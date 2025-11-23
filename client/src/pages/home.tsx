@@ -33,7 +33,12 @@ export default function Home() {
       </div>
 
       <div className="grid gap-4 md:gap-6 w-full max-w-2xl">
-        <div className="bg-card border-4 border-border p-6 pixel-shadow pixel-shadow-hover transition-all cursor-pointer hover:bg-secondary group">
+        <a 
+          href="https://replit.com/@austin-f/Programming-Lightning-Intro-to-Payment-Channels"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="bg-card border-4 border-border p-6 pixel-shadow pixel-shadow-hover transition-all cursor-pointer hover:bg-secondary group block"
+        >
           <div className="flex items-center justify-between gap-4">
             <h2 className="text-xl md:text-2xl font-pixel leading-relaxed">
               Intro to Payment Channels & the Bitcoin Lightning Network
@@ -42,7 +47,7 @@ export default function Home() {
               START
             </div>
           </div>
-        </div>
+        </a>
 
         <div className="bg-muted border-4 border-muted-foreground/30 p-6 opacity-75 cursor-not-allowed relative overflow-hidden">
           {/* Scanline effect for disabled card */}
@@ -55,10 +60,6 @@ export default function Home() {
           </div>
         </div>
       </div>
-
-      <footer className="mt-16 font-mono text-sm text-muted-foreground">
-        © 2025 Programming Lightning. All rights reserved.
-      </footer>
     </div>
   );
 }
