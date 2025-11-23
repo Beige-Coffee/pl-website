@@ -1,0 +1,125 @@
+{
+  "colorScheme": "light",
+  "fonts": [
+    {
+      "family": "Manrope",
+      "role": "body"
+    },
+    {
+      "family": "Helvetica Neue",
+      "role": "body"
+    },
+    {
+      "family": "Segoe UI",
+      "role": "body"
+    },
+    {
+      "family": "Jersey 10",
+      "role": "display"
+    },
+    {
+      "family": "BlinkMacSystemFont",
+      "role": "body"
+    }
+  ],
+  "colors": {
+    "primary": "#FF5E24",
+    "accent": "#FF5E24",
+    "background": "#FFFFFF",
+    "textPrimary": "#FF5E24",
+    "link": "#FF5E24"
+  },
+  "typography": {
+    "fontFamilies": {
+      "primary": "Manrope",
+      "heading": "Jersey 10"
+    },
+    "fontStacks": {
+      "heading": [
+        "Jersey 10",
+        "monospace"
+      ],
+      "body": [
+        "Manrope",
+        "system-ui",
+        "-apple-system",
+        "BlinkMacSystemFont",
+        "Segoe UI",
+        "Helvetica Neue"
+      ],
+      "paragraph": [
+        "Manrope",
+        "system-ui",
+        "-apple-system",
+        "BlinkMacSystemFont",
+        "Segoe UI",
+        "Helvetica Neue"
+      ]
+    },
+    "fontSizes": {
+      "h1": "96px",
+      "h2": "18px",
+      "body": "14px"
+    }
+  },
+  "spacing": {
+    "baseUnit": 8,
+    "borderRadius": "0px"
+  },
+  "components": {
+    "input": {
+      "borderColor": "#CCCCCC",
+      "borderRadius": "0px"
+    },
+    "buttonPrimary": {
+      "background": "#FF5E24",
+      "textColor": "#FFEDE6",
+      "borderRadius": "8px",
+      "shadow": "rgb(255, 94, 36) 0px 0px 0px 1px, rgba(15, 34, 52, 0.01) 0px 27px 11px 0px, rgba(15, 34, 52, 0.02) 0px 15px 9px 0px, rgba(15, 34, 52, 0.04) 0px 7px 7px 0px, rgba(15, 34, 52, 0.04) 0px 2px 4px 0px"
+    },
+    "buttonSecondary": {
+      "background": "#DCEEFE",
+      "textColor": "#5C6066",
+      "borderRadius": "6px",
+      "shadow": "none"
+    }
+  },
+  "images": {
+    "logo": "File saved at: attached_assets/logo.svg",
+    "favicon": "https://obscura.net/favicon.svg",
+    "ogImage": "https://obscura.net/og.png"
+  },
+  "__framework_hints": [],
+  "__llm_logo_reasoning": {
+    "selectedIndex": 0,
+    "reasoning": "Logo #0 matches the brand name 'Obscura' and is located in the header, linking to the homepage, making it the most suitable choice.",
+    "confidence": 0.95
+  },
+  "__llm_button_reasoning": {
+    "primary": {
+      "index": 0,
+      "text": "Download for macOS",
+      "reasoning": "Button #0 has a vibrant orange background (#FF5E24) and action-oriented text 'Download for macOS', making it the primary call-to-action."
+    },
+    "secondary": {
+      "index": 2,
+      "text": "Use with Wireguard",
+      "reasoning": "Button #2 has a different background color (#DCEEFE) compared to the primary button and is less prominent, making it suitable as the secondary action."
+    },
+    "confidence": 0.95
+  },
+  "personality": {
+    "tone": "modern",
+    "energy": "high",
+    "targetAudience": "tech-savvy users looking for VPN solutions"
+  },
+  "designSystem": {
+    "framework": "tailwind",
+    "componentLibrary": null
+  },
+  "confidence": {
+    "buttons": 0.95,
+    "colors": 0.9,
+    "overall": 0.925
+  }
+}
