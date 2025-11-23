@@ -53,7 +53,7 @@ export default function Home() {
             
             <div className="flex items-center justify-between">
               <h2 className="text-xl md:text-2xl font-pixel text-muted-foreground">
-                More Coming Soon...
+                Coming Soon... Onion Routing & Lightning Payments
               </h2>
             </div>
           </div>
