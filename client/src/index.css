@@ -38,7 +38,7 @@
     @apply border-border;
   }
   body {
-    @apply font-mono antialiased bg-background text-foreground overflow-hidden h-screen;
+    @apply font-mono antialiased bg-background text-foreground min-h-screen;
     background-image: 
       linear-gradient(to right, rgba(0,0,0,0.05) 1px, transparent 1px),
       linear-gradient(to bottom, rgba(0,0,0,0.05) 1px, transparent 1px);

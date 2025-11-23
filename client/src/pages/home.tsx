@@ -6,25 +6,25 @@ export default function Home() {
     <div className="min-h-screen flex flex-col items-center justify-center p-4 relative z-10">
       {/* Decorative background elements could go here if needed, but CSS handles the grid */}
       
-      <header className="text-center mb-12">
-        <h1 className="text-4xl md:text-6xl font-pixel leading-tight mb-4 text-shadow-retro">
+      <header className="text-center mb-8 md:mb-12">
+        <h1 className="text-3xl md:text-5xl font-pixel leading-tight mb-4 text-shadow-retro">
           Programming<br />Lightning
         </h1>
-        <p className="text-xl md:text-2xl font-mono text-muted-foreground">
+        <p className="text-lg md:text-2xl font-mono text-muted-foreground">
           Master the future of payments
         </p>
       </header>
 
-      <div className="mb-16 relative group">
+      <div className="mb-10 md:mb-16 relative group">
         <div className="absolute inset-0 bg-primary blur-3xl opacity-20 group-hover:opacity-40 transition-opacity rounded-full" />
         <img 
           src={lightningBolt} 
           alt="Pixel Art Lightning Bolt" 
-          className="w-48 h-48 md:w-64 md:h-64 relative z-10 drop-shadow-[4px_4px_0px_rgba(0,0,0,1)]"
+          className="w-40 h-40 md:w-64 md:h-64 relative z-10 drop-shadow-[4px_4px_0px_rgba(0,0,0,1)]"
         />
       </div>
 
-      <div className="grid gap-6 w-full max-w-2xl">
+      <div className="grid gap-4 md:gap-6 w-full max-w-2xl">
         <div className="bg-card border-4 border-border p-6 pixel-shadow pixel-shadow-hover transition-all cursor-pointer hover:bg-secondary group">
           <div className="flex items-start justify-between gap-4">
             <div>
