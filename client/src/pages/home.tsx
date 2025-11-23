@@ -34,16 +34,11 @@ export default function Home() {
 
       <div className="grid gap-4 md:gap-6 w-full max-w-2xl">
         <div className="bg-card border-4 border-border p-6 pixel-shadow pixel-shadow-hover transition-all cursor-pointer hover:bg-secondary group">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h2 className="text-xl md:text-2xl font-pixel mb-3 leading-relaxed">
-                Intro to Payment Channels & the Bitcoin Lightning Network
-              </h2>
-              <p className="font-mono text-lg text-muted-foreground">
-                Start your journey into Layer 2 protocols.
-              </p>
-            </div>
-            <div className="bg-primary text-foreground px-3 py-1 font-pixel text-xs border-2 border-border">
+          <div className="flex items-center justify-between gap-4">
+            <h2 className="text-xl md:text-2xl font-pixel leading-relaxed">
+              Intro to Payment Channels & the Bitcoin Lightning Network
+            </h2>
+            <div className="bg-primary text-foreground px-3 py-1 font-pixel text-xs border-2 border-border shrink-0">
               START
             </div>
           </div>
@@ -57,9 +52,6 @@ export default function Home() {
             <h2 className="text-xl md:text-2xl font-pixel text-muted-foreground">
               More Coming Soon...
             </h2>
-            <div className="font-pixel text-xs text-muted-foreground">
-              LOCKED
-            </div>
           </div>
         </div>
       </div>
