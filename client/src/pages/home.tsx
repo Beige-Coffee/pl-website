@@ -4,6 +4,14 @@ import lightningBolt from "@assets/generated_images/a_pixel_art_lightning_bolt_i
 export default function Home() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 relative z-10">
+      <div className="absolute top-4 right-4 md:top-8 md:right-8">
+        <Link href="/about">
+          <a className="font-pixel text-sm md:text-base hover:text-primary transition-colors border-b-4 border-transparent hover:border-primary pb-1">
+            ABOUT
+          </a>
+        </Link>
+      </div>
+
       {/* Decorative background elements could go here if needed, but CSS handles the grid */}
       
       <header className="text-center mb-8 md:mb-12">
