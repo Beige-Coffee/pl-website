@@ -19,7 +19,7 @@ export default function Home() {
           Programming<br />Lightning
         </h1>
         <p className="text-lg md:text-2xl font-mono text-muted-foreground">
-          A Free, Open-Source Guide to Programming the Lightning Network
+          A Free, Open-Source Guide to Programming the Bitcoin Lightning Network
         </p>
       </header>
 
