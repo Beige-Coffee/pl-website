@@ -18,10 +18,10 @@ export default function About() {
       <div className="space-y-8 font-mono text-xl md:text-2xl leading-relaxed">
         <div className="bg-card border-4 border-border p-8 pixel-shadow">
           <p className="mb-6">
-            Programming Lightning is an interactive educational platform designed to teach developers how to build on the Bitcoin Lightning Network.
+            Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
           </p>
           <p>
-            Our mission is to demystify Layer 2 protocols and empower the next generation of fintech engineers with the skills they need to build the future of payments.
+            Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
           </p>
         </div>
 
@@ -29,14 +29,14 @@ export default function About() {
           <div className="bg-secondary border-4 border-border p-6 pixel-shadow">
             <h2 className="font-pixel text-lg mb-4">Why Lightning?</h2>
             <p>
-              Instant payments. Micro-transactions. Scalability. The Lightning Network is the most robust Layer 2 solution for Bitcoin.
+              Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam.
             </p>
           </div>
           
           <div className="bg-primary border-4 border-border p-6 pixel-shadow">
             <h2 className="font-pixel text-lg mb-4">What You'll Learn</h2>
             <p>
-              Payment channels, HTLCs, routing, liquidity management, and building real-world Lightning applications.
+              Quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit.
             </p>
           </div>
         </div>
