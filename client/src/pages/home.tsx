@@ -5,7 +5,7 @@ export default function Home() {
   return (
     <div className="min-h-screen flex flex-col relative z-10">
       {/* Top Banner */}
-      <div className="w-full border-b-4 border-border bg-card p-4 flex justify-end pixel-shadow relative z-50">
+      <div className="w-full border-b-4 border-border bg-card p-2 flex justify-end pixel-shadow relative z-50">
         <Link href="/about">
           <a className="font-pixel text-sm md:text-base hover:text-primary transition-colors border-b-4 border-transparent hover:border-primary pb-1">
             ABOUT
@@ -13,8 +13,8 @@ export default function Home() {
         </Link>
       </div>
 
-      <div className="flex-1 flex flex-col items-center justify-center px-4 pb-8 md:p-4">
-        <header className="text-center mb-8 md:mb-10 w-full max-w-4xl mt-8 md:mt-0">
+      <div className="flex-1 flex flex-col items-center justify-start px-4 pt-8 md:pt-12 pb-8">
+        <header className="text-center mb-8 md:mb-10 w-full max-w-4xl">
           <h1 className="text-3xl md:text-5xl font-pixel leading-tight mb-4 text-shadow-retro">
             Programming<br />Lightning
           </h1>
