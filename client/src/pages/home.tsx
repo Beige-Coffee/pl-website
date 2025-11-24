@@ -3,8 +3,9 @@ import lightningBolt from "@assets/generated_images/a_pixel_art_lightning_bolt_i
 
 export default function Home() {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-4 pt-24 pb-8 md:p-4 relative z-10">
-      <div className="absolute top-4 right-4 md:top-8 md:right-8">
+    <div className="min-h-screen flex flex-col relative z-10">
+      {/* Top Banner */}
+      <div className="w-full border-b-4 border-border bg-card p-4 flex justify-end pixel-shadow relative z-50">
         <Link href="/about">
           <a className="font-pixel text-sm md:text-base hover:text-primary transition-colors border-b-4 border-transparent hover:border-primary pb-1">
             ABOUT
@@ -12,18 +13,17 @@ export default function Home() {
         </Link>
       </div>
 
-      {/* Decorative background elements could go here if needed, but CSS handles the grid */}
-      
-      <header className="text-center mb-8 md:mb-10 w-full max-w-4xl">
-        <h1 className="text-3xl md:text-5xl font-pixel leading-tight mb-4 text-shadow-retro">
-          Programming<br />Lightning
-        </h1>
-        <p className="text-xl md:text-3xl font-mono font-bold text-foreground">
-          A Free, Open-Source Guide to Programming the Bitcoin Lightning Network
-        </p>
-      </header>
+      <div className="flex-1 flex flex-col items-center justify-center px-4 pb-8 md:p-4">
+        <header className="text-center mb-8 md:mb-10 w-full max-w-4xl mt-8 md:mt-0">
+          <h1 className="text-3xl md:text-5xl font-pixel leading-tight mb-4 text-shadow-retro">
+            Programming<br />Lightning
+          </h1>
+          <p className="text-xl md:text-3xl font-mono font-bold text-foreground">
+            A Free, Open-Source Guide to Programming the Bitcoin Lightning Network
+          </p>
+        </header>
 
-      <div className="flex flex-col md:flex-row items-center justify-center gap-10 md:gap-12 w-full max-w-7xl px-4">
+        <div className="flex flex-col md:flex-row items-center justify-center gap-10 md:gap-12 w-full max-w-7xl px-4">
         <div className="relative group shrink-0">
           <div className="absolute inset-0 bg-primary blur-3xl opacity-20 group-hover:opacity-40 transition-opacity rounded-full" />
           <img 
