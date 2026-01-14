@@ -15,7 +15,7 @@ export default function About() {
       <div className="flex-1 w-full max-w-6xl mx-auto p-8 md:p-12 flex flex-col justify-center">
         <div className="mb-8 flex flex-col items-center justify-center">
           <h1 className="text-xl md:text-3xl font-pixel leading-tight text-center text-shadow-retro">
-            About Programming Lightning
+            ⚡ About Programming Lightning ⚡
           </h1>
         </div>
 
