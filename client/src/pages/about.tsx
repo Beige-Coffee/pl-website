@@ -2,16 +2,18 @@ import { Link } from "wouter";
 
 export default function About() {
   return (
-    <div className="min-h-screen p-8 md:p-16 relative z-10 max-w-4xl mx-auto">
-      <div className="mb-12">
-        <Link href="/">
-          <a className="inline-block font-pixel text-sm hover:text-primary transition-colors mb-8">
-            &lt; BACK TO HOME
-          </a>
-        </Link>
+    <div className="min-h-screen p-8 md:p-12 relative z-10 max-w-4xl mx-auto">
+      <div className="mb-8 relative flex flex-col md:flex-row items-center justify-center">
+        <div className="md:absolute md:left-0 md:top-1/2 md:-translate-y-1/2 mb-4 md:mb-0">
+          <Link href="/">
+            <a className="inline-block font-pixel text-xs md:text-sm hover:text-primary transition-colors">
+              &lt; BACK TO HOME
+            </a>
+          </Link>
+        </div>
         
-        <h1 className="text-4xl md:text-6xl font-pixel leading-tight mb-8 text-shadow-retro">
-          About<br />Programming<br />Lightning
+        <h1 className="text-xl md:text-3xl font-pixel leading-tight text-center text-shadow-retro">
+          About Programming Lightning
         </h1>
       </div>
 
