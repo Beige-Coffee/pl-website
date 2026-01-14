@@ -1,4 +1,5 @@
 import { Link } from "wouter";
+import lightningBolt from "@assets/generated_images/a_pixel_art_lightning_bolt_icon..png";
 
 export default function About() {
   return (
@@ -14,8 +15,10 @@ export default function About() {
 
       <div className="flex-1 w-full max-w-6xl mx-auto p-8 md:p-12 flex flex-col justify-center">
         <div className="mb-8 flex flex-col items-center justify-center">
-          <h1 className="text-xl md:text-3xl font-pixel leading-tight text-center text-shadow-retro">
-            ⚡ About Programming Lightning ⚡
+          <h1 className="text-xl md:text-3xl font-pixel leading-tight text-center text-shadow-retro flex items-center gap-4">
+            <img src={lightningBolt} alt="" className="w-8 h-8 md:w-12 md:h-12 pixelated" />
+            About Programming Lightning
+            <img src={lightningBolt} alt="" className="w-8 h-8 md:w-12 md:h-12 pixelated" />
           </h1>
         </div>
 
