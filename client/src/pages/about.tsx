@@ -12,14 +12,14 @@ export default function About() {
         </Link>
       </div>
 
-      <div className="flex-1 w-full max-w-4xl mx-auto p-8 md:p-12">
+      <div className="flex-1 w-full max-w-6xl mx-auto p-8 md:p-12 flex flex-col justify-center">
         <div className="mb-8 flex flex-col items-center justify-center">
           <h1 className="text-xl md:text-3xl font-pixel leading-tight text-center text-shadow-retro">
             About Programming Lightning
           </h1>
         </div>
 
-        <div className="space-y-8 font-mono text-xl md:text-2xl leading-relaxed">
+        <div className="font-mono text-xl md:text-2xl leading-relaxed">
           <div className="bg-card border-4 border-border p-8 pixel-shadow">
             <p className="mb-6">
               Hi, my name is Austin, and I'm a <a href="https://spiral.xyz/" target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">Spiral</a> and <a href="https://hrf.org/" target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">HRF</a> grantee working on Programming Lightning.
@@ -36,22 +36,6 @@ export default function About() {
             <p>
               Check back for new releases!
             </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-8">
-            <div className="bg-secondary border-4 border-border p-6 pixel-shadow">
-              <h2 className="font-pixel text-lg mb-4">Why Lightning?</h2>
-              <p>
-                Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam.
-              </p>
-            </div>
-            
-            <div className="bg-primary border-4 border-border p-6 pixel-shadow">
-              <h2 className="font-pixel text-lg mb-4">What You'll Learn</h2>
-              <p>
-                Quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit.
-              </p>
-            </div>
           </div>
         </div>
       </div>
