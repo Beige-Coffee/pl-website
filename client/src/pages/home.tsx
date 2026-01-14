@@ -34,8 +34,11 @@ export default function Home() {
         </div>
 
         <div className="grid gap-4 md:gap-6 w-full max-w-2xl">
-          <div 
-            className="bg-card border-4 border-border p-4 pixel-shadow pixel-shadow-hover transition-all cursor-pointer hover:bg-secondary group block"
+          <a 
+            href="https://replit.com/@austin-f/Programming-Lightning-Intro-to-Payment-Channels?v=1"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bg-card border-4 border-border p-4 pixel-shadow pixel-shadow-hover transition-all cursor-pointer hover:bg-secondary group block text-foreground"
           >
             <div className="flex items-center justify-between gap-4">
               <h2 className="text-lg md:text-xl font-pixel leading-relaxed">
@@ -45,7 +48,7 @@ export default function Home() {
                 START
               </div>
             </div>
-          </div>
+          </a>
 
           <div className="bg-muted border-4 border-muted-foreground/30 p-4 opacity-75 cursor-not-allowed relative overflow-hidden">
             {/* Scanline effect for disabled card */}
