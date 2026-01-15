@@ -31,10 +31,10 @@ export default function About() {
               Inspired by <a href="https://github.com/jimmysong/programmingbitcoin" target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">Programming Bitcoin</a>, Programming Lightning is a free and open source educational resource that teaches developers how Lightning works by implementing crucial parts of the protocol from scratch.
             </p>
             <p className="mb-6">
-              In the first course, Intro to Payment Channels, we implement a Lightning payment channel from the ground up. In fact, once complete, your implementation will pass some of the major Test Vectors provided in <a href="https://github.com/lightning/bolts/blob/master/03-transactions.md#appendix-b-funding-transaction-test-vectors" target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">BOLT 3</a>, putting you in a great position to start contributing to popular Lightning implementations such as LDK. During this course, you’ll learn exactly how Lightning payment channels are constructed, how Hash-Time-Locked-Contracts (HTLCs) work, and how to build an off-chain Lightning wallet to manage all of the cryptographic material needed.
+              In the first course, Intro to Payment Channels, we implement a Lightning payment channel from the ground up. In fact, once complete, your implementation will pass some of the major Test Vectors provided in <a href="https://github.com/lightning/bolts/blob/master/03-transactions.md#appendix-b-funding-transaction-test-vectors" target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">BOLT 3</a>, putting you in a great position to start contributing to popular Lightning implementations such as LDK. During this course, you'll learn the architecture of Lightning payment channels, how Hash-Time-Locked-Contracts (HTLCs) work, and implement the core cryptographic operations for Lightning channels.
             </p>
             <p className="mb-6">
-              This project is currently in active development. The first module on payment channels is now available, with additional sections coming soon.
+              This project is currently in active development. The first module on payment channels is now available, and I will continue to make updates to the course over the next year as I receive feedback, with additional sections coming soon.
             </p>
             <p>
               Check back for new releases!
