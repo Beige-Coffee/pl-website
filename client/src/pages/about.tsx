@@ -28,16 +28,19 @@ export default function About() {
               Hi, my name is Austin, and I'm a <a href="https://spiral.xyz/" target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">Spiral</a> and <a href="https://hrf.org/" target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">HRF</a> grantee working on Programming Lightning.
             </p>
             <p className="mb-6">
-              Inspired by <a href="https://github.com/jimmysong/programmingbitcoin" target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">Programming Bitcoin</a>, Programming Lightning is a free and open source educational resource that teaches developers how Lightning works by implementing crucial parts of the protocol from scratch.
+              Inspired by <a href="https://github.com/jimmysong/programmingbitcoin" target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">Programming Bitcoin</a>, Programming Lightning is a free and open source educational resource that teaches developers and technically-inclined folks how Lightning works by coding important pieces of the protocol from scratch.
             </p>
             <p className="mb-6">
-              In the first course, Intro to Payment Channels, we implement a Lightning payment channel from the ground up. In fact, once complete, your implementation will pass some of the major Test Vectors provided in <a href="https://github.com/lightning/bolts/blob/master/03-transactions.md#appendix-b-funding-transaction-test-vectors" target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">BOLT 3</a>, putting you in a great position to start contributing to popular Lightning implementations such as LDK. During this course, you'll learn the architecture of Lightning payment channels, how Hash-Time-Locked-Contracts (HTLCs) work, and implement the core cryptographic operations for Lightning channels.
+              The first module, Intro to Payment Channels, guides students through building a simple off-chain wallet and Lightning payment channel from the ground up. By the end of the course, your implementation will pass some of the major <a href="https://github.com/lightning/bolts/blob/master/03-transactions.md#appendix-b-funding-transaction-test-vectors" target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">BOLT 3</a> test vectors, meaning you'll have successfully implemented functionality such as key derivation, obscured commitment numbers, and HTLC second-stage transactions (success and timeout).
             </p>
             <p className="mb-6">
-              This project is currently in active development. The first module on payment channels is now available, and I will continue to make updates to the course over the next year as I receive feedback, with additional sections coming soon.
+              While exercises can be completed by forking the GitHub repo and running tests locally, the course is optimized for Replit. Each Repl comes with Bitcoin Core running in the background, allowing you to easily generate Lightning transactions, simulate operations like broadcasting transactions, opening channels, and decoding raw transactions.
+            </p>
+            <p className="mb-6">
+              This project is in active development. Additional modules focusing on Lightning payments, invoices, and newer protocol advancements are coming soon!
             </p>
             <p>
-              Check back for new releases!
+              Feedback and corrections are welcome - please feel free to open an issue or submit a pull request. You can also reach me directly at <a href="mailto:hello@programminglightning.com" className="underline hover:text-primary">hello@programminglightning.com</a>. I'd love to hear your thoughts on how to improve the content!
             </p>
           </div>
         </div>
