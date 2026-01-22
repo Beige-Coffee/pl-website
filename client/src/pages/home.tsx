@@ -71,7 +71,7 @@ export default function Home() {
             alt="Discord Logo" 
             className="w-12 h-12 md:w-16 md:h-16 pixelated" 
           />
-          <p className="font-mono text-sm md:text-base font-bold bg-card border-4 border-border p-4 pixel-shadow">
+          <p className="font-mono text-lg md:text-xl font-bold bg-card border-4 border-border p-4 pixel-shadow">
             Have questions or feedback? Want to share your progress? <br className="hidden md:block"/>
             <a href="https://discord.gg/j2G7nK8EDh" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Join the Programming Lightning Discord</a> to connect with other students, get help, and discuss Lightning development!
           </p>
