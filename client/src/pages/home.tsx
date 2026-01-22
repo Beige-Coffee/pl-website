@@ -1,10 +1,47 @@
 import { Link } from "wouter";
+import { useState } from "react";
 import lightningBolt from "@assets/generated_images/a_pixel_art_lightning_bolt_icon..png";
 import discordLogo from "@assets/discord_1769114568630.png";
 
 export default function Home() {
+  const [showMobileWarning, setShowMobileWarning] = useState(false);
+
+  const handleStartClick = (e: React.MouseEvent) => {
+    // Check if screen width is mobile (using standard md breakpoint of 768px)
+    if (window.innerWidth < 768) {
+      e.preventDefault();
+      setShowMobileWarning(true);
+    }
+  };
+
   return (
     <div className="min-h-screen flex flex-col relative z-10">
+      {/* Mobile Warning Modal */}
+      {showMobileWarning && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-card border-4 border-border p-6 pixel-shadow max-w-sm w-full relative">
+            <button 
+              onClick={() => setShowMobileWarning(false)}
+              className="absolute top-2 right-2 font-pixel text-xl hover:text-primary"
+            >
+              X
+            </button>
+            <h3 className="font-pixel text-xl mb-4 text-center">Desktop Only</h3>
+            <p className="font-mono text-center mb-6">
+              The Replit course only works on desktop and not mobile. This may change in the future, but please access the course on desktop.
+            </p>
+            <div className="flex justify-center">
+              <button 
+                onClick={() => setShowMobileWarning(false)}
+                className="bg-primary text-foreground px-4 py-2 font-pixel text-sm border-2 border-border hover:bg-primary/80 transition-colors"
+              >
+                GOT IT
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Top Banner */}
       <div className="w-full border-b-4 border-border bg-card p-2 flex justify-end pixel-shadow relative z-50">
         <Link href="/about">
@@ -39,6 +76,7 @@ export default function Home() {
             href="https://replit.com/@austin-f/Programming-Lightning-Intro-to-Payment-Channels?v=1"
             target="_blank"
             rel="noopener noreferrer"
+            onClick={handleStartClick}
             className="bg-card border-4 border-border p-4 pixel-shadow pixel-shadow-hover transition-all cursor-pointer hover:bg-secondary group block text-foreground"
           >
             <div className="flex items-center justify-between gap-4">
