@@ -1,5 +1,6 @@
 import { Link } from "wouter";
 import lightningBolt from "@assets/generated_images/a_pixel_art_lightning_bolt_icon..png";
+import discordLogo from "@assets/discord_1769114568630.png";
 
 export default function Home() {
   return (
@@ -60,6 +61,20 @@ export default function Home() {
               </h2>
             </div>
           </div>
+        </div>
+      </div>
+
+      <div className="mt-16 mb-8 text-center max-w-2xl mx-auto w-full">
+        <div className="flex flex-col items-center gap-4">
+          <img 
+            src={discordLogo} 
+            alt="Discord Logo" 
+            className="w-12 h-12 md:w-16 md:h-16 pixelated" 
+          />
+          <p className="font-mono text-sm md:text-base font-bold bg-card border-4 border-border p-4 pixel-shadow">
+            Have questions or feedback? Want to share your progress? <br className="hidden md:block"/>
+            <a href="https://discord.gg/j2G7nK8EDh" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Join the Programming Lightning Discord</a> to connect with other students, get help, and discuss Lightning development!
+          </p>
         </div>
       </div>
     </div>
