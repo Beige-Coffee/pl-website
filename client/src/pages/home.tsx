@@ -28,7 +28,7 @@ export default function Home() {
             </button>
             <h3 className="font-pixel text-xl mb-4 text-center">Desktop Only</h3>
             <p className="font-mono text-center mb-6">
-              The Replit course only works on desktop and not mobile. This may change in the future, but please access the course on desktop.
+              Please note: This course is designed for desktop browsers and doesn't currently support mobile devices.
             </p>
             <div className="flex justify-center">
               <button 
