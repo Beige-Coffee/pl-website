@@ -349,6 +349,8 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
           >
             {active.section === "Quiz" && !authenticated ? (
               <QuizAuthGate theme={theme} onSuccess={login} />
+            ) : active.section === "Quiz" ? (
+              <InteractiveQuiz theme={theme} />
             ) : (
               <ChapterContent chapter={active} theme={theme} />
             )}
@@ -644,6 +646,358 @@ function ImageBlock({
         </span>
       ) : null}
     </span>
+  );
+}
+
+const QUIZ_QUESTIONS = [
+  {
+    question: "Why does the Noise Protocol use ECDH rather than digital signatures for authentication?",
+    options: [
+      "ECDH is more resistant to quantum computing attacks than signatures",
+      "ECDH is more computationally efficient, and the resulting shared secrets can be directly used to derive encryption keys, simplifying the protocol",
+      "The secp256k1 curve doesn't support signature operations, only key agreement",
+      "Signatures would require a certificate authority, which contradicts Bitcoin's decentralized design",
+    ],
+    answer: 1,
+  },
+  {
+    question: "In Act 1, Alice encrypts a zero-length plaintext with ChaCha20-Poly1305. Why doesn't she encrypt any actual data?",
+    options: [
+      "The Act 1 message must be exactly 50 bytes, and there's no room for additional plaintext after the version byte and Ephemeral Public Key",
+      "ChaCha20-Poly1305 requires an empty plaintext for the initial use of any new key",
+      "Alice's goal is only to prove she knows Bob's public key — the MAC alone, created with a key derived from their ECDH shared secret, is sufficient to prove this",
+      "The plaintext is encrypted in a separate step that happens between Act 1 and Act 2",
+    ],
+    answer: 2,
+  },
+  {
+    question: "At what point during the Noise handshake does Bob first learn Alice's identity?",
+    options: [
+      "Act 1 — when Alice proves she knows Bob's Static Public Key",
+      "Act 2 — after the ephemeral-ephemeral (ee) ECDH exchange",
+      "Act 3 — when Bob decrypts Alice's encrypted Static Public Key, but before he has verified the final MAC",
+      "Act 3 — only after Bob successfully verifies the final MAC with temp_k3",
+    ],
+    answer: 2,
+  },
+  {
+    question: "Why does Alice use her Ephemeral Public Key — rather than her Static Public Key — for the ECDH in Act 1?",
+    options: [
+      "Her Static Public Key uses a different curve than Bob's Ephemeral Key, making ECDH impossible",
+      "Sending her Static Public Key in plaintext would reveal her Lightning node identity to eavesdroppers",
+      "The Noise Protocol requires all Act 1 ECDH operations to use ephemeral keys for both parties",
+      "Her Static Public Key is too large to fit in the 50-byte Act 1 message",
+    ],
+    answer: 1,
+  },
+  {
+    question: "Why is forward secrecy NOT established until Act 2?",
+    options: [
+      "Forward secrecy requires at least three ECDH operations, and only two are complete after Act 1",
+      "Act 1 only uses hash functions — the first ECDH doesn't happen until Act 2",
+      "The es ECDH in Act 1 involves Bob's Static Key, so if Bob's static private key were compromised, an attacker could recompute the shared secret using Alice's Ephemeral Public Key (which was sent in plaintext)",
+      "Act 1 doesn't encrypt any data, so there's nothing that forward secrecy would protect",
+    ],
+    answer: 2,
+  },
+  {
+    question: "What would happen if Alice reused the same nonce with the same key for two different ChaCha20 encryptions?",
+    options: [
+      "The decryption would fail because ChaCha20 detects nonce reuse automatically",
+      "Both messages would decrypt to the same plaintext regardless of the original content",
+      "An attacker could XOR the two ciphertexts together to learn information about both plaintexts, potentially recovering them entirely",
+      "The MACs would be identical, but the ciphertexts would remain secure",
+    ],
+    answer: 2,
+  },
+  {
+    question: "What is the primary purpose of the handshake hash throughout the Noise handshake?",
+    options: [
+      "It stores a compressed version of all messages sent between Alice and Bob so they can be replayed if the connection drops",
+      "It acts as a running transcript of the handshake, and is included as associated data in each MAC so that both parties can verify they are progressing through the protocol in sync",
+      "It is used as the encryption key for each act's ChaCha20-Poly1305 operation",
+      "It serves as a checksum that Alice and Bob compare directly at the end of the handshake to verify success",
+    ],
+    answer: 1,
+  },
+  {
+    question: "During key rotation, what serves as the Input Key Material (IKM) for the HKDF function?",
+    options: [
+      "A zero-length input, similar to Act 3's final key derivation",
+      "The original ECDH shared secret from the handshake phase",
+      "The current encryption key (sk or rk)",
+      "A freshly computed ephemeral ECDH shared secret between Alice and Bob",
+    ],
+    answer: 2,
+  },
+  {
+    question: "Why does Lightning encrypt the 2-byte message length prefix before transmission?",
+    options: [
+      "The length field contains a checksum that must be protected from tampering",
+      "ChaCha20-Poly1305 requires all inputs — including metadata — to be encrypted before the algorithm can produce a valid MAC",
+      "Without length encryption, an attacker could perform traffic analysis to learn message types and potentially track payments across the network",
+      "The encrypted length doubles as a session identifier that Bob uses to match messages to the correct connection",
+    ],
+    answer: 2,
+  },
+  {
+    question: 'After the handshake, Alice computes sk, rk = HKDF(ck, "") and Bob computes rk, sk = HKDF(ck, ""). Why are the variable assignments reversed?',
+    options: [
+      "Alice and Bob use different Chaining Keys at this point, so the HKDF outputs are different and must be assigned accordingly",
+      "The HKDF function produces outputs in a different order depending on which party calls it",
+      "The reversal ensures that Alice's Sending Key is the same key as Bob's Receiving Key (and vice versa), so messages encrypted by one party can be decrypted by the other",
+      "Bob reverses the assignment to account for the different nonce ordering between sender and receiver",
+    ],
+    answer: 2,
+  },
+];
+
+function LightningBoltCelebration({ theme }: { theme: "light" | "dark" }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-8 animate-bounce-in" data-testid="container-celebration">
+      <svg
+        width="120"
+        height="160"
+        viewBox="0 0 120 160"
+        className="mb-6 drop-shadow-[0_0_30px_rgba(255,215,0,0.8)]"
+        data-testid="img-lightning-bolt"
+      >
+        <polygon
+          points="70,0 30,70 55,70 20,160 100,60 70,60"
+          fill="#FFD700"
+          stroke="#B8860B"
+          strokeWidth="3"
+          style={{ filter: "drop-shadow(0 0 15px rgba(255, 215, 0, 0.9))" }}
+        />
+        <polygon
+          points="70,0 30,70 55,70 20,160 100,60 70,60"
+          fill="url(#bolt-gradient)"
+        />
+        <defs>
+          <linearGradient id="bolt-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor="#FFF8DC" stopOpacity="0.6" />
+            <stop offset="50%" stopColor="#FFD700" stopOpacity="0" />
+            <stop offset="100%" stopColor="#FF8C00" stopOpacity="0.3" />
+          </linearGradient>
+        </defs>
+      </svg>
+      <style>{`
+        @keyframes bounce-in {
+          0% { transform: scale(0.3) rotate(-10deg); opacity: 0; }
+          50% { transform: scale(1.1) rotate(3deg); opacity: 1; }
+          70% { transform: scale(0.95) rotate(-1deg); }
+          100% { transform: scale(1) rotate(0deg); }
+        }
+        .animate-bounce-in { animation: bounce-in 0.8s ease-out forwards; }
+      `}</style>
+    </div>
+  );
+}
+
+function InteractiveQuiz({ theme }: { theme: "light" | "dark" }) {
+  const [selections, setSelections] = useState<Record<number, number>>({});
+  const [submitted, setSubmitted] = useState(false);
+  const [score, setScore] = useState(0);
+
+  const dark = theme === "dark";
+  const border = dark ? "border-[#2a3552]" : "border-border";
+  const bg = dark ? "bg-[#0f1930]" : "bg-card";
+  const textColor = dark ? "text-slate-200" : "text-foreground";
+  const textMuted = dark ? "text-slate-400" : "text-foreground/60";
+
+  const handleSelect = (qIndex: number, optIndex: number) => {
+    if (submitted) return;
+    setSelections((prev) => ({ ...prev, [qIndex]: optIndex }));
+  };
+
+  const handleSubmit = () => {
+    let correct = 0;
+    QUIZ_QUESTIONS.forEach((q, i) => {
+      if (selections[i] === q.answer) correct++;
+    });
+    setScore(correct);
+    setSubmitted(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleReset = () => {
+    setSelections({});
+    setSubmitted(false);
+    setScore(0);
+  };
+
+  const percentage = Math.round((score / QUIZ_QUESTIONS.length) * 100);
+  const passed = percentage >= 90;
+  const allAnswered = Object.keys(selections).length === QUIZ_QUESTIONS.length;
+
+  return (
+    <div className="py-6" data-testid="container-interactive-quiz">
+      <h1 className={`font-pixel text-2xl md:text-3xl mb-2 ${dark ? "text-slate-100" : "text-foreground"}`} data-testid="text-quiz-title">
+        Quiz: Lightning's Noise Protocol
+      </h1>
+      <p className={`text-lg mb-8 ${textMuted}`}>
+        {submitted
+          ? `You scored ${score}/${QUIZ_QUESTIONS.length} (${percentage}%)`
+          : `Select one answer per question, then submit. You need 90% to pass.`}
+      </p>
+
+      {submitted && passed && <LightningBoltCelebration theme={theme} />}
+
+      {submitted && (
+        <div
+          className={`border-4 p-6 mb-8 text-center ${
+            passed
+              ? "border-[#FFD700] bg-[#FFD700]/10"
+              : dark
+              ? "border-red-500/50 bg-red-500/10"
+              : "border-red-400/50 bg-red-50"
+          }`}
+          data-testid="container-quiz-result"
+        >
+          <div
+            className={`font-pixel text-xl mb-2 ${passed ? "text-[#FFD700]" : dark ? "text-red-400" : "text-red-600"}`}
+            data-testid="text-quiz-result-title"
+          >
+            {passed ? "CONGRATULATIONS!" : "NOT QUITE..."}
+          </div>
+          <div className={`text-lg ${textColor}`} data-testid="text-quiz-result-score">
+            {passed
+              ? `You passed with ${percentage}%! You've mastered Lightning's Noise Protocol.`
+              : `You scored ${percentage}%. You need 90% to pass. Review the incorrect answers below and try again!`}
+          </div>
+          <button
+            type="button"
+            onClick={handleReset}
+            className={`mt-4 font-pixel text-sm border-2 px-6 py-3 transition-colors ${
+              dark
+                ? "border-[#2a3552] bg-[#0f1930] hover:bg-[#132043] text-slate-200"
+                : "border-border bg-card hover:bg-secondary text-foreground"
+            }`}
+            data-testid="button-quiz-retry"
+          >
+            {passed ? "TAKE AGAIN" : "TRY AGAIN"}
+          </button>
+        </div>
+      )}
+
+      <div className="space-y-8">
+        {QUIZ_QUESTIONS.map((q, qIndex) => {
+          const selected = selections[qIndex];
+          const isCorrect = submitted && selected === q.answer;
+          const isWrong = submitted && selected !== undefined && selected !== q.answer;
+
+          return (
+            <div
+              key={qIndex}
+              className={`border-4 p-6 ${bg} ${
+                submitted
+                  ? isCorrect
+                    ? "border-green-500/60"
+                    : isWrong
+                    ? "border-red-500/60"
+                    : border
+                  : border
+              }`}
+              data-testid={`container-quiz-question-${qIndex}`}
+            >
+              <div className={`font-pixel text-sm mb-1 ${textMuted}`}>
+                QUESTION {qIndex + 1} OF {QUIZ_QUESTIONS.length}
+              </div>
+              <div className={`text-lg font-semibold mb-5 ${textColor}`} data-testid={`text-quiz-question-${qIndex}`}>
+                {q.question}
+              </div>
+
+              <div className="space-y-3">
+                {q.options.map((opt, optIndex) => {
+                  const isSelected = selected === optIndex;
+                  const isAnswer = q.answer === optIndex;
+                  const letter = String.fromCharCode(65 + optIndex);
+
+                  let optionStyle = "";
+                  if (submitted) {
+                    if (isAnswer) {
+                      optionStyle = "border-green-500 bg-green-500/15 text-green-300";
+                      if (!dark) optionStyle = "border-green-600 bg-green-50 text-green-800";
+                    } else if (isSelected && !isAnswer) {
+                      optionStyle = "border-red-500 bg-red-500/15 text-red-300";
+                      if (!dark) optionStyle = "border-red-500 bg-red-50 text-red-800";
+                    } else {
+                      optionStyle = dark
+                        ? "border-[#1f2a44] text-slate-500 opacity-60"
+                        : "border-border/50 text-foreground/40 opacity-60";
+                    }
+                  } else if (isSelected) {
+                    optionStyle = "border-[#FFD700] bg-[#FFD700]/15";
+                    if (!dark) optionStyle = "border-[#FFD700] bg-[#FFD700]/10";
+                  } else {
+                    optionStyle = dark
+                      ? "border-[#1f2a44] hover:border-[#2a3552] hover:bg-[#132043] cursor-pointer"
+                      : "border-border hover:border-foreground/30 hover:bg-secondary cursor-pointer";
+                  }
+
+                  return (
+                    <button
+                      key={optIndex}
+                      type="button"
+                      onClick={() => handleSelect(qIndex, optIndex)}
+                      disabled={submitted}
+                      className={`w-full text-left border-2 p-4 flex items-start gap-3 transition-colors ${optionStyle} ${
+                        submitted ? "" : "active:scale-[0.99]"
+                      }`}
+                      data-testid={`button-quiz-option-${qIndex}-${optIndex}`}
+                    >
+                      <span
+                        className={`font-pixel text-sm mt-0.5 shrink-0 w-7 h-7 flex items-center justify-center border ${
+                          submitted && isAnswer
+                            ? "border-green-500 text-green-400"
+                            : submitted && isSelected && !isAnswer
+                            ? "border-red-500 text-red-400"
+                            : isSelected
+                            ? "border-[#FFD700] text-[#FFD700]"
+                            : dark
+                            ? "border-[#2a3552] text-slate-400"
+                            : "border-border text-foreground/60"
+                        }`}
+                      >
+                        {submitted && isAnswer ? "✓" : submitted && isSelected && !isAnswer ? "✗" : letter}
+                      </span>
+                      <span className={`text-[15px] leading-relaxed ${!submitted ? (dark ? "text-slate-200" : "text-foreground") : ""}`}>
+                        {opt}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {!submitted && (
+        <div className="mt-8 text-center">
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={!allAnswered}
+            className={`font-pixel text-lg border-4 px-10 py-4 transition-all ${
+              allAnswered
+                ? "border-[#FFD700] bg-[#FFD700] text-black hover:bg-[#FFC800] active:scale-95"
+                : dark
+                ? "border-[#1f2a44] bg-[#0f1930] text-slate-600 cursor-not-allowed"
+                : "border-border bg-secondary text-foreground/40 cursor-not-allowed"
+            }`}
+            data-testid="button-quiz-submit"
+          >
+            SUBMIT ANSWERS
+          </button>
+          {!allAnswered && (
+            <div className={`mt-3 font-pixel text-xs ${textMuted}`} data-testid="text-quiz-progress">
+              {Object.keys(selections).length}/{QUIZ_QUESTIONS.length} ANSWERED
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
