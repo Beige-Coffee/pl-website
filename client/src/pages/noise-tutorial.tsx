@@ -1,5 +1,5 @@
 import { Link, Route, Switch, useLocation } from "wouter";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
@@ -388,6 +388,9 @@ function ImageBlock({
     return Number.isFinite(v) ? Math.min(2.5, Math.max(0.5, v)) : 0.75;
   });
 
+  const zoomBodyRef = useRef<HTMLSpanElement | null>(null);
+  const zoomImgRef = useRef<HTMLImageElement | null>(null);
+
   useEffect(() => {
     try {
       localStorage.setItem(storageKey, String(zoom));
@@ -404,6 +407,43 @@ function ImageBlock({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    // Auto fit-to-screen based on actual rendered sizes.
+    const bodyEl = zoomBodyRef.current;
+    const imgEl = zoomImgRef.current;
+    if (!bodyEl || !imgEl) return;
+
+    const computeFit = () => {
+      const padding = 24; // breathing room inside viewport
+      const availableW = Math.max(200, bodyEl.clientWidth - padding);
+      const availableH = Math.max(200, bodyEl.clientHeight - padding);
+
+      const naturalW = imgEl.naturalWidth || imgEl.clientWidth || 1;
+      const naturalH = imgEl.naturalHeight || imgEl.clientHeight || 1;
+
+      const fit = Math.min(availableW / naturalW, availableH / naturalH);
+      const clamped = Math.min(2.5, Math.max(0.5, fit));
+
+      setZoom(Number(clamped.toFixed(2)));
+
+      // Reset pan to top-left on open
+      bodyEl.scrollTop = 0;
+      bodyEl.scrollLeft = 0;
+    };
+
+    if (imgEl.complete) {
+      computeFit();
+    } else {
+      imgEl.addEventListener("load", computeFit, { once: true });
+    }
+
+    const onResize = () => computeFit();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [open, rawSrc]);
 
   return (
     <span className="block my-5" data-testid={`img-block-${srcKey}`}>
@@ -525,12 +565,15 @@ function ImageBlock({
               </div>
 
               <span
+                ref={zoomBodyRef}
                 className={`block max-h-[70vh] overflow-auto border-2 ${
                   theme === "dark" ? "border-[#2a3552] bg-[#0f1930]" : "border-border bg-card"
                 }`}
+                data-testid={`container-zoom-body-${srcKey}`}
               >
                 <span style={{ transform: `scale(${zoom})`, transformOrigin: "top left" }}>
                   <img
+                    ref={zoomImgRef}
                     {...props}
                     src={rawSrc}
                     width={undefined}
