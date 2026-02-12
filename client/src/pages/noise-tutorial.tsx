@@ -278,8 +278,11 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
             <button
               type="button"
               onClick={() => setShowLoginModal(true)}
-              className="p-2 font-pixel text-[10px] transition-colors"
-              style={{ color: "#FFD700" }}
+              className={`p-2 font-pixel text-[10px] transition-colors ${
+                theme === "dark"
+                  ? "text-slate-200 hover:text-white"
+                  : "text-foreground hover:text-foreground/80"
+              }`}
               data-testid="button-login"
             >
               LOGIN
