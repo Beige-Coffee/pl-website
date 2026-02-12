@@ -72,9 +72,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       let isValid = false;
       try {
-        const signature = secp256k1.Signature.fromDER(sigBytes);
-        isValid = secp256k1.verify(signature, k1Bytes, keyBytes);
-      } catch {
+        const compactSig = derToCompact(sigBytes);
+        isValid = secp256k1.verify(compactSig, k1Bytes, keyBytes);
+        if (!isValid) {
+          const sigObj = secp256k1.Signature.fromBytes(compactSig);
+          if (sigObj.hasHighS()) {
+            const normalized = sigObj.normalizeS().toBytes();
+            isValid = secp256k1.verify(normalized, k1Bytes, keyBytes);
+          }
+        }
+      } catch (verifyErr) {
+        console.error("Signature verification error:", verifyErr);
         isValid = false;
       }
 
@@ -167,4 +175,25 @@ function hexToBytes(hex: string): Uint8Array {
     bytes[i / 2] = parseInt(hex.substring(i, i + 2), 16);
   }
   return bytes;
+}
+
+function derToCompact(der: Uint8Array): Uint8Array {
+  let pos = 0;
+  if (der[pos++] !== 0x30) throw new Error("Not a DER sequence");
+  pos++;
+  if (der[pos++] !== 0x02) throw new Error("Expected integer tag for r");
+  const rLen = der[pos++];
+  let r = der.slice(pos, pos + rLen);
+  pos += rLen;
+  if (der[pos++] !== 0x02) throw new Error("Expected integer tag for s");
+  const sLen = der[pos++];
+  let s = der.slice(pos, pos + sLen);
+
+  if (r.length > 32) r = r.slice(r.length - 32);
+  if (s.length > 32) s = s.slice(s.length - 32);
+
+  const compact = new Uint8Array(64);
+  compact.set(r, 32 - r.length);
+  compact.set(s, 64 - s.length);
+  return compact;
 }
