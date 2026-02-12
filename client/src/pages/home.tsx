@@ -43,11 +43,12 @@ export default function Home() {
       )}
 
       {/* Top Banner */}
-      <div className="w-full border-b-4 border-border bg-card p-2 flex justify-end pixel-shadow relative z-50">
-        <Link href="/about">
-          <a className="font-pixel text-sm md:text-base hover:text-primary transition-colors border-b-4 border-transparent hover:border-primary pb-1">
-            ABOUT
-          </a>
+      <div className="w-full border-b-4 border-border bg-card p-2 flex items-center justify-end gap-6 pixel-shadow relative z-50">
+        <Link href="/blog" data-testid="link-blog" className="font-pixel text-sm md:text-base hover:text-primary transition-colors border-b-4 border-transparent hover:border-primary pb-1">
+          BLOG
+        </Link>
+        <Link href="/about" data-testid="link-about" className="font-pixel text-sm md:text-base hover:text-primary transition-colors border-b-4 border-transparent hover:border-primary pb-1">
+          ABOUT
         </Link>
       </div>
 
@@ -109,9 +110,18 @@ export default function Home() {
             alt="Discord Logo" 
             className="w-12 h-12 md:w-16 md:h-16 pixelated" 
           />
-          <p className="font-mono text-xl md:text-2xl font-bold bg-card border-4 border-border p-4 pixel-shadow">
+          <p className="font-mono text-xl md:text-2xl font-bold bg-card border-4 border-border p-4 pixel-shadow" data-testid="text-discord-invite">
             Have questions or feedback? Want to share your progress? <br className="hidden md:block"/>
-            <a href="https://discord.gg/j2G7nK8EDh" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Join the Programming Lightning Discord</a> to connect with other students, get help, and discuss Lightning development!
+            <a
+              href="https://discord.gg/j2G7nK8EDh"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline"
+              data-testid="link-discord"
+            >
+              Join the Programming Lightning Discord
+            </a>{" "}
+            to connect with other students, get help, and discuss Lightning development!
           </p>
         </div>
       </div>
