@@ -326,8 +326,22 @@
   }
 
   .noise-md img {
-    max-width: 100%;
+    max-width: none;
     height: auto;
+  }
+
+  .noise-md p:has(> img) {
+    width: 100% !important;
+    max-width: none !important;
+    margin: 14px auto !important;
+  }
+
+  .noise-md p[style*="max-width"] {
+    max-width: none !important;
+  }
+
+  .noise-md p[style*="width"] {
+    width: 100% !important;
   }
 
   .noise-md blockquote {

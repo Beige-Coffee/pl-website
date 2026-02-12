@@ -424,28 +424,21 @@ function ChapterContent({ chapter, theme, imgScale }: { chapter: Chapter; theme:
             const maxW = imgScale === "lg" ? 1500 : imgScale === "md" ? 1200 : 960;
 
             return (
-              <div
+              <img
+                {...props}
+                width={undefined}
+                height={height}
                 style={{
+                  ...(style ?? {}),
                   width: "100%",
                   maxWidth: `${maxW}px`,
+                  height: "auto",
+                  display: "block",
                   margin: "14px auto",
+                  imageRendering: "auto",
                 }}
-                data-testid="container-tutorial-image"
-              >
-                <img
-                  {...props}
-                  width={undefined}
-                  height={height}
-                  style={{
-                    ...(style ?? {}),
-                    width: "100%",
-                    height: "auto",
-                    display: "block",
-                    imageRendering: "auto",
-                  }}
-                  data-testid="img-tutorial"
-                />
-              </div>
+                data-testid="img-tutorial"
+              />
             );
           },
           a: ({ ...props }) => (
