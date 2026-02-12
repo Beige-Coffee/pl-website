@@ -215,37 +215,30 @@
     border: 1px solid rgba(0, 0, 0, 0.14);
   }
 
-  .noise-md-light th {
-    background: rgba(0, 0, 0, 0.04);
-    color: var(--color-foreground);
-  }
-
-  .noise-md-dark th {
-    color: #ffd700;
-  }
-
   .noise-md h1,
   .noise-md h2,
   .noise-md h3,
   .noise-md h4 {
-    font-family: var(--font-pixel);
-    line-height: 1.2;
+    line-height: 1.3;
     margin-top: 1.25em;
     margin-bottom: 0.6em;
-  }
-
-  .noise-md-light h1,
-  .noise-md-light h2,
-  .noise-md-light h3,
-  .noise-md-light h4 {
-    color: #000;
+    font-weight: 800;
   }
 
   .noise-md-dark h1,
   .noise-md-dark h2,
   .noise-md-dark h3,
   .noise-md-dark h4 {
+    font-family: var(--font-pixel);
     color: #ffd700;
+  }
+
+  .noise-md-light h1,
+  .noise-md-light h2,
+  .noise-md-light h3,
+  .noise-md-light h4 {
+    font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    color: #111;
   }
 
   .noise-md h1 {
@@ -331,9 +324,19 @@
 
   .noise-md th {
     background: rgba(255, 255, 255, 0.06);
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .noise-md-dark th {
     color: #ffd700;
     font-family: var(--font-pixel);
-    font-size: 12px;
+  }
+
+  .noise-md-light th {
+    color: #111;
+    font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    background: rgba(0, 0, 0, 0.06);
   }
 
   .noise-md details {
