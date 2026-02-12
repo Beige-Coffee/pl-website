@@ -379,90 +379,163 @@ function ImageBlock({
   theme: "light" | "dark";
   srcKey: string;
 }) {
-  const storageKey = `pl-img-size:${srcKey}`;
+  const storageKey = `pl-img-zoom:${srcKey}`;
 
-  const [size, setSize] = useState<"sm" | "md" | "lg">(() => {
-    if (typeof window === "undefined") return "md";
-    const stored = localStorage.getItem(storageKey);
-    return stored === "sm" || stored === "md" || stored === "lg" ? stored : "md";
+  const [open, setOpen] = useState(false);
+  const [zoom, setZoom] = useState<number>(() => {
+    if (typeof window === "undefined") return 1.25;
+    const v = Number(localStorage.getItem(storageKey) ?? "");
+    return Number.isFinite(v) ? Math.min(2.5, Math.max(1, v)) : 1.25;
   });
 
   useEffect(() => {
     try {
-      localStorage.setItem(storageKey, size);
+      localStorage.setItem(storageKey, String(zoom));
     } catch {
       // ignore
     }
-  }, [storageKey, size]);
+  }, [storageKey, zoom]);
 
-  const sliderValue = size === "sm" ? 0 : size === "md" ? 1 : 2;
-
-  const maxW = size === "lg" ? 1500 : size === "md" ? 1200 : 960;
-  const maxWidthStyle = { maxWidth: `${maxW}px` } as const;
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open]);
 
   return (
-    <span className="block my-4" data-testid={`img-block-${srcKey}`}>
-      <span className="flex items-center justify-center gap-3 mb-2">
-        <span
-          className={`font-pixel text-[10px] tracking-wide ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`}
-          data-testid={`text-imgsize-label-${srcKey}`}
-        >
-          DIAGRAM SIZE
-        </span>
+    <span className="block my-5" data-testid={`img-block-${srcKey}`}>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className={`block w-full border-2 transition-colors ${
+          theme === "dark"
+            ? "border-[#2a3552] bg-[#0f1930] hover:bg-[#132043]"
+            : "border-border bg-card hover:bg-secondary"
+        }`}
+        data-testid={`button-img-zoom-${srcKey}`}
+        aria-label="Open diagram zoom"
+      >
+        <img
+          {...props}
+          src={rawSrc}
+          width={undefined}
+          height={height}
+          style={{
+            ...(style ?? {}),
+            width: "100%",
+            height: "auto",
+            display: "block",
+            margin: "0 auto",
+            imageRendering: "auto",
+          }}
+          data-testid={`img-tutorial-${srcKey}`}
+        />
+      </button>
 
-        <span className="flex items-center gap-2">
-          <span
-            className={`font-pixel text-[10px] ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`}
-            data-testid={`text-imgsize-min-${srcKey}`}
-          >
-            S
-          </span>
-          <input
-            type="range"
-            min={0}
-            max={2}
-            step={1}
-            value={sliderValue}
-            onChange={(e) => {
-              const v = Number((e.target as HTMLInputElement).value);
-              setSize(v === 0 ? "sm" : v === 1 ? "md" : "lg");
-            }}
-            className={`w-40 accent-[hsl(48_100%_50%)] ${theme === "dark" ? "opacity-90" : ""}`}
-            aria-label="Diagram size"
-            data-testid={`slider-imgsize-${srcKey}`}
-          />
-          <span
-            className={`font-pixel text-[10px] ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`}
-            data-testid={`text-imgsize-max-${srcKey}`}
-          >
-            L
-          </span>
-        </span>
-
-        <span
-          className={`font-mono text-xs ${theme === "dark" ? "text-slate-200" : "text-foreground"}`}
-          data-testid={`text-imgsize-value-${srcKey}`}
-        >
-          {size.toUpperCase()}
-        </span>
+      <span
+        className={`mt-2 flex items-center justify-center gap-2 ${
+          theme === "dark" ? "text-slate-300" : "text-foreground/70"
+        }`}
+        data-testid={`text-img-zoomhint-${srcKey}`}
+      >
+        <span className="font-pixel text-[10px] tracking-wide">CLICK TO ZOOM</span>
+        <span className="font-mono text-xs">(Esc to close)</span>
       </span>
 
-      <img
-        {...props}
-        src={rawSrc}
-        width={undefined}
-        height={height}
-        style={{
-          ...(style ?? {}),
-          ...maxWidthStyle,
-          width: "100%",
-          height: "auto",
-          display: "block",
-          margin: "0 auto",
-          imageRendering: "auto",
-        }}
-        data-testid={`img-tutorial-${srcKey}`}
-      />
+      {open ? (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Diagram zoom"
+          data-testid={`overlay-img-${srcKey}`}
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setOpen(false);
+          }}
+        >
+          <div className="absolute inset-0 bg-black/70" />
+
+          <div
+            className={`relative w-full max-w-6xl border-4 ${
+              theme === "dark" ? "border-[#2a3552] bg-[#0b1220]" : "border-border bg-background"
+            }`}
+          >
+            <div
+              className={`flex items-center justify-between gap-3 border-b-4 px-4 py-3 ${
+                theme === "dark" ? "border-[#2a3552]" : "border-border"
+              }`}
+            >
+              <div className="font-pixel text-xs" data-testid={`text-zoom-title-${srcKey}`}>
+                DIAGRAM ZOOM
+              </div>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className={`border-2 px-3 py-2 font-pixel text-xs transition-colors ${
+                  theme === "dark"
+                    ? "border-[#2a3552] bg-[#0f1930] hover:bg-[#132043]"
+                    : "border-border bg-card hover:bg-secondary"
+                }`}
+                data-testid={`button-zoom-close-${srcKey}`}
+              >
+                CLOSE
+              </button>
+            </div>
+
+            <div className="p-4">
+              <div className="flex items-center justify-center gap-3 mb-3">
+                <span className={`font-pixel text-[10px] tracking-wide ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`}>
+                  ZOOM
+                </span>
+                <input
+                  type="range"
+                  min={1}
+                  max={2.5}
+                  step={0.25}
+                  value={zoom}
+                  onChange={(e) => setZoom(Number((e.target as HTMLInputElement).value))}
+                  className="w-56 accent-[hsl(48_100%_50%)]"
+                  data-testid={`slider-zoom-${srcKey}`}
+                />
+                <span className={`font-mono text-xs ${theme === "dark" ? "text-slate-200" : "text-foreground"}`} data-testid={`text-zoom-value-${srcKey}`}>
+                  {zoom.toFixed(2)}x
+                </span>
+              </div>
+
+              <div
+                className={`max-h-[70vh] overflow-auto border-2 ${
+                  theme === "dark" ? "border-[#2a3552] bg-[#0f1930]" : "border-border bg-card"
+                }`}
+              >
+                <div style={{ transform: `scale(${zoom})`, transformOrigin: "top left" }}>
+                  <img
+                    {...props}
+                    src={rawSrc}
+                    width={undefined}
+                    height={height}
+                    style={{
+                      ...(style ?? {}),
+                      display: "block",
+                      maxWidth: "none",
+                      width: "auto",
+                      height: "auto",
+                      imageRendering: "auto",
+                    }}
+                    data-testid={`img-zoomed-${srcKey}`}
+                  />
+                </div>
+              </div>
+
+              <div className={`mt-3 text-center font-mono text-xs ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`}>
+                Tip: scroll inside the frame to pan.
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </span>
   );
 }
