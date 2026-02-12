@@ -333,7 +333,9 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
         >
           <div className="hidden md:flex items-center justify-between px-4 pt-4">
             <div
-              className={`font-pixel text-sm ${theme === "dark" ? "text-slate-200" : "text-foreground"}`}
+              className={`font-pixel text-sm ${theme === "dark" ? "text-slate-200" : "text-foreground"} ${
+                sidebarCollapsed ? "sr-only" : ""
+              }`}
               data-testid="text-sidebar-title"
             >
               Chapters
@@ -345,7 +347,7 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
                 theme === "dark"
                   ? "border-[#2a3552] bg-[#0f1930] hover:bg-[#132043]"
                   : "border-border bg-card hover:bg-secondary"
-              }`}
+              } ${sidebarCollapsed ? "mx-auto" : ""}`}
               data-testid="button-sidebar-collapse"
               aria-label={sidebarCollapsed ? "Expand chapters panel" : "Collapse chapters panel"}
             >
@@ -353,7 +355,9 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
             </button>
           </div>
 
-          <div className="p-4">
+          <div className={`p-4 ${sidebarCollapsed ? "hidden" : ""}`}
+            aria-hidden={sidebarCollapsed}
+          >
 
             {sectionOrder.map((section) => {
               const items = grouped.get(section) ?? [];
