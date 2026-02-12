@@ -1213,7 +1213,9 @@ function ChapterContent({ chapter, theme }: { chapter: Chapter; theme: "light" |
           a: ({ ...props }) => (
             <a
               {...props}
-              className="text-[#ffd700] underline underline-offset-4 hover:opacity-90"
+              className={`underline underline-offset-4 hover:opacity-80 ${
+                theme === "dark" ? "text-[#ffd700]" : "text-[#b8860b]"
+              }`}
               target={props.href?.startsWith("http") ? "_blank" : undefined}
               rel={props.href?.startsWith("http") ? "noreferrer" : undefined}
               data-testid="link-markdown"
