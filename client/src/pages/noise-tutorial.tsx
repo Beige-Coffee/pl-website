@@ -396,7 +396,9 @@ function ImageBlock({
   }, [storageKey, size]);
 
   const sliderValue = size === "sm" ? 0 : size === "md" ? 1 : 2;
+
   const maxW = size === "lg" ? 1500 : size === "md" ? 1200 : 960;
+  const maxWidthStyle = { maxWidth: `${maxW}px` } as const;
 
   return (
     <span className="block my-4" data-testid={`img-block-${srcKey}`}>
@@ -452,8 +454,8 @@ function ImageBlock({
         height={height}
         style={{
           ...(style ?? {}),
+          ...maxWidthStyle,
           width: "100%",
-          maxWidth: `${maxW}px`,
           height: "auto",
           display: "block",
           margin: "0 auto",
