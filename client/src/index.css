@@ -283,7 +283,14 @@
     background: transparent !important;
     padding: 0;
     border-radius: 0;
-    font-family: inherit;
+    font-family: inherit !important;
+  }
+
+  .noise-md pre,
+  .noise-md code,
+  .noise-md kbd,
+  .noise-md samp {
+    font-family: inherit !important;
   }
 
   .noise-md table {
