@@ -315,7 +315,7 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
             className="noise-article mx-auto w-full max-w-[800px]"
             data-testid="container-article"
           >
-            <ChapterContent chapter={active} />
+            <ChapterContent chapter={active} theme={theme} imgScale={imgScale} />
 
             <div className={`mt-10 pt-6 border-t ${theme === "dark" ? "border-[#1f2a44]" : "border-border"} flex items-center justify-between gap-3`}>
               {prev ? (
@@ -351,7 +351,7 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
   );
 }
 
-function ChapterContent({ chapter }: { chapter: Chapter }) {
+function ChapterContent({ chapter, theme, imgScale }: { chapter: Chapter; theme: "light" | "dark"; imgScale: "sm" | "md" | "lg" }) {
   const [md, setMd] = useState<string>("Loading…");
   const [err, setErr] = useState<string | null>(null);
 
@@ -404,22 +404,7 @@ function ChapterContent({ chapter }: { chapter: Chapter }) {
     );
   }
 
-  const theme = (typeof document !== "undefined"
-    ? (document.querySelector("[data-theme]")?.getAttribute("data-theme") as
-        | "light"
-        | "dark"
-        | null)
-    : null) ?? "light";
-
-  const scale = (typeof document !== "undefined"
-    ? (document.querySelector("[data-img-scale]")?.getAttribute("data-img-scale") as
-        | "sm"
-        | "md"
-        | "lg"
-        | null)
-    : null) ?? "md";
-
-  const imgMaxWidth = scale === "lg" ? "1100px" : scale === "md" ? "900px" : "760px";
+  const imgMaxWidth = imgScale === "lg" ? "1100px" : imgScale === "md" ? "900px" : "760px";
 
   return (
     <div className={`noise-md noise-md-${theme}`} data-testid="container-markdown">
