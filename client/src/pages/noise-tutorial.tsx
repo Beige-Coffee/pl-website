@@ -185,7 +185,9 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
 
   const [imgScale, setImgScale] = useState<"sm" | "md" | "lg">("md");
   const [sidebarWidth, setSidebarWidth] = useState(360);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
+  const lastSidebarWidthRef = useState(360)[0];
 
   useEffect(() => {
     const stored = typeof window !== "undefined" ? localStorage.getItem("pl-img-scale") : null;
@@ -194,6 +196,9 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
     const storedWidth = typeof window !== "undefined" ? localStorage.getItem("pl-sidebar-width") : null;
     const w = storedWidth ? Number(storedWidth) : NaN;
     if (Number.isFinite(w)) setSidebarWidth(Math.min(520, Math.max(240, w)));
+
+    const storedCollapsed = typeof window !== "undefined" ? localStorage.getItem("pl-sidebar-collapsed") : null;
+    if (storedCollapsed === "1") setSidebarCollapsed(true);
   }, []);
 
   useEffect(() => {
@@ -213,11 +218,24 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
   }, [sidebarWidth]);
 
   useEffect(() => {
+    try {
+      localStorage.setItem("pl-sidebar-collapsed", sidebarCollapsed ? "1" : "0");
+    } catch {
+      // ignore
+    }
+  }, [sidebarCollapsed]);
+
+  useEffect(() => {
     const onMove = (e: MouseEvent) => {
       if (!isResizingSidebar) return;
       setSidebarWidth((prev) => {
         const next = prev + e.movementX;
-        return Math.min(520, Math.max(240, next));
+        if (next <= 90) {
+          setSidebarCollapsed(true);
+          return 60;
+        }
+        setSidebarCollapsed(false);
+        return Math.min(520, Math.max(120, next));
       });
     };
 
@@ -302,17 +320,40 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
 
       <div
         className="mx-auto w-full max-w-7xl grid gap-0"
-        style={{ gridTemplateColumns: `minmax(240px, ${sidebarWidth}px) 10px minmax(0, 1fr)` }}
+        style={{
+          gridTemplateColumns: sidebarCollapsed
+            ? `60px 10px minmax(0, 1fr)`
+            : `minmax(240px, ${sidebarWidth}px) 10px minmax(0, 1fr)`,
+        }}
       >
         <aside
           className={`${
             mobileNavOpen ? "block" : "hidden"
           } md:block md:sticky md:top-[68px] h-fit ${theme === "dark" ? "bg-[#0b1220]" : "bg-card"}`}
         >
-          <div className="p-4">
-            <div className="font-pixel text-sm mb-3" data-testid="text-sidebar-title">
+          <div className="hidden md:flex items-center justify-between px-4 pt-4">
+            <div
+              className={`font-pixel text-sm ${theme === "dark" ? "text-slate-200" : "text-foreground"}`}
+              data-testid="text-sidebar-title"
+            >
               Chapters
             </div>
+            <button
+              type="button"
+              onClick={() => setSidebarCollapsed((v) => !v)}
+              className={`border-2 px-2 py-1 font-pixel text-xs transition-colors ${
+                theme === "dark"
+                  ? "border-[#2a3552] bg-[#0f1930] hover:bg-[#132043]"
+                  : "border-border bg-card hover:bg-secondary"
+              }`}
+              data-testid="button-sidebar-collapse"
+              aria-label={sidebarCollapsed ? "Expand chapters panel" : "Collapse chapters panel"}
+            >
+              {sidebarCollapsed ? ">" : "<"}
+            </button>
+          </div>
+
+          <div className="p-4">
 
             {sectionOrder.map((section) => {
               const items = grouped.get(section) ?? [];
@@ -338,10 +379,10 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
                           onClick={() => setLocation(href)}
                           className={`${
                             isActive ? t.chapterActive : t.chapterInactive
-                          } w-full text-left border-2 px-3 py-2 transition-colors`}
+                          } w-full text-left border-2 px-3 py-3 transition-colors`}
                           data-testid={`button-chapter-${c.id}`}
                         >
-                          <div className="font-mono text-[16px] leading-snug">{c.title}</div>
+                          <div className="font-mono text-[18px] leading-snug">{c.title}</div>
                         </button>
                       );
                     })}
