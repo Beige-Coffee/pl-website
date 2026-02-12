@@ -184,18 +184,11 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
       };
 
   const [imgScale, setImgScale] = useState<"sm" | "md" | "lg">("md");
-  const [sidebarWidth, setSidebarWidth] = useState(360);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [isResizingSidebar, setIsResizingSidebar] = useState(false);
-  const lastSidebarWidthRef = useState(360)[0];
 
   useEffect(() => {
     const stored = typeof window !== "undefined" ? localStorage.getItem("pl-img-scale") : null;
     if (stored === "sm" || stored === "md" || stored === "lg") setImgScale(stored);
-
-    const storedWidth = typeof window !== "undefined" ? localStorage.getItem("pl-sidebar-width") : null;
-    const w = storedWidth ? Number(storedWidth) : NaN;
-    if (Number.isFinite(w)) setSidebarWidth(Math.min(520, Math.max(240, w)));
 
     const storedCollapsed = typeof window !== "undefined" ? localStorage.getItem("pl-sidebar-collapsed") : null;
     if (storedCollapsed === "1") setSidebarCollapsed(true);
@@ -211,43 +204,11 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
 
   useEffect(() => {
     try {
-      localStorage.setItem("pl-sidebar-width", String(sidebarWidth));
-    } catch {
-      // ignore
-    }
-  }, [sidebarWidth]);
-
-  useEffect(() => {
-    try {
       localStorage.setItem("pl-sidebar-collapsed", sidebarCollapsed ? "1" : "0");
     } catch {
       // ignore
     }
   }, [sidebarCollapsed]);
-
-  useEffect(() => {
-    const onMove = (e: MouseEvent) => {
-      if (!isResizingSidebar) return;
-      setSidebarWidth((prev) => {
-        const next = prev + e.movementX;
-        if (next <= 90) {
-          setSidebarCollapsed(true);
-          return 60;
-        }
-        setSidebarCollapsed(false);
-        return Math.min(520, Math.max(120, next));
-      });
-    };
-
-    const onUp = () => setIsResizingSidebar(false);
-
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-  }, [isResizingSidebar]);
 
   return (
     <div className={`min-h-screen ${t.pageBg} ${t.pageText} overflow-x-hidden`} data-theme={theme} data-img-scale={imgScale}>
@@ -321,9 +282,7 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
       <div
         className="mx-auto w-full max-w-7xl grid gap-0"
         style={{
-          gridTemplateColumns: sidebarCollapsed
-            ? `60px 10px minmax(0, 1fr)`
-            : `minmax(240px, ${sidebarWidth}px) 10px minmax(0, 1fr)`,
+          gridTemplateColumns: sidebarCollapsed ? `60px minmax(0, 1fr)` : `360px minmax(0, 1fr)`,
         }}
       >
         <aside
@@ -396,19 +355,6 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
             })}
           </div>
         </aside>
-
-        <div
-          className={`hidden md:flex items-stretch justify-center ${theme === "dark" ? "bg-[#1f2a44]" : "bg-border"}`}
-          data-testid="divider-sidebar"
-        >
-          <button
-            type="button"
-            onMouseDown={() => setIsResizingSidebar(true)}
-            className={`w-full cursor-col-resize transition-colors ${theme === "dark" ? "hover:bg-[#2a3552]" : "hover:bg-foreground/10"}`}
-            aria-label="Resize chapters panel"
-            data-testid="handle-sidebar-resize"
-          />
-        </div>
 
         <main className="p-5 md:p-10">
           <div className="mx-auto w-full max-w-[1200px]">
