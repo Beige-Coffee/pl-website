@@ -70,24 +70,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const sigBytes = hexToBytes(sig);
       const keyBytes = hexToBytes(key);
 
-      console.log("LNURL callback params:", { k1, sig: sig.substring(0, 20) + "...", key, sigLen: sig.length, keyLen: key.length });
-      console.log("k1Bytes length:", k1Bytes.length, "sigBytes length:", sigBytes.length, "keyBytes length:", keyBytes.length);
-
       let isValid = false;
       try {
         const compactSig = derToCompact(sigBytes);
-        console.log("Compact sig length:", compactSig.length);
+        const k1Hash = createHash("sha256").update(k1Bytes).digest();
 
-        isValid = secp256k1.verify(compactSig, k1Bytes, keyBytes);
-        console.log("Verify attempt 1 (compact, default):", isValid);
+        isValid = secp256k1.verify(compactSig, k1Hash, keyBytes);
+
+        if (!isValid) {
+          isValid = secp256k1.verify(compactSig, k1Bytes, keyBytes);
+        }
 
         if (!isValid) {
           const sigObj = secp256k1.Signature.fromBytes(compactSig);
-          console.log("Has high S:", sigObj.hasHighS());
           if (sigObj.hasHighS()) {
             const normalized = sigObj.normalizeS().toBytes();
-            isValid = secp256k1.verify(normalized, k1Bytes, keyBytes);
-            console.log("Verify attempt 2 (normalized):", isValid);
+            isValid = secp256k1.verify(normalized, k1Hash, keyBytes)
+              || secp256k1.verify(normalized, k1Bytes, keyBytes);
           }
         }
       } catch (verifyErr) {
