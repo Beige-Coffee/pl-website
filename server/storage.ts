@@ -1,38 +1,54 @@
-import { type User, type InsertUser } from "@shared/schema";
-import { randomUUID } from "crypto";
+import { type User, type InsertUser, type LnAuthChallenge, users, lnAuthChallenges } from "@shared/schema";
+import { eq } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/node-postgres";
+import pg from "pg";
 
-// modify the interface with any CRUD methods
-// you might need
+const pool = new pg.Pool({
+  connectionString: process.env.DATABASE_URL,
+});
+
+export const db = drizzle(pool);
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByPubkey(pubkey: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  createChallenge(k1: string): Promise<LnAuthChallenge>;
+  getChallenge(k1: string): Promise<LnAuthChallenge | undefined>;
+  completeChallenge(k1: string, pubkey: string, sessionToken: string): Promise<void>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-
-  constructor() {
-    this.users = new Map();
-  }
-
+export class DatabaseStorage implements IStorage {
   async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+  async getUserByPubkey(pubkey: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.pubkey, pubkey));
+    return user;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
+    const [user] = await db.insert(users).values(insertUser).returning();
     return user;
+  }
+
+  async createChallenge(k1: string): Promise<LnAuthChallenge> {
+    const [challenge] = await db.insert(lnAuthChallenges).values({ k1 }).returning();
+    return challenge;
+  }
+
+  async getChallenge(k1: string): Promise<LnAuthChallenge | undefined> {
+    const [challenge] = await db.select().from(lnAuthChallenges).where(eq(lnAuthChallenges.k1, k1));
+    return challenge;
+  }
+
+  async completeChallenge(k1: string, pubkey: string, sessionToken: string): Promise<void> {
+    await db.update(lnAuthChallenges)
+      .set({ used: true, pubkey, sessionToken })
+      .where(eq(lnAuthChallenges.k1, k1));
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
