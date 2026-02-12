@@ -1,8 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { randomBytes, createHash } from "crypto";
-import { secp256k1 } from "@noble/curves/secp256k1.js";
+import { randomBytes, createHash, createVerify, createPublicKey } from "crypto";
 import { bech32 } from "bech32";
 import QRCode from "qrcode";
 
@@ -72,23 +71,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       let isValid = false;
       try {
-        const compactSig = derToCompact(sigBytes);
-        const k1Hash = createHash("sha256").update(k1Bytes).digest();
+        const spkiHeader = Buffer.from(
+          "3056301006072a8648ce3d020106052b8104000a034200",
+          "hex"
+        );
+        const spkiHeaderCompressed = Buffer.from(
+          "3036301006072a8648ce3d020106052b8104000a032200",
+          "hex"
+        );
 
-        isValid = secp256k1.verify(compactSig, k1Hash, keyBytes);
+        const isCompressed = keyBytes.length === 33;
+        const spkiDer = Buffer.concat([
+          isCompressed ? spkiHeaderCompressed : spkiHeader,
+          keyBytes,
+        ]);
 
-        if (!isValid) {
-          isValid = secp256k1.verify(compactSig, k1Bytes, keyBytes);
-        }
+        const pubKeyObj = createPublicKey({
+          key: spkiDer,
+          format: "der",
+          type: "spki",
+        });
 
-        if (!isValid) {
-          const sigObj = secp256k1.Signature.fromBytes(compactSig);
-          if (sigObj.hasHighS()) {
-            const normalized = sigObj.normalizeS().toBytes();
-            isValid = secp256k1.verify(normalized, k1Hash, keyBytes)
-              || secp256k1.verify(normalized, k1Bytes, keyBytes);
-          }
-        }
+        const verify = createVerify("SHA256");
+        verify.update(k1Bytes);
+        isValid = verify.verify(pubKeyObj, Buffer.from(sigBytes));
       } catch (verifyErr) {
         console.error("Signature verification error:", verifyErr);
         isValid = false;
@@ -185,23 +191,3 @@ function hexToBytes(hex: string): Uint8Array {
   return bytes;
 }
 
-function derToCompact(der: Uint8Array): Uint8Array {
-  let pos = 0;
-  if (der[pos++] !== 0x30) throw new Error("Not a DER sequence");
-  pos++;
-  if (der[pos++] !== 0x02) throw new Error("Expected integer tag for r");
-  const rLen = der[pos++];
-  let r = der.slice(pos, pos + rLen);
-  pos += rLen;
-  if (der[pos++] !== 0x02) throw new Error("Expected integer tag for s");
-  const sLen = der[pos++];
-  let s = der.slice(pos, pos + sLen);
-
-  if (r.length > 32) r = r.slice(r.length - 32);
-  if (s.length > 32) s = s.slice(s.length - 32);
-
-  const compact = new Uint8Array(64);
-  compact.set(r, 32 - r.length);
-  compact.set(s, 64 - s.length);
-  return compact;
-}
