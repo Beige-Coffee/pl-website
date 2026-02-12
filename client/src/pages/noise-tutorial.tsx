@@ -432,6 +432,8 @@ function ChapterContent({ chapter, theme }: { chapter: Chapter; theme: "light" |
               return stored === "sm" || stored === "md" || stored === "lg" ? stored : "md";
             });
 
+            const sliderValue = size === "sm" ? 0 : size === "md" ? 1 : 2;
+
             useEffect(() => {
               try {
                 localStorage.setItem(storageKey, size);
@@ -444,43 +446,43 @@ function ChapterContent({ chapter, theme }: { chapter: Chapter; theme: "light" |
 
             return (
               <div className="my-4" data-testid={`img-block-${stableKey}`}>
-                <div className="flex items-center justify-center gap-2 mb-2">
-                  <button
-                    type="button"
-                    onClick={() => setSize("sm")}
-                    className={`border-2 px-2 py-1 font-pixel text-xs transition-colors ${
-                      theme === "dark"
-                        ? "border-[#2a3552] bg-[#0f1930] hover:bg-[#132043]"
-                        : "border-border bg-card hover:bg-secondary"
-                    } ${size === "sm" ? (theme === "dark" ? "text-[#ffd700]" : "text-primary") : ""}`}
-                    data-testid={`button-imgsize-sm-${stableKey}`}
+                <div className="flex items-center justify-center gap-3 mb-2">
+                  <span
+                    className={`font-pixel text-[10px] tracking-wide ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`}
+                    data-testid={`text-imgsize-label-${stableKey}`}
                   >
-                    S
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSize("md")}
-                    className={`border-2 px-2 py-1 font-pixel text-xs transition-colors ${
-                      theme === "dark"
-                        ? "border-[#2a3552] bg-[#0f1930] hover:bg-[#132043]"
-                        : "border-border bg-card hover:bg-secondary"
-                    } ${size === "md" ? (theme === "dark" ? "text-[#ffd700]" : "text-primary") : ""}`}
-                    data-testid={`button-imgsize-md-${stableKey}`}
+                    DIAGRAM SIZE
+                  </span>
+
+                  <div className="flex items-center gap-2">
+                    <span className={`font-pixel text-[10px] ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`} data-testid={`text-imgsize-min-${stableKey}`}>
+                      S
+                    </span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={2}
+                      step={1}
+                      value={sliderValue}
+                      onChange={(e) => {
+                        const v = Number(e.target.value);
+                        setSize(v === 0 ? "sm" : v === 1 ? "md" : "lg");
+                      }}
+                      className={`w-40 accent-[hsl(48_100%_50%)] ${theme === "dark" ? "opacity-90" : ""}`}
+                      aria-label="Diagram size"
+                      data-testid={`slider-imgsize-${stableKey}`}
+                    />
+                    <span className={`font-pixel text-[10px] ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`} data-testid={`text-imgsize-max-${stableKey}`}>
+                      L
+                    </span>
+                  </div>
+
+                  <span
+                    className={`font-mono text-xs ${theme === "dark" ? "text-slate-200" : "text-foreground"}`}
+                    data-testid={`text-imgsize-value-${stableKey}`}
                   >
-                    M
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSize("lg")}
-                    className={`border-2 px-2 py-1 font-pixel text-xs transition-colors ${
-                      theme === "dark"
-                        ? "border-[#2a3552] bg-[#0f1930] hover:bg-[#132043]"
-                        : "border-border bg-card hover:bg-secondary"
-                    } ${size === "lg" ? (theme === "dark" ? "text-[#ffd700]" : "text-primary") : ""}`}
-                    data-testid={`button-imgsize-lg-${stableKey}`}
-                  >
-                    L
-                  </button>
+                    {size.toUpperCase()}
+                  </span>
                 </div>
 
                 <img
