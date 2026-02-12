@@ -382,23 +382,17 @@ function ImageBlock({
   const storageKey = `pl-img-zoom:${srcKey}`;
 
   const [open, setOpen] = useState(false);
-  const [zoom, setZoom] = useState<number>(() => {
-    if (typeof window === "undefined") return 0.75;
-    const v = Number(localStorage.getItem(storageKey) ?? "");
-    return Number.isFinite(v) ? Math.min(2.5, Math.max(0.5, v)) : 0.75;
-  });
+  const [zoom, setZoom] = useState<number>(0.75);
+  const [hasManualZoom, setHasManualZoom] = useState(false);
 
-  const [fitNonce, setFitNonce] = useState(0);
+  useEffect(() => {
+    if (!open) return;
+    setHasManualZoom(false);
+  }, [open, rawSrc]);
+
   const zoomBodyRef = useRef<HTMLSpanElement | null>(null);
   const zoomImgRef = useRef<HTMLImageElement | null>(null);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(storageKey, String(zoom));
-    } catch {
-      // ignore
-    }
-  }, [storageKey, zoom]);
 
   useEffect(() => {
     if (!open) return;
@@ -412,38 +406,38 @@ function ImageBlock({
   useEffect(() => {
     if (!open) return;
 
-    // Auto fit-to-screen based on actual rendered sizes.
-    // (We defer by a frame because the overlay body has max-height constraints and
-    // its clientWidth/clientHeight are often 0 on the first effect tick.)
     const bodyEl = zoomBodyRef.current;
     const imgEl = zoomImgRef.current;
     if (!bodyEl || !imgEl) return;
 
+    // If user touched the slider, don't keep overriding their choice.
+    if (hasManualZoom) return;
+
     let raf = 0;
 
     const computeFit = () => {
-      const padding = 24; // breathing room inside viewport
-      const availableW = Math.max(200, bodyEl.clientWidth - padding);
-      const availableH = Math.max(200, bodyEl.clientHeight - padding);
+      // Use the real scroll viewport dimensions.
+      const availableW = Math.max(1, bodyEl.clientWidth);
+      const availableH = Math.max(1, bodyEl.clientHeight);
 
       const naturalW = imgEl.naturalWidth || 1;
       const naturalH = imgEl.naturalHeight || 1;
 
-      const fit = Math.min(availableW / naturalW, availableH / naturalH);
+      // Fit INSIDE, leaving some breathing room.
+      const pad = 16;
+      const fit = Math.min((availableW - pad) / naturalW, (availableH - pad) / naturalH);
       const clamped = Math.min(2.5, Math.max(0.5, fit));
 
       setZoom(Number(clamped.toFixed(2)));
-
-      // Reset pan to top-left on open
       bodyEl.scrollTop = 0;
       bodyEl.scrollLeft = 0;
     };
 
-    const scheduleFit = () => {
+    const schedule = () => {
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
-        // If still 0-sized (very early), try one more frame.
-        if (bodyEl.clientWidth === 0 || bodyEl.clientHeight === 0) {
+        // Wait until the overlay is actually laid out.
+        if (bodyEl.clientWidth < 10 || bodyEl.clientHeight < 10) {
           raf = requestAnimationFrame(computeFit);
           return;
         }
@@ -451,24 +445,21 @@ function ImageBlock({
       });
     };
 
-    if (imgEl.complete && imgEl.naturalWidth > 0) {
-      scheduleFit();
-    } else {
-      imgEl.addEventListener("load", scheduleFit, { once: true });
-    }
+    if (imgEl.complete && imgEl.naturalWidth > 0) schedule();
+    else imgEl.addEventListener("load", schedule, { once: true });
 
-    const onResize = () => scheduleFit();
+    const onResize = () => schedule();
     window.addEventListener("resize", onResize);
+
+    // Also refit once after mount; fonts/layout can shift the first frame.
+    const t = window.setTimeout(schedule, 50);
+
     return () => {
+      window.clearTimeout(t);
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", onResize);
     };
-  }, [open, rawSrc, fitNonce]);
-
-  useEffect(() => {
-    if (!open) return;
-    setFitNonce((n) => n + 1);
-  }, [open]);
+  }, [open, rawSrc, hasManualZoom]);
 
   return (
     <span className="block my-5" data-testid={`img-block-${srcKey}`}>
@@ -580,7 +571,10 @@ function ImageBlock({
                   max={2.5}
                   step={0.25}
                   value={zoom}
-                  onChange={(e) => setZoom(Number((e.target as HTMLInputElement).value))}
+                  onChange={(e) => {
+                    setHasManualZoom(true);
+                    setZoom(Number((e.target as HTMLInputElement).value));
+                  }}
                   className="w-56 accent-[hsl(48_100%_50%)]"
                   data-testid={`slider-zoom-${srcKey}`}
                 />
