@@ -383,9 +383,9 @@ function ImageBlock({
 
   const [open, setOpen] = useState(false);
   const [zoom, setZoom] = useState<number>(() => {
-    if (typeof window === "undefined") return 1.25;
+    if (typeof window === "undefined") return 1;
     const v = Number(localStorage.getItem(storageKey) ?? "");
-    return Number.isFinite(v) ? Math.min(2.5, Math.max(1, v)) : 1.25;
+    return Number.isFinite(v) ? Math.min(2.5, Math.max(0.5, v)) : 1;
   });
 
   useEffect(() => {
@@ -492,7 +492,7 @@ function ImageBlock({
                 </span>
                 <input
                   type="range"
-                  min={1}
+                  min={0.5}
                   max={2.5}
                   step={0.25}
                   value={zoom}
