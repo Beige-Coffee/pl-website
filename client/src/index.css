@@ -135,9 +135,6 @@
     image-rendering: pixelated;
   }
 
-  .noise-article {
-    color: #e5e7eb;
-  }
 
   .noise-md {
     font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica,
@@ -228,6 +225,16 @@
 
   .noise-md p {
     margin: 0.9em 0;
+  }
+
+  .noise-md-light p,
+  .noise-md-light li,
+  .noise-md-light td {
+    color: var(--color-foreground);
+  }
+
+  .noise-md-light strong {
+    color: var(--color-foreground);
   }
 
   .noise-md ul,
