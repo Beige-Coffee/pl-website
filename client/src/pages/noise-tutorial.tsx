@@ -503,9 +503,6 @@ function ChapterContent({ chapter, theme, imgScale }: { chapter: Chapter; theme:
         {rewriteTutorialImagePaths(md)}
       </ReactMarkdown>
 
-      <div className="font-mono text-xs opacity-70 mt-4" data-testid="text-image-note">
-        Note: Tutorial images are displayed larger for readability (the tutorial markdown may contain smaller width hints).
-      </div>
     </div>
   );
 }
