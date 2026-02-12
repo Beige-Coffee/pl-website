@@ -244,9 +244,15 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
                 const v = Number(e.target.value);
                 setImgScale(v === 0 ? "sm" : v === 1 ? "md" : "lg");
               }}
-              className="w-28 accent-[hsl(48_100%_50%)]"
+              className="w-36 accent-[hsl(48_100%_50%)]"
               data-testid="slider-image-size"
             />
+            <span
+              className={`font-mono text-xs ${theme === "dark" ? "text-slate-200" : "text-foreground"}`}
+              data-testid="text-image-size-value"
+            >
+              {imgScale === "sm" ? "S" : imgScale === "md" ? "M" : "L"}
+            </span>
           </div>
 
           <button
@@ -418,21 +424,28 @@ function ChapterContent({ chapter, theme, imgScale }: { chapter: Chapter; theme:
             const maxW = imgScale === "lg" ? 1500 : imgScale === "md" ? 1200 : 960;
 
             return (
-              <img
-                {...props}
-                width={undefined}
-                height={height}
+              <div
                 style={{
-                  ...(style ?? {}),
                   width: "100%",
                   maxWidth: `${maxW}px`,
-                  height: "auto",
-                  display: "block",
                   margin: "14px auto",
-                  imageRendering: "auto",
                 }}
-                data-testid="img-tutorial"
-              />
+                data-testid="container-tutorial-image"
+              >
+                <img
+                  {...props}
+                  width={undefined}
+                  height={height}
+                  style={{
+                    ...(style ?? {}),
+                    width: "100%",
+                    height: "auto",
+                    display: "block",
+                    imageRendering: "auto",
+                  }}
+                  data-testid="img-tutorial"
+                />
+              </div>
             );
           },
           a: ({ ...props }) => (
