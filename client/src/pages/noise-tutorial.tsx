@@ -383,9 +383,9 @@ function ImageBlock({
 
   const [open, setOpen] = useState(false);
   const [zoom, setZoom] = useState<number>(() => {
-    if (typeof window === "undefined") return 1;
+    if (typeof window === "undefined") return 0.75;
     const v = Number(localStorage.getItem(storageKey) ?? "");
-    return Number.isFinite(v) ? Math.min(2.5, Math.max(0.5, v)) : 1;
+    return Number.isFinite(v) ? Math.min(2.5, Math.max(0.5, v)) : 0.75;
   });
 
   useEffect(() => {
