@@ -410,7 +410,7 @@ function ImageBlock({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className={`block w-full border-2 transition-colors ${
+        className={`group relative block w-full border-2 transition-colors ${
           theme === "dark"
             ? "border-[#2a3552] bg-[#0f1930] hover:bg-[#132043]"
             : "border-border bg-card hover:bg-secondary"
@@ -433,15 +433,34 @@ function ImageBlock({
           }}
           data-testid={`img-tutorial-${srcKey}`}
         />
+
+        <span
+          className={`pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100 ${
+            theme === "dark" ? "bg-black/35" : "bg-black/20"
+          }`}
+          data-testid={`overlay-img-hover-${srcKey}`}
+        >
+          <span
+            className={`flex items-center gap-2 border-2 px-3 py-2 ${
+              theme === "dark"
+                ? "border-[#2a3552] bg-[#0b1220]"
+                : "border-border bg-background"
+            }`}
+            data-testid={`badge-img-zoom-${srcKey}`}
+          >
+            <span className="text-[14px] leading-none" aria-hidden="true">⌕</span>
+            <span className="font-pixel text-xs">CLICK TO ZOOM</span>
+          </span>
+        </span>
       </button>
 
       <span
         className={`mt-2 flex items-center justify-center gap-2 ${
           theme === "dark" ? "text-slate-300" : "text-foreground/70"
-        }`}
+        } opacity-80`}
         data-testid={`text-img-zoomhint-${srcKey}`}
       >
-        <span className="font-pixel text-[10px] tracking-wide">CLICK TO ZOOM</span>
+        <span className="font-pixel text-[10px] tracking-wide">HOVER + CLICK TO ZOOM</span>
         <span className="font-mono text-xs">(Esc to close)</span>
       </span>
 
