@@ -311,8 +311,9 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
         </aside>
 
         <main className="p-5 md:p-10">
+          <div className="mx-auto w-full max-w-[1200px]">
           <article
-            className="noise-article mx-auto w-full max-w-[800px]"
+            className="noise-article mx-auto w-full max-w-[1100px]"
             data-testid="container-article"
           >
             <ChapterContent chapter={active} theme={theme} imgScale={imgScale} />
@@ -345,6 +346,7 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
               )}
             </div>
           </article>
+          </div>
         </main>
       </div>
     </div>
@@ -413,20 +415,21 @@ function ChapterContent({ chapter, theme, imgScale }: { chapter: Chapter; theme:
         rehypePlugins={[rehypeRaw, rehypeHighlight]}
         components={{
           img: ({ style, width, height, ...props }) => {
-            const maxW = imgScale === "lg" ? 1100 : imgScale === "md" ? 900 : 760;
+            const maxW = imgScale === "lg" ? 1500 : imgScale === "md" ? 1200 : 960;
 
             return (
               <img
                 {...props}
-                width={width}
+                width={undefined}
                 height={height}
                 style={{
                   ...(style ?? {}),
-                  width: "min(100%, var(--noise-img-max, 900px))",
+                  width: "100%",
                   maxWidth: `${maxW}px`,
                   height: "auto",
                   display: "block",
-                  margin: "12px auto",
+                  margin: "14px auto",
+                  imageRendering: "auto",
                 }}
                 data-testid="img-tutorial"
               />
