@@ -2,7 +2,7 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { randomBytes, createHash } from "crypto";
-import * as secp256k1 from "@noble/secp256k1";
+import { secp256k1 } from "@noble/curves/secp256k1.js";
 import { bech32 } from "bech32";
 import QRCode from "qrcode";
 

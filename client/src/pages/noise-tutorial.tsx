@@ -1,9 +1,11 @@
 import { Link, Route, Switch, useLocation } from "wouter";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import rehypeHighlight from "rehype-highlight";
+import { useLnAuth } from "../hooks/use-lnauth";
+import LnAuthLogin from "../components/LnAuthLogin";
 
 type Chapter = {
   id: string;
@@ -119,6 +121,7 @@ Let's get started.`;
 function NoiseTutorialShell({ activeId }: { activeId: string }) {
   const [location, setLocation] = useLocation();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const { authenticated, pubkey, loading: authLoading, login, logout } = useLnAuth();
 
   const activeIndex = idxOf(activeId);
   const active = chapters[activeIndex] ?? chapters[0];
@@ -230,6 +233,25 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
         </div>
 
         <div className="flex items-center gap-3">
+          {authenticated && pubkey && (
+            <div className="hidden md:flex items-center gap-2" data-testid="container-auth-status">
+              <span className={`font-pixel text-[10px] ${theme === "dark" ? "text-slate-400" : "text-foreground/60"}`}>
+                {pubkey.slice(0, 8)}...
+              </span>
+              <button
+                type="button"
+                onClick={logout}
+                className={`border px-2 py-1 font-pixel text-[10px] transition-colors ${
+                  theme === "dark"
+                    ? "border-[#2a3552] text-slate-400 hover:text-slate-200"
+                    : "border-border text-foreground/60 hover:text-foreground"
+                }`}
+                data-testid="button-logout"
+              >
+                LOGOUT
+              </button>
+            </div>
+          )}
           <button
             type="button"
             onClick={() => setTheme((v) => (v === "dark" ? "light" : "dark"))}
@@ -325,7 +347,11 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
             className="noise-article mx-auto w-full max-w-[1100px]"
             data-testid="container-article"
           >
-            <ChapterContent chapter={active} theme={theme} />
+            {active.section === "Quiz" && !authenticated ? (
+              <QuizAuthGate theme={theme} onSuccess={login} />
+            ) : (
+              <ChapterContent chapter={active} theme={theme} />
+            )}
 
             <div className={`mt-10 pt-6 border-t ${theme === "dark" ? "border-[#1f2a44]" : "border-border"} flex items-center justify-between gap-3`}>
               {prev ? (
@@ -618,6 +644,40 @@ function ImageBlock({
         </span>
       ) : null}
     </span>
+  );
+}
+
+function QuizAuthGate({
+  theme,
+  onSuccess,
+}: {
+  theme: "light" | "dark";
+  onSuccess: (token: string, pubkey: string) => void;
+}) {
+  const dark = theme === "dark";
+  const border = dark ? "border-[#2a3552]" : "border-border";
+  const bg = dark ? "bg-[#0f1930]" : "bg-card";
+  const textColor = dark ? "text-slate-200" : "text-foreground";
+  const textMuted = dark ? "text-slate-400" : "text-foreground/60";
+
+  return (
+    <div className="py-8" data-testid="container-quiz-auth-gate">
+      <div className={`border-4 ${border} ${bg} p-8 max-w-2xl mx-auto text-center`}>
+        <div className="font-pixel text-xl mb-4" style={{ color: "#ffd700" }} data-testid="text-quiz-locked-title">
+          QUIZ LOCKED
+        </div>
+
+        <div className={`text-lg ${textColor} mb-2`}>
+          You need to log in with a Lightning wallet to take the quiz.
+        </div>
+
+        <div className={`text-sm ${textMuted} mb-8`}>
+          This helps verify you're a real human and connects your score to your Lightning identity.
+        </div>
+
+        <LnAuthLogin theme={theme} onSuccess={onSuccess} />
+      </div>
+    </div>
   );
 }
 
