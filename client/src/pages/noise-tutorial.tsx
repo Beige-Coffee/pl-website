@@ -421,7 +421,7 @@ function ChapterContent({ chapter, theme, imgScale }: { chapter: Chapter; theme:
               ? `${Math.round(asNumber * imgScaleFactor)}px`
               : asPercent != null && Number.isFinite(asPercent)
                 ? `${Math.min(100, Math.max(10, asPercent * imgScaleFactor))}%`
-                : "100%";
+                : "min(100%, 1100px)";
 
             return (
               <img
@@ -431,7 +431,7 @@ function ChapterContent({ chapter, theme, imgScale }: { chapter: Chapter; theme:
                 style={{
                   ...(style ?? {}),
                   width: computedWidth,
-                  maxWidth: "100%",
+                  maxWidth: imgScale === "lg" ? "1100px" : imgScale === "md" ? "900px" : "760px",
                   height: "auto",
                   display: "block",
                   margin: "12px auto",
