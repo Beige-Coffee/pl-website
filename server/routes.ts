@@ -1,10 +1,12 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { randomBytes, createHash } from "crypto";
+import { randomBytes } from "crypto";
 import secp256k1 from "secp256k1";
 import { bech32 } from "bech32";
 import QRCode from "qrcode";
+import bcrypt from "bcryptjs";
+import { emailAuthSchema } from "@shared/schema";
 
 function generateK1(): string {
   return randomBytes(32).toString("hex");
@@ -21,7 +23,112 @@ function getBaseUrl(req: Request): string {
   return `${proto}://${host}`;
 }
 
+async function getAuthUser(req: Request) {
+  const token = req.headers.authorization?.replace("Bearer ", "");
+  if (!token) return null;
+  return storage.getUserBySessionToken(token);
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
+
+  app.post("/api/auth/register", async (req: Request, res: Response) => {
+    try {
+      const parsed = emailAuthSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid email or password (min 6 chars)" });
+      }
+      const { email, password } = parsed.data;
+
+      const existing = await storage.getUserByEmail(email);
+      if (existing) {
+        return res.status(409).json({ error: "Email already registered" });
+      }
+
+      const passwordHash = await bcrypt.hash(password, 10);
+      const user = await storage.createUserWithPassword(email, passwordHash, email.split("@")[0]);
+
+      const session = await storage.createSession(user.id);
+      res.json({
+        authenticated: true,
+        sessionToken: session.token,
+        userId: user.id,
+        email: user.email,
+        displayName: user.displayName,
+        rewardClaimed: user.rewardClaimed,
+      });
+    } catch (err) {
+      console.error("Register error:", err);
+      res.status(500).json({ error: "Registration failed" });
+    }
+  });
+
+  app.post("/api/auth/login", async (req: Request, res: Response) => {
+    try {
+      const parsed = emailAuthSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid email or password" });
+      }
+      const { email, password } = parsed.data;
+
+      const user = await storage.getUserByEmail(email);
+      if (!user || !user.passwordHash) {
+        return res.status(401).json({ error: "Invalid email or password" });
+      }
+
+      const valid = await bcrypt.compare(password, user.passwordHash);
+      if (!valid) {
+        return res.status(401).json({ error: "Invalid email or password" });
+      }
+
+      const session = await storage.createSession(user.id);
+      res.json({
+        authenticated: true,
+        sessionToken: session.token,
+        userId: user.id,
+        email: user.email,
+        displayName: user.displayName,
+        rewardClaimed: user.rewardClaimed,
+      });
+    } catch (err) {
+      console.error("Login error:", err);
+      res.status(500).json({ error: "Login failed" });
+    }
+  });
+
+  app.get("/api/auth/verify", async (req: Request, res: Response) => {
+    const user = await getAuthUser(req);
+    if (!user) {
+      return res.json({ authenticated: false });
+    }
+    res.json({
+      authenticated: true,
+      userId: user.id,
+      pubkey: user.pubkey,
+      email: user.email,
+      displayName: user.displayName,
+      rewardClaimed: user.rewardClaimed,
+    });
+  });
+
+  app.post("/api/auth/logout", async (req: Request, res: Response) => {
+    const token = req.headers.authorization?.replace("Bearer ", "");
+    if (token) {
+      await storage.deleteSession(token);
+    }
+    res.json({ ok: true });
+  });
+
+  app.post("/api/auth/claim-reward", async (req: Request, res: Response) => {
+    const user = await getAuthUser(req);
+    if (!user) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+    if (user.rewardClaimed) {
+      return res.status(400).json({ error: "Reward already claimed" });
+    }
+    await storage.setRewardClaimed(user.id);
+    res.json({ claimed: true });
+  });
 
   app.get("/api/lnauth/challenge", async (req: Request, res: Response) => {
     try {
@@ -86,13 +193,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json({ status: "ERROR", reason: "Invalid signature" });
       }
 
-      const sessionToken = randomBytes(32).toString("hex");
-      await storage.completeChallenge(k1, key, sessionToken);
-
       let user = await storage.getUserByPubkey(key);
       if (!user) {
         user = await storage.createUser({ pubkey: key });
       }
+
+      const session = await storage.createSession(user.id);
+      await storage.completeChallenge(k1, key, session.token);
 
       return res.json({ status: "OK" });
     } catch (err) {
@@ -121,42 +228,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         pubkey: challenge.pubkey,
         userId: user?.id,
         displayName: user?.displayName,
+        rewardClaimed: user?.rewardClaimed ?? false,
       });
     } catch (err) {
       console.error("Status check error:", err);
-      return res.json({ authenticated: false });
-    }
-  });
-
-  app.get("/api/lnauth/verify", async (req: Request, res: Response) => {
-    const token = req.headers.authorization?.replace("Bearer ", "");
-    if (!token) {
-      return res.json({ authenticated: false });
-    }
-
-    try {
-      const [challenge] = await (await import("./storage")).db
-        .select()
-        .from((await import("@shared/schema")).lnAuthChallenges)
-        .where(
-          (await import("drizzle-orm")).eq(
-            (await import("@shared/schema")).lnAuthChallenges.sessionToken,
-            token
-          )
-        );
-
-      if (!challenge || !challenge.pubkey) {
-        return res.json({ authenticated: false });
-      }
-
-      const user = await storage.getUserByPubkey(challenge.pubkey);
-      return res.json({
-        authenticated: true,
-        pubkey: challenge.pubkey,
-        userId: user?.id,
-        displayName: user?.displayName,
-      });
-    } catch {
       return res.json({ authenticated: false });
     }
   });
@@ -172,4 +247,3 @@ function hexToBytes(hex: string): Uint8Array {
   }
   return bytes;
 }
-

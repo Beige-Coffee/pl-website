@@ -4,8 +4,8 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import rehypeHighlight from "rehype-highlight";
-import { useLnAuth } from "../hooks/use-lnauth";
-import LnAuthLogin from "../components/LnAuthLogin";
+import { useAuth } from "../hooks/use-auth";
+import LoginModal from "../components/LoginModal";
 
 type Chapter = {
   id: string;
@@ -121,7 +121,9 @@ Let's get started.`;
 function NoiseTutorialShell({ activeId }: { activeId: string }) {
   const [location, setLocation] = useLocation();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const { authenticated, pubkey, loading: authLoading, login, logout } = useLnAuth();
+  const auth = useAuth();
+  const { authenticated, loading: authLoading, logout, loginWithToken, markRewardClaimed } = auth;
+  const [showLoginModal, setShowLoginModal] = useState(false);
 
   const activeIndex = idxOf(activeId);
   const active = chapters[activeIndex] ?? chapters[0];
@@ -258,7 +260,7 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
               </svg>
             )}
           </button>
-          {authenticated && pubkey && (
+          {authenticated ? (
             <button
               type="button"
               onClick={logout}
@@ -267,10 +269,20 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
                   ? "text-slate-400 hover:text-slate-200"
                   : "text-foreground/60 hover:text-foreground"
               }`}
-              title={`Logged in as ${pubkey.slice(0, 8)}...`}
+              title={auth.email || auth.pubkey ? `Logged in as ${auth.email || (auth.pubkey?.slice(0, 8) + "...")}` : "Logged in"}
               data-testid="button-logout"
             >
               LOGOUT
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowLoginModal(true)}
+              className="p-2 font-pixel text-[10px] transition-colors"
+              style={{ color: "#FFD700" }}
+              data-testid="button-login"
+            >
+              LOGIN
             </button>
           )}
         </div>
@@ -359,10 +371,15 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
             className="noise-article mx-auto w-full max-w-[1100px]"
             data-testid="container-article"
           >
-            {active.section === "Quiz" && !authenticated ? (
-              <QuizAuthGate theme={theme} onSuccess={login} />
-            ) : active.section === "Quiz" ? (
-              <InteractiveQuiz theme={theme} />
+            {active.section === "Quiz" ? (
+              <InteractiveQuiz
+                theme={theme}
+                authenticated={authenticated}
+                rewardClaimed={auth.rewardClaimed}
+                sessionToken={auth.sessionToken}
+                onLoginRequest={() => setShowLoginModal(true)}
+                onRewardClaimed={markRewardClaimed}
+              />
             ) : (
               <ChapterContent chapter={active} theme={theme} />
             )}
@@ -398,6 +415,17 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
           </div>
         </main>
       </div>
+
+      {showLoginModal && (
+        <LoginModal
+          theme={theme}
+          onSuccess={(token, data) => {
+            loginWithToken(token, data);
+            setShowLoginModal(false);
+          }}
+          onClose={() => setShowLoginModal(false)}
+        />
+      )}
     </div>
   );
 }
@@ -806,10 +834,26 @@ function LightningBoltCelebration({ theme }: { theme: "light" | "dark" }) {
   );
 }
 
-function InteractiveQuiz({ theme }: { theme: "light" | "dark" }) {
+function InteractiveQuiz({
+  theme,
+  authenticated,
+  rewardClaimed,
+  sessionToken,
+  onLoginRequest,
+  onRewardClaimed,
+}: {
+  theme: "light" | "dark";
+  authenticated: boolean;
+  rewardClaimed: boolean;
+  sessionToken: string | null;
+  onLoginRequest: () => void;
+  onRewardClaimed: () => void;
+}) {
   const [selections, setSelections] = useState<Record<number, number>>({});
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(0);
+  const [showReward, setShowReward] = useState(false);
+  const [claimingReward, setClaimingReward] = useState(false);
 
   const dark = theme === "dark";
   const border = dark ? "border-[#2a3552]" : "border-border";
@@ -823,6 +867,10 @@ function InteractiveQuiz({ theme }: { theme: "light" | "dark" }) {
   };
 
   const handleSubmit = () => {
+    if (!authenticated) {
+      onLoginRequest();
+      return;
+    }
     let correct = 0;
     QUIZ_QUESTIONS.forEach((q, i) => {
       if (selections[i] === q.answer) correct++;
@@ -832,10 +880,28 @@ function InteractiveQuiz({ theme }: { theme: "light" | "dark" }) {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const handleClaimReward = async () => {
+    if (!sessionToken || rewardClaimed) return;
+    setClaimingReward(true);
+    try {
+      const res = await fetch("/api/auth/claim-reward", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${sessionToken}` },
+      });
+      const data = await res.json();
+      if (data.claimed) {
+        onRewardClaimed();
+        setShowReward(true);
+      }
+    } catch {}
+    setClaimingReward(false);
+  };
+
   const handleReset = () => {
     setSelections({});
     setSubmitted(false);
     setScore(0);
+    setShowReward(false);
   };
 
   const percentage = Math.round((score / QUIZ_QUESTIONS.length) * 100);
@@ -877,6 +943,55 @@ function InteractiveQuiz({ theme }: { theme: "light" | "dark" }) {
               ? `You passed with ${percentage}%! You've mastered Lightning's Noise Protocol.`
               : `You scored ${percentage}%. You need 90% to pass. Review the incorrect answers below and try again!`}
           </div>
+
+          {passed && !rewardClaimed && !showReward && (
+            <button
+              type="button"
+              onClick={handleClaimReward}
+              disabled={claimingReward}
+              className={`mt-4 font-pixel text-sm border-2 px-6 py-3 transition-all border-[#FFD700] bg-[#FFD700] text-black hover:bg-[#FFC800] active:scale-95 ${
+                claimingReward ? "opacity-60 cursor-wait" : ""
+              }`}
+              data-testid="button-claim-reward"
+            >
+              {claimingReward ? "CLAIMING..." : "CLAIM BITCOIN REWARD"}
+            </button>
+          )}
+
+          {passed && (rewardClaimed || showReward) && (
+            <div className="mt-6" data-testid="container-reward-qr">
+              <div className="font-pixel text-sm mb-3" style={{ color: "#FFD700" }}>
+                YOUR BITCOIN REWARD
+              </div>
+              <div className={`inline-block border-4 ${border} ${bg} p-4`}>
+                <div className="w-[200px] h-[200px] flex items-center justify-center" style={{ background: "#fff" }}>
+                  <svg viewBox="0 0 200 200" width="200" height="200">
+                    <rect width="200" height="200" fill="white" />
+                    <g fill="black">
+                      {Array.from({ length: 15 }, (_, row) =>
+                        Array.from({ length: 15 }, (_, col) => {
+                          const isCorner = (row < 5 && col < 5) || (row < 5 && col > 9) || (row > 9 && col < 5);
+                          const isBorder = isCorner && (row === 0 || row === 4 || col === 0 || col === 4 || col === 10 || col === 14 || row === 10 || row === 14);
+                          const isInner = isCorner && row >= 1 && row <= 3 && col >= 1 && col <= 3;
+                          const isInner2 = isCorner && ((row >= 1 && row <= 3 && col >= 11 && col <= 13) || (row >= 11 && row <= 13 && col >= 1 && col <= 3));
+                          const hash = (row * 17 + col * 31) % 7;
+                          const isData = !isCorner && hash < 3;
+                          if (isBorder || isInner || isInner2 || isData) {
+                            return <rect key={`${row}-${col}`} x={col * 13 + 3} y={row * 13 + 3} width="12" height="12" />;
+                          }
+                          return null;
+                        })
+                      )}
+                    </g>
+                  </svg>
+                </div>
+              </div>
+              <div className={`mt-3 font-pixel text-[10px] ${textMuted}`}>
+                SAMPLE QR - REAL REWARDS COMING SOON
+              </div>
+            </div>
+          )}
+
           <button
             type="button"
             onClick={handleReset}
@@ -1000,49 +1115,20 @@ function InteractiveQuiz({ theme }: { theme: "light" | "dark" }) {
             }`}
             data-testid="button-quiz-submit"
           >
-            SUBMIT ANSWERS
+            {allAnswered && !authenticated ? "LOGIN & SUBMIT" : "SUBMIT ANSWERS"}
           </button>
           {!allAnswered && (
             <div className={`mt-3 font-pixel text-xs ${textMuted}`} data-testid="text-quiz-progress">
               {Object.keys(selections).length}/{QUIZ_QUESTIONS.length} ANSWERED
             </div>
           )}
+          {allAnswered && !authenticated && (
+            <div className={`mt-3 font-pixel text-xs ${textMuted}`}>
+              LOGIN REQUIRED TO SUBMIT
+            </div>
+          )}
         </div>
       )}
-    </div>
-  );
-}
-
-function QuizAuthGate({
-  theme,
-  onSuccess,
-}: {
-  theme: "light" | "dark";
-  onSuccess: (token: string, pubkey: string) => void;
-}) {
-  const dark = theme === "dark";
-  const border = dark ? "border-[#2a3552]" : "border-border";
-  const bg = dark ? "bg-[#0f1930]" : "bg-card";
-  const textColor = dark ? "text-slate-200" : "text-foreground";
-  const textMuted = dark ? "text-slate-400" : "text-foreground/60";
-
-  return (
-    <div className="py-8" data-testid="container-quiz-auth-gate">
-      <div className={`border-4 ${border} ${bg} p-8 max-w-2xl mx-auto text-center`}>
-        <div className="font-pixel text-xl mb-4" style={{ color: "#ffd700" }} data-testid="text-quiz-locked-title">
-          QUIZ LOCKED
-        </div>
-
-        <div className={`text-lg ${textColor} mb-2`}>
-          You need to log in with a Lightning wallet to take the quiz.
-        </div>
-
-        <div className={`text-sm ${textMuted} mb-8`}>
-          This helps verify you're a real human and connects your score to your Lightning identity.
-        </div>
-
-        <LnAuthLogin theme={theme} onSuccess={onSuccess} />
-      </div>
     </div>
   );
 }

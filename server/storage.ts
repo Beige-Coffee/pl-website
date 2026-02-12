@@ -14,6 +14,7 @@ export interface IStorage {
   getUserByPubkey(pubkey: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  createUserWithPassword(email: string, passwordHash: string, displayName: string): Promise<User>;
   createSession(userId: string): Promise<Session>;
   getSession(token: string): Promise<Session | undefined>;
   deleteSession(token: string): Promise<void>;
@@ -42,6 +43,15 @@ export class DatabaseStorage implements IStorage {
 
   async createUser(insertUser: InsertUser): Promise<User> {
     const [user] = await db.insert(users).values(insertUser).returning();
+    return user;
+  }
+
+  async createUserWithPassword(email: string, passwordHash: string, displayName: string): Promise<User> {
+    const [user] = await db.insert(users).values({
+      email,
+      passwordHash,
+      displayName,
+    }).returning();
     return user;
   }
 
