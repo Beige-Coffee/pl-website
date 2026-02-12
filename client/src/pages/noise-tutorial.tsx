@@ -425,8 +425,8 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
                   className={`inline-flex items-center gap-2 border-2 px-4 py-3 transition-colors ${t.navPrev}`}
                   data-testid="link-prev"
                 >
-                  <span className={`font-pixel text-[10px] ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`}>PREV</span>
-                  <span className="font-mono text-sm">{prev.title}</span>
+                  <span className={`font-pixel text-xs ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`}>PREV</span>
+                  <span className="font-mono text-[15px]">{prev.title}</span>
                 </Link>
               ) : (
                 <div />
@@ -438,8 +438,8 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
                   className={`inline-flex items-center gap-2 border-2 px-4 py-3 transition-all ${t.navNext}`}
                   data-testid="link-next"
                 >
-                  <span className="font-pixel text-[10px]">NEXT</span>
-                  <span className="font-mono text-sm">{next.title}</span>
+                  <span className="font-pixel text-xs">NEXT</span>
+                  <span className="font-mono text-[15px]">{next.title}</span>
                 </Link>
               ) : (
                 <div />
