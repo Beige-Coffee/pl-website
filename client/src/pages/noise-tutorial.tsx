@@ -880,7 +880,7 @@ function InteractiveQuiz({ theme }: { theme: "light" | "dark" }) {
         </div>
       )}
 
-      <div className="space-y-8">
+      <div className="space-y-6">
         {QUIZ_QUESTIONS.map((q, qIndex) => {
           const selected = selections[qIndex];
           const isCorrect = submitted && selected === q.answer;
@@ -889,7 +889,7 @@ function InteractiveQuiz({ theme }: { theme: "light" | "dark" }) {
           return (
             <div
               key={qIndex}
-              className={`border-4 p-6 ${bg} ${
+              className={`border-2 p-4 md:p-5 ${bg} ${
                 submitted
                   ? isCorrect
                     ? "border-green-500/60"
@@ -900,14 +900,14 @@ function InteractiveQuiz({ theme }: { theme: "light" | "dark" }) {
               }`}
               data-testid={`container-quiz-question-${qIndex}`}
             >
-              <div className={`font-pixel text-sm mb-1 ${textMuted}`}>
-                QUESTION {qIndex + 1} OF {QUIZ_QUESTIONS.length}
+              <div className={`font-pixel text-xs mb-1 ${textMuted}`}>
+                Q{qIndex + 1}/{QUIZ_QUESTIONS.length}
               </div>
-              <div className={`text-lg font-semibold mb-5 ${textColor}`} data-testid={`text-quiz-question-${qIndex}`}>
+              <div className={`text-[17px] md:text-[19px] font-semibold mb-4 leading-snug ${textColor}`} data-testid={`text-quiz-question-${qIndex}`}>
                 {q.question}
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {q.options.map((opt, optIndex) => {
                   const isSelected = selected === optIndex;
                   const isAnswer = q.answer === optIndex;
@@ -941,13 +941,13 @@ function InteractiveQuiz({ theme }: { theme: "light" | "dark" }) {
                       type="button"
                       onClick={() => handleSelect(qIndex, optIndex)}
                       disabled={submitted}
-                      className={`w-full text-left border-2 p-4 flex items-start gap-3 transition-colors ${optionStyle} ${
+                      className={`w-full text-left border px-3 py-2.5 flex items-start gap-2.5 transition-colors ${optionStyle} ${
                         submitted ? "" : "active:scale-[0.99]"
                       }`}
                       data-testid={`button-quiz-option-${qIndex}-${optIndex}`}
                     >
                       <span
-                        className={`font-pixel text-sm mt-0.5 shrink-0 w-7 h-7 flex items-center justify-center border ${
+                        className={`font-pixel text-xs mt-0.5 shrink-0 w-6 h-6 flex items-center justify-center border ${
                           submitted && isAnswer
                             ? "border-green-500 text-green-400"
                             : submitted && isSelected && !isAnswer
@@ -961,7 +961,7 @@ function InteractiveQuiz({ theme }: { theme: "light" | "dark" }) {
                       >
                         {submitted && isAnswer ? "✓" : submitted && isSelected && !isAnswer ? "✗" : letter}
                       </span>
-                      <span className={`text-[15px] leading-relaxed ${!submitted ? (dark ? "text-slate-200" : "text-foreground") : ""}`}>
+                      <span className={`text-[16px] md:text-[17px] leading-snug ${!submitted ? (dark ? "text-slate-200" : "text-foreground") : ""}`}>
                         {opt}
                       </span>
                     </button>
