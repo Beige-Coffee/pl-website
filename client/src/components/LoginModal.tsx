@@ -17,11 +17,10 @@ const SUPPORTED_WALLETS = [
 export default function LoginModal({ theme, onSuccess, onClose }: LoginModalProps) {
   const [tab, setTab] = useState<"lightning" | "email">("email");
   const dark = theme === "dark";
-  const border = dark ? "border-[#2a3552]" : "border-border";
-  const bg = dark ? "bg-[#0f1930]" : "bg-card";
-  const pageBg = dark ? "bg-[#0b1220]" : "bg-background";
-  const textColor = dark ? "text-slate-200" : "text-foreground";
-  const textMuted = dark ? "text-slate-400" : "text-foreground/60";
+  const border = dark ? "border-[#2a3552]" : "border-gray-800";
+  const bg = dark ? "bg-[#0f1930]" : "bg-white";
+  const pageBg = dark ? "bg-[#0b1220]" : "bg-white";
+  const textMuted = dark ? "text-slate-400" : "text-gray-500";
 
   return (
     <div
@@ -32,13 +31,13 @@ export default function LoginModal({ theme, onSuccess, onClose }: LoginModalProp
       <div className="absolute inset-0 bg-black/60" />
       <div className={`relative w-full max-w-md border-4 ${border} ${pageBg} p-6`}>
         <div className="flex items-center justify-between mb-4">
-          <div className="font-pixel text-sm" style={{ color: "#ffd700" }} data-testid="text-login-title">
+          <div className={`font-pixel text-sm ${dark ? "text-[#FFD700]" : "text-gray-900"}`} data-testid="text-login-title">
             LOGIN / REGISTER
           </div>
           <button
             type="button"
             onClick={onClose}
-            className={`border-2 ${border} ${bg} px-3 py-1 font-pixel text-xs hover:opacity-80`}
+            className={`border-2 ${border} ${bg} px-3 py-1 font-pixel text-xs hover:opacity-80 ${dark ? "text-slate-200" : "text-gray-900"}`}
             data-testid="button-login-close"
           >
             X
@@ -51,8 +50,10 @@ export default function LoginModal({ theme, onSuccess, onClose }: LoginModalProp
             onClick={() => setTab("email")}
             className={`flex-1 border-2 px-3 py-2 font-pixel text-xs transition-colors ${
               tab === "email"
-                ? "border-[#FFD700] bg-[#FFD700]/15 text-[#FFD700]"
-                : `${border} ${bg} ${textMuted} hover:opacity-80`
+                ? dark
+                  ? "border-[#FFD700] bg-[#FFD700]/15 text-[#FFD700]"
+                  : "border-gray-900 bg-gray-900 text-white"
+                : `${border} ${bg} ${dark ? "text-slate-400" : "text-gray-600"} hover:opacity-80`
             }`}
             data-testid="button-tab-email"
           >
@@ -63,8 +64,10 @@ export default function LoginModal({ theme, onSuccess, onClose }: LoginModalProp
             onClick={() => setTab("lightning")}
             className={`flex-1 border-2 border-l-0 px-3 py-2 font-pixel text-xs transition-colors ${
               tab === "lightning"
-                ? "border-[#FFD700] bg-[#FFD700]/15 text-[#FFD700]"
-                : `${border} ${bg} ${textMuted} hover:opacity-80`
+                ? dark
+                  ? "border-[#FFD700] bg-[#FFD700]/15 text-[#FFD700]"
+                  : "border-gray-900 bg-gray-900 text-white"
+                : `${border} ${bg} ${dark ? "text-slate-400" : "text-gray-600"} hover:opacity-80`
             }`}
             data-testid="button-tab-lightning"
           >
@@ -96,11 +99,11 @@ function EmailAuthForm({
   const [loading, setLoading] = useState(false);
 
   const dark = theme === "dark";
-  const border = dark ? "border-[#2a3552]" : "border-border";
-  const bg = dark ? "bg-[#0f1930]" : "bg-card";
-  const textColor = dark ? "text-slate-200" : "text-foreground";
-  const textMuted = dark ? "text-slate-400" : "text-foreground/60";
-  const inputBg = dark ? "bg-[#0b1220]" : "bg-background";
+  const border = dark ? "border-[#2a3552]" : "border-gray-400";
+  const bg = dark ? "bg-[#0f1930]" : "bg-white";
+  const textColor = dark ? "text-slate-200" : "text-gray-900";
+  const textMuted = dark ? "text-slate-400" : "text-gray-600";
+  const inputBg = dark ? "bg-[#0b1220]" : "bg-white";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -130,26 +133,26 @@ function EmailAuthForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
-        <label className={`block font-pixel text-[10px] mb-1 ${textMuted}`}>EMAIL</label>
+        <label className={`block font-pixel text-[10px] mb-1 ${dark ? "text-slate-400" : "text-gray-700"}`}>EMAIL</label>
         <input
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
-          className={`w-full border-2 ${border} ${inputBg} ${textColor} px-3 py-2 text-sm font-mono focus:outline-none focus:border-[#FFD700]`}
+          className={`w-full border-2 ${border} ${inputBg} ${textColor} px-3 py-2 text-sm font-mono focus:outline-none focus:border-gray-900 placeholder:text-gray-400`}
           placeholder="you@example.com"
           data-testid="input-email"
         />
       </div>
       <div>
-        <label className={`block font-pixel text-[10px] mb-1 ${textMuted}`}>PASSWORD</label>
+        <label className={`block font-pixel text-[10px] mb-1 ${dark ? "text-slate-400" : "text-gray-700"}`}>PASSWORD</label>
         <input
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
           minLength={6}
-          className={`w-full border-2 ${border} ${inputBg} ${textColor} px-3 py-2 text-sm font-mono focus:outline-none focus:border-[#FFD700]`}
+          className={`w-full border-2 ${border} ${inputBg} ${textColor} px-3 py-2 text-sm font-mono focus:outline-none focus:border-gray-900 placeholder:text-gray-400`}
           placeholder="Min 6 characters"
           data-testid="input-password"
         />
@@ -167,7 +170,9 @@ function EmailAuthForm({
         className={`w-full font-pixel text-sm border-2 px-4 py-3 transition-all ${
           loading
             ? `${border} ${bg} ${textMuted} cursor-wait`
-            : "border-[#FFD700] bg-[#FFD700] text-black hover:bg-[#FFC800] active:scale-[0.98]"
+            : dark
+            ? "border-[#FFD700] bg-[#FFD700] text-black hover:bg-[#FFC800] active:scale-[0.98]"
+            : "border-gray-900 bg-gray-900 text-white hover:bg-gray-800 active:scale-[0.98]"
         }`}
         data-testid="button-auth-submit"
       >
@@ -178,7 +183,7 @@ function EmailAuthForm({
         <button
           type="button"
           onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(null); }}
-          className={`font-pixel text-[10px] ${textMuted} hover:text-[#FFD700] transition-colors`}
+          className={`font-pixel text-[10px] transition-colors ${dark ? "text-slate-400 hover:text-[#FFD700]" : "text-gray-500 hover:text-gray-900"}`}
           data-testid="button-toggle-mode"
         >
           {mode === "login" ? "DON'T HAVE AN ACCOUNT? REGISTER" : "ALREADY HAVE AN ACCOUNT? LOGIN"}
@@ -199,9 +204,9 @@ function LightningAuthForm({
   const [status, setStatus] = useState<"idle" | "waiting" | "success">("idle");
 
   const dark = theme === "dark";
-  const border = dark ? "border-[#2a3552]" : "border-border";
-  const bg = dark ? "bg-[#0f1930]" : "bg-card";
-  const textMuted = dark ? "text-slate-400" : "text-foreground/60";
+  const border = dark ? "border-[#2a3552]" : "border-gray-400";
+  const bg = dark ? "bg-[#0f1930]" : "bg-gray-50";
+  const textMuted = dark ? "text-slate-400" : "text-gray-500";
 
   useEffect(() => {
     generate();
@@ -228,7 +233,7 @@ function LightningAuthForm({
 
   return (
     <div>
-      <p className={`text-sm ${dark ? "text-slate-300" : "text-foreground/80"} mb-4 text-center`}>
+      <p className={`text-sm ${dark ? "text-slate-300" : "text-gray-700"} mb-4 text-center`}>
         Scan with a Lightning wallet that supports LNURL-auth
       </p>
 
@@ -241,7 +246,7 @@ function LightningAuthForm({
       {error && (
         <div className="text-center py-4">
           <p className="text-red-500 font-pixel text-xs mb-3">ERROR: {error}</p>
-          <button onClick={generate} className={`border-2 ${border} ${bg} px-4 py-2 font-pixel text-xs hover:opacity-80`} data-testid="button-ln-retry">
+          <button onClick={generate} className={`border-2 ${border} ${bg} px-4 py-2 font-pixel text-xs hover:opacity-80 ${dark ? "text-slate-200" : "text-gray-900"}`} data-testid="button-ln-retry">
             RETRY
           </button>
         </div>
@@ -252,7 +257,7 @@ function LightningAuthForm({
           <div className={`border-2 ${border} ${bg} p-4 mb-4 flex justify-center`}>
             {status === "success" ? (
               <div className="text-center py-4">
-                <div className="font-pixel text-sm mb-2" style={{ color: "#ffd700" }}>AUTHENTICATED!</div>
+                <div className={`font-pixel text-sm mb-2 ${dark ? "text-[#FFD700]" : "text-gray-900"}`}>AUTHENTICATED!</div>
               </div>
             ) : (
               <img
@@ -273,8 +278,9 @@ function LightningAuthForm({
           <div className="text-center mb-4">
             <a
               href={`lightning:${challenge.lnurl}`}
-              className={`inline-block border-2 ${border} ${bg} px-4 py-2 font-pixel text-xs hover:opacity-80`}
-              style={{ color: "#ffd700" }}
+              className={`inline-block border-2 px-4 py-2 font-pixel text-xs hover:opacity-80 ${
+                dark ? "border-[#2a3552] bg-[#0f1930] text-[#FFD700]" : "border-gray-900 bg-gray-900 text-white"
+              }`}
               data-testid="link-open-wallet"
             >
               OPEN IN WALLET
@@ -292,7 +298,7 @@ function LightningAuthForm({
               href={w.url}
               target="_blank"
               rel="noopener noreferrer"
-              className={`border ${border} px-2 py-1 text-xs ${dark ? "text-slate-300" : "text-foreground"} hover:opacity-70`}
+              className={`border ${border} px-2 py-1 text-xs ${dark ? "text-slate-300" : "text-gray-700"} hover:opacity-70`}
             >
               {w.name}
               {w.note && <span className={`ml-1 ${textMuted} text-[10px]`}>({w.note})</span>}
