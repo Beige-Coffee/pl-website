@@ -184,10 +184,16 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
       };
 
   const [imgScale, setImgScale] = useState<"sm" | "md" | "lg">("md");
+  const [sidebarWidth, setSidebarWidth] = useState(360);
+  const [isResizingSidebar, setIsResizingSidebar] = useState(false);
 
   useEffect(() => {
     const stored = typeof window !== "undefined" ? localStorage.getItem("pl-img-scale") : null;
     if (stored === "sm" || stored === "md" || stored === "lg") setImgScale(stored);
+
+    const storedWidth = typeof window !== "undefined" ? localStorage.getItem("pl-sidebar-width") : null;
+    const w = storedWidth ? Number(storedWidth) : NaN;
+    if (Number.isFinite(w)) setSidebarWidth(Math.min(520, Math.max(240, w)));
   }, []);
 
   useEffect(() => {
@@ -197,6 +203,33 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
       // ignore
     }
   }, [imgScale]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("pl-sidebar-width", String(sidebarWidth));
+    } catch {
+      // ignore
+    }
+  }, [sidebarWidth]);
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!isResizingSidebar) return;
+      setSidebarWidth((prev) => {
+        const next = prev + e.movementX;
+        return Math.min(520, Math.max(240, next));
+      });
+    };
+
+    const onUp = () => setIsResizingSidebar(false);
+
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [isResizingSidebar]);
 
   return (
     <div className={`min-h-screen ${t.pageBg} ${t.pageText} overflow-x-hidden`} data-theme={theme} data-img-scale={imgScale}>
@@ -267,11 +300,14 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
         </div>
       </div>
 
-      <div className="mx-auto w-full max-w-7xl grid md:grid-cols-[360px_1fr] gap-0">
+      <div
+        className="mx-auto w-full max-w-7xl grid gap-0"
+        style={{ gridTemplateColumns: `minmax(240px, ${sidebarWidth}px) 10px minmax(0, 1fr)` }}
+      >
         <aside
           className={`${
             mobileNavOpen ? "block" : "hidden"
-          } md:block md:sticky md:top-[68px] h-fit border-r-4 ${theme === "dark" ? "border-[#1f2a44] bg-[#0b1220]" : "border-border bg-card"}`}
+          } md:block md:sticky md:top-[68px] h-fit ${theme === "dark" ? "bg-[#0b1220]" : "bg-card"}`}
         >
           <div className="p-4">
             <div className="font-pixel text-sm mb-3" data-testid="text-sidebar-title">
@@ -315,6 +351,19 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
             })}
           </div>
         </aside>
+
+        <div
+          className={`hidden md:flex items-stretch justify-center ${theme === "dark" ? "bg-[#1f2a44]" : "bg-border"}`}
+          data-testid="divider-sidebar"
+        >
+          <button
+            type="button"
+            onMouseDown={() => setIsResizingSidebar(true)}
+            className={`w-full cursor-col-resize transition-colors ${theme === "dark" ? "hover:bg-[#2a3552]" : "hover:bg-foreground/10"}`}
+            aria-label="Resize chapters panel"
+            data-testid="handle-sidebar-resize"
+          />
+        </div>
 
         <main className="p-5 md:p-10">
           <div className="mx-auto w-full max-w-[1200px]">
