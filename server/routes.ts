@@ -1,7 +1,8 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { randomBytes, createHash, createVerify, createPublicKey } from "crypto";
+import { randomBytes, createHash } from "crypto";
+import secp256k1 from "secp256k1";
 import { bech32 } from "bech32";
 import QRCode from "qrcode";
 
@@ -71,30 +72,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       let isValid = false;
       try {
-        const spkiHeader = Buffer.from(
-          "3056301006072a8648ce3d020106052b8104000a034200",
-          "hex"
+        isValid = secp256k1.ecdsaVerify(
+          secp256k1.signatureImport(Buffer.from(sigBytes)),
+          Buffer.from(k1Bytes),
+          Buffer.from(keyBytes)
         );
-        const spkiHeaderCompressed = Buffer.from(
-          "3036301006072a8648ce3d020106052b8104000a032200",
-          "hex"
-        );
-
-        const isCompressed = keyBytes.length === 33;
-        const spkiDer = Buffer.concat([
-          isCompressed ? spkiHeaderCompressed : spkiHeader,
-          keyBytes,
-        ]);
-
-        const pubKeyObj = createPublicKey({
-          key: spkiDer,
-          format: "der",
-          type: "spki",
-        });
-
-        const verify = createVerify("SHA256");
-        verify.update(k1Bytes);
-        isValid = verify.verify(pubKeyObj, Buffer.from(sigBytes));
       } catch (verifyErr) {
         console.error("Signature verification error:", verifyErr);
         isValid = false;
