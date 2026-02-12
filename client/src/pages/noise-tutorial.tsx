@@ -413,25 +413,17 @@ function ChapterContent({ chapter, theme, imgScale }: { chapter: Chapter; theme:
         rehypePlugins={[rehypeRaw, rehypeHighlight]}
         components={{
           img: ({ style, width, height, ...props }) => {
-            const w = style?.width ?? width;
-            const asNumber = typeof w === "number" ? w : null;
-            const asPercent = typeof w === "string" && w.trim().endsWith("%") ? Number(w.trim().slice(0, -1)) : null;
-
-            const computedWidth = asNumber != null
-              ? `${Math.round(asNumber * imgScaleFactor)}px`
-              : asPercent != null && Number.isFinite(asPercent)
-                ? `${Math.min(100, Math.max(10, asPercent * imgScaleFactor))}%`
-                : "min(100%, 1100px)";
+            const maxW = imgScale === "lg" ? 1100 : imgScale === "md" ? 900 : 760;
 
             return (
               <img
                 {...props}
-                width={undefined}
+                width={width}
                 height={height}
                 style={{
                   ...(style ?? {}),
-                  width: computedWidth,
-                  maxWidth: imgScale === "lg" ? "1100px" : imgScale === "md" ? "900px" : "760px",
+                  width: "min(100%, var(--noise-img-max, 900px))",
+                  maxWidth: `${maxW}px`,
                   height: "auto",
                   display: "block",
                   margin: "12px auto",
@@ -461,6 +453,10 @@ function ChapterContent({ chapter, theme, imgScale }: { chapter: Chapter; theme:
       >
         {rewriteTutorialImagePaths(md)}
       </ReactMarkdown>
+
+      <div className="font-mono text-xs opacity-70 mt-4" data-testid="text-image-note">
+        Note: Tutorial images are displayed larger for readability (the tutorial markdown may contain smaller width hints).
+      </div>
     </div>
   );
 }
