@@ -388,6 +388,7 @@ function ImageBlock({
     return Number.isFinite(v) ? Math.min(2.5, Math.max(0.5, v)) : 0.75;
   });
 
+  const [fitNonce, setFitNonce] = useState(0);
   const zoomBodyRef = useRef<HTMLSpanElement | null>(null);
   const zoomImgRef = useRef<HTMLImageElement | null>(null);
 
@@ -412,17 +413,21 @@ function ImageBlock({
     if (!open) return;
 
     // Auto fit-to-screen based on actual rendered sizes.
+    // (We defer by a frame because the overlay body has max-height constraints and
+    // its clientWidth/clientHeight are often 0 on the first effect tick.)
     const bodyEl = zoomBodyRef.current;
     const imgEl = zoomImgRef.current;
     if (!bodyEl || !imgEl) return;
+
+    let raf = 0;
 
     const computeFit = () => {
       const padding = 24; // breathing room inside viewport
       const availableW = Math.max(200, bodyEl.clientWidth - padding);
       const availableH = Math.max(200, bodyEl.clientHeight - padding);
 
-      const naturalW = imgEl.naturalWidth || imgEl.clientWidth || 1;
-      const naturalH = imgEl.naturalHeight || imgEl.clientHeight || 1;
+      const naturalW = imgEl.naturalWidth || 1;
+      const naturalH = imgEl.naturalHeight || 1;
 
       const fit = Math.min(availableW / naturalW, availableH / naturalH);
       const clamped = Math.min(2.5, Math.max(0.5, fit));
@@ -434,16 +439,36 @@ function ImageBlock({
       bodyEl.scrollLeft = 0;
     };
 
-    if (imgEl.complete) {
-      computeFit();
+    const scheduleFit = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        // If still 0-sized (very early), try one more frame.
+        if (bodyEl.clientWidth === 0 || bodyEl.clientHeight === 0) {
+          raf = requestAnimationFrame(computeFit);
+          return;
+        }
+        computeFit();
+      });
+    };
+
+    if (imgEl.complete && imgEl.naturalWidth > 0) {
+      scheduleFit();
     } else {
-      imgEl.addEventListener("load", computeFit, { once: true });
+      imgEl.addEventListener("load", scheduleFit, { once: true });
     }
 
-    const onResize = () => computeFit();
+    const onResize = () => scheduleFit();
     window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, [open, rawSrc]);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", onResize);
+    };
+  }, [open, rawSrc, fitNonce]);
+
+  useEffect(() => {
+    if (!open) return;
+    setFitNonce((n) => n + 1);
+  }, [open]);
 
   return (
     <span className="block my-5" data-testid={`img-block-${srcKey}`}>
