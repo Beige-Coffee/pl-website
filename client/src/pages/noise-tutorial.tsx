@@ -136,13 +136,60 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
     setMobileNavOpen(false);
   }, [location, setMobileNavOpen]);
 
+  const [theme, setTheme] = useState<"light" | "dark">("light");
+
+  useEffect(() => {
+    const stored = typeof window !== "undefined" ? localStorage.getItem("pl-theme") : null;
+    if (stored === "dark" || stored === "light") setTheme(stored);
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("pl-theme", theme);
+    } catch {
+      // ignore
+    }
+  }, [theme]);
+
+  const t = theme === "dark"
+    ? {
+        pageBg: "bg-[#0b1220]",
+        pageText: "text-slate-100",
+        headerBg: "bg-[#0b1220]",
+        headerBorder: "border-[#1f2a44]",
+        sidebarBg: "bg-[#0b1220]",
+        sidebarBorder: "border-[#1f2a44]",
+        sectionText: "text-slate-300",
+        dividerBg: "bg-[#1f2a44]",
+        chapterInactive: "bg-[#0f1930] border-[#2a3552] text-slate-100 hover:bg-[#132043]",
+        chapterActive: "bg-[#132043] border-[hsl(48_100%_50%)] text-[hsl(48_100%_50%)]",
+        navPrev: "bg-[#0f1930] border-[#2a3552] hover:bg-[#132043]",
+        navNext: "bg-[hsl(48_100%_50%)] text-[#0b1220] border-[#0b1220] hover:brightness-110",
+        crumbText: "text-slate-200",
+      }
+    : {
+        pageBg: "bg-background",
+        pageText: "text-foreground",
+        headerBg: "bg-card",
+        headerBorder: "border-border",
+        sidebarBg: "bg-card",
+        sidebarBorder: "border-border",
+        sectionText: "text-foreground/70",
+        dividerBg: "bg-border",
+        chapterInactive: "bg-card border-border text-foreground hover:bg-secondary",
+        chapterActive: "bg-secondary border-border text-foreground",
+        navPrev: "bg-card border-border hover:bg-secondary",
+        navNext: "bg-primary text-foreground border-border hover:bg-primary/90",
+        crumbText: "text-foreground",
+      };
+
   return (
-    <div className="min-h-screen bg-[#0b1220] text-slate-100">
-      <div className="w-full border-b-4 border-[#1f2a44] bg-[#0b1220] px-4 py-3 flex items-center justify-between sticky top-0 z-50">
+    <div className={`min-h-screen ${t.pageBg} ${t.pageText}`} data-theme={theme}>
+      <div className={`w-full border-b-4 ${t.headerBorder} ${t.headerBg} px-4 py-3 flex items-center justify-between sticky top-0 z-50`}>
         <div className="flex items-center gap-3">
           <button
             type="button"
-            className="md:hidden font-pixel text-xs border-2 border-[#2a3552] px-3 py-2 bg-[#0f1930] hover:bg-[#132043] transition-colors"
+            className={`md:hidden font-pixel text-xs border-2 ${theme === "dark" ? "border-[#2a3552] bg-[#0f1930] hover:bg-[#132043]" : "border-border bg-card hover:bg-secondary"} px-3 py-2 transition-colors`}
             onClick={() => setMobileNavOpen((v) => !v)}
             data-testid="button-sidebar-toggle"
           >
@@ -150,7 +197,7 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
           </button>
           <Link
             href="/blog"
-            className="font-pixel text-xs md:text-sm hover:text-[hsl(48_100%_50%)] transition-colors"
+            className="font-pixel text-xs md:text-sm hover:text-primary transition-colors"
             data-testid="link-back-blog"
           >
             &lt; BACK TO BLOG
@@ -158,29 +205,40 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
         </div>
 
         <div className="hidden md:flex items-center gap-3">
-          <div className="font-pixel text-xs text-slate-300" data-testid="text-tutorial-breadcrumb">
+          <div className={`font-pixel text-xs ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`} data-testid="text-tutorial-breadcrumb">
             Noise Tutorial
           </div>
-          <div className="h-4 w-[2px] bg-[#2a3552]" />
-          <div className="font-mono text-sm text-slate-200" data-testid="text-chapter-title">
+          <div className={`h-4 w-[2px] ${theme === "dark" ? "bg-[#2a3552]" : "bg-border"}`} />
+          <div className={`font-mono text-sm ${t.crumbText}`} data-testid="text-chapter-title">
             {active.title}
           </div>
         </div>
 
-        <Link
-          href="/"
-          className="font-pixel text-xs md:text-sm hover:text-[hsl(48_100%_50%)] transition-colors"
-          data-testid="link-home"
-        >
-          HOME
-        </Link>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setTheme((v) => (v === "dark" ? "light" : "dark"))}
+            className={`border-2 px-3 py-2 font-pixel text-xs transition-colors ${theme === "dark" ? "border-[#2a3552] bg-[#0f1930] hover:bg-[#132043]" : "border-border bg-card hover:bg-secondary"}`}
+            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            data-testid="button-theme-toggle"
+          >
+            {theme === "dark" ? "LIGHT" : "DARK"}
+          </button>
+          <Link
+            href="/"
+            className="font-pixel text-xs md:text-sm hover:text-primary transition-colors"
+            data-testid="link-home"
+          >
+            HOME
+          </Link>
+        </div>
       </div>
 
-      <div className="mx-auto w-full max-w-7xl grid md:grid-cols-[320px_1fr] gap-0">
+      <div className="mx-auto w-full max-w-7xl grid md:grid-cols-[360px_1fr] gap-0">
         <aside
           className={`${
             mobileNavOpen ? "block" : "hidden"
-          } md:block md:sticky md:top-[68px] h-fit border-r-4 border-[#1f2a44] bg-[#0b1220]`}
+          } md:block md:sticky md:top-[68px] h-fit border-r-4 ${theme === "dark" ? "border-[#1f2a44] bg-[#0b1220]" : "border-border bg-card"}`}
         >
           <div className="p-4">
             <div className="font-pixel text-sm mb-3" data-testid="text-sidebar-title">
@@ -193,12 +251,12 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
               return (
                 <div key={section} className="mb-4">
                   <div
-                    className="font-pixel text-[11px] tracking-wide text-slate-300 mb-2"
+                    className={`font-pixel text-[12px] tracking-wide mb-2 ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`}
                     data-testid={`text-section-${section.replace(/\s+/g, "-").toLowerCase()}`}
                   >
                     {section.toUpperCase()}
                   </div>
-                  <div className="h-[2px] bg-[#1f2a44] mb-2" />
+                  <div className={`h-[2px] ${theme === "dark" ? "bg-[#1f2a44]" : "bg-border"} mb-2`} />
 
                   <nav className="grid gap-1">
                     {items.map((c) => {
@@ -210,13 +268,11 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
                           type="button"
                           onClick={() => setLocation(href)}
                           className={`${
-                            isActive
-                              ? "bg-[#132043] border-[#ffd700] text-[#ffd700]"
-                              : "bg-[#0f1930] border-[#2a3552] text-slate-100 hover:bg-[#132043]"
+                            isActive ? t.chapterActive : t.chapterInactive
                           } w-full text-left border-2 px-3 py-2 transition-colors`}
                           data-testid={`button-chapter-${c.id}`}
                         >
-                          <div className="font-mono text-sm leading-snug">{c.title}</div>
+                          <div className="font-mono text-[16px] leading-snug">{c.title}</div>
                         </button>
                       );
                     })}
@@ -234,14 +290,14 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
           >
             <ChapterContent chapter={active} />
 
-            <div className="mt-10 pt-6 border-t border-[#1f2a44] flex items-center justify-between gap-3">
+            <div className={`mt-10 pt-6 border-t ${theme === "dark" ? "border-[#1f2a44]" : "border-border"} flex items-center justify-between gap-3`}>
               {prev ? (
                 <Link
                   href={prev.id === "intro" ? "/noise-tutorial" : `/noise-tutorial/${prev.id}`}
-                  className="inline-flex items-center gap-2 bg-[#0f1930] border-2 border-[#2a3552] px-4 py-3 hover:bg-[#132043] transition-colors"
+                  className={`inline-flex items-center gap-2 border-2 px-4 py-3 transition-colors ${t.navPrev}`}
                   data-testid="link-prev"
                 >
-                  <span className="font-pixel text-[10px] text-slate-300">PREV</span>
+                  <span className={`font-pixel text-[10px] ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`}>PREV</span>
                   <span className="font-mono text-sm">{prev.title}</span>
                 </Link>
               ) : (
@@ -251,7 +307,7 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
               {next ? (
                 <Link
                   href={next.id === "intro" ? "/noise-tutorial" : `/noise-tutorial/${next.id}`}
-                  className="inline-flex items-center gap-2 bg-[#ffd700] text-[#0b1220] border-2 border-[#0b1220] px-4 py-3 hover:brightness-110 transition-all"
+                  className={`inline-flex items-center gap-2 border-2 px-4 py-3 transition-all ${t.navNext}`}
                   data-testid="link-next"
                 >
                   <span className="font-pixel text-[10px]">NEXT</span>
@@ -315,8 +371,10 @@ function ChapterContent({ chapter }: { chapter: Chapter }) {
     );
   }
 
+  const theme = typeof document !== "undefined" ? (document.querySelector("[data-theme]")?.getAttribute("data-theme") as "light" | "dark" | null) : null;
+
   return (
-    <div className="noise-md" data-testid="container-markdown">
+    <div className={`noise-md noise-md-${theme ?? "light"}`} data-testid="container-markdown">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeRaw, rehypeHighlight]}

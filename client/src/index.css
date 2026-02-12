@@ -146,6 +146,41 @@
     font-size: 18px;
   }
 
+  .noise-md-light {
+    color: var(--color-foreground);
+  }
+
+  .noise-md-dark {
+    color: #e5e7eb;
+  }
+
+  .noise-md-light pre {
+    background: rgba(0, 0, 0, 0.04);
+    border: 1px solid rgba(0, 0, 0, 0.12);
+  }
+
+  .noise-md-light blockquote {
+    color: rgba(0, 0, 0, 0.75);
+  }
+
+  .noise-md-light hr {
+    background: rgba(0, 0, 0, 0.12);
+  }
+
+  .noise-md-light th,
+  .noise-md-light td {
+    border: 1px solid rgba(0, 0, 0, 0.14);
+  }
+
+  .noise-md-light th {
+    background: rgba(0, 0, 0, 0.04);
+    color: var(--color-foreground);
+  }
+
+  .noise-md-dark th {
+    color: #ffd700;
+  }
+
   .noise-md h1,
   .noise-md h2,
   .noise-md h3,
