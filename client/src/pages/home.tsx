@@ -21,17 +21,19 @@ export default function Home() {
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <div className="bg-card border-4 border-border p-6 pixel-shadow max-w-sm w-full relative">
             <button 
+              data-testid="button-mobile-warning-close"
               onClick={() => setShowMobileWarning(false)}
               className="absolute top-2 right-2 font-pixel text-xl hover:text-primary"
             >
               X
             </button>
-            <h3 className="font-pixel text-xl mb-4 text-center">Desktop Only</h3>
-            <p className="font-mono text-center mb-6">
+            <h3 data-testid="text-mobile-warning-title" className="font-pixel text-xl mb-4 text-center">Desktop Only</h3>
+            <p data-testid="text-mobile-warning-body" className="font-mono text-center mb-6">
               Please note: This course is designed for desktop browsers and doesn't currently support mobile devices.
             </p>
             <div className="flex justify-center">
               <button 
+                data-testid="button-mobile-warning-dismiss"
                 onClick={() => setShowMobileWarning(false)}
                 className="bg-primary text-foreground px-4 py-2 font-pixel text-sm border-2 border-border hover:bg-primary/80 transition-colors"
               >
@@ -45,7 +47,7 @@ export default function Home() {
       {/* Top Banner */}
       <div className="w-full border-b-4 border-border bg-card p-2 flex justify-end pixel-shadow relative z-50">
         <Link href="/about">
-          <a className="font-pixel text-sm md:text-base hover:text-primary transition-colors border-b-4 border-transparent hover:border-primary pb-1">
+          <a data-testid="link-about" className="font-pixel text-sm md:text-base hover:text-primary transition-colors border-b-4 border-transparent hover:border-primary pb-1">
             ABOUT
           </a>
         </Link>
@@ -73,6 +75,7 @@ export default function Home() {
 
         <div className="grid gap-4 md:gap-6 w-full max-w-2xl">
           <a 
+            data-testid="link-course-intro"
             href="https://replit.com/@austin-f/Programming-Lightning-Intro-to-Payment-Channels?v=1"
             target="_blank"
             rel="noopener noreferrer"
@@ -83,9 +86,9 @@ export default function Home() {
               <h2 className="text-lg md:text-xl font-pixel leading-relaxed">
                 Intro to Payment Channels & the Bitcoin Lightning Network
               </h2>
-              <div className="bg-primary text-foreground px-2 py-1 font-pixel text-[10px] border-2 border-border shrink-0">
+              <span data-testid="button-start-course" className="bg-primary text-foreground px-2 py-1 font-pixel text-[10px] border-2 border-border shrink-0">
                 START
-              </div>
+              </span>
             </div>
           </a>
 
@@ -105,13 +108,14 @@ export default function Home() {
       <div className="mt-16 mb-8 text-center max-w-2xl mx-auto w-full">
         <div className="flex flex-col items-center gap-4">
           <img 
+            data-testid="img-discord-logo"
             src={discordLogo} 
             alt="Discord Logo" 
             className="w-12 h-12 md:w-16 md:h-16 pixelated" 
           />
           <p className="font-mono text-xl md:text-2xl font-bold bg-card border-4 border-border p-4 pixel-shadow">
             Have questions or feedback? Want to share your progress? <br className="hidden md:block"/>
-            <a href="https://discord.gg/j2G7nK8EDh" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Join the Programming Lightning Discord</a> to connect with other students, get help, and discuss Lightning development!
+            <a data-testid="link-discord" href="https://discord.gg/j2G7nK8EDh" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Join the Programming Lightning Discord</a> to connect with other students, get help, and discuss Lightning development!
           </p>
         </div>
       </div>
