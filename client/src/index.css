@@ -277,7 +277,16 @@
   .noise-md ul,
   .noise-md ol {
     margin: 0.9em 0;
-    padding-left: 1.25em;
+    padding-left: 1.5em;
+    list-style-position: outside;
+  }
+
+  .noise-md ul {
+    list-style-type: disc;
+  }
+
+  .noise-md ol {
+    list-style-type: decimal;
   }
 
   .noise-md li {
