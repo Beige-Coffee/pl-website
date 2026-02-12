@@ -465,7 +465,7 @@ function ImageBlock({
       </span>
 
       {open ? (
-        <div
+        <span
           className="fixed inset-0 z-[100] flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
@@ -475,14 +475,14 @@ function ImageBlock({
             if (e.target === e.currentTarget) setOpen(false);
           }}
         >
-          <div className="absolute inset-0 bg-black/70" />
+          <span className="absolute inset-0 bg-black/70" />
 
-          <div
+          <span
             className={`relative w-full max-w-6xl border-4 ${
               theme === "dark" ? "border-[#2a3552] bg-[#0b1220]" : "border-border bg-background"
             }`}
           >
-            <div
+            <span
               className={`flex items-center justify-between gap-3 border-b-4 px-4 py-3 ${
                 theme === "dark" ? "border-[#2a3552]" : "border-border"
               }`}
@@ -502,9 +502,9 @@ function ImageBlock({
               >
                 CLOSE
               </button>
-            </div>
+            </span>
 
-            <div className="p-4">
+            <span className="block p-4">
               <div className="flex items-center justify-center gap-3 mb-3">
                 <span className={`font-pixel text-[10px] tracking-wide ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`}>
                   ZOOM
@@ -524,12 +524,12 @@ function ImageBlock({
                 </span>
               </div>
 
-              <div
-                className={`max-h-[70vh] overflow-auto border-2 ${
+              <span
+                className={`block max-h-[70vh] overflow-auto border-2 ${
                   theme === "dark" ? "border-[#2a3552] bg-[#0f1930]" : "border-border bg-card"
                 }`}
               >
-                <div style={{ transform: `scale(${zoom})`, transformOrigin: "top left" }}>
+                <span style={{ transform: `scale(${zoom})`, transformOrigin: "top left" }}>
                   <img
                     {...props}
                     src={rawSrc}
@@ -545,15 +545,15 @@ function ImageBlock({
                     }}
                     data-testid={`img-zoomed-${srcKey}`}
                   />
-                </div>
-              </div>
+                </span>
+              </span>
 
-              <div className={`mt-3 text-center font-mono text-xs ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`}>
+              <span className={`mt-3 block text-center font-mono text-xs ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`}>
                 Tip: scroll inside the frame to pan.
-              </div>
-            </div>
-          </div>
-        </div>
+              </span>
+            </span>
+          </span>
+        </span>
       ) : null}
     </span>
   );
