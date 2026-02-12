@@ -183,8 +183,23 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
         crumbText: "text-foreground",
       };
 
+  const [imgScale, setImgScale] = useState<"sm" | "md" | "lg">("md");
+
+  useEffect(() => {
+    const stored = typeof window !== "undefined" ? localStorage.getItem("pl-img-scale") : null;
+    if (stored === "sm" || stored === "md" || stored === "lg") setImgScale(stored);
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("pl-img-scale", imgScale);
+    } catch {
+      // ignore
+    }
+  }, [imgScale]);
+
   return (
-    <div className={`min-h-screen ${t.pageBg} ${t.pageText}`} data-theme={theme}>
+    <div className={`min-h-screen ${t.pageBg} ${t.pageText}`} data-theme={theme} data-img-scale={imgScale}>
       <div className={`w-full border-b-4 ${t.headerBorder} ${t.headerBg} px-4 py-3 flex items-center justify-between sticky top-0 z-50`}>
         <div className="flex items-center gap-3">
           <button
@@ -215,6 +230,25 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
         </div>
 
         <div className="flex items-center gap-3">
+          <div className="hidden md:flex items-center gap-2">
+            <span className={`font-pixel text-[10px] ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`} data-testid="text-image-size">
+              IMAGE SIZE
+            </span>
+            <input
+              type="range"
+              min={0}
+              max={2}
+              step={1}
+              value={imgScale === "sm" ? 0 : imgScale === "md" ? 1 : 2}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                setImgScale(v === 0 ? "sm" : v === 1 ? "md" : "lg");
+              }}
+              className="w-28 accent-[hsl(48_100%_50%)]"
+              data-testid="slider-image-size"
+            />
+          </div>
+
           <button
             type="button"
             onClick={() => setTheme((v) => (v === "dark" ? "light" : "dark"))}
@@ -370,10 +404,25 @@ function ChapterContent({ chapter }: { chapter: Chapter }) {
     );
   }
 
-  const theme = typeof document !== "undefined" ? (document.querySelector("[data-theme]")?.getAttribute("data-theme") as "light" | "dark" | null) : null;
+  const theme = (typeof document !== "undefined"
+    ? (document.querySelector("[data-theme]")?.getAttribute("data-theme") as
+        | "light"
+        | "dark"
+        | null)
+    : null) ?? "light";
+
+  const scale = (typeof document !== "undefined"
+    ? (document.querySelector("[data-img-scale]")?.getAttribute("data-img-scale") as
+        | "sm"
+        | "md"
+        | "lg"
+        | null)
+    : null) ?? "md";
+
+  const imgMaxWidth = scale === "lg" ? "1100px" : scale === "md" ? "900px" : "760px";
 
   return (
-    <div className={`noise-md noise-md-${theme ?? "light"}`} data-testid="container-markdown">
+    <div className={`noise-md noise-md-${theme}`} data-testid="container-markdown">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeRaw, rehypeHighlight]}
@@ -381,7 +430,7 @@ function ChapterContent({ chapter }: { chapter: Chapter }) {
           img: ({ ...props }) => (
             <img
               {...props}
-              style={{ maxWidth: "100%", height: "auto" }}
+              style={{ maxWidth: `min(100%, ${imgMaxWidth})`, height: "auto" }}
               data-testid="img-tutorial"
             />
           ),
