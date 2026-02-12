@@ -369,6 +369,7 @@ function ImageBlock({
   height,
   props,
   theme,
+  srcKey,
 }: {
   stableKey: string;
   rawSrc: string;
@@ -376,8 +377,9 @@ function ImageBlock({
   height: any;
   props: any;
   theme: "light" | "dark";
+  srcKey: string;
 }) {
-  const storageKey = `pl-img-size:${stableKey}`;
+  const storageKey = `pl-img-size:${srcKey}`;
 
   const [size, setSize] = useState<"sm" | "md" | "lg">(() => {
     if (typeof window === "undefined") return "md";
@@ -397,11 +399,11 @@ function ImageBlock({
   const maxW = size === "lg" ? 1500 : size === "md" ? 1200 : 960;
 
   return (
-    <span className="block my-4" data-testid={`img-block-${stableKey}`}>
+    <span className="block my-4" data-testid={`img-block-${srcKey}`}>
       <span className="flex items-center justify-center gap-3 mb-2">
         <span
           className={`font-pixel text-[10px] tracking-wide ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`}
-          data-testid={`text-imgsize-label-${stableKey}`}
+          data-testid={`text-imgsize-label-${srcKey}`}
         >
           DIAGRAM SIZE
         </span>
@@ -409,7 +411,7 @@ function ImageBlock({
         <span className="flex items-center gap-2">
           <span
             className={`font-pixel text-[10px] ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`}
-            data-testid={`text-imgsize-min-${stableKey}`}
+            data-testid={`text-imgsize-min-${srcKey}`}
           >
             S
           </span>
@@ -425,11 +427,11 @@ function ImageBlock({
             }}
             className={`w-40 accent-[hsl(48_100%_50%)] ${theme === "dark" ? "opacity-90" : ""}`}
             aria-label="Diagram size"
-            data-testid={`slider-imgsize-${stableKey}`}
+            data-testid={`slider-imgsize-${srcKey}`}
           />
           <span
             className={`font-pixel text-[10px] ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`}
-            data-testid={`text-imgsize-max-${stableKey}`}
+            data-testid={`text-imgsize-max-${srcKey}`}
           >
             L
           </span>
@@ -437,7 +439,7 @@ function ImageBlock({
 
         <span
           className={`font-mono text-xs ${theme === "dark" ? "text-slate-200" : "text-foreground"}`}
-          data-testid={`text-imgsize-value-${stableKey}`}
+          data-testid={`text-imgsize-value-${srcKey}`}
         >
           {size.toUpperCase()}
         </span>
@@ -457,7 +459,7 @@ function ImageBlock({
           margin: "0 auto",
           imageRendering: "auto",
         }}
-        data-testid={`img-tutorial-${stableKey}`}
+        data-testid={`img-tutorial-${srcKey}`}
       />
     </span>
   );
@@ -525,7 +527,17 @@ function ChapterContent({ chapter, theme }: { chapter: Chapter; theme: "light" |
           img: ({ style, width, height, ...props }) => {
             const rawSrc = String(props.src ?? "");
             const stableKey = rawSrc.replace(/\W+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "img";
-            return <ImageBlock stableKey={stableKey} rawSrc={rawSrc} style={style} height={height} props={props} theme={theme} />;
+            return (
+              <ImageBlock
+                stableKey={stableKey}
+                rawSrc={rawSrc}
+                style={style}
+                height={height}
+                props={props}
+                theme={theme}
+                srcKey={stableKey}
+              />
+            );
           },
           a: ({ ...props }) => (
             <a
