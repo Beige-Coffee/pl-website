@@ -198,8 +198,8 @@
   }
 
   .noise-md-light pre {
-    background: rgba(0, 0, 0, 0.04);
-    border: 1px solid rgba(0, 0, 0, 0.12);
+    background: rgba(0, 0, 0, 0.08);
+    border: 1px solid rgba(0, 0, 0, 0.16);
   }
 
   .noise-md-light blockquote {
@@ -229,10 +229,23 @@
   .noise-md h3,
   .noise-md h4 {
     font-family: var(--font-pixel);
-    color: #ffd700;
     line-height: 1.2;
     margin-top: 1.25em;
     margin-bottom: 0.6em;
+  }
+
+  .noise-md-light h1,
+  .noise-md-light h2,
+  .noise-md-light h3,
+  .noise-md-light h4 {
+    color: #000;
+  }
+
+  .noise-md-dark h1,
+  .noise-md-dark h2,
+  .noise-md-dark h3,
+  .noise-md-dark h4 {
+    color: #ffd700;
   }
 
   .noise-md h1 {
