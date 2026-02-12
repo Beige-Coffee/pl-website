@@ -154,6 +154,28 @@
     color: #e5e7eb;
   }
 
+  .noise-md-dark p,
+  .noise-md-dark li,
+  .noise-md-dark td {
+    color: rgba(229, 231, 235, 0.92);
+  }
+
+  .noise-md-dark strong {
+    color: rgba(255, 255, 255, 0.98);
+  }
+
+  .noise-md-dark em {
+    color: rgba(229, 231, 235, 0.92);
+  }
+
+  .noise-md-dark blockquote {
+    color: rgba(229, 231, 235, 0.9);
+  }
+
+  .noise-md-dark a {
+    color: #ffd700;
+  }
+
   .noise-md-light pre {
     background: rgba(0, 0, 0, 0.04);
     border: 1px solid rgba(0, 0, 0, 0.12);
