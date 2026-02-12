@@ -135,6 +135,133 @@
     image-rendering: pixelated;
   }
 
+  .noise-article {
+    color: #e5e7eb;
+  }
+
+  .noise-md {
+    font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica,
+      Arial, "Apple Color Emoji", "Segoe UI Emoji";
+    line-height: 1.75;
+    font-size: 18px;
+  }
+
+  .noise-md h1,
+  .noise-md h2,
+  .noise-md h3,
+  .noise-md h4 {
+    font-family: var(--font-pixel);
+    color: #ffd700;
+    line-height: 1.2;
+    margin-top: 1.25em;
+    margin-bottom: 0.6em;
+  }
+
+  .noise-md h1 {
+    font-size: 28px;
+  }
+
+  .noise-md h2 {
+    font-size: 22px;
+  }
+
+  .noise-md h3 {
+    font-size: 18px;
+  }
+
+  .noise-md p {
+    margin: 0.9em 0;
+  }
+
+  .noise-md ul,
+  .noise-md ol {
+    margin: 0.9em 0;
+    padding-left: 1.25em;
+  }
+
+  .noise-md li {
+    margin: 0.35em 0;
+  }
+
+  .noise-md pre {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    padding: 14px;
+    overflow: auto;
+    margin: 1.1em 0;
+  }
+
+  .noise-md pre code {
+    background: transparent !important;
+    padding: 0;
+    border-radius: 0;
+  }
+
+  .noise-md table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.2em 0;
+    font-size: 16px;
+  }
+
+  .noise-md th,
+  .noise-md td {
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    padding: 10px;
+    vertical-align: top;
+  }
+
+  .noise-md th {
+    background: rgba(255, 255, 255, 0.06);
+    color: #ffd700;
+    font-family: var(--font-pixel);
+    font-size: 12px;
+  }
+
+  .noise-md details {
+    background-color: rgba(128, 128, 128, 0.05);
+    border: 1px solid rgba(128, 128, 128, 0.2);
+    border-radius: 6px;
+    padding: 0.5em 1em;
+    margin: 1em 0;
+  }
+
+  .noise-md details summary {
+    cursor: pointer;
+    font-weight: 700;
+    padding: 0.3em 0;
+  }
+
+  .noise-md details[open] summary {
+    margin-bottom: 0.5em;
+    border-bottom: 1px solid rgba(128, 128, 128, 0.2);
+    padding-bottom: 0.5em;
+  }
+
+  .noise-md img {
+    max-width: 100%;
+    height: auto;
+  }
+
+  .noise-md blockquote {
+    border-left: 4px solid rgba(255, 215, 0, 0.5);
+    padding-left: 14px;
+    margin: 1.1em 0;
+    color: rgba(229, 231, 235, 0.9);
+  }
+
+  .noise-md hr {
+    border: none;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.12);
+    margin: 1.5em 0;
+  }
+
+  .noise-md :not(pre) > code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+      "Liberation Mono", "Courier New", monospace;
+  }
+
   .blog-attention::before {
     left: -18px;
     top: 50%;

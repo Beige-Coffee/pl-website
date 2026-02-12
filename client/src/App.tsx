@@ -7,6 +7,7 @@ import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import About from "@/pages/about";
 import Blog from "@/pages/blog";
+import NoiseTutorialPage from "@/pages/noise-tutorial";
 
 function Router() {
   return (
@@ -14,6 +15,8 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/about" component={About} />
       <Route path="/blog" component={Blog} />
+      <Route path="/noise-tutorial" component={NoiseTutorialPage} />
+      <Route path="/noise-tutorial/:chapterId" component={NoiseTutorialPage} />
       <Route component={NotFound} />
     </Switch>
   );
