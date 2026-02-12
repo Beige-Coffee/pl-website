@@ -352,6 +352,12 @@ function ChapterContent({ chapter }: { chapter: Chapter }) {
     };
   }, [chapter]);
 
+  const rewriteTutorialImagePaths = (raw: string) => {
+    return raw
+      .replaceAll('src="./tutorial_images/', 'src="/noise_tutorial/tutorial_images/')
+      .replaceAll("src='./tutorial_images/", "src='/noise_tutorial/tutorial_images/");
+  };
+
   if (err) {
     return (
       <div
@@ -398,7 +404,7 @@ function ChapterContent({ chapter }: { chapter: Chapter }) {
           ),
         }}
       >
-        {md}
+        {rewriteTutorialImagePaths(md)}
       </ReactMarkdown>
     </div>
   );
