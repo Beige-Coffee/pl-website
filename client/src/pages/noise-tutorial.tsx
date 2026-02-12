@@ -362,6 +362,107 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
   );
 }
 
+function ImageBlock({
+  stableKey,
+  rawSrc,
+  style,
+  height,
+  props,
+  theme,
+}: {
+  stableKey: string;
+  rawSrc: string;
+  style: React.CSSProperties | undefined;
+  height: any;
+  props: any;
+  theme: "light" | "dark";
+}) {
+  const storageKey = `pl-img-size:${stableKey}`;
+
+  const [size, setSize] = useState<"sm" | "md" | "lg">(() => {
+    if (typeof window === "undefined") return "md";
+    const stored = localStorage.getItem(storageKey);
+    return stored === "sm" || stored === "md" || stored === "lg" ? stored : "md";
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(storageKey, size);
+    } catch {
+      // ignore
+    }
+  }, [storageKey, size]);
+
+  const sliderValue = size === "sm" ? 0 : size === "md" ? 1 : 2;
+  const maxW = size === "lg" ? 1500 : size === "md" ? 1200 : 960;
+
+  return (
+    <span className="block my-4" data-testid={`img-block-${stableKey}`}>
+      <span className="flex items-center justify-center gap-3 mb-2">
+        <span
+          className={`font-pixel text-[10px] tracking-wide ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`}
+          data-testid={`text-imgsize-label-${stableKey}`}
+        >
+          DIAGRAM SIZE
+        </span>
+
+        <span className="flex items-center gap-2">
+          <span
+            className={`font-pixel text-[10px] ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`}
+            data-testid={`text-imgsize-min-${stableKey}`}
+          >
+            S
+          </span>
+          <input
+            type="range"
+            min={0}
+            max={2}
+            step={1}
+            value={sliderValue}
+            onChange={(e) => {
+              const v = Number((e.target as HTMLInputElement).value);
+              setSize(v === 0 ? "sm" : v === 1 ? "md" : "lg");
+            }}
+            className={`w-40 accent-[hsl(48_100%_50%)] ${theme === "dark" ? "opacity-90" : ""}`}
+            aria-label="Diagram size"
+            data-testid={`slider-imgsize-${stableKey}`}
+          />
+          <span
+            className={`font-pixel text-[10px] ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`}
+            data-testid={`text-imgsize-max-${stableKey}`}
+          >
+            L
+          </span>
+        </span>
+
+        <span
+          className={`font-mono text-xs ${theme === "dark" ? "text-slate-200" : "text-foreground"}`}
+          data-testid={`text-imgsize-value-${stableKey}`}
+        >
+          {size.toUpperCase()}
+        </span>
+      </span>
+
+      <img
+        {...props}
+        src={rawSrc}
+        width={undefined}
+        height={height}
+        style={{
+          ...(style ?? {}),
+          width: "100%",
+          maxWidth: `${maxW}px`,
+          height: "auto",
+          display: "block",
+          margin: "0 auto",
+          imageRendering: "auto",
+        }}
+        data-testid={`img-tutorial-${stableKey}`}
+      />
+    </span>
+  );
+}
+
 function ChapterContent({ chapter, theme }: { chapter: Chapter; theme: "light" | "dark" }) {
   const [md, setMd] = useState<string>("Loading…");
   const [err, setErr] = useState<string | null>(null);
@@ -424,84 +525,7 @@ function ChapterContent({ chapter, theme }: { chapter: Chapter; theme: "light" |
           img: ({ style, width, height, ...props }) => {
             const rawSrc = String(props.src ?? "");
             const stableKey = rawSrc.replace(/\W+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "img";
-            const storageKey = `pl-img-size:${stableKey}`;
-
-            const [size, setSize] = useState<"sm" | "md" | "lg">(() => {
-              if (typeof window === "undefined") return "md";
-              const stored = localStorage.getItem(storageKey);
-              return stored === "sm" || stored === "md" || stored === "lg" ? stored : "md";
-            });
-
-            const sliderValue = size === "sm" ? 0 : size === "md" ? 1 : 2;
-
-            useEffect(() => {
-              try {
-                localStorage.setItem(storageKey, size);
-              } catch {
-                // ignore
-              }
-            }, [storageKey, size]);
-
-            const maxW = size === "lg" ? 1500 : size === "md" ? 1200 : 960;
-
-            return (
-              <div className="my-4" data-testid={`img-block-${stableKey}`}>
-                <div className="flex items-center justify-center gap-3 mb-2">
-                  <span
-                    className={`font-pixel text-[10px] tracking-wide ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`}
-                    data-testid={`text-imgsize-label-${stableKey}`}
-                  >
-                    DIAGRAM SIZE
-                  </span>
-
-                  <div className="flex items-center gap-2">
-                    <span className={`font-pixel text-[10px] ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`} data-testid={`text-imgsize-min-${stableKey}`}>
-                      S
-                    </span>
-                    <input
-                      type="range"
-                      min={0}
-                      max={2}
-                      step={1}
-                      value={sliderValue}
-                      onChange={(e) => {
-                        const v = Number(e.target.value);
-                        setSize(v === 0 ? "sm" : v === 1 ? "md" : "lg");
-                      }}
-                      className={`w-40 accent-[hsl(48_100%_50%)] ${theme === "dark" ? "opacity-90" : ""}`}
-                      aria-label="Diagram size"
-                      data-testid={`slider-imgsize-${stableKey}`}
-                    />
-                    <span className={`font-pixel text-[10px] ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`} data-testid={`text-imgsize-max-${stableKey}`}>
-                      L
-                    </span>
-                  </div>
-
-                  <span
-                    className={`font-mono text-xs ${theme === "dark" ? "text-slate-200" : "text-foreground"}`}
-                    data-testid={`text-imgsize-value-${stableKey}`}
-                  >
-                    {size.toUpperCase()}
-                  </span>
-                </div>
-
-                <img
-                  {...props}
-                  width={undefined}
-                  height={height}
-                  style={{
-                    ...(style ?? {}),
-                    width: "100%",
-                    maxWidth: `${maxW}px`,
-                    height: "auto",
-                    display: "block",
-                    margin: "0 auto",
-                    imageRendering: "auto",
-                  }}
-                  data-testid={`img-tutorial-${stableKey}`}
-                />
-              </div>
-            );
+            return <ImageBlock stableKey={stableKey} rawSrc={rawSrc} style={style} height={height} props={props} theme={theme} />;
           },
           a: ({ ...props }) => (
             <a
