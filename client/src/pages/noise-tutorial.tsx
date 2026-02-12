@@ -183,24 +183,12 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
         crumbText: "text-foreground",
       };
 
-  const [imgScale, setImgScale] = useState<"sm" | "md" | "lg">("md");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
-    const stored = typeof window !== "undefined" ? localStorage.getItem("pl-img-scale") : null;
-    if (stored === "sm" || stored === "md" || stored === "lg") setImgScale(stored);
-
     const storedCollapsed = typeof window !== "undefined" ? localStorage.getItem("pl-sidebar-collapsed") : null;
     if (storedCollapsed === "1") setSidebarCollapsed(true);
   }, []);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem("pl-img-scale", imgScale);
-    } catch {
-      // ignore
-    }
-  }, [imgScale]);
 
   useEffect(() => {
     try {
@@ -211,7 +199,7 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
   }, [sidebarCollapsed]);
 
   return (
-    <div className={`min-h-screen ${t.pageBg} ${t.pageText} overflow-x-hidden`} data-theme={theme} data-img-scale={imgScale}>
+    <div className={`min-h-screen ${t.pageBg} ${t.pageText} overflow-x-hidden`} data-theme={theme}>
       <div className={`w-full border-b-4 ${t.headerBorder} ${t.headerBg} px-4 py-3 flex items-center justify-between sticky top-0 z-50`}>
         <div className="flex items-center gap-3">
           <button
@@ -242,31 +230,6 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="hidden md:flex items-center gap-2">
-            <span className={`font-pixel text-[10px] ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`} data-testid="text-image-size">
-              IMAGE SIZE
-            </span>
-            <input
-              type="range"
-              min={0}
-              max={2}
-              step={1}
-              value={imgScale === "sm" ? 0 : imgScale === "md" ? 1 : 2}
-              onChange={(e) => {
-                const v = Number(e.target.value);
-                setImgScale(v === 0 ? "sm" : v === 1 ? "md" : "lg");
-              }}
-              className="w-36 accent-[hsl(48_100%_50%)]"
-              data-testid="slider-image-size"
-            />
-            <span
-              className={`font-mono text-xs ${theme === "dark" ? "text-slate-200" : "text-foreground"}`}
-              data-testid="text-image-size-value"
-            >
-              {imgScale === "sm" ? "S" : imgScale === "md" ? "M" : "L"}
-            </span>
-          </div>
-
           <button
             type="button"
             onClick={() => setTheme((v) => (v === "dark" ? "light" : "dark"))}
@@ -362,7 +325,7 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
             className="noise-article mx-auto w-full max-w-[1100px]"
             data-testid="container-article"
           >
-            <ChapterContent chapter={active} theme={theme} imgScale={imgScale} />
+            <ChapterContent chapter={active} theme={theme} />
 
             <div className={`mt-10 pt-6 border-t ${theme === "dark" ? "border-[#1f2a44]" : "border-border"} flex items-center justify-between gap-3`}>
               {prev ? (
@@ -399,7 +362,7 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
   );
 }
 
-function ChapterContent({ chapter, theme, imgScale }: { chapter: Chapter; theme: "light" | "dark"; imgScale: "sm" | "md" | "lg" }) {
+function ChapterContent({ chapter, theme }: { chapter: Chapter; theme: "light" | "dark" }) {
   const [md, setMd] = useState<string>("Loading…");
   const [err, setErr] = useState<string | null>(null);
 
@@ -452,8 +415,6 @@ function ChapterContent({ chapter, theme, imgScale }: { chapter: Chapter; theme:
     );
   }
 
-  const imgScaleFactor = imgScale === "lg" ? 1.4 : imgScale === "md" ? 1.15 : 1;
-
   return (
     <div className={`noise-md noise-md-${theme}`} data-testid="container-markdown">
       <ReactMarkdown
@@ -461,24 +422,83 @@ function ChapterContent({ chapter, theme, imgScale }: { chapter: Chapter; theme:
         rehypePlugins={[rehypeRaw, rehypeHighlight]}
         components={{
           img: ({ style, width, height, ...props }) => {
-            const maxW = imgScale === "lg" ? 1500 : imgScale === "md" ? 1200 : 960;
+            const rawSrc = String(props.src ?? "");
+            const stableKey = rawSrc.replace(/\W+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "img";
+            const storageKey = `pl-img-size:${stableKey}`;
+
+            const [size, setSize] = useState<"sm" | "md" | "lg">(() => {
+              if (typeof window === "undefined") return "md";
+              const stored = localStorage.getItem(storageKey);
+              return stored === "sm" || stored === "md" || stored === "lg" ? stored : "md";
+            });
+
+            useEffect(() => {
+              try {
+                localStorage.setItem(storageKey, size);
+              } catch {
+                // ignore
+              }
+            }, [storageKey, size]);
+
+            const maxW = size === "lg" ? 1500 : size === "md" ? 1200 : 960;
 
             return (
-              <img
-                {...props}
-                width={undefined}
-                height={height}
-                style={{
-                  ...(style ?? {}),
-                  width: "100%",
-                  maxWidth: `${maxW}px`,
-                  height: "auto",
-                  display: "block",
-                  margin: "14px auto",
-                  imageRendering: "auto",
-                }}
-                data-testid="img-tutorial"
-              />
+              <div className="my-4" data-testid={`img-block-${stableKey}`}>
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <button
+                    type="button"
+                    onClick={() => setSize("sm")}
+                    className={`border-2 px-2 py-1 font-pixel text-xs transition-colors ${
+                      theme === "dark"
+                        ? "border-[#2a3552] bg-[#0f1930] hover:bg-[#132043]"
+                        : "border-border bg-card hover:bg-secondary"
+                    } ${size === "sm" ? (theme === "dark" ? "text-[#ffd700]" : "text-primary") : ""}`}
+                    data-testid={`button-imgsize-sm-${stableKey}`}
+                  >
+                    S
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSize("md")}
+                    className={`border-2 px-2 py-1 font-pixel text-xs transition-colors ${
+                      theme === "dark"
+                        ? "border-[#2a3552] bg-[#0f1930] hover:bg-[#132043]"
+                        : "border-border bg-card hover:bg-secondary"
+                    } ${size === "md" ? (theme === "dark" ? "text-[#ffd700]" : "text-primary") : ""}`}
+                    data-testid={`button-imgsize-md-${stableKey}`}
+                  >
+                    M
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSize("lg")}
+                    className={`border-2 px-2 py-1 font-pixel text-xs transition-colors ${
+                      theme === "dark"
+                        ? "border-[#2a3552] bg-[#0f1930] hover:bg-[#132043]"
+                        : "border-border bg-card hover:bg-secondary"
+                    } ${size === "lg" ? (theme === "dark" ? "text-[#ffd700]" : "text-primary") : ""}`}
+                    data-testid={`button-imgsize-lg-${stableKey}`}
+                  >
+                    L
+                  </button>
+                </div>
+
+                <img
+                  {...props}
+                  width={undefined}
+                  height={height}
+                  style={{
+                    ...(style ?? {}),
+                    width: "100%",
+                    maxWidth: `${maxW}px`,
+                    height: "auto",
+                    display: "block",
+                    margin: "0 auto",
+                    imageRendering: "auto",
+                  }}
+                  data-testid={`img-tutorial-${stableKey}`}
+                />
+              </div>
             );
           },
           a: ({ ...props }) => (
