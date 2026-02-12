@@ -404,7 +404,7 @@ function ChapterContent({ chapter, theme, imgScale }: { chapter: Chapter; theme:
     );
   }
 
-  const imgMaxWidth = imgScale === "lg" ? "1100px" : imgScale === "md" ? "900px" : "760px";
+  const imgScaleFactor = imgScale === "lg" ? 1.4 : imgScale === "md" ? 1.15 : 1;
 
   return (
     <div className={`noise-md noise-md-${theme}`} data-testid="container-markdown">
@@ -412,20 +412,34 @@ function ChapterContent({ chapter, theme, imgScale }: { chapter: Chapter; theme:
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeRaw, rehypeHighlight]}
         components={{
-          img: ({ style, width, height, ...props }) => (
-            <img
-              {...props}
-              width={width}
-              height={height}
-              style={{
-                ...(style ?? {}),
-                width: style?.width ?? width ?? "auto",
-                height: style?.height ?? height ?? "auto",
-                maxWidth: `min(100%, ${imgMaxWidth})`,
-              }}
-              data-testid="img-tutorial"
-            />
-          ),
+          img: ({ style, width, height, ...props }) => {
+            const w = style?.width ?? width;
+            const asNumber = typeof w === "number" ? w : null;
+            const asPercent = typeof w === "string" && w.trim().endsWith("%") ? Number(w.trim().slice(0, -1)) : null;
+
+            const computedWidth = asNumber != null
+              ? `${Math.round(asNumber * imgScaleFactor)}px`
+              : asPercent != null && Number.isFinite(asPercent)
+                ? `${Math.min(100, Math.max(10, asPercent * imgScaleFactor))}%`
+                : "100%";
+
+            return (
+              <img
+                {...props}
+                width={undefined}
+                height={height}
+                style={{
+                  ...(style ?? {}),
+                  width: computedWidth,
+                  maxWidth: "100%",
+                  height: "auto",
+                  display: "block",
+                  margin: "12px auto",
+                }}
+                data-testid="img-tutorial"
+              />
+            );
+          },
           a: ({ ...props }) => (
             <a
               {...props}
