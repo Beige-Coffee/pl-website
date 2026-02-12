@@ -283,6 +283,7 @@
     background: transparent !important;
     padding: 0;
     border-radius: 0;
+    font-family: inherit;
   }
 
   .noise-md table {
@@ -360,8 +361,7 @@
   }
 
   .noise-md :not(pre) > code {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-      "Liberation Mono", "Courier New", monospace;
+    font-family: inherit;
   }
 
   .blog-attention::before {
