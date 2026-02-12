@@ -412,10 +412,17 @@ function ChapterContent({ chapter, theme, imgScale }: { chapter: Chapter; theme:
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeRaw, rehypeHighlight]}
         components={{
-          img: ({ ...props }) => (
+          img: ({ style, width, height, ...props }) => (
             <img
               {...props}
-              style={{ maxWidth: `min(100%, ${imgMaxWidth})`, height: "auto" }}
+              width={width}
+              height={height}
+              style={{
+                ...(style ?? {}),
+                width: style?.width ?? width ?? "auto",
+                height: style?.height ?? height ?? "auto",
+                maxWidth: `min(100%, ${imgMaxWidth})`,
+              }}
               data-testid="img-tutorial"
             />
           ),
