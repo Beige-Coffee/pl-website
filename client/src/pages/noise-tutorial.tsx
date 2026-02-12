@@ -222,15 +222,8 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
             aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
             data-testid="button-theme-toggle"
           >
-            {theme === "dark" ? "LIGHT" : "DARK"}
+            Dark Mode
           </button>
-          <Link
-            href="/"
-            className="font-pixel text-xs md:text-sm hover:text-primary transition-colors"
-            data-testid="link-home"
-          >
-            HOME
-          </Link>
         </div>
       </div>
 
