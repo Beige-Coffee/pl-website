@@ -82,6 +82,34 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    animation: text-shake 2s infinite;
+  }
+
+  @keyframes text-shake {
+    0%, 74%, 96%, 100% {
+      transform: translate(0, 0);
+    }
+    76% {
+      transform: translate(-1px, 0);
+    }
+    79% {
+      transform: translate(2px, -1px);
+    }
+    82% {
+      transform: translate(-2px, 1px);
+    }
+    85% {
+      transform: translate(1px, -1px);
+    }
+    88% {
+      transform: translate(-1px, 0);
+    }
+    91% {
+      transform: translate(1px, 0);
+    }
+    94% {
+      transform: translate(0, 0);
+    }
   }
 
   .blog-attention::before,
