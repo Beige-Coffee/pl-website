@@ -367,29 +367,45 @@
   }
 
   @keyframes bolt-vibrate {
-    0%, 85%, 100% {
+    0%, 74% {
+      opacity: 0;
+      transform: translateY(-50%) rotate(0deg);
+    }
+    75% {
       opacity: 1;
       transform: translateY(-50%) rotate(0deg);
     }
-    87% {
+    78% {
+      opacity: 1;
+      transform: translateY(-50%) rotate(-12deg) scale(1.15);
+    }
+    81% {
+      opacity: 1;
+      transform: translateY(-50%) rotate(10deg);
+    }
+    84% {
       opacity: 1;
       transform: translateY(-50%) rotate(-8deg) scale(1.1);
     }
-    89% {
+    87% {
       opacity: 1;
       transform: translateY(-50%) rotate(6deg);
     }
-    91% {
+    90% {
       opacity: 1;
-      transform: translateY(-50%) rotate(-5deg) scale(1.05);
+      transform: translateY(-50%) rotate(-3deg);
     }
     93% {
       opacity: 1;
-      transform: translateY(-50%) rotate(4deg);
+      transform: translateY(-50%) rotate(0deg);
     }
-    95% {
-      opacity: 1;
-      transform: translateY(-50%) rotate(-2deg);
+    96% {
+      opacity: 0;
+      transform: translateY(-50%) rotate(0deg);
+    }
+    100% {
+      opacity: 0;
+      transform: translateY(-50%) rotate(0deg);
     }
   }
 }
