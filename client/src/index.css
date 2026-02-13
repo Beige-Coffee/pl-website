@@ -76,64 +76,21 @@
     text-shadow: 2px 2px 0px rgba(0,0,0,0.1);
   }
 
-  @keyframes blog-wiggle {
-    0%, 90%, 100% {
-      transform: translate(0, 0);
-    }
-    92% {
-      transform: translate(-1px, 0);
-    }
-    94% {
-      transform: translate(2px, -1px);
-    }
-    96% {
-      transform: translate(-2px, 1px);
-    }
-    98% {
-      transform: translate(1px, 0);
-    }
-  }
-
-  @keyframes blog-bolt-flash {
-    0%, 90%, 100% {
-      opacity: 0;
-      transform: translateY(0) scale(1);
-      filter: drop-shadow(0px 0px 0px rgba(0, 0, 0, 0));
-    }
-    92% {
-      opacity: 1;
-      transform: translateY(-1px) scale(1.05);
-      filter: drop-shadow(2px 2px 0px rgba(0, 0, 0, 1));
-    }
-    96% {
-      opacity: 0.7;
-      transform: translateY(0) scale(1);
-    }
-  }
 
   .blog-attention {
     position: relative;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    animation: blog-wiggle 3s infinite;
-    transform-origin: center;
-    will-change: transform;
   }
 
   .blog-attention::before,
   .blog-attention::after {
-    content: "";
+    content: "⚡";
     position: absolute;
-    width: 14px;
-    height: 14px;
-    background-image: url("/favicon.png");
-    background-size: contain;
-    background-repeat: no-repeat;
-    opacity: 0;
+    font-size: 14px;
     pointer-events: none;
-    animation: blog-bolt-flash 3s infinite;
-    image-rendering: pixelated;
+    animation: bolt-vibrate 2s infinite;
   }
 
 
@@ -397,15 +354,42 @@
   }
 
   .blog-attention::before {
-    left: -18px;
+    left: -20px;
     top: 50%;
     transform: translateY(-50%);
   }
 
   .blog-attention::after {
-    right: -18px;
+    right: -20px;
     top: 50%;
     transform: translateY(-50%);
-    animation-delay: 0.08s;
+    animation-delay: 0.15s;
+  }
+
+  @keyframes bolt-vibrate {
+    0%, 85%, 100% {
+      opacity: 1;
+      transform: translateY(-50%) rotate(0deg);
+    }
+    87% {
+      opacity: 1;
+      transform: translateY(-50%) rotate(-8deg) scale(1.1);
+    }
+    89% {
+      opacity: 1;
+      transform: translateY(-50%) rotate(6deg);
+    }
+    91% {
+      opacity: 1;
+      transform: translateY(-50%) rotate(-5deg) scale(1.05);
+    }
+    93% {
+      opacity: 1;
+      transform: translateY(-50%) rotate(4deg);
+    }
+    95% {
+      opacity: 1;
+      transform: translateY(-50%) rotate(-2deg);
+    }
   }
 }

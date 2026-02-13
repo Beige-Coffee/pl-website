@@ -220,7 +220,7 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
             className="font-pixel text-xs md:text-sm hover:text-primary transition-colors"
             data-testid="link-back-blog"
           >
-            &lt; BACK TO BLOG
+            &lt; BACK TO LEARN
           </Link>
         </div>
 

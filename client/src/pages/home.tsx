@@ -49,7 +49,7 @@ export default function Home() {
           data-testid="link-blog"
           className="font-pixel text-sm md:text-base hover:text-primary transition-colors border-b-4 border-transparent hover:border-primary pb-1 blog-attention"
         >
-          BLOG
+          LEARN
         </Link>
         <Link href="/about" data-testid="link-about" className="font-pixel text-sm md:text-base hover:text-primary transition-colors border-b-4 border-transparent hover:border-primary pb-1">
           ABOUT

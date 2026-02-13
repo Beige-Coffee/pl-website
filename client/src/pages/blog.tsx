@@ -26,7 +26,7 @@ export default function Blog() {
             className="font-pixel text-sm md:text-base hover:text-primary transition-colors border-b-4 border-transparent hover:border-primary pb-1"
             data-testid="link-blog"
           >
-            BLOG
+            LEARN
           </Link>
           <Link
             href="/about"
@@ -41,7 +41,7 @@ export default function Blog() {
       <div className="flex-1 w-full max-w-5xl mx-auto p-6 md:p-10">
         <header className="mb-8">
           <h1 className="font-pixel text-2xl md:text-4xl leading-tight text-shadow-retro mb-3" data-testid="text-blog-title">
-            Blog
+            Learn
           </h1>
           <p className="font-mono text-xl md:text-2xl" data-testid="text-blog-subtitle">
             Long-form technical articles and tutorials.
