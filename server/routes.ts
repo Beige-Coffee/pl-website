@@ -1,5 +1,6 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
+import { spawn } from "child_process";
 import { storage } from "./storage";
 import { randomBytes } from "crypto";
 import secp256k1 from "secp256k1";
@@ -7,6 +8,30 @@ import { bech32 } from "bech32";
 import QRCode from "qrcode";
 import bcrypt from "bcryptjs";
 import { emailAuthSchema } from "@shared/schema";
+import { existsSync } from "fs";
+
+function startLexeSidecar() {
+  const sidecarPath = ".local/bin/lexe-sidecar";
+  if (!existsSync(sidecarPath)) {
+    console.log("[lexe-sidecar] Binary not found, skipping");
+    return;
+  }
+  if (!process.env.LEXE_CLIENT_CREDENTIALS) {
+    console.log("[lexe-sidecar] No LEXE_CLIENT_CREDENTIALS set, skipping");
+    return;
+  }
+  const child = spawn(sidecarPath, [], {
+    stdio: "inherit",
+    detached: false,
+  });
+  child.on("error", (err) => {
+    console.error("[lexe-sidecar] Failed to start:", err.message);
+  });
+  child.on("exit", (code) => {
+    console.log(`[lexe-sidecar] Exited with code ${code}`);
+  });
+  console.log("[lexe-sidecar] Started (pid=" + child.pid + ")");
+}
 
 function generateK1(): string {
   return randomBytes(32).toString("hex");
@@ -30,6 +55,8 @@ async function getAuthUser(req: Request) {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+
+  startLexeSidecar();
 
   app.post("/api/auth/register", async (req: Request, res: Response) => {
     try {
