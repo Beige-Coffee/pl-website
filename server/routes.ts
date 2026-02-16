@@ -7,7 +7,7 @@ import secp256k1 from "secp256k1";
 import { bech32 } from "bech32";
 import QRCode from "qrcode";
 import bcrypt from "bcryptjs";
-import { emailAuthSchema } from "@shared/schema";
+import { emailAuthSchema, insertPageEventSchema } from "@shared/schema";
 import { existsSync } from "fs";
 
 function startLexeSidecar() {
@@ -469,6 +469,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err) {
       console.error("Status check error:", err);
       return res.json({ authenticated: false });
+    }
+  });
+
+  app.post("/api/track/pageview", async (req: Request, res: Response) => {
+    try {
+      const { page, referrer, sessionId } = req.body;
+      if (!page || typeof page !== "string") {
+        return res.status(400).json({ error: "page is required" });
+      }
+      const user = await getAuthUser(req);
+      const parsed = insertPageEventSchema.safeParse({
+        page,
+        referrer: typeof referrer === "string" ? referrer : null,
+        sessionId: typeof sessionId === "string" ? sessionId : null,
+        userId: user?.id || null,
+        duration: null,
+      });
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid data" });
+      }
+      const event = await storage.createPageEvent(parsed.data);
+      return res.json({ id: event.id, sessionId: parsed.data.sessionId });
+    } catch (err) {
+      console.error("Track pageview error:", err);
+      return res.status(500).json({ error: "Failed to track pageview" });
+    }
+  });
+
+  app.post("/api/track/pageview/:id/duration", async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { duration, sessionId } = req.body;
+      if (isNaN(id) || typeof duration !== "number" || duration < 0 || duration > 86400) {
+        return res.status(400).json({ error: "Invalid id or duration" });
+      }
+      if (!sessionId || typeof sessionId !== "string") {
+        return res.status(400).json({ error: "sessionId required" });
+      }
+      const event = await storage.getPageEventById(id);
+      if (!event || event.sessionId !== sessionId) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      await storage.updatePageEventDuration(id, Math.round(duration));
+      return res.json({ ok: true });
+    } catch (err) {
+      console.error("Update pageview error:", err);
+      return res.status(500).json({ error: "Failed to update pageview" });
+    }
+  });
+
+  app.get("/api/admin/analytics", async (req: Request, res: Response) => {
+    try {
+      const { password } = req.query as Record<string, string>;
+      if (!password || password !== process.env.ADMIN_PASSWORD) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const [pageStats, totalViews, recentEvents] = await Promise.all([
+        storage.getPageViewStats(),
+        storage.getTotalPageViews(),
+        storage.getRecentPageEvents(50),
+      ]);
+      return res.json({ totalViews, pageStats, recentEvents });
+    } catch (err) {
+      console.error("Admin analytics error:", err);
+      return res.status(500).json({ error: "Failed to get analytics" });
     }
   });
 

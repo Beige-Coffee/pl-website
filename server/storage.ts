@@ -1,5 +1,5 @@
-import { type User, type InsertUser, type LnAuthChallenge, type Session, type LnurlWithdrawal, users, lnAuthChallenges, sessions, lnurlWithdrawals } from "@shared/schema";
-import { eq, desc, inArray, and } from "drizzle-orm";
+import { type User, type InsertUser, type LnAuthChallenge, type Session, type LnurlWithdrawal, type InsertPageEvent, type PageEvent, users, lnAuthChallenges, sessions, lnurlWithdrawals, pageEvents } from "@shared/schema";
+import { eq, desc, inArray, and, sql, count } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 
@@ -32,6 +32,12 @@ export interface IStorage {
   getWithdrawalsByUserId(userId: string): Promise<LnurlWithdrawal[]>;
   getRecentWithdrawals(limit: number): Promise<LnurlWithdrawal[]>;
   cancelPendingWithdrawals(userId: string): Promise<void>;
+  createPageEvent(event: InsertPageEvent): Promise<PageEvent>;
+  getPageEventById(id: number): Promise<PageEvent | undefined>;
+  updatePageEventDuration(id: number, duration: number): Promise<void>;
+  getPageViewStats(): Promise<{ page: string; views: number; avgDuration: number }[]>;
+  getRecentPageEvents(limit: number): Promise<PageEvent[]>;
+  getTotalPageViews(): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -162,6 +168,38 @@ export class DatabaseStorage implements IStorage {
           inArray(lnurlWithdrawals.status, ["pending", "claimed"])
         )
       );
+  }
+
+  async createPageEvent(event: InsertPageEvent): Promise<PageEvent> {
+    const [pageEvent] = await db.insert(pageEvents).values(event).returning();
+    return pageEvent;
+  }
+
+  async getPageEventById(id: number): Promise<PageEvent | undefined> {
+    const [event] = await db.select().from(pageEvents).where(eq(pageEvents.id, id));
+    return event;
+  }
+
+  async updatePageEventDuration(id: number, duration: number): Promise<void> {
+    await db.update(pageEvents).set({ duration }).where(eq(pageEvents.id, id));
+  }
+
+  async getPageViewStats(): Promise<{ page: string; views: number; avgDuration: number }[]> {
+    const result = await db.select({
+      page: pageEvents.page,
+      views: count(pageEvents.id),
+      avgDuration: sql<number>`coalesce(avg(${pageEvents.duration})::int, 0)`,
+    }).from(pageEvents).groupBy(pageEvents.page).orderBy(desc(count(pageEvents.id)));
+    return result.map(r => ({ page: r.page, views: Number(r.views), avgDuration: Number(r.avgDuration) }));
+  }
+
+  async getRecentPageEvents(limit: number): Promise<PageEvent[]> {
+    return db.select().from(pageEvents).orderBy(desc(pageEvents.createdAt)).limit(limit);
+  }
+
+  async getTotalPageViews(): Promise<number> {
+    const [result] = await db.select({ total: count(pageEvents.id) }).from(pageEvents);
+    return Number(result.total);
   }
 }
 

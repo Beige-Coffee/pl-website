@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, boolean, integer, serial } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -39,6 +39,20 @@ export const lnurlWithdrawals = pgTable("lnurl_withdrawals", {
   claimedAt: timestamp("claimed_at"),
   paidAt: timestamp("paid_at"),
 });
+
+export const pageEvents = pgTable("page_events", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id"),
+  sessionId: text("session_id"),
+  page: text("page").notNull(),
+  referrer: text("referrer"),
+  duration: integer("duration"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertPageEventSchema = createInsertSchema(pageEvents).omit({ id: true, createdAt: true });
+export type InsertPageEvent = z.infer<typeof insertPageEventSchema>;
+export type PageEvent = typeof pageEvents.$inferSelect;
 
 export const insertUserSchema = createInsertSchema(users).pick({
   pubkey: true,
