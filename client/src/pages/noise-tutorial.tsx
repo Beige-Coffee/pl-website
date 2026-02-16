@@ -338,7 +338,7 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
               return (
                 <div key={section} className="mb-4">
                   <div
-                    className={`font-pixel text-[12px] tracking-wide mb-2 ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`}
+                    className={`font-pixel text-[14px] tracking-wide mb-2 ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`}
                     data-testid={`text-section-${section.replace(/\s+/g, "-").toLowerCase()}`}
                   >
                     {section.toUpperCase()}
@@ -396,8 +396,8 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
                   className={`inline-flex items-center gap-2 border-2 px-4 py-3 transition-colors ${t.navPrev}`}
                   data-testid="link-prev"
                 >
-                  <span className={`font-pixel text-sm ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`}>PREV</span>
-                  <span className="font-mono text-[16px]">{prev.title}</span>
+                  <span className={`font-pixel text-base ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`}>PREV</span>
+                  <span className="font-mono text-lg">{prev.title}</span>
                 </Link>
               ) : (
                 <div />
@@ -409,8 +409,8 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
                   className={`inline-flex items-center gap-2 border-2 px-4 py-3 transition-all ${t.navNext}`}
                   data-testid="link-next"
                 >
-                  <span className="font-pixel text-sm">NEXT</span>
-                  <span className="font-mono text-[16px]">{next.title}</span>
+                  <span className="font-pixel text-base">NEXT</span>
+                  <span className="font-mono text-lg">{next.title}</span>
                 </Link>
               ) : (
                 <div />
