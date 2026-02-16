@@ -356,10 +356,10 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
                           onClick={() => setLocation(href)}
                           className={`${
                             isActive ? t.chapterActive : t.chapterInactive
-                          } w-full text-left border-2 px-3 py-3 transition-colors`}
+                          } w-full text-left border-2 px-3 py-1.5 transition-colors`}
                           data-testid={`button-chapter-${c.id}`}
                         >
-                          <div className="font-mono text-[18px] leading-snug">{c.title}</div>
+                          <div className="font-mono text-[20px] leading-tight">{c.title}</div>
                         </button>
                       );
                     })}
@@ -393,7 +393,7 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
               {prev ? (
                 <Link
                   href={prev.id === "intro" ? "/noise-tutorial" : `/noise-tutorial/${prev.id}`}
-                  className={`inline-flex items-center gap-2 border-2 px-4 py-3 transition-colors ${t.navPrev}`}
+                  className={`inline-flex items-center gap-2 border-2 px-4 py-2 transition-colors ${t.navPrev}`}
                   data-testid="link-prev"
                 >
                   <span className={`font-pixel text-base ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`}>PREV</span>
@@ -406,7 +406,7 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
               {next ? (
                 <Link
                   href={next.id === "intro" ? "/noise-tutorial" : `/noise-tutorial/${next.id}`}
-                  className={`inline-flex items-center gap-2 border-2 px-4 py-3 transition-all ${t.navNext}`}
+                  className={`inline-flex items-center gap-2 border-2 px-4 py-2 transition-all ${t.navNext}`}
                   data-testid="link-next"
                 >
                   <span className="font-pixel text-base">NEXT</span>
