@@ -228,11 +228,11 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
         </div>
 
         <div className="hidden md:flex items-center gap-3">
-          <div className={`font-pixel text-xs ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`} data-testid="text-tutorial-breadcrumb">
+          <div className={`font-pixel text-xs md:text-sm ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`} data-testid="text-tutorial-breadcrumb">
             Noise Tutorial
           </div>
           <div className={`h-4 w-[2px] ${theme === "dark" ? "bg-[#2a3552]" : "bg-border"}`} />
-          <div className={`font-mono text-sm ${t.crumbText}`} data-testid="text-chapter-title">
+          <div className={`font-mono text-sm md:text-base ${t.crumbText}`} data-testid="text-chapter-title">
             {active.title}
           </div>
         </div>
@@ -267,7 +267,7 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
             <button
               type="button"
               onClick={logout}
-              className={`p-2 font-pixel text-[10px] transition-colors ${
+              className={`p-2 font-pixel text-xs md:text-sm transition-colors ${
                 theme === "dark"
                   ? "text-slate-400 hover:text-slate-200"
                   : "text-foreground/60 hover:text-foreground"
@@ -281,7 +281,7 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
             <button
               type="button"
               onClick={() => setShowLoginModal(true)}
-              className={`p-2 font-pixel text-[10px] transition-colors ${
+              className={`p-2 font-pixel text-xs md:text-sm transition-colors ${
                 theme === "dark"
                   ? "text-slate-200 hover:text-white"
                   : "text-foreground hover:text-foreground/80"
