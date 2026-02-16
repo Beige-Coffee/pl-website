@@ -243,6 +243,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       (async () => {
         try {
+          if (withdrawal.userId) {
+            const freshUser = await storage.getUser(withdrawal.userId);
+            if (freshUser?.rewardClaimed) {
+              await storage.markWithdrawalFailed(k1, "Reward already claimed by user");
+              return;
+            }
+          }
           const payRes = await fetch("http://localhost:5393/v2/node/pay_invoice", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
