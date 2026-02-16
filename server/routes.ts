@@ -118,7 +118,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ ok: true });
   });
 
-  const QUIZ_ANSWER_KEY = [1, 2, 2, 1, 2, 2, 1, 2, 2, 2];
+  const QUIZ_ANSWER_KEY = [3, 0, 0, 2, 1, 0, 3, 0, 3, 1];
   const QUIZ_PASS_THRESHOLD = 0.9;
   const REWARD_AMOUNT_SATS = parseInt(process.env.REWARD_AMOUNT_SATS || "21", 10);
   const REWARD_AMOUNT_MSATS = REWARD_AMOUNT_SATS * 1000;
