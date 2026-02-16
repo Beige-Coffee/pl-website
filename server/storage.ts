@@ -1,5 +1,5 @@
 import { type User, type InsertUser, type LnAuthChallenge, type Session, type LnurlWithdrawal, users, lnAuthChallenges, sessions, lnurlWithdrawals } from "@shared/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, inArray, and } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 
@@ -31,6 +31,7 @@ export interface IStorage {
   markWithdrawalExpired(k1: string): Promise<void>;
   getWithdrawalsByUserId(userId: string): Promise<LnurlWithdrawal[]>;
   getRecentWithdrawals(limit: number): Promise<LnurlWithdrawal[]>;
+  cancelPendingWithdrawals(userId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -150,6 +151,17 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(lnurlWithdrawals)
       .orderBy(desc(lnurlWithdrawals.createdAt))
       .limit(limit);
+  }
+
+  async cancelPendingWithdrawals(userId: string): Promise<void> {
+    await db.update(lnurlWithdrawals)
+      .set({ status: "expired" })
+      .where(
+        and(
+          eq(lnurlWithdrawals.userId, userId),
+          inArray(lnurlWithdrawals.status, ["pending", "claimed"])
+        )
+      );
   }
 }
 

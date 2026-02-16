@@ -131,6 +131,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
+      if (user.rewardClaimed) {
+        return res.status(400).json({ error: "Reward already claimed" });
+      }
+
       const { answers } = req.body;
       if (!answers || typeof answers !== "object") {
         return res.status(400).json({ error: "Missing quiz answers" });
@@ -147,14 +151,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: `Score too low: ${Math.round(score * 100)}%. Need 90%+` });
       }
 
-      const recentWithdrawals = await storage.getWithdrawalsByUserId(user.id);
-      const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
-      const recentClaim = recentWithdrawals.find(
-        (w) => w.createdAt > tenMinutesAgo && (w.status === "pending" || w.status === "claimed" || w.status === "paid")
-      );
-      if (recentClaim) {
-        return res.status(429).json({ error: "Please wait 10 minutes between claims" });
-      }
+      await storage.cancelPendingWithdrawals(user.id);
 
       try {
         const nodeRes = await fetch("http://localhost:5393/v2/node/node_info", {
@@ -255,6 +252,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (payRes.ok) {
             const payData = await payRes.json() as { index: string };
             await storage.markWithdrawalPaid(k1, payData.index);
+            if (withdrawal.userId) {
+              await storage.setRewardClaimed(withdrawal.userId);
+            }
           } else {
             const errData = await payRes.json().catch(() => ({ msg: "Unknown error" })) as { msg?: string };
             await storage.markWithdrawalFailed(k1, errData.msg || `HTTP ${payRes.status}`);

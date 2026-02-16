@@ -381,6 +381,7 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
               <InteractiveQuiz
                 theme={theme}
                 authenticated={authenticated}
+                rewardClaimed={auth.rewardClaimed}
                 sessionToken={auth.sessionToken}
                 onLoginRequest={() => setShowLoginModal(true)}
               />
@@ -841,11 +842,13 @@ function LightningBoltCelebration({ theme }: { theme: "light" | "dark" }) {
 function InteractiveQuiz({
   theme,
   authenticated,
+  rewardClaimed,
   sessionToken,
   onLoginRequest,
 }: {
   theme: "light" | "dark";
   authenticated: boolean;
+  rewardClaimed: boolean;
   sessionToken: string | null;
   onLoginRequest: () => void;
 }) {
@@ -1016,7 +1019,7 @@ function InteractiveQuiz({
               : `You scored ${percentage}%. You need 90% to pass. Review the incorrect answers below and try again!`}
           </div>
 
-          {passed && !showReward && (
+          {passed && !showReward && !rewardClaimed && (
             <div>
               <button
                 type="button"
@@ -1034,6 +1037,12 @@ function InteractiveQuiz({
                   {claimError}
                 </div>
               )}
+            </div>
+          )}
+
+          {passed && rewardClaimed && !showReward && (
+            <div className="mt-4 font-pixel text-sm" style={{ color: "#FFD700" }} data-testid="text-reward-already-claimed">
+              REWARD ALREADY CLAIMED
             </div>
           )}
 
