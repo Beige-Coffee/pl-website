@@ -704,6 +704,7 @@ const QUIZ_QUESTIONS = [
       "ECDH is more computationally efficient, and the resulting shared secrets can be directly used to derive encryption keys, simplifying the protocol",
     ],
     answer: 3,
+    explanation: "Digital signatures prove identity but produce a standalone proof that anyone can verify — they don't create shared secrets. ECDH, on the other hand, produces a shared secret known only to both parties, which can be immediately fed into HKDF to derive encryption keys. This means a single ECDH operation simultaneously authenticates both parties AND establishes keying material, whereas signatures would require a separate key exchange step on top. The Noise framework leverages this dual purpose throughout the handshake.",
   },
   {
     question: "In Act 1, Alice encrypts a zero-length plaintext with ChaCha20-Poly1305. Why doesn't she encrypt any actual data?",
@@ -714,6 +715,7 @@ const QUIZ_QUESTIONS = [
       "ChaCha20-Poly1305 requires an empty plaintext for the initial use of any new key",
     ],
     answer: 0,
+    explanation: "The purpose of Act 1 is not to transmit data — it's to prove that Alice knows Bob's static public key. She does this by performing an ECDH between her ephemeral key and Bob's static key, deriving a temporary key, and using it to produce a 16-byte Poly1305 MAC over an empty plaintext. If Alice didn't know Bob's real public key, the ECDH would produce the wrong shared secret, the derived key would be wrong, and the MAC wouldn't verify. The MAC itself is the proof — no plaintext is needed.",
   },
   {
     question: "At what point during the Noise handshake does Bob first learn Alice's identity?",
@@ -724,6 +726,7 @@ const QUIZ_QUESTIONS = [
       "Act 3 — only after Bob successfully verifies the final MAC with temp_k3",
     ],
     answer: 0,
+    explanation: "In Act 3, Alice sends her static public key encrypted with temp_k2. When Bob decrypts it, he immediately learns her Lightning node identity — this happens before he verifies the final MAC with temp_k3. The MAC verification in Act 3 confirms that the handshake transcript hasn't been tampered with, but Bob already has Alice's decrypted identity at that point. Acts 1 and 2 don't reveal Alice's identity at all: Act 1 only proves Alice knows Bob's key, and Act 2 only involves ephemeral keys.",
   },
   {
     question: "Why does Alice use her Ephemeral Public Key — rather than her Static Public Key — for the ECDH in Act 1?",
@@ -734,6 +737,7 @@ const QUIZ_QUESTIONS = [
       "Her Static Public Key uses a different curve than Bob's Ephemeral Key, making ECDH impossible",
     ],
     answer: 2,
+    explanation: "Alice's static public key is her Lightning node identity (the public key in her node's connection address). If she sent it in plaintext in Act 1, any passive eavesdropper monitoring the network could see exactly which node is initiating the connection. By using a freshly generated ephemeral key instead, Alice reveals nothing about her identity to observers. Her static key is only transmitted later in Act 3, encrypted under keys derived from the ee ECDH — which an eavesdropper cannot compute.",
   },
   {
     question: "Why is forward secrecy NOT established until Act 2?",
@@ -744,6 +748,7 @@ const QUIZ_QUESTIONS = [
       "Act 1 only uses hash functions — the first ECDH doesn't happen until Act 2",
     ],
     answer: 1,
+    explanation: "Forward secrecy means that compromising long-term (static) keys doesn't compromise past session keys. In Act 1, the es ECDH combines Alice's ephemeral key with Bob's static key. If an attacker later steals Bob's static private key, they can recompute this shared secret using Alice's ephemeral public key (which was sent unencrypted in Act 1). It's not until Act 2, when Bob introduces his own ephemeral key and the ee ECDH occurs, that the session keys depend on secrets that are destroyed after the handshake — achieving forward secrecy.",
   },
   {
     question: "What would happen if Alice reused the same nonce with the same key for two different ChaCha20 encryptions?",
@@ -754,6 +759,7 @@ const QUIZ_QUESTIONS = [
       "Both messages would decrypt to the same plaintext regardless of the original content",
     ],
     answer: 0,
+    explanation: "ChaCha20 is a stream cipher — it generates a pseudorandom keystream from the key and nonce, then XORs it with the plaintext. If the same key and nonce produce the same keystream twice, an attacker can XOR the two ciphertexts together. The keystreams cancel out, leaving the XOR of the two plaintexts. With known or guessable structure in either message, the attacker can progressively recover both. This is why Noise increments the nonce after every encryption and rotates keys after 1000 messages — nonce reuse must never occur.",
   },
   {
     question: "What is the primary purpose of the handshake hash throughout the Noise handshake?",
@@ -764,6 +770,7 @@ const QUIZ_QUESTIONS = [
       "It acts as a running transcript of the handshake, and is included as associated data in each MAC so that both parties can verify they are progressing through the protocol in sync",
     ],
     answer: 3,
+    explanation: "The handshake hash (h) is a cumulative SHA-256 digest that absorbs every piece of data exchanged during the handshake — public keys, ECDH outputs, and ciphertexts. Each time a MAC is computed with ChaCha20-Poly1305, the current handshake hash is passed as the Associated Data (AD). This binds the MAC to the entire transcript up to that point. If an attacker tried to replay, reorder, or tamper with any handshake message, the hash would diverge between Alice and Bob, and the MAC verification would fail.",
   },
   {
     question: "During key rotation, what serves as the Input Key Material (IKM) for the HKDF function?",
@@ -774,6 +781,7 @@ const QUIZ_QUESTIONS = [
       "The original ECDH shared secret from the handshake phase",
     ],
     answer: 0,
+    explanation: "Key rotation uses HKDF with the current encryption key (sk or rk) as the Input Key Material. HKDF(ck, current_key) produces two outputs: a new chaining key and a new encryption key that replaces the old one. The old key is immediately discarded. This is what provides forward secrecy for the message transport phase — even if an attacker compromises a current key, they cannot derive any previous keys because HKDF is a one-way function. Rotation happens every 1000 messages (when the nonce counter hits 1000).",
   },
   {
     question: "Why does Lightning encrypt the 2-byte message length prefix before transmission?",
@@ -784,6 +792,7 @@ const QUIZ_QUESTIONS = [
       "Without length encryption, an attacker could perform traffic analysis to learn message types and potentially track payments across the network",
     ],
     answer: 3,
+    explanation: "Lightning messages are framed as [2-byte encrypted length][encrypted payload]. If the length were sent in plaintext, an eavesdropper could see the exact size of every message without decrypting anything. Since different Lightning message types (channel opens, payments, routing updates) have characteristic sizes, an attacker could infer what operations a node is performing and correlate payment flows across the network. Encrypting the length prefix ensures that even message boundaries are hidden from observers.",
   },
   {
     question: 'After the handshake, Alice computes sk, rk = HKDF(ck, "") and Bob computes rk, sk = HKDF(ck, ""). Why are the variable assignments reversed?',
@@ -794,6 +803,7 @@ const QUIZ_QUESTIONS = [
       "The HKDF function produces outputs in a different order depending on which party calls it",
     ],
     answer: 1,
+    explanation: "HKDF(ck, \"\") always produces the same two keys in the same order — call them K1 and K2. Alice assigns K1 as her sending key (sk) and K2 as her receiving key (rk). Bob must do the opposite: K1 becomes his receiving key (rk) and K2 becomes his sending key (sk). This way, when Alice encrypts with her sk (K1), Bob decrypts with his rk (also K1). And when Bob encrypts with his sk (K2), Alice decrypts with her rk (also K2). Without this reversal, both sides would encrypt and decrypt with the same key assignments, and communication would fail.",
   },
 ];
 
@@ -1220,6 +1230,30 @@ function InteractiveQuiz({
                   );
                 })}
               </div>
+
+              {submitted && q.explanation && (
+                <div
+                  className={`mt-4 pt-4 border-t ${
+                    dark ? "border-[#1f2a44]" : "border-border"
+                  }`}
+                  data-testid={`container-quiz-explanation-${qIndex}`}
+                >
+                  <div className={`font-pixel text-xs mb-2 ${
+                    isCorrect
+                      ? "text-green-400"
+                      : isWrong
+                      ? "text-red-400"
+                      : dark ? "text-slate-400" : "text-foreground/60"
+                  }`}>
+                    {isCorrect ? "CORRECT" : isWrong ? "INCORRECT" : "NOT ANSWERED"} — EXPLANATION
+                  </div>
+                  <div className={`text-[15px] md:text-[16px] leading-relaxed ${
+                    dark ? "text-slate-300" : "text-foreground/80"
+                  }`}>
+                    {q.explanation}
+                  </div>
+                </div>
+              )}
             </div>
           );
         })}
