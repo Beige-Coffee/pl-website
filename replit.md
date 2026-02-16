@@ -6,6 +6,10 @@ Free, open-source educational website teaching Bitcoin Lightning Network through
 Created by Austin (Spiral and HRF grantee), inspired by Programming Bitcoin.
 
 ## Recent Changes
+- 2026-02-16: Added Plausible Analytics for traffic/referrer tracking
+- 2026-02-16: Custom page_events tracking (page views, duration, user progress)
+- 2026-02-16: Admin analytics endpoint (GET /api/admin/analytics)
+- 2026-02-16: Lexe Sidecar auto-starts with app server
 - 2026-02-12: Added dual authentication (Lightning + Email/Password) with unified sessions table
 - 2026-02-12: One-time Bitcoin reward system for quiz completion (90%+ score)
 - 2026-02-12: Quiz is now open-access; submission requires login
@@ -26,11 +30,12 @@ Created by Austin (Spiral and HRF grantee), inspired by Programming Bitcoin.
 - Reward: One-time claim per account, tracked by reward_claimed column in users table
 
 ## Key Files
-- shared/schema.ts — DB schema (users, sessions, lnAuthChallenges)
-- server/routes.ts — API routes (auth, lnauth, reward)
+- shared/schema.ts — DB schema (users, sessions, lnAuthChallenges, lnurlWithdrawals, pageEvents)
+- server/routes.ts — API routes (auth, lnauth, reward, tracking, admin analytics)
 - server/storage.ts — Storage interface and DB operations
 - client/src/hooks/use-auth.ts — Unified auth hook
 - client/src/hooks/use-lnauth.ts — LNURL-auth challenge polling (used by LoginModal)
+- client/src/hooks/use-page-tracking.ts — Auto page view tracking with duration
 - client/src/components/LoginModal.tsx — Login modal with Email/Lightning tabs
 - client/src/pages/noise-tutorial.tsx — Tutorial + quiz page
 
@@ -40,3 +45,7 @@ Created by Austin (Spiral and HRF grantee), inspired by Programming Bitcoin.
 - Session tokens stored in localStorage as "pl-session-token"
 - LN callback creates session in sessions table (unified with email sessions)
 - Password hashing: bcryptjs with cost 10
+- Analytics: Plausible (external traffic/referrers) + custom page_events table (tutorial progress)
+- Tracking sessionId is client-generated, stored in sessionStorage, used for duration update ownership
+- Admin analytics: GET /api/admin/analytics?password=<ADMIN_PASSWORD>
+- Lexe Sidecar auto-starts via spawn() in server/routes.ts registerRoutes()
