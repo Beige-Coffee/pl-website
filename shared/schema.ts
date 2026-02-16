@@ -26,6 +26,20 @@ export const lnAuthChallenges = pgTable("ln_auth_challenges", {
   sessionToken: text("session_token"),
 });
 
+export const lnurlWithdrawals = pgTable("lnurl_withdrawals", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  k1: varchar("k1", { length: 64 }).notNull().unique(),
+  userId: varchar("user_id").notNull(),
+  amountMsats: text("amount_msats").notNull(),
+  status: text("status").notNull().default("pending"),
+  bolt11Invoice: text("bolt11_invoice"),
+  paymentIndex: text("payment_index"),
+  errorReason: text("error_reason"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  claimedAt: timestamp("claimed_at"),
+  paidAt: timestamp("paid_at"),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   pubkey: true,
   email: true,
@@ -41,3 +55,4 @@ export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type LnAuthChallenge = typeof lnAuthChallenges.$inferSelect;
+export type LnurlWithdrawal = typeof lnurlWithdrawals.$inferSelect;

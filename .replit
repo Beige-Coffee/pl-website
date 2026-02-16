@@ -46,3 +46,8 @@ waitForPort = 5000
 
 [agent]
 mockupState = "FULLSTACK"
+
+[userenv]
+
+[userenv.shared]
+REWARD_AMOUNT_SATS = "21"

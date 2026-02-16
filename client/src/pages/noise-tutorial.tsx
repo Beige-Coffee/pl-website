@@ -6,6 +6,7 @@ import rehypeRaw from "rehype-raw";
 import rehypeHighlight from "rehype-highlight";
 import { useAuth } from "../hooks/use-auth";
 import LoginModal from "../components/LoginModal";
+import { QRCodeSVG } from "qrcode.react";
 
 type Chapter = {
   id: string;
@@ -124,7 +125,7 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
   const [location, setLocation] = useLocation();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const auth = useAuth();
-  const { authenticated, loading: authLoading, logout, loginWithToken, markRewardClaimed } = auth;
+  const { authenticated, loading: authLoading, logout, loginWithToken } = auth;
   const [showLoginModal, setShowLoginModal] = useState(false);
 
   const activeIndex = idxOf(activeId);
@@ -380,10 +381,8 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
               <InteractiveQuiz
                 theme={theme}
                 authenticated={authenticated}
-                rewardClaimed={auth.rewardClaimed}
                 sessionToken={auth.sessionToken}
                 onLoginRequest={() => setShowLoginModal(true)}
-                onRewardClaimed={markRewardClaimed}
               />
             ) : (
               <ChapterContent chapter={active} theme={theme} />
@@ -842,23 +841,26 @@ function LightningBoltCelebration({ theme }: { theme: "light" | "dark" }) {
 function InteractiveQuiz({
   theme,
   authenticated,
-  rewardClaimed,
   sessionToken,
   onLoginRequest,
-  onRewardClaimed,
 }: {
   theme: "light" | "dark";
   authenticated: boolean;
-  rewardClaimed: boolean;
   sessionToken: string | null;
   onLoginRequest: () => void;
-  onRewardClaimed: () => void;
 }) {
   const [selections, setSelections] = useState<Record<number, number>>({});
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(0);
   const [showReward, setShowReward] = useState(false);
   const [claimingReward, setClaimingReward] = useState(false);
+  const [claimError, setClaimError] = useState<string | null>(null);
+  const [rewardK1, setRewardK1] = useState<string | null>(null);
+  const [rewardLnurl, setRewardLnurl] = useState<string | null>(null);
+  const [rewardAmountSats, setRewardAmountSats] = useState(21);
+  const [withdrawalStatus, setWithdrawalStatus] = useState<string>("pending");
+  const [rewardCreatedAt, setRewardCreatedAt] = useState<number | null>(null);
+  const [countdown, setCountdown] = useState(300);
 
   const dark = theme === "dark";
   const border = dark ? "border-[#2a3552]" : "border-border";
@@ -886,20 +888,73 @@ function InteractiveQuiz({
   };
 
   const handleClaimReward = async () => {
-    if (!sessionToken || rewardClaimed) return;
+    if (!sessionToken) return;
     setClaimingReward(true);
+    setClaimError(null);
     try {
-      const res = await fetch("/api/auth/claim-reward", {
+      const res = await fetch("/api/quiz/claim", {
         method: "POST",
-        headers: { Authorization: `Bearer ${sessionToken}` },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${sessionToken}`,
+        },
+        body: JSON.stringify({ answers: selections }),
       });
       const data = await res.json();
-      if (data.claimed) {
-        onRewardClaimed();
-        setShowReward(true);
+      if (!res.ok) {
+        setClaimError(data.error || "Failed to claim reward");
+        setClaimingReward(false);
+        return;
       }
-    } catch {}
+      setRewardK1(data.k1);
+      setRewardLnurl(data.lnurl);
+      setRewardAmountSats(data.amountSats);
+      setRewardCreatedAt(Date.now());
+      setWithdrawalStatus("pending");
+      setShowReward(true);
+    } catch {
+      setClaimError("Network error. Please try again.");
+    }
     setClaimingReward(false);
+  };
+
+  useEffect(() => {
+    if (!rewardK1 || withdrawalStatus === "paid" || withdrawalStatus === "expired" || withdrawalStatus === "failed") return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/lnurl/status/${rewardK1}`);
+        const data = await res.json();
+        setWithdrawalStatus(data.status);
+        if (data.status === "paid" || data.status === "expired" || data.status === "failed") {
+          clearInterval(interval);
+        }
+      } catch {}
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [rewardK1, withdrawalStatus]);
+
+  useEffect(() => {
+    if (!rewardCreatedAt || withdrawalStatus === "paid" || withdrawalStatus === "expired" || withdrawalStatus === "failed") return;
+    const interval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - rewardCreatedAt) / 1000);
+      const remaining = Math.max(0, 300 - elapsed);
+      setCountdown(remaining);
+      if (remaining <= 0) {
+        setWithdrawalStatus("expired");
+        clearInterval(interval);
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [rewardCreatedAt, withdrawalStatus]);
+
+  const handleNewQR = () => {
+    setShowReward(false);
+    setRewardK1(null);
+    setRewardLnurl(null);
+    setWithdrawalStatus("pending");
+    setRewardCreatedAt(null);
+    setCountdown(300);
+    setClaimError(null);
   };
 
   const handleReset = () => {
@@ -907,11 +962,23 @@ function InteractiveQuiz({
     setSubmitted(false);
     setScore(0);
     setShowReward(false);
+    setRewardK1(null);
+    setRewardLnurl(null);
+    setWithdrawalStatus("pending");
+    setRewardCreatedAt(null);
+    setCountdown(300);
+    setClaimError(null);
   };
 
   const percentage = Math.round((score / QUIZ_QUESTIONS.length) * 100);
   const passed = percentage >= 90;
   const allAnswered = Object.keys(selections).length === QUIZ_QUESTIONS.length;
+
+  const formatCountdown = (s: number) => {
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return `${m}:${sec.toString().padStart(2, "0")}`;
+  };
 
   return (
     <div className="py-6" data-testid="container-interactive-quiz">
@@ -949,51 +1016,85 @@ function InteractiveQuiz({
               : `You scored ${percentage}%. You need 90% to pass. Review the incorrect answers below and try again!`}
           </div>
 
-          {passed && !rewardClaimed && !showReward && (
-            <button
-              type="button"
-              onClick={handleClaimReward}
-              disabled={claimingReward}
-              className={`mt-4 font-pixel text-sm border-2 px-6 py-3 transition-all border-[#FFD700] bg-[#FFD700] text-black hover:bg-[#FFC800] active:scale-95 ${
-                claimingReward ? "opacity-60 cursor-wait" : ""
-              }`}
-              data-testid="button-claim-reward"
-            >
-              {claimingReward ? "CLAIMING..." : "CLAIM BITCOIN REWARD"}
-            </button>
+          {passed && !showReward && (
+            <div>
+              <button
+                type="button"
+                onClick={handleClaimReward}
+                disabled={claimingReward}
+                className={`mt-4 font-pixel text-sm border-2 px-6 py-3 transition-all border-[#FFD700] bg-[#FFD700] text-black hover:bg-[#FFC800] active:scale-95 ${
+                  claimingReward ? "opacity-60 cursor-wait" : ""
+                }`}
+                data-testid="button-claim-reward"
+              >
+                {claimingReward ? "GENERATING QR..." : "CLAIM BITCOIN REWARD"}
+              </button>
+              {claimError && (
+                <div className="mt-2 text-sm text-red-400" data-testid="text-claim-error">
+                  {claimError}
+                </div>
+              )}
+            </div>
           )}
 
-          {passed && (rewardClaimed || showReward) && (
+          {passed && showReward && rewardLnurl && (
             <div className="mt-6" data-testid="container-reward-qr">
-              <div className="font-pixel text-sm mb-3" style={{ color: "#FFD700" }}>
-                YOUR BITCOIN REWARD
-              </div>
-              <div className={`inline-block border-4 ${border} ${bg} p-4`}>
-                <div className="w-[200px] h-[200px] flex items-center justify-center" style={{ background: "#fff" }}>
-                  <svg viewBox="0 0 200 200" width="200" height="200">
-                    <rect width="200" height="200" fill="white" />
-                    <g fill="black">
-                      {Array.from({ length: 15 }, (_, row) =>
-                        Array.from({ length: 15 }, (_, col) => {
-                          const isCorner = (row < 5 && col < 5) || (row < 5 && col > 9) || (row > 9 && col < 5);
-                          const isBorder = isCorner && (row === 0 || row === 4 || col === 0 || col === 4 || col === 10 || col === 14 || row === 10 || row === 14);
-                          const isInner = isCorner && row >= 1 && row <= 3 && col >= 1 && col <= 3;
-                          const isInner2 = isCorner && ((row >= 1 && row <= 3 && col >= 11 && col <= 13) || (row >= 11 && row <= 13 && col >= 1 && col <= 3));
-                          const hash = (row * 17 + col * 31) % 7;
-                          const isData = !isCorner && hash < 3;
-                          if (isBorder || isInner || isInner2 || isData) {
-                            return <rect key={`${row}-${col}`} x={col * 13 + 3} y={row * 13 + 3} width="12" height="12" />;
-                          }
-                          return null;
-                        })
-                      )}
-                    </g>
-                  </svg>
+              {withdrawalStatus === "paid" ? (
+                <div>
+                  <div className="font-pixel text-lg mb-2" style={{ color: "#FFD700" }}>
+                    {rewardAmountSats} SATS SENT!
+                  </div>
+                  <div className={`text-lg ${textColor}`}>
+                    Payment complete. Enjoy your sats!
+                  </div>
                 </div>
-              </div>
-              <div className={`mt-3 font-pixel text-[10px] ${textMuted}`}>
-                SAMPLE QR - REAL REWARDS COMING SOON
-              </div>
+              ) : withdrawalStatus === "expired" ? (
+                <div>
+                  <div className="font-pixel text-sm mb-2 text-red-400">QR EXPIRED</div>
+                  <button
+                    type="button"
+                    onClick={handleNewQR}
+                    className="font-pixel text-sm border-2 px-4 py-2 border-[#FFD700] bg-[#FFD700] text-black hover:bg-[#FFC800]"
+                    data-testid="button-new-qr"
+                  >
+                    GENERATE NEW QR
+                  </button>
+                </div>
+              ) : withdrawalStatus === "failed" ? (
+                <div>
+                  <div className="font-pixel text-sm mb-2 text-red-400">PAYMENT FAILED</div>
+                  <button
+                    type="button"
+                    onClick={handleNewQR}
+                    className="font-pixel text-sm border-2 px-4 py-2 border-[#FFD700] bg-[#FFD700] text-black hover:bg-[#FFC800]"
+                    data-testid="button-try-again"
+                  >
+                    TRY AGAIN
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <div className="font-pixel text-sm mb-3" style={{ color: "#FFD700" }}>
+                    SCAN TO CLAIM {rewardAmountSats} SATS
+                  </div>
+                  <div className={`inline-block border-4 ${border} ${bg} p-4`}>
+                    <QRCodeSVG
+                      value={rewardLnurl}
+                      size={220}
+                      level="M"
+                      bgColor="#ffffff"
+                      fgColor="#000000"
+                      data-testid="img-reward-qr"
+                    />
+                  </div>
+                  <div className={`mt-3 font-pixel text-xs ${textMuted}`}>
+                    {withdrawalStatus === "claimed" ? "PROCESSING PAYMENT..." : "WAITING FOR SCAN..."}
+                  </div>
+                  <div className={`mt-1 font-mono text-sm ${countdown <= 60 ? "text-red-400" : textMuted}`}>
+                    Expires in {formatCountdown(countdown)}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

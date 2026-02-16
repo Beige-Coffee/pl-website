@@ -118,16 +118,218 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ ok: true });
   });
 
-  app.post("/api/auth/claim-reward", async (req: Request, res: Response) => {
-    const user = await getAuthUser(req);
-    if (!user) {
-      return res.status(401).json({ error: "Not authenticated" });
+  const QUIZ_ANSWER_KEY = [1, 2, 2, 1, 2, 2, 1, 2, 2, 2];
+  const QUIZ_PASS_THRESHOLD = 0.9;
+  const REWARD_AMOUNT_SATS = parseInt(process.env.REWARD_AMOUNT_SATS || "21", 10);
+  const REWARD_AMOUNT_MSATS = REWARD_AMOUNT_SATS * 1000;
+  const WITHDRAWAL_TTL_MS = 5 * 60 * 1000;
+
+  app.post("/api/quiz/claim", async (req: Request, res: Response) => {
+    try {
+      const user = await getAuthUser(req);
+      if (!user) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      const { answers } = req.body;
+      if (!answers || typeof answers !== "object") {
+        return res.status(400).json({ error: "Missing quiz answers" });
+      }
+
+      let correct = 0;
+      for (let i = 0; i < QUIZ_ANSWER_KEY.length; i++) {
+        if (answers[String(i)] === QUIZ_ANSWER_KEY[i]) {
+          correct++;
+        }
+      }
+      const score = correct / QUIZ_ANSWER_KEY.length;
+      if (score < QUIZ_PASS_THRESHOLD) {
+        return res.status(400).json({ error: `Score too low: ${Math.round(score * 100)}%. Need 90%+` });
+      }
+
+      const recentWithdrawals = await storage.getWithdrawalsByUserId(user.id);
+      const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+      const recentClaim = recentWithdrawals.find(
+        (w) => w.createdAt > tenMinutesAgo && (w.status === "pending" || w.status === "claimed" || w.status === "paid")
+      );
+      if (recentClaim) {
+        return res.status(429).json({ error: "Please wait 10 minutes between claims" });
+      }
+
+      try {
+        const nodeRes = await fetch("http://localhost:5393/v2/node/node_info", {
+          signal: AbortSignal.timeout(20000),
+        });
+        if (nodeRes.ok) {
+          const nodeInfo = await nodeRes.json() as Record<string, string>;
+          const sendable = parseInt(nodeInfo.lightning_sendable_balance || "0", 10);
+          if (sendable < REWARD_AMOUNT_SATS) {
+            return res.status(503).json({ error: "Reward pool temporarily empty. Please try again later." });
+          }
+        }
+      } catch {
+      }
+
+      const k1 = generateK1();
+      await storage.createWithdrawal(k1, user.id, String(REWARD_AMOUNT_MSATS));
+
+      const withdrawUrl = `${getBaseUrl(req)}/api/lnurl/withdraw/${k1}`;
+      const lnurl = encodeLnurl(withdrawUrl);
+
+      res.json({ k1, lnurl, amountSats: REWARD_AMOUNT_SATS });
+    } catch (err) {
+      console.error("Quiz claim error:", err);
+      res.status(500).json({ error: "Failed to generate reward" });
     }
-    if (user.rewardClaimed) {
-      return res.status(400).json({ error: "Reward already claimed" });
+  });
+
+  app.get("/api/lnurl/withdraw/:k1", async (req: Request, res: Response) => {
+    try {
+      const { k1 } = req.params;
+      const withdrawal = await storage.getWithdrawalByK1(k1);
+
+      if (!withdrawal) {
+        return res.json({ status: "ERROR", reason: "Unknown withdrawal" });
+      }
+
+      const age = Date.now() - withdrawal.createdAt.getTime();
+      if (age > WITHDRAWAL_TTL_MS) {
+        await storage.markWithdrawalExpired(k1);
+        return res.json({ status: "ERROR", reason: "Withdrawal expired" });
+      }
+
+      if (withdrawal.status !== "pending") {
+        return res.json({ status: "ERROR", reason: "Withdrawal expired or already claimed" });
+      }
+
+      const callbackUrl = `${getBaseUrl(req)}/api/lnurl/callback`;
+      res.json({
+        tag: "withdrawRequest",
+        callback: callbackUrl,
+        k1,
+        defaultDescription: "Lightning Quiz Reward - Programming Lightning",
+        minWithdrawable: parseInt(withdrawal.amountMsats, 10),
+        maxWithdrawable: parseInt(withdrawal.amountMsats, 10),
+      });
+    } catch (err) {
+      console.error("LNURL withdraw error:", err);
+      res.json({ status: "ERROR", reason: "Internal error" });
     }
-    await storage.setRewardClaimed(user.id);
-    res.json({ claimed: true });
+  });
+
+  app.get("/api/lnurl/callback", async (req: Request, res: Response) => {
+    try {
+      const { k1, pr } = req.query as Record<string, string>;
+
+      if (!k1 || !pr) {
+        return res.json({ status: "ERROR", reason: "Missing k1 or pr parameter" });
+      }
+
+      const withdrawal = await storage.getWithdrawalByK1(k1);
+      if (!withdrawal) {
+        return res.json({ status: "ERROR", reason: "Unknown withdrawal" });
+      }
+
+      const age = Date.now() - withdrawal.createdAt.getTime();
+      if (age > WITHDRAWAL_TTL_MS) {
+        await storage.markWithdrawalExpired(k1);
+        return res.json({ status: "ERROR", reason: "Withdrawal expired" });
+      }
+
+      if (withdrawal.status !== "pending") {
+        return res.json({ status: "ERROR", reason: "Withdrawal already claimed or processed" });
+      }
+
+      await storage.markWithdrawalClaimed(k1, pr);
+
+      res.json({ status: "OK" });
+
+      (async () => {
+        try {
+          const payRes = await fetch("http://localhost:5393/v2/node/pay_invoice", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ invoice: pr }),
+            signal: AbortSignal.timeout(30000),
+          });
+          if (payRes.ok) {
+            const payData = await payRes.json() as { index: string };
+            await storage.markWithdrawalPaid(k1, payData.index);
+          } else {
+            const errData = await payRes.json().catch(() => ({ msg: "Unknown error" })) as { msg?: string };
+            await storage.markWithdrawalFailed(k1, errData.msg || `HTTP ${payRes.status}`);
+          }
+        } catch (err: any) {
+          await storage.markWithdrawalFailed(k1, err.message || "Payment failed");
+        }
+      })();
+    } catch (err) {
+      console.error("LNURL callback error:", err);
+      res.json({ status: "ERROR", reason: "Internal error" });
+    }
+  });
+
+  app.get("/api/lnurl/status/:k1", async (req: Request, res: Response) => {
+    try {
+      const { k1 } = req.params;
+      const withdrawal = await storage.getWithdrawalByK1(k1);
+
+      if (!withdrawal) {
+        return res.status(404).json({ status: "unknown" });
+      }
+
+      const age = Date.now() - withdrawal.createdAt.getTime();
+      if (withdrawal.status === "pending" && age > WITHDRAWAL_TTL_MS) {
+        await storage.markWithdrawalExpired(k1);
+        return res.json({ status: "expired", amountSats: Math.floor(parseInt(withdrawal.amountMsats, 10) / 1000) });
+      }
+
+      res.json({
+        status: withdrawal.status,
+        amountSats: Math.floor(parseInt(withdrawal.amountMsats, 10) / 1000),
+      });
+    } catch (err) {
+      console.error("Status check error:", err);
+      res.status(500).json({ status: "error" });
+    }
+  });
+
+  app.get("/api/admin/stats", async (req: Request, res: Response) => {
+    const adminPassword = process.env.ADMIN_PASSWORD;
+    const providedPassword = req.query.password as string;
+    if (!adminPassword || providedPassword !== adminPassword) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+      let nodeBalance: Record<string, unknown> = {};
+      try {
+        const nodeRes = await fetch("http://localhost:5393/v2/node/node_info", {
+          signal: AbortSignal.timeout(20000),
+        });
+        if (nodeRes.ok) {
+          nodeBalance = await nodeRes.json() as Record<string, unknown>;
+        }
+      } catch {}
+
+      const recentWithdrawals = await storage.getRecentWithdrawals(50);
+      const paidWithdrawals = recentWithdrawals.filter((w) => w.status === "paid");
+      const totalSatsPaid = paidWithdrawals.reduce(
+        (sum, w) => sum + Math.floor(parseInt(w.amountMsats, 10) / 1000),
+        0
+      );
+      const pendingCount = recentWithdrawals.filter((w) => w.status === "pending" || w.status === "claimed").length;
+
+      res.json({
+        nodeBalance,
+        totalSatsPaid,
+        pendingCount,
+        recentWithdrawals: recentWithdrawals.slice(0, 20),
+      });
+    } catch (err) {
+      console.error("Admin stats error:", err);
+      res.status(500).json({ error: "Failed to fetch stats" });
+    }
   });
 
   app.get("/api/lnauth/challenge", async (req: Request, res: Response) => {
