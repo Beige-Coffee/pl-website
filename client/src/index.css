@@ -183,8 +183,9 @@
   }
 
   .noise-md-light pre {
-    background: rgba(0, 0, 0, 0.14);
-    border: 1px solid rgba(0, 0, 0, 0.20);
+    background: #e8e4da;
+    border: 1px solid rgba(0, 0, 0, 0.25);
+    color: #1a1a1a;
   }
 
   .noise-md-light blockquote {
