@@ -852,7 +852,12 @@ function InteractiveQuiz({
   sessionToken: string | null;
   onLoginRequest: () => void;
 }) {
-  const [selections, setSelections] = useState<Record<number, number>>({});
+  const [selections, setSelections] = useState<Record<number, number>>(() => {
+    try {
+      const saved = localStorage.getItem("pl-quiz-selections");
+      return saved ? JSON.parse(saved) : {};
+    } catch { return {}; }
+  });
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(0);
   const [showReward, setShowReward] = useState(false);
@@ -873,7 +878,11 @@ function InteractiveQuiz({
 
   const handleSelect = (qIndex: number, optIndex: number) => {
     if (submitted) return;
-    setSelections((prev) => ({ ...prev, [qIndex]: optIndex }));
+    setSelections((prev) => {
+      const next = { ...prev, [qIndex]: optIndex };
+      try { localStorage.setItem("pl-quiz-selections", JSON.stringify(next)); } catch {}
+      return next;
+    });
   };
 
   const handleSubmit = () => {
@@ -962,6 +971,7 @@ function InteractiveQuiz({
 
   const handleReset = () => {
     setSelections({});
+    try { localStorage.removeItem("pl-quiz-selections"); } catch {}
     setSubmitted(false);
     setScore(0);
     setShowReward(false);
@@ -984,14 +994,14 @@ function InteractiveQuiz({
   };
 
   return (
-    <div className="py-6" data-testid="container-interactive-quiz">
+    <div className="py-4" data-testid="container-interactive-quiz">
       <h1 className={`font-pixel text-2xl md:text-3xl mb-2 ${dark ? "text-slate-100" : "text-foreground"}`} data-testid="text-quiz-title">
         Quiz: Lightning's Noise Protocol
       </h1>
-      <p className={`text-lg mb-8 ${textMuted}`}>
+      <p className={`text-xl md:text-2xl mb-4 ${textMuted}`}>
         {submitted
           ? `You scored ${score}/${QUIZ_QUESTIONS.length} (${percentage}%)`
-          : `Select one answer per question, then submit. You need 90% to pass.`}
+          : `Select one answer per question, then submit. You need 90% to pass. Your answers are saved automatically.`}
       </p>
 
       {submitted && passed && <LightningBoltCelebration theme={theme} />}
@@ -1145,7 +1155,7 @@ function InteractiveQuiz({
               <div className={`font-pixel text-xs mb-1 ${textMuted}`}>
                 Q{qIndex + 1}/{QUIZ_QUESTIONS.length}
               </div>
-              <div className={`text-[17px] md:text-[19px] font-semibold mb-4 leading-snug ${textColor}`} data-testid={`text-quiz-question-${qIndex}`}>
+              <div className={`text-[19px] md:text-[22px] font-semibold mb-4 leading-snug ${textColor}`} data-testid={`text-quiz-question-${qIndex}`}>
                 {q.question}
               </div>
 
@@ -1203,7 +1213,7 @@ function InteractiveQuiz({
                       >
                         {submitted && isAnswer ? "✓" : submitted && isSelected && !isAnswer ? "✗" : letter}
                       </span>
-                      <span className={`text-[16px] md:text-[17px] leading-snug ${!submitted ? (dark ? "text-slate-200" : "text-foreground") : ""}`}>
+                      <span className={`text-[18px] md:text-[20px] leading-snug ${!submitted ? (dark ? "text-slate-200" : "text-foreground") : ""}`}>
                         {opt}
                       </span>
                     </button>
