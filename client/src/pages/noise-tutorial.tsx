@@ -206,7 +206,7 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
   }, [sidebarCollapsed]);
 
   return (
-    <div className={`min-h-screen ${t.pageBg} ${t.pageText} overflow-x-hidden`} data-theme={theme}>
+    <div className={`min-h-screen ${t.pageBg} ${t.pageText}`} data-theme={theme}>
       <div className={`w-full border-b-4 ${t.headerBorder} ${t.headerBg} px-4 py-3 flex items-center justify-between sticky top-0 z-50`}>
         <div className="flex items-center gap-3">
           <button
