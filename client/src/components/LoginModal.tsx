@@ -92,7 +92,6 @@ function EmailAuthForm({
   theme: "light" | "dark";
   onSuccess: (token: string, data: any) => void;
 }) {
-  const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -111,18 +110,38 @@ function EmailAuthForm({
     setLoading(true);
 
     try {
-      const endpoint = mode === "register" ? "/api/auth/register" : "/api/auth/login";
-      const res = await fetch(endpoint, {
+      // Try login first
+      const loginRes = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || "Something went wrong");
+      const loginData = await loginRes.json();
+
+      if (loginRes.ok) {
+        onSuccess(loginData.sessionToken, loginData);
         return;
       }
-      onSuccess(data.sessionToken, data);
+
+      // Login failed — try registering (email might not exist yet)
+      const registerRes = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const registerData = await registerRes.json();
+
+      if (registerRes.ok) {
+        onSuccess(registerData.sessionToken, registerData);
+        return;
+      }
+
+      // Register also failed — if email already exists, password was wrong
+      if (registerRes.status === 409) {
+        setError("Incorrect password");
+      } else {
+        setError(registerData.error || "Something went wrong");
+      }
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -176,18 +195,11 @@ function EmailAuthForm({
         }`}
         data-testid="button-auth-submit"
       >
-        {loading ? "PLEASE WAIT..." : mode === "register" ? "CREATE ACCOUNT" : "LOGIN"}
+        {loading ? "PLEASE WAIT..." : "CONTINUE"}
       </button>
 
-      <div className="text-center">
-        <button
-          type="button"
-          onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(null); }}
-          className={`font-pixel text-xs transition-colors ${dark ? "text-slate-400 hover:text-[#FFD700]" : "text-gray-500 hover:text-gray-900"}`}
-          data-testid="button-toggle-mode"
-        >
-          {mode === "login" ? "DON'T HAVE AN ACCOUNT? REGISTER" : "ALREADY HAVE AN ACCOUNT? LOGIN"}
-        </button>
+      <div className={`text-center font-pixel text-xs ${textMuted}`}>
+        NEW USERS ARE REGISTERED AUTOMATICALLY
       </div>
     </form>
   );
