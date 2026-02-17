@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type LnAuthChallenge, type Session, type LnurlWithdrawal, type InsertPageEvent, type PageEvent, users, lnAuthChallenges, sessions, lnurlWithdrawals, pageEvents } from "@shared/schema";
+import { type User, type InsertUser, type LnAuthChallenge, type Session, type LnurlWithdrawal, type InsertPageEvent, type PageEvent, type CheckpointCompletion, users, lnAuthChallenges, sessions, lnurlWithdrawals, pageEvents, checkpointCompletions } from "@shared/schema";
 import { eq, desc, inArray, and, sql, count } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
@@ -32,6 +32,9 @@ export interface IStorage {
   getWithdrawalsByUserId(userId: string): Promise<LnurlWithdrawal[]>;
   getRecentWithdrawals(limit: number): Promise<LnurlWithdrawal[]>;
   cancelPendingWithdrawals(userId: string): Promise<void>;
+  hasCompletedCheckpoint(userId: string, checkpointId: string): Promise<boolean>;
+  markCheckpointCompleted(userId: string, checkpointId: string): Promise<void>;
+  getCompletedCheckpoints(userId: string): Promise<string[]>;
   createPageEvent(event: InsertPageEvent): Promise<PageEvent>;
   getPageEventById(id: number): Promise<PageEvent | undefined>;
   updatePageEventDuration(id: number, duration: number): Promise<void>;
@@ -168,6 +171,26 @@ export class DatabaseStorage implements IStorage {
           inArray(lnurlWithdrawals.status, ["pending", "claimed"])
         )
       );
+  }
+
+  async hasCompletedCheckpoint(userId: string, checkpointId: string): Promise<boolean> {
+    const [row] = await db.select().from(checkpointCompletions)
+      .where(and(eq(checkpointCompletions.userId, userId), eq(checkpointCompletions.checkpointId, checkpointId)));
+    return !!row;
+  }
+
+  async markCheckpointCompleted(userId: string, checkpointId: string): Promise<void> {
+    // Check first to avoid duplicates (no unique constraint on userId+checkpointId pair)
+    const existing = await this.hasCompletedCheckpoint(userId, checkpointId);
+    if (existing) return;
+    await db.insert(checkpointCompletions).values({ userId, checkpointId });
+  }
+
+  async getCompletedCheckpoints(userId: string): Promise<string[]> {
+    const rows = await db.select({ checkpointId: checkpointCompletions.checkpointId })
+      .from(checkpointCompletions)
+      .where(eq(checkpointCompletions.userId, userId));
+    return rows.map(r => r.checkpointId);
   }
 
   async createPageEvent(event: InsertPageEvent): Promise<PageEvent> {

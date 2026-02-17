@@ -40,6 +40,13 @@ export const lnurlWithdrawals = pgTable("lnurl_withdrawals", {
   paidAt: timestamp("paid_at"),
 });
 
+export const checkpointCompletions = pgTable("checkpoint_completions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  checkpointId: text("checkpoint_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const pageEvents = pgTable("page_events", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id"),
@@ -70,3 +77,4 @@ export type User = typeof users.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type LnAuthChallenge = typeof lnAuthChallenges.$inferSelect;
 export type LnurlWithdrawal = typeof lnurlWithdrawals.$inferSelect;
+export type CheckpointCompletion = typeof checkpointCompletions.$inferSelect;

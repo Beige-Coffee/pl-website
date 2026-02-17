@@ -7,6 +7,7 @@ interface AuthState {
   email: string | null;
   displayName: string | null;
   rewardClaimed: boolean;
+  completedCheckpoints: string[];
   sessionToken: string | null;
   loading: boolean;
 }
@@ -21,6 +22,7 @@ export function useAuth() {
     email: null,
     displayName: null,
     rewardClaimed: false,
+    completedCheckpoints: [],
     sessionToken: null,
     loading: true,
   });
@@ -32,11 +34,11 @@ export function useAuth() {
       return;
     }
 
-    fetch("/api/auth/verify", {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((r) => r.json())
-      .then((data) => {
+    Promise.all([
+      fetch("/api/auth/verify", { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
+      fetch("/api/checkpoint/status", { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()).catch(() => ({ completed: [] })),
+    ])
+      .then(([data, cpData]) => {
         if (data.authenticated) {
           setAuth({
             authenticated: true,
@@ -45,6 +47,7 @@ export function useAuth() {
             email: data.email || null,
             displayName: data.displayName || null,
             rewardClaimed: data.rewardClaimed || false,
+            completedCheckpoints: cpData.completed || [],
             sessionToken: token,
             loading: false,
           });
@@ -57,6 +60,7 @@ export function useAuth() {
             email: null,
             displayName: null,
             rewardClaimed: false,
+            completedCheckpoints: [],
             sessionToken: null,
             loading: false,
           });
@@ -69,16 +73,23 @@ export function useAuth() {
 
   const loginWithToken = useCallback((token: string, data: Partial<AuthState>) => {
     localStorage.setItem(STORAGE_KEY, token);
-    setAuth({
-      authenticated: true,
-      userId: data.userId || null,
-      pubkey: data.pubkey || null,
-      email: data.email || null,
-      displayName: data.displayName || null,
-      rewardClaimed: data.rewardClaimed || false,
-      sessionToken: token,
-      loading: false,
-    });
+    // Fetch checkpoint status after login
+    fetch("/api/checkpoint/status", { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.json())
+      .catch(() => ({ completed: [] }))
+      .then((cpData) => {
+        setAuth({
+          authenticated: true,
+          userId: data.userId || null,
+          pubkey: data.pubkey || null,
+          email: data.email || null,
+          displayName: data.displayName || null,
+          rewardClaimed: data.rewardClaimed || false,
+          completedCheckpoints: cpData.completed || [],
+          sessionToken: token,
+          loading: false,
+        });
+      });
   }, []);
 
   const logout = useCallback(async () => {
@@ -99,6 +110,7 @@ export function useAuth() {
       email: null,
       displayName: null,
       rewardClaimed: false,
+      completedCheckpoints: [],
       sessionToken: null,
       loading: false,
     });
@@ -108,5 +120,14 @@ export function useAuth() {
     setAuth((a) => ({ ...a, rewardClaimed: true }));
   }, []);
 
-  return { ...auth, loginWithToken, logout, markRewardClaimed };
+  const markCheckpointCompleted = useCallback((checkpointId: string) => {
+    setAuth((a) => ({
+      ...a,
+      completedCheckpoints: a.completedCheckpoints.includes(checkpointId)
+        ? a.completedCheckpoints
+        : [...a.completedCheckpoints, checkpointId],
+    }));
+  }, []);
+
+  return { ...auth, loginWithToken, logout, markRewardClaimed, markCheckpointCompleted };
 }

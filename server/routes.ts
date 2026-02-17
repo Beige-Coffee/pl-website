@@ -151,6 +151,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const REWARD_AMOUNT_MSATS = REWARD_AMOUNT_SATS * 1000;
   const WITHDRAWAL_TTL_MS = 5 * 60 * 1000;
 
+  // Checkpoint questions — server-side answer key (index of correct option)
+  const CHECKPOINT_ANSWER_KEY: Record<string, number> = {
+    "nonce-reuse": 2,
+    "setup-wrong-key": 1,
+    "act2-both-ephemeral": 3,
+    "act3-nonce-one": 2,
+    "message-length-limit": 0,
+  };
+  const CHECKPOINT_REWARD_SATS = parseInt(process.env.CHECKPOINT_REWARD_SATS || "5", 10);
+  const CHECKPOINT_REWARD_MSATS = CHECKPOINT_REWARD_SATS * 1000;
+
   app.post("/api/quiz/claim", async (req: Request, res: Response) => {
     try {
       const user = await getAuthUser(req);
@@ -204,6 +215,77 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err) {
       console.error("Quiz claim error:", err);
       res.status(500).json({ error: "Failed to generate reward" });
+    }
+  });
+
+  // --- Checkpoint rewards ---
+
+  app.post("/api/checkpoint/claim", async (req: Request, res: Response) => {
+    try {
+      const user = await getAuthUser(req);
+      if (!user) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      const { checkpointId, answer } = req.body;
+      if (!checkpointId || typeof checkpointId !== "string" || typeof answer !== "number") {
+        return res.status(400).json({ error: "Invalid request" });
+      }
+
+      const correctAnswer = CHECKPOINT_ANSWER_KEY[checkpointId];
+      if (correctAnswer === undefined) {
+        return res.status(400).json({ error: "Unknown checkpoint" });
+      }
+
+      if (answer !== correctAnswer) {
+        return res.status(400).json({ error: "Incorrect answer", correct: false });
+      }
+
+      const alreadyDone = await storage.hasCompletedCheckpoint(user.id, checkpointId);
+      if (alreadyDone) {
+        return res.status(400).json({ error: "Checkpoint already completed", alreadyCompleted: true });
+      }
+
+      // Check node balance
+      try {
+        const nodeRes = await fetch("http://localhost:5393/v2/node/node_info", {
+          signal: AbortSignal.timeout(20000),
+        });
+        if (nodeRes.ok) {
+          const nodeInfo = await nodeRes.json() as Record<string, string>;
+          const sendable = parseInt(nodeInfo.lightning_sendable_balance || "0", 10);
+          if (sendable < CHECKPOINT_REWARD_SATS) {
+            return res.status(503).json({ error: "Reward pool temporarily empty. Please try again later." });
+          }
+        }
+      } catch {}
+
+      await storage.markCheckpointCompleted(user.id, checkpointId);
+
+      const k1 = generateK1();
+      await storage.createWithdrawal(k1, user.id, String(CHECKPOINT_REWARD_MSATS));
+
+      const withdrawUrl = `${getBaseUrl(req)}/api/lnurl/withdraw/${k1}`;
+      const lnurl = encodeLnurl(withdrawUrl);
+
+      res.json({ k1, lnurl, amountSats: CHECKPOINT_REWARD_SATS, correct: true });
+    } catch (err) {
+      console.error("Checkpoint claim error:", err);
+      res.status(500).json({ error: "Failed to process checkpoint" });
+    }
+  });
+
+  app.get("/api/checkpoint/status", async (req: Request, res: Response) => {
+    try {
+      const user = await getAuthUser(req);
+      if (!user) {
+        return res.json({ completed: [] });
+      }
+      const completed = await storage.getCompletedCheckpoints(user.id);
+      res.json({ completed });
+    } catch (err) {
+      console.error("Checkpoint status error:", err);
+      res.json({ completed: [] });
     }
   });
 

@@ -7,6 +7,71 @@ import rehypeHighlight from "rehype-highlight";
 import { useAuth } from "../hooks/use-auth";
 import LoginModal from "../components/LoginModal";
 import { QRCodeSVG } from "qrcode.react";
+import CheckpointQuestion from "../components/CheckpointQuestion";
+
+// --- Checkpoint questions embedded inline in tutorial chapters ---
+const CHECKPOINT_QUESTIONS: Record<string, {
+  question: string;
+  options: string[];
+  answer: number;
+  explanation: string;
+}> = {
+  "nonce-reuse": {
+    question: "If Alice encrypts two different messages using the same ChaCha20 key and nonce, what can an attacker who intercepts both ciphertexts do?",
+    options: [
+      "Derive the original ChaCha20 key by brute-forcing the nonce space, since the same nonce was used twice",
+      "Forge valid Poly1305 MACs for arbitrary messages, because the authentication keys are also repeated",
+      "XOR the two ciphertexts together to cancel the keystream, then use frequency analysis and known plaintext structure to recover both messages",
+      "Determine which of the two messages is longer, but learn nothing about their actual contents",
+    ],
+    answer: 2,
+    explanation: "ChaCha20 generates a pseudorandom keystream from the key and nonce, then XORs it with the plaintext. If the same key and nonce are reused, the identical keystream is produced. An attacker who XORs the two ciphertexts together cancels the keystream out, leaving the XOR of the two plaintexts. With known or guessable structure in either message (like protocol headers), the attacker can progressively recover both messages. Even worse, once a plaintext is known, XORing it with its ciphertext reveals the keystream itself, compromising all future messages encrypted with the same key and nonce.",
+  },
+  "setup-wrong-key": {
+    question: "During the handshake setup, Alice mixes the responder's (Bob's) static public key into the handshake hash. What would happen if Alice accidentally used the wrong public key?",
+    options: [
+      "The handshake would succeed, but Alice and Bob would derive different encryption keys, causing all messages after the handshake to be unreadable",
+      "Alice's handshake hash would diverge from Bob's immediately, so the MAC she creates in Act 1 would fail verification and Bob would abort the connection",
+      "The ECDH operation in Act 1 would produce an error because secp256k1 rejects invalid public keys",
+      "Alice would unknowingly connect to a different node whose public key she used, creating a man-in-the-middle opportunity",
+    ],
+    answer: 1,
+    explanation: "In the handshake setup, both Alice and Bob independently mix Bob's static public key into their handshake hash. If Alice uses the wrong key, her hash diverges from Bob's from the very start. When she computes the es ECDH shared secret using the wrong key in Act 1, she derives a different temp_k1 than Bob would. The MAC she creates with this wrong key and her divergent handshake hash (used as associated data) will fail verification on Bob's side, and he will immediately terminate the connection. This is exactly why the setup phase exists — it catches identity mismatches before any real data is exchanged.",
+  },
+  "act2-both-ephemeral": {
+    question: "In Act 2, Bob generates his own ephemeral key pair and performs an ee ECDH with Alice's ephemeral key. Why can't they just reuse the es shared secret from Act 1 for the rest of the connection?",
+    options: [
+      "The es shared secret from Act 1 is only 16 bytes, which is too short for ChaCha20-Poly1305's 32-byte key requirement",
+      "Reusing es would cause nonce collisions because both Act 1 and Act 2 start their nonces at 0",
+      "The Noise Protocol specification explicitly forbids reusing shared secrets across acts, though it would be cryptographically safe to do so",
+      "The es secret depends on Bob's static private key, so if that key were ever compromised, an attacker could derive es from Act 1's plaintext ephemeral key and decrypt all past sessions — the ee ECDH fixes this by adding entropy that is destroyed after the handshake",
+    ],
+    answer: 3,
+    explanation: "The es shared secret from Act 1 is computed from Alice's ephemeral key and Bob's static key. Since Bob's static key is long-lived, if it were ever compromised in the future, an attacker who recorded the Act 1 message (which contains Alice's ephemeral public key in plaintext) could recompute es and decrypt the session. The ee ECDH in Act 2 introduces a shared secret that depends on both parties' ephemeral private keys — keys that are generated fresh for this session and destroyed afterward. Without at least one of these ephemeral private keys, an attacker cannot compute ee, even if they obtain both static keys later. This is what provides forward secrecy.",
+  },
+  "act3-nonce-one": {
+    question: "In Act 3, Alice encrypts her static public key using temp_k2 with nonce = 1. Why doesn't she use nonce = 0?",
+    options: [
+      "Nonce 0 is reserved for the HKDF extract phase — ChaCha20 uses counter 0 to derive the Poly1305 authentication keys, so nonce 0 refers to this internal counter, not an external nonce",
+      "The Noise Protocol always starts nonces at 1 to distinguish handshake messages from transport messages, which start at 0",
+      "Bob already used temp_k2 with nonce = 0 in Act 2 to create his authentication MAC — reusing the same key with the same nonce would produce an identical keystream, leaking information about both plaintexts",
+      "Alice's nonce counter was already incremented to 1 during the HKDF derivation of temp_k2, since HKDF internally calls ChaCha20 with nonce 0",
+    ],
+    answer: 2,
+    explanation: "In Act 2, Bob used temp_k2 with nonce = 0 to encrypt a zero-length plaintext and produce his authentication MAC. Now in Act 3, Alice needs to use the same temp_k2 to encrypt her static public key. If she also used nonce = 0, the ChaCha20 keystream would be identical to what Bob generated, and an attacker who XORed the two ciphertexts could learn information about Alice's static key. By using nonce = 1, Alice ensures a completely different keystream is generated, keeping her encrypted static public key secure.",
+  },
+  "message-length-limit": {
+    question: "What happens if a Lightning node needs to send a message that is 70,000 bytes long?",
+    options: [
+      "It cannot — BOLT 8 specifies that Lightning messages must not exceed 65,535 bytes, since the length prefix is a 2-byte integer and the protocol was designed this way intentionally to simplify testing and prevent memory-exhaustion attacks",
+      "The message is automatically split into two frames: one of 65,535 bytes and one of 4,465 bytes, each with its own encrypted length prefix and MAC",
+      "The sending node uses a 4-byte extended length prefix instead of the standard 2-byte prefix, signaled by setting the first bit of the length field to 1",
+      "The message is compressed using zlib before encryption to bring it under the 65,535-byte limit, as required by BOLT 1's message compression extension",
+    ],
+    answer: 0,
+    explanation: "This is a design constraint, not a limitation to work around. BOLT 8 explicitly states: 'The maximum size of any Lightning message MUST NOT exceed 65535 bytes.' The 2-byte length prefix can represent values from 0 to 65,535 (the maximum for an unsigned 16-bit integer), and the protocol was intentionally designed with this ceiling. The motivation is practical: a hard maximum simplifies testing, makes memory management predictable, and prevents a malicious peer from exhausting a node's memory by advertising enormous messages. No splitting, compression, or extended headers exist in the protocol.",
+  },
+};
 
 type Chapter = {
   id: string;
@@ -386,7 +451,15 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
                 onLoginRequest={() => setShowLoginModal(true)}
               />
             ) : (
-              <ChapterContent chapter={active} theme={theme} />
+              <ChapterContent
+                chapter={active}
+                theme={theme}
+                authenticated={authenticated}
+                sessionToken={auth.sessionToken}
+                completedCheckpoints={auth.completedCheckpoints}
+                onLoginRequest={() => setShowLoginModal(true)}
+                onCheckpointCompleted={auth.markCheckpointCompleted}
+              />
             )}
 
             <div className={`mt-10 pt-6 border-t ${theme === "dark" ? "border-[#1f2a44]" : "border-border"} flex items-center justify-between gap-3`}>
@@ -1309,7 +1382,23 @@ function InteractiveQuiz({
   );
 }
 
-function ChapterContent({ chapter, theme }: { chapter: Chapter; theme: "light" | "dark" }) {
+function ChapterContent({
+  chapter,
+  theme,
+  authenticated,
+  sessionToken,
+  completedCheckpoints,
+  onLoginRequest,
+  onCheckpointCompleted,
+}: {
+  chapter: Chapter;
+  theme: "light" | "dark";
+  authenticated: boolean;
+  sessionToken: string | null;
+  completedCheckpoints: string[];
+  onLoginRequest: () => void;
+  onCheckpointCompleted: (id: string) => void;
+}) {
   const [md, setMd] = useState<string>("Loading…");
   const [err, setErr] = useState<string | null>(null);
 
@@ -1368,7 +1457,7 @@ function ChapterContent({ chapter, theme }: { chapter: Chapter; theme: "light" |
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeRaw, rehypeHighlight]}
         components={{
-          img: ({ style, width, height, ...props }) => {
+          img: ({ style, width, height, ...props }: any) => {
             const rawSrc = String(props.src ?? "");
             const stableKey = rawSrc.replace(/\W+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "img";
             return (
@@ -1394,7 +1483,7 @@ function ChapterContent({ chapter, theme }: { chapter: Chapter; theme: "light" |
               data-testid="link-markdown"
             />
           ),
-          code: ({ className, children, ...props }) => (
+          code: ({ className, children, ...props }: any) => (
             <code
               className={`${className ?? ""} rounded px-1 py-0.5 bg-white/10`}
               {...props}
@@ -1402,7 +1491,28 @@ function ChapterContent({ chapter, theme }: { chapter: Chapter; theme: "light" |
               {children}
             </code>
           ),
-        }}
+          // Handle <checkpoint id="..." /> tags in markdown (custom HTML element)
+          checkpoint: ({ id }: any) => {
+            const cpId = String(id || "");
+            const cpData = CHECKPOINT_QUESTIONS[cpId];
+            if (!cpData) return null;
+            return (
+              <CheckpointQuestion
+                checkpointId={cpId}
+                question={cpData.question}
+                options={cpData.options}
+                answer={cpData.answer}
+                explanation={cpData.explanation}
+                theme={theme}
+                authenticated={authenticated}
+                sessionToken={sessionToken}
+                alreadyCompleted={completedCheckpoints.includes(cpId)}
+                onLoginRequest={onLoginRequest}
+                onCompleted={onCheckpointCompleted}
+              />
+            );
+          },
+        } as any}
       >
         {rewriteTutorialImagePaths(md)}
       </ReactMarkdown>

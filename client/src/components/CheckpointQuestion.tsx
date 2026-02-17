@@ -1,0 +1,365 @@
+import { useState, useEffect, useCallback } from "react";
+import { QRCodeSVG } from "qrcode.react";
+
+interface CheckpointQuestionProps {
+  checkpointId: string;
+  question: string;
+  options: string[];
+  answer: number;
+  explanation: string;
+  theme: "light" | "dark";
+  authenticated: boolean;
+  sessionToken: string | null;
+  alreadyCompleted: boolean;
+  onLoginRequest: () => void;
+  onCompleted: (checkpointId: string) => void;
+}
+
+export default function CheckpointQuestion({
+  checkpointId,
+  question,
+  options,
+  answer,
+  explanation,
+  theme,
+  authenticated,
+  sessionToken,
+  alreadyCompleted,
+  onLoginRequest,
+  onCompleted,
+}: CheckpointQuestionProps) {
+  const dark = theme === "dark";
+
+  const [selected, setSelected] = useState<number | null>(null);
+  const [submitted, setSubmitted] = useState(false);
+  const [correct, setCorrect] = useState(false);
+  const [wrongAttempt, setWrongAttempt] = useState(false);
+  const [shaking, setShaking] = useState(false);
+
+  // Reward state
+  const [claiming, setClaiming] = useState(false);
+  const [claimError, setClaimError] = useState<string | null>(null);
+  const [rewardK1, setRewardK1] = useState<string | null>(null);
+  const [rewardLnurl, setRewardLnurl] = useState<string | null>(null);
+  const [rewardAmountSats, setRewardAmountSats] = useState(5);
+  const [withdrawalStatus, setWithdrawalStatus] = useState<string>("pending");
+  const [rewardCreatedAt, setRewardCreatedAt] = useState<number | null>(null);
+  const [countdown, setCountdown] = useState(300);
+
+  // Poll withdrawal status
+  useEffect(() => {
+    if (!rewardK1 || withdrawalStatus === "paid" || withdrawalStatus === "expired" || withdrawalStatus === "failed") return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/lnurl/status/${rewardK1}`);
+        const data = await res.json();
+        setWithdrawalStatus(data.status);
+        if (data.status === "paid" || data.status === "expired" || data.status === "failed") {
+          clearInterval(interval);
+        }
+      } catch {}
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [rewardK1, withdrawalStatus]);
+
+  // Countdown timer
+  useEffect(() => {
+    if (!rewardCreatedAt || withdrawalStatus === "paid" || withdrawalStatus === "expired" || withdrawalStatus === "failed") return;
+    const interval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - rewardCreatedAt) / 1000);
+      const remaining = Math.max(0, 300 - elapsed);
+      setCountdown(remaining);
+      if (remaining <= 0) {
+        setWithdrawalStatus("expired");
+        clearInterval(interval);
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [rewardCreatedAt, withdrawalStatus]);
+
+  const formatCountdown = (s: number) => {
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return `${m}:${sec.toString().padStart(2, "0")}`;
+  };
+
+  const handleSubmit = useCallback(async () => {
+    if (selected === null) return;
+
+    if (!authenticated) {
+      onLoginRequest();
+      return;
+    }
+
+    if (selected !== answer) {
+      setWrongAttempt(true);
+      setShaking(true);
+      setTimeout(() => setShaking(false), 500);
+      return;
+    }
+
+    // Correct answer!
+    setSubmitted(true);
+    setCorrect(true);
+    setWrongAttempt(false);
+  }, [selected, answer, authenticated, onLoginRequest]);
+
+  const handleClaimReward = useCallback(async () => {
+    if (!sessionToken) return;
+    setClaiming(true);
+    setClaimError(null);
+
+    try {
+      const res = await fetch("/api/checkpoint/claim", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${sessionToken}`,
+        },
+        body: JSON.stringify({ checkpointId, answer: selected }),
+      });
+      const data = await res.json();
+
+      if (res.ok && data.correct) {
+        setRewardK1(data.k1);
+        setRewardLnurl(data.lnurl);
+        setRewardAmountSats(data.amountSats || 5);
+        setRewardCreatedAt(Date.now());
+        setWithdrawalStatus("pending");
+        setCountdown(300);
+        onCompleted(checkpointId);
+      } else if (data.alreadyCompleted) {
+        onCompleted(checkpointId);
+      } else {
+        setClaimError(data.error || "Failed to claim reward");
+      }
+    } catch {
+      setClaimError("Network error. Please try again.");
+    } finally {
+      setClaiming(false);
+    }
+  }, [sessionToken, checkpointId, selected, onCompleted]);
+
+  const handleNewQR = useCallback(async () => {
+    setRewardK1(null);
+    setRewardLnurl(null);
+    setWithdrawalStatus("pending");
+    handleClaimReward();
+  }, [handleClaimReward]);
+
+  // Styling
+  const cardBg = dark ? "bg-[#0f1930]" : "bg-card";
+  const cardBorder = dark ? "border-[#2a3552]" : "border-border";
+  const textColor = dark ? "text-slate-100" : "text-foreground";
+  const textMuted = dark ? "text-slate-400" : "text-foreground/60";
+  const goldText = "text-[#FFD700]";
+  const goldBorder = "border-[#FFD700]";
+  const goldBg = "bg-[#FFD700]";
+
+  // Already completed state
+  if (alreadyCompleted && !rewardLnurl) {
+    return (
+      <div className={`my-8 border-2 ${goldBorder} ${cardBg} p-5`}>
+        <div className="flex items-center gap-3 mb-2">
+          <div className={`font-pixel text-xs ${goldText}`}>CHECKPOINT</div>
+          <div className="font-pixel text-xs text-green-400">COMPLETED</div>
+        </div>
+        <div className={`text-[17px] md:text-[19px] font-semibold ${textColor} mb-3`}>{question}</div>
+        <div className={`text-[15px] md:text-[17px] ${textMuted} leading-relaxed`}>
+          <span className="font-semibold text-green-400">Correct answer: </span>
+          {options[answer]}
+        </div>
+        {explanation && (
+          <div className={`mt-3 pt-3 border-t ${dark ? "border-[#1f2a44]" : "border-border"}`}>
+            <div className="font-pixel text-xs text-green-400 mb-1">EXPLANATION</div>
+            <div className={`text-[15px] md:text-[17px] ${textMuted} leading-relaxed`}>{explanation}</div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className={`my-8 border-2 ${submitted && correct ? goldBorder : cardBorder} ${cardBg} p-5 ${shaking ? "animate-shake" : ""}`}>
+      <style>{`
+        @keyframes shake {
+          0%, 100% { transform: translateX(0); }
+          20% { transform: translateX(-6px); }
+          40% { transform: translateX(6px); }
+          60% { transform: translateX(-4px); }
+          80% { transform: translateX(4px); }
+        }
+        .animate-shake { animation: shake 0.4s ease-in-out; }
+      `}</style>
+
+      <div className="flex items-center gap-3 mb-3">
+        <div className={`font-pixel text-xs ${goldText}`}>CHECKPOINT</div>
+        <div className={`font-pixel text-xs ${goldText}`}>EARN SATS</div>
+      </div>
+
+      <div className={`text-[17px] md:text-[19px] font-semibold ${textColor} mb-4`}>{question}</div>
+
+      {/* Options */}
+      <div className="space-y-2 mb-4">
+        {options.map((opt, i) => {
+          const isSelected = selected === i;
+          const isWrongSelection = wrongAttempt && isSelected && i !== answer;
+          const isCorrectReveal = submitted && correct && i === answer;
+
+          let optBorder = dark ? "border-[#2a3552]" : "border-border";
+          let optBg = dark ? "bg-[#0b1220]" : "bg-background";
+          let optText = textColor;
+
+          if (isCorrectReveal) {
+            optBorder = "border-green-500";
+            optBg = dark ? "bg-green-500/15" : "bg-green-50";
+          } else if (isWrongSelection) {
+            optBorder = "border-red-500";
+            optBg = dark ? "bg-red-500/15" : "bg-red-50";
+          } else if (isSelected) {
+            optBorder = goldBorder;
+            optBg = dark ? "bg-[#FFD700]/10" : "bg-[#FFD700]/5";
+          }
+
+          return (
+            <button
+              key={i}
+              type="button"
+              onClick={() => {
+                if (submitted) return;
+                setSelected(i);
+                setWrongAttempt(false);
+              }}
+              disabled={submitted}
+              className={`w-full text-left border-2 ${optBorder} ${optBg} px-4 py-3 transition-all ${
+                submitted ? "cursor-default" : "cursor-pointer hover:brightness-110"
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <div className={`font-pixel text-xs mt-1 shrink-0 ${isSelected ? goldText : textMuted}`}>
+                  {String.fromCharCode(65 + i)})
+                </div>
+                <div className={`text-[15px] md:text-[17px] ${optText} leading-relaxed`}>{opt}</div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Wrong attempt feedback */}
+      {wrongAttempt && !submitted && (
+        <div className="font-pixel text-xs text-red-400 mb-3">
+          INCORRECT — TRY AGAIN
+        </div>
+      )}
+
+      {/* Submit button */}
+      {!submitted && (
+        <button
+          type="button"
+          onClick={handleSubmit}
+          disabled={selected === null}
+          className={`font-pixel text-sm border-2 px-6 py-3 transition-all ${
+            selected !== null
+              ? `${goldBorder} ${goldBg} text-black hover:bg-[#FFC800] active:scale-95`
+              : dark
+              ? "border-[#2a3552] bg-[#0f1930] text-slate-500 cursor-not-allowed"
+              : "border-border bg-secondary text-foreground/40 cursor-not-allowed"
+          }`}
+        >
+          {selected !== null && !authenticated ? "LOGIN & SUBMIT" : "SUBMIT ANSWER"}
+        </button>
+      )}
+
+      {/* Correct answer — explanation + claim */}
+      {submitted && correct && (
+        <div className="mt-4">
+          <div className="font-pixel text-sm text-green-400 mb-2">CORRECT!</div>
+
+          {explanation && (
+            <div className={`mb-4 pt-3 border-t ${dark ? "border-[#1f2a44]" : "border-border"}`}>
+              <div className="font-pixel text-xs text-green-400 mb-1">EXPLANATION</div>
+              <div className={`text-[15px] md:text-[17px] ${textMuted} leading-relaxed`}>{explanation}</div>
+            </div>
+          )}
+
+          {/* Reward section */}
+          {!rewardLnurl && !alreadyCompleted && (
+            <div>
+              <button
+                type="button"
+                onClick={handleClaimReward}
+                disabled={claiming}
+                className={`font-pixel text-sm border-2 px-6 py-3 transition-all ${goldBorder} ${goldBg} text-black hover:bg-[#FFC800] active:scale-95 ${
+                  claiming ? "opacity-60 cursor-wait" : ""
+                }`}
+              >
+                {claiming ? "GENERATING QR..." : `CLAIM ${rewardAmountSats} SATS`}
+              </button>
+              {claimError && (
+                <div className="mt-2 font-pixel text-xs text-red-400">{claimError}</div>
+              )}
+            </div>
+          )}
+
+          {/* QR code display */}
+          {rewardLnurl && (
+            <div className="mt-4 text-center">
+              {withdrawalStatus === "paid" ? (
+                <div>
+                  <div className={`font-pixel text-lg mb-2 ${goldText}`}>
+                    {rewardAmountSats} SATS SENT!
+                  </div>
+                  <div className={`text-[15px] ${textColor}`}>Payment complete. Keep reading!</div>
+                </div>
+              ) : withdrawalStatus === "expired" ? (
+                <div>
+                  <div className="font-pixel text-sm mb-2 text-red-400">QR EXPIRED</div>
+                  <button
+                    type="button"
+                    onClick={handleNewQR}
+                    className={`font-pixel text-sm border-2 px-4 py-2 ${goldBorder} ${goldBg} text-black hover:bg-[#FFC800]`}
+                  >
+                    GENERATE NEW QR
+                  </button>
+                </div>
+              ) : withdrawalStatus === "failed" ? (
+                <div>
+                  <div className="font-pixel text-sm mb-2 text-red-400">PAYMENT FAILED</div>
+                  <button
+                    type="button"
+                    onClick={handleNewQR}
+                    className={`font-pixel text-sm border-2 px-4 py-2 ${goldBorder} ${goldBg} text-black hover:bg-[#FFC800]`}
+                  >
+                    TRY AGAIN
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <div className={`font-pixel text-sm mb-3 ${goldText}`}>
+                    SCAN TO CLAIM {rewardAmountSats} SATS
+                  </div>
+                  <div className={`inline-block border-4 ${dark ? "border-[#2a3552]" : "border-border"} ${dark ? "bg-[#0b1220]" : "bg-background"} p-4`}>
+                    <QRCodeSVG
+                      value={rewardLnurl}
+                      size={200}
+                      level="M"
+                      bgColor="#ffffff"
+                      fgColor="#000000"
+                    />
+                  </div>
+                  <div className={`mt-3 font-pixel text-xs ${textMuted}`}>
+                    {withdrawalStatus === "claimed" ? "PROCESSING PAYMENT..." : "WAITING FOR SCAN..."}
+                  </div>
+                  <div className={`mt-1 font-mono text-sm ${countdown <= 60 ? "text-red-400" : textMuted}`}>
+                    Expires in {formatCountdown(countdown)}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
