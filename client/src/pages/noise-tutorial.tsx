@@ -1395,6 +1395,13 @@ function ChapterContent({ chapter, theme }: { chapter: Chapter; theme: "light" |
 }
 
 export default function NoiseTutorialPage() {
+  const hasAccess = sessionStorage.getItem("pl-course-access") === "granted";
+
+  if (!hasAccess) {
+    window.location.href = "/blog";
+    return null;
+  }
+
   return (
     <Switch>
       <Route path="/noise-tutorial">

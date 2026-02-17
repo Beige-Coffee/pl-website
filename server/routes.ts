@@ -472,6 +472,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/auth/course-access", async (req: Request, res: Response) => {
+    try {
+      const { password } = req.body;
+      if (!password || typeof password !== "string") {
+        return res.status(400).json({ error: "Password required" });
+      }
+      if (password === process.env.COURSE_ACCESS_PASSWORD) {
+        return res.json({ granted: true });
+      }
+      return res.status(401).json({ error: "Incorrect password" });
+    } catch (err) {
+      return res.status(500).json({ error: "Server error" });
+    }
+  });
+
   app.post("/api/track/pageview", async (req: Request, res: Response) => {
     try {
       const { page, referrer, sessionId } = req.body;
