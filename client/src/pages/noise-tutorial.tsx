@@ -177,11 +177,11 @@ function introMarkdown() {
 
 The Lightning Network helps bring the Bitcoin whitepaper's original vision to life: peer-to-peer electronic cash.
 
-To do this successfully, the Lightning Network must adopt the same features that make peer-to-peer cash so great. Payments are private (nobody has to know who you pay) and they are authenticated (you know who you're paying because they are right there in front of you).
+To do this successfully, the Lightning Network must adopt the same features that make peer-to-peer cash so great. Cash transactions are private (nobody has to know who you pay), authenticated (you know who you're paying because they're right there in front of you), and *kinda* tamper-proof (you can verify a bill is real and hasn't been altered... probably).
 
-To bring authenticated and encrypted communication to the Lightning Network, developers chose the **Noise Protocol Framework**, a secure channel protocol that ensures data transmitted between nodes is resistant to outsiders eavesdropping and tampering with the content. Lightning is in good company here. Popular messaging platforms such as WhatsApp and Slack also leverage the Noise Framework to add end-to-end encryption for their 3+ billion users!
+To bring these same properties (encrypted communication, authentication, and integrity checking) to the Lightning Network, the creators of the Lightning protocol chose the **Noise Protocol Framework**: a lean, secure channel protocol for encrypted peer-to-peer communication. Lightning is in good company here. WhatsApp leverages the Noise Framework as part of its end-to-end encryption for over 2 billion users, and WireGuard, one of the most widely adopted modern VPN protocols, uses Noise to secure its tunnels.
 
-In this tutorial, we'll dig very deep into the Noise Protocol, starting with the cryptographic building blocks, working through the three-act handshake, and finishing with encrypted message transport and key rotation.
+In this tutorial, we'll dig deep into Lightning's implementation of Noise, starting with the cryptographic building blocks, then working through the three-act handshake, and finishing with encrypted message transport and key rotation.
 
 Let's get started.`;
 }
