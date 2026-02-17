@@ -182,9 +182,9 @@
     color: #ffd700;
   }
 
-  .noise-md-light pre {
-    background: #d9d9d9;
-    border: 1px solid #bbb;
+  .noise-md.noise-md-light pre {
+    background: #e5e7eb;
+    border: 1px solid #d1d5db;
     color: #1a1a1a;
   }
 
