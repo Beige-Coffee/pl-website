@@ -123,7 +123,7 @@ function EmailAuthForm({
         return;
       }
 
-      // Login failed — try registering (email might not exist yet)
+      // Login failed - try registering (email might not exist yet)
       const registerRes = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -136,7 +136,7 @@ function EmailAuthForm({
         return;
       }
 
-      // Register also failed — if email already exists, password was wrong
+      // Register also failed - if email already exists, password was wrong
       if (registerRes.status === 409) {
         setError("Incorrect password");
       } else {

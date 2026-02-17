@@ -166,6 +166,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const CHECKPOINT_REWARD_SATS = parseInt(process.env.CHECKPOINT_REWARD_SATS || "5", 10);
   const CHECKPOINT_REWARD_MSATS = CHECKPOINT_REWARD_SATS * 1000;
 
+  // Grouped checkpoint config: all questions must be correct for a single larger reward
+  const CHECKPOINT_GROUPS: Record<string, { questionIds: string[]; rewardSats: number }> = {
+    "crypto-review": {
+      questionIds: ["pubkey-compression", "hash-preimage", "ecdh-security", "hkdf-purpose", "nonce-reuse"],
+      rewardSats: 210,
+    },
+  };
+
   app.post("/api/quiz/claim", async (req: Request, res: Response) => {
     try {
       const user = await getAuthUser(req);
@@ -290,6 +298,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err) {
       console.error("Checkpoint status error:", err);
       res.json({ completed: [] });
+    }
+  });
+
+  // --- Grouped checkpoint rewards ---
+
+  app.post("/api/checkpoint-group/claim", async (req: Request, res: Response) => {
+    try {
+      const user = await getAuthUser(req);
+      if (!user) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      const { groupId, answers } = req.body;
+      if (!groupId || typeof groupId !== "string" || !answers || typeof answers !== "object") {
+        return res.status(400).json({ error: "Invalid request" });
+      }
+
+      const group = CHECKPOINT_GROUPS[groupId];
+      if (!group) {
+        return res.status(400).json({ error: "Unknown checkpoint group" });
+      }
+
+      // Check if already completed
+      const already = await storage.hasCompletedCheckpoint(user.id, groupId);
+      if (already) {
+        return res.json({ alreadyCompleted: true });
+      }
+
+      // Validate all answers
+      for (const qid of group.questionIds) {
+        const submitted = answers[qid];
+        const correct = CHECKPOINT_ANSWER_KEY[qid];
+        if (typeof submitted !== "number" || submitted !== correct) {
+          return res.json({ correct: false, error: "Not all answers are correct" });
+        }
+      }
+
+      // All correct! Check balance before creating withdrawal
+      const rewardMsats = group.rewardSats * 1000;
+      try {
+        const nodeRes = await fetch("https://lexe.app/v1/node/info", {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${process.env.LEXE_API_KEY}`,
+          },
+          signal: AbortSignal.timeout(20000),
+        });
+        if (nodeRes.ok) {
+          const nodeInfo = await nodeRes.json() as Record<string, string>;
+          const sendable = parseInt(nodeInfo.lightning_sendable_balance || "0", 10);
+          if (sendable < group.rewardSats) {
+            return res.status(503).json({ error: "Reward pool temporarily empty. Please try again later." });
+          }
+        }
+      } catch {}
+
+      await storage.markCheckpointCompleted(user.id, groupId);
+
+      const k1 = generateK1();
+      await storage.createWithdrawal(k1, user.id, String(rewardMsats));
+
+      const withdrawUrl = `${getBaseUrl(req)}/api/lnurl/withdraw/${k1}`;
+      const lnurl = encodeLnurl(withdrawUrl);
+
+      res.json({ k1, lnurl, amountSats: group.rewardSats, correct: true });
+    } catch (err) {
+      console.error("Checkpoint group claim error:", err);
+      res.status(500).json({ error: "Failed to process checkpoint group" });
     }
   });
 

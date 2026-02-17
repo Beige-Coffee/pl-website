@@ -8,6 +8,7 @@ import { useAuth } from "../hooks/use-auth";
 import LoginModal from "../components/LoginModal";
 import { QRCodeSVG } from "qrcode.react";
 import CheckpointQuestion from "../components/CheckpointQuestion";
+import CheckpointGroup from "../components/CheckpointGroup";
 
 // --- Checkpoint questions embedded inline in tutorial chapters ---
 const CHECKPOINT_QUESTIONS: Record<string, {
@@ -25,7 +26,7 @@ const CHECKPOINT_QUESTIONS: Record<string, {
       "The x-coordinate is in the lower half of the finite field",
     ],
     answer: 1,
-    explanation: "In compressed public key format, the first byte is a parity byte that indicates whether the y-coordinate is even (02) or odd (03). Since the secp256k1 curve is symmetrical around the x-axis, there are exactly two possible y-values for each x-coordinate — one even, one odd. By encoding just the parity byte and the x-coordinate, the full point can be reconstructed, saving roughly 50% of space compared to the uncompressed format.",
+    explanation: "In compressed public key format, the first byte is a parity byte that indicates whether the y-coordinate is even (02) or odd (03). Since the secp256k1 curve is symmetrical around the x-axis, there are exactly two possible y-values for each x-coordinate: one even, one odd. By encoding just the parity byte and the x-coordinate, the full point can be reconstructed, saving roughly 50% of space compared to the uncompressed format.",
   },
   "hash-preimage": {
     question: "An attacker has the SHA256 hash of Alice's public key. Which of the following is true?",
@@ -47,7 +48,7 @@ const CHECKPOINT_QUESTIONS: Record<string, {
       "The public keys are only valid for a short time window, so the eavesdropper cannot use them after they expire",
     ],
     answer: 1,
-    explanation: "The security of ECDH relies on the Elliptic Curve Discrete Logarithm Problem (ECDLP). While it's easy to compute a public key from a private key (multiply the private key by the generator point G), reversing this — finding the private key from the public key — is computationally infeasible. An eavesdropper who captures both A = a × G and B = b × G would need to extract either 'a' or 'b' to compute the shared secret a × b × G, but doing so requires solving the ECDLP.",
+    explanation: "The security of ECDH relies on the Elliptic Curve Discrete Logarithm Problem (ECDLP). While it's easy to compute a public key from a private key (multiply the private key by the generator point G), reversing this (finding the private key from the public key) is computationally infeasible. An eavesdropper who captures both A = a × G and B = b × G would need to extract either 'a' or 'b' to compute the shared secret a × b × G, but doing so requires solving the ECDLP.",
   },
   "hkdf-purpose": {
     question: "In Lightning's Noise Protocol, HKDF is used to expand one ECDH shared secret into two 32-byte keys. Why not simply use the shared secret directly as a single encryption key?",
@@ -58,7 +59,7 @@ const CHECKPOINT_QUESTIONS: Record<string, {
       "The ECDH output is biased toward certain byte patterns due to the structure of secp256k1, so HKDF is needed to produce uniformly random bytes",
     ],
     answer: 1,
-    explanation: "The Noise Protocol needs multiple independent keys for different purposes at each stage of the handshake: a chaining key (which accumulates entropy across ECDH operations) and a temporary encryption key (used for the current act's encryption). Using the same key for different cryptographic operations — such as both a MAC and an encryption — can create subtle vulnerabilities. HKDF's two-phase design (extract then expand) takes a single input and produces multiple cryptographically independent keys, ensuring that compromising one derived key doesn't compromise the others.",
+    explanation: "The Noise Protocol needs multiple independent keys for different purposes at each stage of the handshake: a chaining key (which accumulates entropy across ECDH operations) and a temporary encryption key (used for the current act's encryption). Using the same key for different cryptographic operations, such as both a MAC and an encryption, can create subtle vulnerabilities. HKDF's two-phase design (extract then expand) takes a single input and produces multiple cryptographically independent keys, ensuring that compromising one derived key doesn't compromise the others.",
   },
   "nonce-reuse": {
     question: "If Alice encrypts two different messages using the same ChaCha20 key and nonce, what can an attacker who intercepts both ciphertexts do?",
@@ -80,7 +81,7 @@ const CHECKPOINT_QUESTIONS: Record<string, {
       "Alice would unknowingly connect to a different node whose public key she used, creating a man-in-the-middle opportunity",
     ],
     answer: 1,
-    explanation: "In the handshake setup, both Alice and Bob independently mix Bob's static public key into their handshake hash. If Alice uses the wrong key, her hash diverges from Bob's from the very start. When she computes the es ECDH shared secret using the wrong key in Act 1, she derives a different temp_k1 than Bob would. The MAC she creates with this wrong key and her divergent handshake hash (used as associated data) will fail verification on Bob's side, and he will immediately terminate the connection. This is exactly why the setup phase exists — it catches identity mismatches before any real data is exchanged.",
+    explanation: "In the handshake setup, both Alice and Bob independently mix Bob's static public key into their handshake hash. If Alice uses the wrong key, her hash diverges from Bob's from the very start. When she computes the es ECDH shared secret using the wrong key in Act 1, she derives a different temp_k1 than Bob would. The MAC she creates with this wrong key and her divergent handshake hash (used as associated data) will fail verification on Bob's side, and he will immediately terminate the connection. This is exactly why the setup phase exists: it catches identity mismatches before any real data is exchanged.",
   },
   "act2-both-ephemeral": {
     question: "In Act 2, Bob generates his own ephemeral key pair and performs an ee ECDH with Alice's ephemeral key. Why can't they just reuse the es shared secret from Act 1 for the rest of the connection?",
@@ -88,17 +89,17 @@ const CHECKPOINT_QUESTIONS: Record<string, {
       "The es shared secret from Act 1 is only 16 bytes, which is too short for ChaCha20-Poly1305's 32-byte key requirement",
       "Reusing es would cause nonce collisions because both Act 1 and Act 2 start their nonces at 0",
       "The Noise Protocol specification explicitly forbids reusing shared secrets across acts, though it would be cryptographically safe to do so",
-      "The es secret depends on Bob's static private key, so if that key were ever compromised, an attacker could derive es from Act 1's plaintext ephemeral key and decrypt all past sessions — the ee ECDH fixes this by adding entropy that is destroyed after the handshake",
+      "The es secret depends on Bob's static private key, so if that key were ever compromised, an attacker could derive es from Act 1's plaintext ephemeral key and decrypt all past sessions. The ee ECDH fixes this by adding entropy that is destroyed after the handshake",
     ],
     answer: 3,
-    explanation: "The es shared secret from Act 1 is computed from Alice's ephemeral key and Bob's static key. Since Bob's static key is long-lived, if it were ever compromised in the future, an attacker who recorded the Act 1 message (which contains Alice's ephemeral public key in plaintext) could recompute es and decrypt the session. The ee ECDH in Act 2 introduces a shared secret that depends on both parties' ephemeral private keys — keys that are generated fresh for this session and destroyed afterward. Without at least one of these ephemeral private keys, an attacker cannot compute ee, even if they obtain both static keys later. This is what provides forward secrecy.",
+    explanation: "The es shared secret from Act 1 is computed from Alice's ephemeral key and Bob's static key. Since Bob's static key is long-lived, if it were ever compromised in the future, an attacker who recorded the Act 1 message (which contains Alice's ephemeral public key in plaintext) could recompute es and decrypt the session. The ee ECDH in Act 2 introduces a shared secret that depends on both parties' ephemeral private keys, keys that are generated fresh for this session and destroyed afterward. Without at least one of these ephemeral private keys, an attacker cannot compute ee, even if they obtain both static keys later. This is what provides forward secrecy.",
   },
   "act3-nonce-one": {
     question: "In Act 3, Alice encrypts her static public key using temp_k2 with nonce = 1. Why doesn't she use nonce = 0?",
     options: [
-      "Nonce 0 is reserved for the HKDF extract phase — ChaCha20 uses counter 0 to derive the Poly1305 authentication keys, so nonce 0 refers to this internal counter, not an external nonce",
+      "Nonce 0 is reserved for the HKDF extract phase. ChaCha20 uses counter 0 to derive the Poly1305 authentication keys, so nonce 0 refers to this internal counter, not an external nonce",
       "The Noise Protocol always starts nonces at 1 to distinguish handshake messages from transport messages, which start at 0",
-      "Bob already used temp_k2 with nonce = 0 in Act 2 to create his authentication MAC — reusing the same key with the same nonce would produce an identical keystream, leaking information about both plaintexts",
+      "Bob already used temp_k2 with nonce = 0 in Act 2 to create his authentication MAC, so reusing the same key with the same nonce would produce an identical keystream, leaking information about both plaintexts",
       "Alice's nonce counter was already incremented to 1 during the HKDF derivation of temp_k2, since HKDF internally calls ChaCha20 with nonce 0",
     ],
     answer: 2,
@@ -107,7 +108,7 @@ const CHECKPOINT_QUESTIONS: Record<string, {
   "message-length-limit": {
     question: "What happens if a Lightning node needs to send a message that is 70,000 bytes long?",
     options: [
-      "It cannot — BOLT 8 specifies that Lightning messages must not exceed 65,535 bytes, since the length prefix is a 2-byte integer and the protocol was designed this way intentionally to simplify testing and prevent memory-exhaustion attacks",
+      "It cannot. BOLT 8 specifies that Lightning messages must not exceed 65,535 bytes, since the length prefix is a 2-byte integer and the protocol was designed this way intentionally to simplify testing and prevent memory-exhaustion attacks",
       "The message is automatically split into two frames: one of 65,535 bytes and one of 4,465 bytes, each with its own encrypted length prefix and MAC",
       "The sending node uses a 4-byte extended length prefix instead of the standard 2-byte prefix, signaled by setting the first bit of the length field to 1",
       "The message is compressed using zlib before encryption to bring it under the 65,535-byte limit, as required by BOLT 1's message compression extension",
@@ -821,32 +822,32 @@ const QUIZ_QUESTIONS = [
       "ECDH is more computationally efficient, and the resulting shared secrets can be directly used to derive encryption keys, simplifying the protocol",
     ],
     answer: 3,
-    explanation: "Digital signatures prove identity but produce a standalone proof that anyone can verify — they don't create shared secrets. ECDH, on the other hand, produces a shared secret known only to both parties, which can be immediately fed into HKDF to derive encryption keys. This means a single ECDH operation simultaneously authenticates both parties AND establishes keying material, whereas signatures would require a separate key exchange step on top. The Noise framework leverages this dual purpose throughout the handshake.",
+    explanation: "Digital signatures prove identity but produce a standalone proof that anyone can verify. They don't create shared secrets. ECDH, on the other hand, produces a shared secret known only to both parties, which can be immediately fed into HKDF to derive encryption keys. This means a single ECDH operation simultaneously authenticates both parties AND establishes keying material, whereas signatures would require a separate key exchange step on top. The Noise framework leverages this dual purpose throughout the handshake.",
   },
   {
     question: "In Act 1, Alice encrypts a zero-length plaintext with ChaCha20-Poly1305. Why doesn't she encrypt any actual data?",
     options: [
-      "Alice's goal is only to prove she knows Bob's public key — the MAC alone, created with a key derived from their ECDH shared secret, is sufficient to prove this",
+      "Alice's goal is only to prove she knows Bob's public key, so the MAC alone, created with a key derived from their ECDH shared secret, is sufficient to prove this",
       "The Act 1 message must be exactly 50 bytes, and there's no room for additional plaintext after the version byte and Ephemeral Public Key",
       "The plaintext is encrypted in a separate step that happens between Act 1 and Act 2",
       "ChaCha20-Poly1305 requires an empty plaintext for the initial use of any new key",
     ],
     answer: 0,
-    explanation: "The purpose of Act 1 is not to transmit data — it's to prove that Alice knows Bob's static public key. She does this by performing an ECDH between her ephemeral key and Bob's static key, deriving a temporary key, and using it to produce a 16-byte Poly1305 MAC over an empty plaintext. If Alice didn't know Bob's real public key, the ECDH would produce the wrong shared secret, the derived key would be wrong, and the MAC wouldn't verify. The MAC itself is the proof — no plaintext is needed.",
+    explanation: "The purpose of Act 1 is not to transmit data. It's to prove that Alice knows Bob's static public key. She does this by performing an ECDH between her ephemeral key and Bob's static key, deriving a temporary key, and using it to produce a 16-byte Poly1305 MAC over an empty plaintext. If Alice didn't know Bob's real public key, the ECDH would produce the wrong shared secret, the derived key would be wrong, and the MAC wouldn't verify. The MAC itself is the proof; no plaintext is needed.",
   },
   {
     question: "At what point during the Noise handshake does Bob first learn Alice's identity?",
     options: [
-      "Act 3 — when Bob decrypts Alice's encrypted Static Public Key, but before he has verified the final MAC",
-      "Act 1 — when Alice proves she knows Bob's Static Public Key",
-      "Act 2 — after the ephemeral-ephemeral (ee) ECDH exchange",
-      "Act 3 — only after Bob successfully verifies the final MAC with temp_k3",
+      "Act 3, when Bob decrypts Alice's encrypted Static Public Key, but before he has verified the final MAC",
+      "Act 1, when Alice proves she knows Bob's Static Public Key",
+      "Act 2, after the ephemeral-ephemeral (ee) ECDH exchange",
+      "Act 3, only after Bob successfully verifies the final MAC with temp_k3",
     ],
     answer: 0,
-    explanation: "In Act 3, Alice sends her static public key encrypted with temp_k2. When Bob decrypts it, he immediately learns her Lightning node identity — this happens before he verifies the final MAC with temp_k3. The MAC verification in Act 3 confirms that the handshake transcript hasn't been tampered with, but Bob already has Alice's decrypted identity at that point. Acts 1 and 2 don't reveal Alice's identity at all: Act 1 only proves Alice knows Bob's key, and Act 2 only involves ephemeral keys.",
+    explanation: "In Act 3, Alice sends her static public key encrypted with temp_k2. When Bob decrypts it, he immediately learns her Lightning node identity. This happens before he verifies the final MAC with temp_k3. The MAC verification in Act 3 confirms that the handshake transcript hasn't been tampered with, but Bob already has Alice's decrypted identity at that point. Acts 1 and 2 don't reveal Alice's identity at all: Act 1 only proves Alice knows Bob's key, and Act 2 only involves ephemeral keys.",
   },
   {
-    question: "Why does Alice use her Ephemeral Public Key — rather than her Static Public Key — for the ECDH in Act 1?",
+    question: "Why does Alice use her Ephemeral Public Key, rather than her Static Public Key, for the ECDH in Act 1?",
     options: [
       "The Noise Protocol requires all Act 1 ECDH operations to use ephemeral keys for both parties",
       "Her Static Public Key is too large to fit in the 50-byte Act 1 message",
@@ -854,7 +855,7 @@ const QUIZ_QUESTIONS = [
       "Her Static Public Key uses a different curve than Bob's Ephemeral Key, making ECDH impossible",
     ],
     answer: 2,
-    explanation: "Alice's static public key is her Lightning node identity (the public key in her node's connection address). If she sent it in plaintext in Act 1, any passive eavesdropper monitoring the network could see exactly which node is initiating the connection. By using a freshly generated ephemeral key instead, Alice reveals nothing about her identity to observers. Her static key is only transmitted later in Act 3, encrypted under keys derived from the ee ECDH — which an eavesdropper cannot compute.",
+    explanation: "Alice's static public key is her Lightning node identity (the public key in her node's connection address). If she sent it in plaintext in Act 1, any passive eavesdropper monitoring the network could see exactly which node is initiating the connection. By using a freshly generated ephemeral key instead, Alice reveals nothing about her identity to observers. Her static key is only transmitted later in Act 3, encrypted under keys derived from the ee ECDH, which an eavesdropper cannot compute.",
   },
   {
     question: "Why is forward secrecy NOT established until Act 2?",
@@ -862,10 +863,10 @@ const QUIZ_QUESTIONS = [
       "Act 1 doesn't encrypt any data, so there's nothing that forward secrecy would protect",
       "The es ECDH in Act 1 involves Bob's Static Key, so if Bob's static private key were compromised, an attacker could recompute the shared secret using Alice's Ephemeral Public Key (which was sent in plaintext)",
       "Forward secrecy requires at least three ECDH operations, and only two are complete after Act 1",
-      "Act 1 only uses hash functions — the first ECDH doesn't happen until Act 2",
+      "Act 1 only uses hash functions, and the first ECDH doesn't happen until Act 2",
     ],
     answer: 1,
-    explanation: "Forward secrecy means that compromising long-term (static) keys doesn't compromise past session keys. In Act 1, the es ECDH combines Alice's ephemeral key with Bob's static key. If an attacker later steals Bob's static private key, they can recompute this shared secret using Alice's ephemeral public key (which was sent unencrypted in Act 1). It's not until Act 2, when Bob introduces his own ephemeral key and the ee ECDH occurs, that the session keys depend on secrets that are destroyed after the handshake — achieving forward secrecy.",
+    explanation: "Forward secrecy means that compromising long-term (static) keys doesn't compromise past session keys. In Act 1, the es ECDH combines Alice's ephemeral key with Bob's static key. If an attacker later steals Bob's static private key, they can recompute this shared secret using Alice's ephemeral public key (which was sent unencrypted in Act 1). It's not until Act 2, when Bob introduces his own ephemeral key and the ee ECDH occurs, that the session keys depend on secrets that are destroyed after the handshake, achieving forward secrecy.",
   },
   {
     question: "What would happen if Alice reused the same nonce with the same key for two different ChaCha20 encryptions?",
@@ -876,7 +877,7 @@ const QUIZ_QUESTIONS = [
       "Both messages would decrypt to the same plaintext regardless of the original content",
     ],
     answer: 0,
-    explanation: "ChaCha20 is a stream cipher — it generates a pseudorandom keystream from the key and nonce, then XORs it with the plaintext. If the same key and nonce produce the same keystream twice, an attacker can XOR the two ciphertexts together. The keystreams cancel out, leaving the XOR of the two plaintexts. With known or guessable structure in either message, the attacker can progressively recover both. This is why Noise increments the nonce after every encryption and rotates keys after 1000 messages — nonce reuse must never occur.",
+    explanation: "ChaCha20 is a stream cipher: it generates a pseudorandom keystream from the key and nonce, then XORs it with the plaintext. If the same key and nonce produce the same keystream twice, an attacker can XOR the two ciphertexts together. The keystreams cancel out, leaving the XOR of the two plaintexts. With known or guessable structure in either message, the attacker can progressively recover both. This is why Noise increments the nonce after every encryption and rotates keys after 1000 messages. Nonce reuse must never occur.",
   },
   {
     question: "What is the primary purpose of the handshake hash throughout the Noise handshake?",
@@ -887,7 +888,7 @@ const QUIZ_QUESTIONS = [
       "It acts as a running transcript of the handshake, and is included as associated data in each MAC so that both parties can verify they are progressing through the protocol in sync",
     ],
     answer: 3,
-    explanation: "The handshake hash (h) is a cumulative SHA-256 digest that absorbs every piece of data exchanged during the handshake — public keys, ECDH outputs, and ciphertexts. Each time a MAC is computed with ChaCha20-Poly1305, the current handshake hash is passed as the Associated Data (AD). This binds the MAC to the entire transcript up to that point. If an attacker tried to replay, reorder, or tamper with any handshake message, the hash would diverge between Alice and Bob, and the MAC verification would fail.",
+    explanation: "The handshake hash (h) is a cumulative SHA-256 digest that absorbs every piece of data exchanged during the handshake: public keys, ECDH outputs, and ciphertexts. Each time a MAC is computed with ChaCha20-Poly1305, the current handshake hash is passed as the Associated Data (AD). This binds the MAC to the entire transcript up to that point. If an attacker tried to replay, reorder, or tamper with any handshake message, the hash would diverge between Alice and Bob, and the MAC verification would fail.",
   },
   {
     question: "During key rotation, what serves as the Input Key Material (IKM) for the HKDF function?",
@@ -898,14 +899,14 @@ const QUIZ_QUESTIONS = [
       "The original ECDH shared secret from the handshake phase",
     ],
     answer: 0,
-    explanation: "Key rotation uses HKDF with the current encryption key (sk or rk) as the Input Key Material. HKDF(ck, current_key) produces two outputs: a new chaining key and a new encryption key that replaces the old one. The old key is immediately discarded. This is what provides forward secrecy for the message transport phase — even if an attacker compromises a current key, they cannot derive any previous keys because HKDF is a one-way function. Rotation happens every 1000 messages (when the nonce counter hits 1000).",
+    explanation: "Key rotation uses HKDF with the current encryption key (sk or rk) as the Input Key Material. HKDF(ck, current_key) produces two outputs: a new chaining key and a new encryption key that replaces the old one. The old key is immediately discarded. This is what provides forward secrecy for the message transport phase: even if an attacker compromises a current key, they cannot derive any previous keys because HKDF is a one-way function. Rotation happens every 1,000 messages (when the nonce counter hits 1000).",
   },
   {
     question: "Why does Lightning encrypt the 2-byte message length prefix before transmission?",
     options: [
       "The encrypted length doubles as a session identifier that Bob uses to match messages to the correct connection",
       "The length field contains a checksum that must be protected from tampering",
-      "ChaCha20-Poly1305 requires all inputs — including metadata — to be encrypted before the algorithm can produce a valid MAC",
+      "ChaCha20-Poly1305 requires all inputs, including metadata, to be encrypted before the algorithm can produce a valid MAC",
       "Without length encryption, an attacker could perform traffic analysis to learn message types and potentially track payments across the network",
     ],
     answer: 3,
@@ -920,7 +921,7 @@ const QUIZ_QUESTIONS = [
       "The HKDF function produces outputs in a different order depending on which party calls it",
     ],
     answer: 1,
-    explanation: "HKDF(ck, \"\") always produces the same two keys in the same order — call them K1 and K2. Alice assigns K1 as her sending key (sk) and K2 as her receiving key (rk). Bob must do the opposite: K1 becomes his receiving key (rk) and K2 becomes his sending key (sk). This way, when Alice encrypts with her sk (K1), Bob decrypts with his rk (also K1). And when Bob encrypts with his sk (K2), Alice decrypts with her rk (also K2). Without this reversal, both sides would encrypt and decrypt with the same key assignments, and communication would fail.",
+    explanation: "HKDF(ck, \"\") always produces the same two keys in the same order. Call them K1 and K2. Alice assigns K1 as her sending key (sk) and K2 as her receiving key (rk). Bob must do the opposite: K1 becomes his receiving key (rk) and K2 becomes his sending key (sk). This way, when Alice encrypts with her sk (K1), Bob decrypts with his rk (also K1). And when Bob encrypts with his sk (K2), Alice decrypts with her rk (also K2). Without this reversal, both sides would encrypt and decrypt with the same key assignments, and communication would fail.",
   },
 ];
 
@@ -1308,11 +1309,11 @@ function InteractiveQuiz({
                       optionStyle = "border-green-500 bg-green-500/15 text-green-300";
                       if (!dark) optionStyle = "border-green-600 bg-green-50 text-green-800";
                     } else if (!passed && isSelected && isAnswer) {
-                      // They selected it and it's correct — show green
+                      // They selected it and it's correct - show green
                       optionStyle = "border-green-500 bg-green-500/15 text-green-300";
                       if (!dark) optionStyle = "border-green-600 bg-green-50 text-green-800";
                     } else if (isSelected && !isAnswer) {
-                      // They selected it and it's wrong — show red
+                      // They selected it and it's wrong - show red
                       optionStyle = "border-red-500 bg-red-500/15 text-red-300";
                       if (!dark) optionStyle = "border-red-500 bg-red-50 text-red-800";
                     } else {
@@ -1379,7 +1380,7 @@ function InteractiveQuiz({
                       ? "text-red-400"
                       : dark ? "text-slate-400" : "text-foreground/60"
                   }`}>
-                    {isCorrect ? "CORRECT" : isWrong ? "INCORRECT" : "NOT ANSWERED"} — EXPLANATION
+                    {isCorrect ? "CORRECT" : isWrong ? "INCORRECT" : "NOT ANSWERED"} - EXPLANATION
                   </div>
                   <div className={`text-[17px] md:text-[19px] leading-relaxed ${
                     dark ? "text-slate-300" : "text-foreground/80"
@@ -1551,6 +1552,32 @@ function ChapterContent({
                 authenticated={authenticated}
                 sessionToken={sessionToken}
                 alreadyCompleted={completedCheckpoints.includes(cpId)}
+                onLoginRequest={onLoginRequest}
+                onCompleted={onCheckpointCompleted}
+              />
+            );
+          },
+          // Handle <checkpoint-group id="..." ids="a,b,c" /> for grouped checkpoint rewards
+          "checkpoint-group": ({ id, ids }: any) => {
+            const groupId = String(id || "");
+            const questionIds = String(ids || "").split(",").map((s: string) => s.trim()).filter(Boolean);
+            const groupQuestions = questionIds
+              .map((qid: string) => {
+                const cpData = CHECKPOINT_QUESTIONS[qid];
+                if (!cpData) return null;
+                return { id: qid, ...cpData };
+              })
+              .filter(Boolean) as Array<{ id: string; question: string; options: string[]; answer: number; explanation: string }>;
+            if (groupQuestions.length === 0) return null;
+            return (
+              <CheckpointGroup
+                groupId={groupId}
+                questions={groupQuestions}
+                rewardSats={210}
+                theme={theme}
+                authenticated={authenticated}
+                sessionToken={sessionToken}
+                alreadyCompleted={completedCheckpoints.includes(groupId)}
                 onLoginRequest={onLoginRequest}
                 onCompleted={onCheckpointCompleted}
               />
