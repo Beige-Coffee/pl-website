@@ -153,6 +153,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Checkpoint questions — server-side answer key (index of correct option)
   const CHECKPOINT_ANSWER_KEY: Record<string, number> = {
+    "pubkey-compression": 1,
+    "hash-preimage": 2,
+    "ecdh-security": 1,
+    "hkdf-purpose": 1,
     "nonce-reuse": 2,
     "setup-wrong-key": 1,
     "act2-both-ephemeral": 3,

@@ -16,6 +16,50 @@ const CHECKPOINT_QUESTIONS: Record<string, {
   answer: number;
   explanation: string;
 }> = {
+  "pubkey-compression": {
+    question: "A compressed secp256k1 public key starts with 02. What does this tell you?",
+    options: [
+      "The public key was generated using the second variant of the secp256k1 generator point",
+      "The y-coordinate of the public key point is even",
+      "The public key is 2 of 2 in a multisignature scheme",
+      "The x-coordinate is in the lower half of the finite field",
+    ],
+    answer: 1,
+    explanation: "In compressed public key format, the first byte is a parity byte that indicates whether the y-coordinate is even (02) or odd (03). Since the secp256k1 curve is symmetrical around the x-axis, there are exactly two possible y-values for each x-coordinate — one even, one odd. By encoding just the parity byte and the x-coordinate, the full point can be reconstructed, saving roughly 50% of space compared to the uncompressed format.",
+  },
+  "hash-preimage": {
+    question: "An attacker has the SHA256 hash of Alice's public key. Which of the following is true?",
+    options: [
+      "The attacker can recover Alice's public key by reversing SHA256 with enough computational power, since SHA256 is a deterministic function",
+      "The attacker can find a different public key that produces the same hash, enabling them to impersonate Alice",
+      "The attacker can verify whether a given public key matches the hash, but cannot work backwards from the hash to discover the key",
+      "The attacker can determine the length of Alice's public key from the hash output, since SHA256 preserves input length information",
+    ],
+    answer: 2,
+    explanation: "SHA256 is a one-way function (pre-image resistant), meaning it's computationally infeasible to recover the input from the output. It's also collision resistant, so finding a different input that produces the same hash is practically impossible. However, since SHA256 is deterministic, anyone who has (or guesses) the original public key can hash it and check whether the result matches. SHA256 always produces a fixed 256-bit output regardless of input length, so no length information is leaked.",
+  },
+  "ecdh-security": {
+    question: "During ECDH, Alice and Bob exchange public keys over an insecure channel. Why can't an eavesdropper who captures both public keys compute the shared secret?",
+    options: [
+      "The public keys are encrypted with a pre-shared symmetric key before being sent over the channel",
+      "The eavesdropper would need to solve the Elliptic Curve Discrete Logarithm Problem to recover a private key from a public key, which is computationally infeasible",
+      "The shared secret includes a random salt that is never transmitted, making it impossible to reproduce without the salt",
+      "The public keys are only valid for a short time window, so the eavesdropper cannot use them after they expire",
+    ],
+    answer: 1,
+    explanation: "The security of ECDH relies on the Elliptic Curve Discrete Logarithm Problem (ECDLP). While it's easy to compute a public key from a private key (multiply the private key by the generator point G), reversing this — finding the private key from the public key — is computationally infeasible. An eavesdropper who captures both A = a × G and B = b × G would need to extract either 'a' or 'b' to compute the shared secret a × b × G, but doing so requires solving the ECDLP.",
+  },
+  "hkdf-purpose": {
+    question: "In Lightning's Noise Protocol, HKDF is used to expand one ECDH shared secret into two 32-byte keys. Why not simply use the shared secret directly as a single encryption key?",
+    options: [
+      "The ECDH shared secret is a point on the curve (64 bytes), which is too large for ChaCha20's 32-byte key requirement, so HKDF compresses it",
+      "The protocol needs multiple independent keys for different purposes (e.g., a chaining key and a temporary encryption key), and reusing the same key for multiple cryptographic operations can compromise security",
+      "HKDF adds entropy from the system's random number generator, making the derived keys more secure than the original shared secret",
+      "The ECDH output is biased toward certain byte patterns due to the structure of secp256k1, so HKDF is needed to produce uniformly random bytes",
+    ],
+    answer: 1,
+    explanation: "The Noise Protocol needs multiple independent keys for different purposes at each stage of the handshake: a chaining key (which accumulates entropy across ECDH operations) and a temporary encryption key (used for the current act's encryption). Using the same key for different cryptographic operations — such as both a MAC and an encryption — can create subtle vulnerabilities. HKDF's two-phase design (extract then expand) takes a single input and produces multiple cryptographically independent keys, ensuring that compromising one derived key doesn't compromise the others.",
+  },
   "nonce-reuse": {
     question: "If Alice encrypts two different messages using the same ChaCha20 key and nonce, what can an attacker who intercepts both ciphertexts do?",
     options: [
