@@ -232,7 +232,7 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
             Noise Tutorial
           </div>
           <div className={`h-4 w-[2px] ${theme === "dark" ? "bg-[#2a3552]" : "bg-border"}`} />
-          <div className={`font-mono text-sm md:text-base ${t.crumbText}`} data-testid="text-chapter-title">
+          <div className={`font-mono text-lg md:text-xl ${t.crumbText}`} data-testid="text-chapter-title">
             {active.title}
           </div>
         </div>
@@ -1028,12 +1028,12 @@ function InteractiveQuiz({
           data-testid="container-quiz-result"
         >
           <div
-            className={`font-pixel text-xl mb-2 ${passed ? "text-[#FFD700]" : dark ? "text-red-400" : "text-red-600"}`}
+            className={`font-pixel text-2xl md:text-3xl mb-3 ${passed ? "text-[#FFD700]" : dark ? "text-red-400" : "text-red-600"}`}
             data-testid="text-quiz-result-title"
           >
             {passed ? "CONGRATULATIONS!" : "NOT QUITE..."}
           </div>
-          <div className={`text-lg ${textColor}`} data-testid="text-quiz-result-score">
+          <div className={`text-xl md:text-2xl ${textColor}`} data-testid="text-quiz-result-score">
             {passed
               ? `You passed with ${percentage}%! You've mastered Lightning's Noise Protocol.`
               : `You scored ${percentage}%. You need 90% to pass. Review the incorrect answers below and try again!`}
@@ -1162,8 +1162,17 @@ function InteractiveQuiz({
               }`}
               data-testid={`container-quiz-question-${qIndex}`}
             >
-              <div className={`font-pixel text-xs mb-1 ${textMuted}`}>
-                Q{qIndex + 1}/{QUIZ_QUESTIONS.length}
+              <div className="flex items-center justify-between mb-1">
+                <div className={`font-pixel text-xs ${textMuted}`}>
+                  Q{qIndex + 1}/{QUIZ_QUESTIONS.length}
+                </div>
+                {submitted && (
+                  <div className={`font-pixel text-xs ${
+                    isCorrect ? "text-green-400" : isWrong ? "text-red-400" : dark ? "text-slate-500" : "text-foreground/40"
+                  }`}>
+                    {isCorrect ? "CORRECT" : isWrong ? "WRONG" : "SKIPPED"}
+                  </div>
+                )}
               </div>
               <div className={`text-[19px] md:text-[22px] font-semibold mb-4 leading-snug ${textColor}`} data-testid={`text-quiz-question-${qIndex}`}>
                 {q.question}
@@ -1177,10 +1186,16 @@ function InteractiveQuiz({
 
                   let optionStyle = "";
                   if (submitted) {
-                    if (isAnswer) {
+                    if (passed && isAnswer) {
+                      // Only reveal the correct answer when they passed
+                      optionStyle = "border-green-500 bg-green-500/15 text-green-300";
+                      if (!dark) optionStyle = "border-green-600 bg-green-50 text-green-800";
+                    } else if (!passed && isSelected && isAnswer) {
+                      // They selected it and it's correct — show green
                       optionStyle = "border-green-500 bg-green-500/15 text-green-300";
                       if (!dark) optionStyle = "border-green-600 bg-green-50 text-green-800";
                     } else if (isSelected && !isAnswer) {
+                      // They selected it and it's wrong — show red
                       optionStyle = "border-red-500 bg-red-500/15 text-red-300";
                       if (!dark) optionStyle = "border-red-500 bg-red-50 text-red-800";
                     } else {
@@ -1210,7 +1225,9 @@ function InteractiveQuiz({
                     >
                       <span
                         className={`font-pixel text-xs mt-0.5 shrink-0 w-6 h-6 flex items-center justify-center border ${
-                          submitted && isAnswer
+                          submitted && isSelected && isAnswer
+                            ? "border-green-500 text-green-400"
+                            : submitted && passed && isAnswer
                             ? "border-green-500 text-green-400"
                             : submitted && isSelected && !isAnswer
                             ? "border-red-500 text-red-400"
@@ -1221,7 +1238,7 @@ function InteractiveQuiz({
                             : "border-border text-foreground/60"
                         }`}
                       >
-                        {submitted && isAnswer ? "✓" : submitted && isSelected && !isAnswer ? "✗" : letter}
+                        {submitted && isSelected && isAnswer ? "✓" : submitted && passed && isAnswer ? "✓" : submitted && isSelected && !isAnswer ? "✗" : letter}
                       </span>
                       <span className={`text-[18px] md:text-[20px] leading-snug ${!submitted ? (dark ? "text-slate-200" : "text-foreground") : ""}`}>
                         {opt}
@@ -1231,14 +1248,14 @@ function InteractiveQuiz({
                 })}
               </div>
 
-              {submitted && q.explanation && (
+              {submitted && passed && q.explanation && (
                 <div
                   className={`mt-4 pt-4 border-t ${
                     dark ? "border-[#1f2a44]" : "border-border"
                   }`}
                   data-testid={`container-quiz-explanation-${qIndex}`}
                 >
-                  <div className={`font-pixel text-xs mb-2 ${
+                  <div className={`font-pixel text-sm mb-2 ${
                     isCorrect
                       ? "text-green-400"
                       : isWrong
@@ -1247,7 +1264,7 @@ function InteractiveQuiz({
                   }`}>
                     {isCorrect ? "CORRECT" : isWrong ? "INCORRECT" : "NOT ANSWERED"} — EXPLANATION
                   </div>
-                  <div className={`text-[15px] md:text-[16px] leading-relaxed ${
+                  <div className={`text-[17px] md:text-[19px] leading-relaxed ${
                     dark ? "text-slate-300" : "text-foreground/80"
                   }`}>
                     {q.explanation}
