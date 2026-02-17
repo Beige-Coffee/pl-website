@@ -1529,7 +1529,7 @@ function ChapterContent({
           ),
           code: ({ className, children, ...props }: any) => (
             <code
-              className={`${className ?? ""} rounded px-1 py-0.5 ${theme === "dark" ? "bg-white/10" : "bg-[#fefce8]"}`}
+              className={`${className ?? ""} rounded px-1 py-0.5 ${theme === "dark" ? "bg-white/10" : "bg-black/[0.03]"}`}
               {...props}
             >
               {children}

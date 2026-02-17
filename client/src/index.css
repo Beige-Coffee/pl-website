@@ -183,8 +183,8 @@
   }
 
   .noise-md.noise-md-light pre {
-    background: #fefce8;
-    border: 1px solid #fde68a;
+    background: rgba(0, 0, 0, 0.03);
+    border: 1px solid rgba(0, 0, 0, 0.08);
     color: #1a1a1a;
   }
 
