@@ -1034,7 +1034,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          amount_sat: String(amount_sats),
+          amount: String(amount_sats),
           description: `Programming Lightning Donation: ${amount_sats} sats`,
           expiration_secs: 600,
         }),
