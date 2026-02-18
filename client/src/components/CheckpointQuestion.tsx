@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { QRCodeSVG } from "qrcode.react";
 
 interface CheckpointQuestionProps {
@@ -13,6 +13,26 @@ interface CheckpointQuestionProps {
   alreadyCompleted: boolean;
   onLoginRequest: () => void;
   onCompleted: (checkpointId: string) => void;
+}
+
+// Render inline code: converts `text` to <code> elements
+function renderInlineCode(text: string, dark: boolean): React.ReactNode {
+  const parts = text.split(/(`[^`]+`)/g);
+  if (parts.length === 1) return text;
+  return parts.map((part, i) => {
+    if (part.startsWith("`") && part.endsWith("`")) {
+      const code = part.slice(1, -1);
+      return (
+        <code
+          key={i}
+          className={`rounded px-1 py-0.5 font-mono text-[0.9em] ${dark ? "bg-white/10" : "bg-black/[0.06]"}`}
+        >
+          {code}
+        </code>
+      );
+    }
+    return part;
+  });
 }
 
 export default function CheckpointQuestion({
@@ -175,15 +195,15 @@ export default function CheckpointQuestion({
           <div className={`font-pixel text-xs ${goldText}`}>CHECKPOINT</div>
           <div className="font-pixel text-xs text-green-400">COMPLETED</div>
         </div>
-        <div className={`text-[17px] md:text-[19px] font-semibold ${textColor} mb-3`}>{question}</div>
+        <div className={`text-[17px] md:text-[19px] font-semibold ${textColor} mb-3`}>{renderInlineCode(question, dark)}</div>
         <div className={`text-[15px] md:text-[17px] ${textMuted} leading-relaxed`}>
           <span className="font-semibold text-green-400">Correct answer: </span>
-          {options[answer]}
+          {renderInlineCode(options[answer], dark)}
         </div>
         {explanation && (
           <div className={`mt-3 pt-3 border-t ${dark ? "border-[#1f2a44]" : "border-border"}`}>
             <div className="font-pixel text-xs text-green-400 mb-1">EXPLANATION</div>
-            <div className={`text-[15px] md:text-[17px] ${textMuted} leading-relaxed`}>{explanation}</div>
+            <div className={`text-[15px] md:text-[17px] ${textMuted} leading-relaxed`}>{renderInlineCode(explanation, dark)}</div>
           </div>
         )}
         <div className={`mt-4 font-pixel text-sm ${goldText}`}>
@@ -211,7 +231,7 @@ export default function CheckpointQuestion({
         <div className={`font-pixel text-xs ${goldText}`}>EARN SATS</div>
       </div>
 
-      <div className={`text-[17px] md:text-[19px] font-semibold ${textColor} mb-4`}>{question}</div>
+      <div className={`text-[17px] md:text-[19px] font-semibold ${textColor} mb-4`}>{renderInlineCode(question, dark)}</div>
 
       <div className="space-y-2 mb-4">
         {options.map((opt, i) => {
@@ -253,7 +273,7 @@ export default function CheckpointQuestion({
                 <div className={`font-pixel text-xs mt-1 shrink-0 ${isSelected ? goldText : textMuted}`}>
                   {String.fromCharCode(65 + i)})
                 </div>
-                <div className={`text-[15px] md:text-[17px] ${optText} leading-relaxed`}>{opt}</div>
+                <div className={`text-[15px] md:text-[17px] ${optText} leading-relaxed`}>{renderInlineCode(opt, dark)}</div>
               </div>
             </button>
           );
@@ -290,7 +310,7 @@ export default function CheckpointQuestion({
           {explanation && (
             <div className={`mb-4 pt-3 border-t ${dark ? "border-[#1f2a44]" : "border-border"}`}>
               <div className="font-pixel text-xs text-green-400 mb-1">EXPLANATION</div>
-              <div className={`text-[15px] md:text-[17px] ${textMuted} leading-relaxed`}>{explanation}</div>
+              <div className={`text-[15px] md:text-[17px] ${textMuted} leading-relaxed`}>{renderInlineCode(explanation, dark)}</div>
             </div>
           )}
 
