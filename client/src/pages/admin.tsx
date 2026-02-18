@@ -74,8 +74,11 @@ export default function AdminPage() {
 
   useEffect(() => {
     fetch("/api/admin/check-ip")
-      .then((r) => r.json())
-      .then((d) => setIpAllowed(d.allowed))
+      .then((r) => {
+        if (!r.ok) return { allowed: false };
+        return r.json();
+      })
+      .then((d) => setIpAllowed(!!d.allowed))
       .catch(() => setIpAllowed(false));
   }, []);
 

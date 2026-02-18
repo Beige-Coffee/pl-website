@@ -1,4 +1,4 @@
-import type { Express, Request, Response } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { spawn } from "child_process";
 import { storage } from "./storage";
@@ -7,8 +7,48 @@ import secp256k1 from "secp256k1";
 import { bech32 } from "bech32";
 import QRCode from "qrcode";
 import bcrypt from "bcryptjs";
+import { decode as decodeBolt11 } from "light-bolt11-decoder";
 import { emailAuthSchema, insertPageEventSchema } from "@shared/schema";
 import { existsSync } from "fs";
+
+class RateLimiter {
+  private attempts: Map<string, number[]> = new Map();
+  private maxAttempts: number;
+  private windowMs: number;
+
+  constructor(maxAttempts: number, windowMs: number) {
+    this.maxAttempts = maxAttempts;
+    this.windowMs = windowMs;
+    setInterval(() => this.cleanup(), windowMs);
+  }
+
+  check(key: string): boolean {
+    const now = Date.now();
+    const timestamps = this.attempts.get(key) || [];
+    const recent = timestamps.filter((t) => now - t < this.windowMs);
+    if (recent.length >= this.maxAttempts) return false;
+    recent.push(now);
+    this.attempts.set(key, recent);
+    return true;
+  }
+
+  private cleanup() {
+    const now = Date.now();
+    for (const [key, timestamps] of this.attempts) {
+      const recent = timestamps.filter((t) => now - t < this.windowMs);
+      if (recent.length === 0) this.attempts.delete(key);
+      else this.attempts.set(key, recent);
+    }
+  }
+}
+
+const authLimiter = new RateLimiter(10, 60_000);
+const claimLimiter = new RateLimiter(5, 60_000);
+const adminLimiter = new RateLimiter(5, 60_000);
+
+function getClientIp(req: Request): string {
+  return (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";
+}
 
 function startLexeSidecar() {
   const sidecarPath = ".local/bin/lexe-sidecar";
@@ -59,6 +99,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   startLexeSidecar();
 
   app.post("/api/auth/register", async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    if (!authLimiter.check(ip)) {
+      return res.status(429).json({ error: "Too many attempts, try again later" });
+    }
     try {
       const parsed = emailAuthSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -90,6 +134,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/auth/login", async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    if (!authLimiter.check(ip)) {
+      return res.status(429).json({ error: "Too many attempts, try again later" });
+    }
     try {
       const parsed = emailAuthSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -145,6 +193,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ ok: true });
   });
 
+  const ALLOWED_ADMIN_IP = "108.236.117.225";
+
   const QUIZ_ANSWER_KEY = [3, 0, 0, 2, 1, 0, 3, 0, 3, 1];
   const QUIZ_PASS_THRESHOLD = 0.9;
   const REWARD_AMOUNT_SATS = parseInt(process.env.REWARD_AMOUNT_SATS || "21", 10);
@@ -175,6 +225,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   };
 
   app.post("/api/quiz/claim", async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    if (!claimLimiter.check(ip)) {
+      return res.status(429).json({ error: "Too many attempts, try again later" });
+    }
     try {
       const user = await getAuthUser(req);
       if (!user) {
@@ -233,6 +287,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // --- Checkpoint rewards ---
 
   app.post("/api/checkpoint/claim", async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    if (!claimLimiter.check(ip)) {
+      return res.status(429).json({ error: "Too many attempts, try again later" });
+    }
     try {
       const user = await getAuthUser(req);
       if (!user) {
@@ -305,6 +363,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // --- Grouped checkpoint rewards ---
 
   app.post("/api/checkpoint-group/claim", async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    if (!claimLimiter.check(ip)) {
+      return res.status(429).json({ error: "Too many attempts, try again later" });
+    }
     try {
       const user = await getAuthUser(req);
       if (!user) {
@@ -424,6 +486,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json({ status: "ERROR", reason: "Withdrawal already claimed or processed" });
       }
 
+      let invoiceMsats: string | null = null;
+      try {
+        const decoded = decodeBolt11(pr);
+        const amountSection = decoded.sections.find((s: any) => s.name === "amount");
+        if (amountSection && amountSection.value) {
+          invoiceMsats = String(amountSection.value);
+        }
+      } catch (decodeErr) {
+        console.error("Failed to decode bolt11:", decodeErr);
+        return res.json({ status: "ERROR", reason: "Invalid invoice" });
+      }
+
+      if (!invoiceMsats || invoiceMsats !== withdrawal.amountMsats) {
+        console.error(`Invoice amount mismatch: expected ${withdrawal.amountMsats} msats, got ${invoiceMsats} msats for k1 ${k1}`);
+        await storage.markWithdrawalFailed(k1, `Amount mismatch: expected ${withdrawal.amountMsats}, got ${invoiceMsats}`);
+        return res.json({ status: "ERROR", reason: "Invoice amount does not match withdrawal" });
+      }
+
       await storage.markWithdrawalClaimed(k1, pr);
 
       res.json({ status: "OK" });
@@ -500,6 +580,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.get("/api/admin/stats", async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    if (ip !== ALLOWED_ADMIN_IP) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+    if (!adminLimiter.check(ip)) {
+      return res.status(429).json({ error: "Too many attempts, try again later" });
+    }
     const adminPassword = process.env.ADMIN_PASSWORD;
     const providedPassword = req.query.password as string;
     if (!adminPassword || providedPassword !== adminPassword) {
@@ -644,6 +731,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/auth/course-access", async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    if (!authLimiter.check(ip)) {
+      return res.status(429).json({ error: "Too many attempts, try again later" });
+    }
     try {
       const { password } = req.body;
       if (!password || typeof password !== "string") {
@@ -707,6 +798,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/admin/analytics", async (req: Request, res: Response) => {
     try {
+      const ip = getClientIp(req);
+      if (ip !== ALLOWED_ADMIN_IP) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      if (!adminLimiter.check(ip)) {
+        return res.status(429).json({ error: "Too many attempts, try again later" });
+      }
       const { password } = req.query as Record<string, string>;
       if (!password || password !== process.env.ADMIN_PASSWORD) {
         return res.status(401).json({ error: "Unauthorized" });
@@ -723,19 +821,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  const ALLOWED_ADMIN_IP = "108.236.117.225";
-
   app.get("/api/admin/check-ip", (req: Request, res: Response) => {
-    const clientIp = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "";
-    const allowed = clientIp === ALLOWED_ADMIN_IP;
-    res.json({ allowed, ip: clientIp });
+    const ip = getClientIp(req);
+    if (ip !== ALLOWED_ADMIN_IP) {
+      return res.status(404).json({ error: "Not found" });
+    }
+    res.json({ allowed: true });
   });
 
   app.get("/api/admin/dashboard", async (req: Request, res: Response) => {
     try {
-      const clientIp = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "";
-      if (clientIp !== ALLOWED_ADMIN_IP) {
+      const ip = getClientIp(req);
+      if (ip !== ALLOWED_ADMIN_IP) {
         return res.status(403).json({ error: "Access denied" });
+      }
+      if (!adminLimiter.check(ip)) {
+        return res.status(429).json({ error: "Too many attempts, try again later" });
       }
 
       const { password } = req.query as Record<string, string>;
