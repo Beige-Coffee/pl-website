@@ -47,9 +47,17 @@ interface DashboardData {
     duration: number | null;
     createdAt: string;
   }>;
+  recentDonations: Array<{
+    id: string;
+    paymentIndex: string;
+    amountSats: number;
+    donorName: string;
+    message: string | null;
+    createdAt: string;
+  }>;
 }
 
-type Tab = "overview" | "users" | "withdrawals" | "checkpoints" | "analytics";
+type Tab = "overview" | "users" | "withdrawals" | "checkpoints" | "analytics" | "donations";
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return "-";
@@ -71,6 +79,8 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const [storedPassword, setStoredPassword] = useState("");
   const [ipAllowed, setIpAllowed] = useState<boolean | null>(null);
+  const [spamming, setSpamming] = useState<Set<string>>(new Set());
+  const [revealedMessages, setRevealedMessages] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetch("/api/admin/check-ip")
@@ -112,6 +122,44 @@ export default function AdminPage() {
 
   const refresh = () => {
     fetchDashboard(storedPassword);
+  };
+
+  const markSpam = async (donationId: string) => {
+    if (!confirm("Mark this donation as spam? The message will be replaced with ⚡⚡⚡ and the name set to Anon.")) return;
+    setSpamming((prev) => new Set(prev).add(donationId));
+    try {
+      const res = await fetch("/api/admin/donation-spam", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: storedPassword, donation_id: donationId }),
+      });
+      if (res.ok) {
+        // Update local data
+        setData((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            recentDonations: prev.recentDonations.map((d) =>
+              d.id === donationId ? { ...d, message: "⚡⚡⚡", donorName: "Anon" } : d
+            ),
+          };
+        });
+      }
+    } catch {}
+    setSpamming((prev) => {
+      const next = new Set(prev);
+      next.delete(donationId);
+      return next;
+    });
+  };
+
+  const toggleReveal = (donationId: string) => {
+    setRevealedMessages((prev) => {
+      const next = new Set(prev);
+      if (next.has(donationId)) next.delete(donationId);
+      else next.add(donationId);
+      return next;
+    });
   };
 
   if (ipAllowed === null) {
@@ -199,6 +247,7 @@ export default function AdminPage() {
           <button className={tabClass("withdrawals")} onClick={() => setActiveTab("withdrawals")}>WITHDRAWALS</button>
           <button className={tabClass("checkpoints")} onClick={() => setActiveTab("checkpoints")}>CHECKPOINTS</button>
           <button className={tabClass("analytics")} onClick={() => setActiveTab("analytics")}>ANALYTICS</button>
+          <button className={tabClass("donations")} onClick={() => setActiveTab("donations")}>DONATIONS ({(data.recentDonations || []).length})</button>
         </div>
 
         {error && <div className="font-pixel text-xs text-red-500 mb-4">{error}</div>}
@@ -402,6 +451,90 @@ export default function AdminPage() {
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+
+        {/* Donations Tab */}
+        {activeTab === "donations" && (
+          <div className={`${cardClass} overflow-x-auto`}>
+            <div className="font-pixel text-xs mb-3">
+              DONATIONS &mdash; {(data.recentDonations || []).reduce((s, d) => s + d.amountSats, 0).toLocaleString()} TOTAL SATS
+            </div>
+            <table className={tableClass}>
+              <thead>
+                <tr>
+                  <th className={thClass}>NAME</th>
+                  <th className={thClass}>AMOUNT</th>
+                  <th className={thClass}>MESSAGE</th>
+                  <th className={thClass}>DATE</th>
+                  <th className={thClass}>ACTION</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(data.recentDonations || []).map((d) => {
+                  const isSpammed = d.message === "\u26A1\u26A1\u26A1";
+                  const isRevealed = revealedMessages.has(d.id);
+                  const hasMessage = d.message && d.message.trim().length > 0;
+                  return (
+                    <tr key={d.id} className="hover:bg-primary/5">
+                      <td className={tdClass}>{d.donorName}</td>
+                      <td className={tdClass}>{d.amountSats.toLocaleString()} sats</td>
+                      <td className={tdClass}>
+                        {!hasMessage ? (
+                          <span className="text-foreground/30">-</span>
+                        ) : isSpammed ? (
+                          <span title="Marked as spam">{d.message}</span>
+                        ) : isRevealed ? (
+                          <span>
+                            {d.message}
+                            <button
+                              onClick={() => toggleReveal(d.id)}
+                              className="ml-2 text-foreground/40 hover:text-foreground text-[10px]"
+                              title="Hide message"
+                            >
+                              [hide]
+                            </button>
+                          </span>
+                        ) : (
+                          <span>
+                            <span
+                              className="bg-foreground/80 text-foreground/80 rounded px-1 select-none cursor-pointer hover:bg-foreground/60"
+                              onClick={() => toggleReveal(d.id)}
+                              title="Click to reveal"
+                            >
+                              {d.message}
+                            </span>
+                            <button
+                              onClick={() => toggleReveal(d.id)}
+                              className="ml-2 text-foreground/40 hover:text-foreground text-[10px]"
+                            >
+                              [reveal]
+                            </button>
+                          </span>
+                        )}
+                      </td>
+                      <td className={tdClass}>{formatDate(d.createdAt)}</td>
+                      <td className={tdClass}>
+                        {isSpammed ? (
+                          <span className="font-pixel text-[10px] text-foreground/30">REMOVED</span>
+                        ) : (
+                          <button
+                            onClick={() => markSpam(d.id)}
+                            disabled={spamming.has(d.id)}
+                            className="font-pixel text-[10px] border border-red-500/50 text-red-500 px-2 py-1 hover:bg-red-500/10 disabled:opacity-50"
+                          >
+                            {spamming.has(d.id) ? "..." : "SPAM"}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {(data.recentDonations || []).length === 0 && (
+                  <tr><td colSpan={5} className={`${tdClass} text-center text-foreground/40`}>No donations yet</td></tr>
+                )}
+              </tbody>
+            </table>
           </div>
         )}
       </div>

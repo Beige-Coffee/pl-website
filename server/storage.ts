@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type LnAuthChallenge, type Session, type LnurlWithdrawal, type InsertPageEvent, type PageEvent, type CheckpointCompletion, users, lnAuthChallenges, sessions, lnurlWithdrawals, pageEvents, checkpointCompletions } from "@shared/schema";
+import { type User, type InsertUser, type LnAuthChallenge, type Session, type LnurlWithdrawal, type InsertPageEvent, type PageEvent, type CheckpointCompletion, type Donation, users, lnAuthChallenges, sessions, lnurlWithdrawals, pageEvents, checkpointCompletions, donations } from "@shared/schema";
 import { eq, desc, inArray, and, sql, count } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
@@ -44,6 +44,9 @@ export interface IStorage {
   getPageViewStats(): Promise<{ page: string; views: number; avgDuration: number }[]>;
   getRecentPageEvents(limit: number): Promise<PageEvent[]>;
   getTotalPageViews(): Promise<number>;
+  createDonation(paymentIndex: string, amountSats: number, donorName: string, message: string | null): Promise<Donation>;
+  getRecentDonations(limit: number): Promise<Donation[]>;
+  markDonationSpam(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -293,6 +296,24 @@ export class DatabaseStorage implements IStorage {
 
   async getAllCheckpointCompletions(): Promise<CheckpointCompletion[]> {
     return db.select().from(checkpointCompletions).orderBy(desc(checkpointCompletions.createdAt));
+  }
+
+  async createDonation(paymentIndex: string, amountSats: number, donorName: string, message: string | null): Promise<Donation> {
+    const [donation] = await db.insert(donations).values({
+      paymentIndex,
+      amountSats,
+      donorName: donorName || "Anon",
+      message,
+    }).returning();
+    return donation;
+  }
+
+  async getRecentDonations(limit: number): Promise<Donation[]> {
+    return db.select().from(donations).orderBy(desc(donations.createdAt)).limit(limit);
+  }
+
+  async markDonationSpam(id: string): Promise<void> {
+    await db.update(donations).set({ message: "\u26A1\u26A1\u26A1", donorName: "Anon" }).where(eq(donations.id, id));
   }
 }
 

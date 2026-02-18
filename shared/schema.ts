@@ -49,6 +49,15 @@ export const checkpointCompletions = pgTable("checkpoint_completions", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const donations = pgTable("donations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  paymentIndex: text("payment_index").notNull().unique(),
+  amountSats: integer("amount_sats").notNull(),
+  donorName: text("donor_name").notNull().default("Anon"),
+  message: text("message"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const pageEvents = pgTable("page_events", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id"),
@@ -80,3 +89,4 @@ export type Session = typeof sessions.$inferSelect;
 export type LnAuthChallenge = typeof lnAuthChallenges.$inferSelect;
 export type LnurlWithdrawal = typeof lnurlWithdrawals.$inferSelect;
 export type CheckpointCompletion = typeof checkpointCompletions.$inferSelect;
+export type Donation = typeof donations.$inferSelect;

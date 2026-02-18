@@ -994,6 +994,86 @@ function ImageBlock({
   );
 }
 
+interface DonationEntry {
+  id: string;
+  amountSats: number;
+  donorName: string;
+  message: string | null;
+  createdAt: string;
+}
+
+function DonationWall({ theme }: { theme: "light" | "dark" }) {
+  const dark = theme === "dark";
+  const [donations, setDonations] = useState<DonationEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const goldText = dark ? "text-[#FFD700]" : "text-[#9a7200]";
+  const goldBorder = dark ? "border-[#FFD700]" : "border-[#b8860b]";
+  const cardBg = dark ? "bg-[#0f1930]" : "bg-card";
+  const cardBorder = dark ? "border-[#2a3552]" : "border-border";
+  const textColor = dark ? "text-slate-100" : "text-black";
+  const textMuted = dark ? "text-slate-400" : "text-black/70";
+  const sansFont = 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+
+  const fetchDonations = useCallback(async () => {
+    try {
+      const res = await fetch("/api/donate/wall");
+      if (res.ok) {
+        const data = await res.json();
+        setDonations(data.donations || []);
+      }
+    } catch {}
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { fetchDonations(); }, [fetchDonations]);
+
+  if (loading) return null;
+  if (donations.length === 0) return null;
+
+  const totalSats = donations.reduce((sum, d) => sum + d.amountSats, 0);
+
+  return (
+    <div className="mt-10">
+      <div className={`font-pixel text-sm ${goldText} mb-4 tracking-wider`}>DONOR WALL</div>
+      <div className={`border-2 ${goldBorder} ${cardBg} p-4 md:p-6 mb-4`}>
+        <div className="flex justify-between items-center mb-4">
+          <div className={`text-sm ${textMuted}`} style={{ fontFamily: sansFont }}>
+            {donations.length} donation{donations.length !== 1 ? "s" : ""}
+          </div>
+          <div className={`font-pixel text-sm ${goldText}`}>
+            {totalSats.toLocaleString()} SATS TOTAL
+          </div>
+        </div>
+        <div className="space-y-3">
+          {donations.map((d) => (
+            <div key={d.id} className={`border ${cardBorder} ${dark ? "bg-[#0b1220]" : "bg-gray-50"} p-3`}>
+              <div className="flex justify-between items-start gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`font-pixel text-xs ${goldText}`}>{d.donorName}</span>
+                    <span className={`font-pixel text-xs ${dark ? "text-green-400" : "text-green-700"}`}>
+                      {d.amountSats.toLocaleString()} sats
+                    </span>
+                  </div>
+                  {d.message && (
+                    <div className={`text-sm ${textColor} leading-relaxed`} style={{ fontFamily: sansFont }}>
+                      "{d.message}"
+                    </div>
+                  )}
+                </div>
+                <div className={`text-xs ${textMuted} whitespace-nowrap`} style={{ fontFamily: sansFont }}>
+                  {new Date(d.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PayItForward({ theme }: { theme: "light" | "dark" }) {
   const dark = theme === "dark";
   const [amount, setAmount] = useState("");
@@ -1003,6 +1083,11 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
   const [status, setStatus] = useState<"idle" | "creating" | "waiting" | "paid" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
+  const [donorName, setDonorName] = useState("");
+  const [donorMessage, setDonorMessage] = useState("");
+  const [moderationError, setModerationError] = useState("");
+  const [donationSaved, setDonationSaved] = useState(false);
+  const [wallKey, setWallKey] = useState(0);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const expiryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -1022,6 +1107,7 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
   const textColor = dark ? "text-slate-100" : "text-black";
   const textMuted = dark ? "text-slate-400" : "text-black/70";
   const greenText = dark ? "text-green-400" : "text-green-700";
+  const sansFont = 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
 
   useEffect(() => {
     return () => {
@@ -1030,11 +1116,48 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
     };
   }, []);
 
+  const saveDonation = useCallback(async (pIdx: string, sats: number) => {
+    try {
+      await fetch("/api/donate/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          payment_index: pIdx,
+          amount_sats: sats,
+          donor_name: donorName.trim() || "Anon",
+          message: donorMessage.trim() || null,
+        }),
+      });
+      setDonationSaved(true);
+      setWallKey(k => k + 1);
+    } catch {}
+  }, [donorName, donorMessage]);
+
   const createInvoice = useCallback(async (sats: number) => {
+    // Run moderation check before creating invoice
+    if (donorName.trim() || donorMessage.trim()) {
+      try {
+        const modRes = await fetch("/api/donate/moderate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: donorName.trim(), message: donorMessage.trim() }),
+        });
+        if (modRes.ok) {
+          const modData = await modRes.json();
+          if (!modData.clean) {
+            setModerationError("Your " + modData.issues.join(" and ") + " contains language that isn't allowed. Please revise and try again.");
+            return;
+          }
+        }
+      } catch {}
+    }
+    setModerationError("");
+
     setStatus("creating");
     setErrorMsg("");
     setInvoice(null);
     setPaymentIndex(null);
+    setDonationSaved(false);
 
     try {
       const res = await fetch("/api/donate/create-invoice", {
@@ -1064,9 +1187,11 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
       }, timeUntilExpiry);
 
       if (pollingRef.current) clearInterval(pollingRef.current);
+      const capturedPaymentIndex = data.payment_index;
+      const capturedSats = sats;
       pollingRef.current = setInterval(async () => {
         try {
-          const checkRes = await fetch(`/api/donate/check-payment?index=${encodeURIComponent(data.payment_index)}`);
+          const checkRes = await fetch(`/api/donate/check-payment?index=${encodeURIComponent(capturedPaymentIndex)}`);
           if (checkRes.ok) {
             const checkData = await checkRes.json();
             if (checkData.status === "paid") {
@@ -1079,6 +1204,8 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
                 clearTimeout(expiryRef.current);
                 expiryRef.current = null;
               }
+              // Auto-save donation to the wall
+              saveDonation(capturedPaymentIndex, capturedSats);
             }
           }
         } catch {}
@@ -1087,7 +1214,7 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
       setStatus("error");
       setErrorMsg(err.message || "Something went wrong");
     }
-  }, []);
+  }, [donorName, donorMessage, saveDonation]);
 
   const handlePresetClick = useCallback((value: number) => {
     setAmount(String(value));
@@ -1112,7 +1239,9 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
     setAmount("");
     setCustomAmount("");
     setErrorMsg("");
+    setModerationError("");
     setExpiresAt(null);
+    setDonationSaved(false);
     if (pollingRef.current) {
       clearInterval(pollingRef.current);
       pollingRef.current = null;
@@ -1133,36 +1262,37 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
       <div className={`border-2 ${goldBorder} ${cardBg} p-6 md:p-8 mb-8`}>
         <div className={`font-pixel text-xs ${goldText} mb-4 tracking-wider`}>SUPPORT THE MISSION</div>
 
-        <div className={`text-[17px] md:text-[19px] leading-relaxed ${textColor} mb-6`} style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
+        <div className={`text-[17px] md:text-[19px] leading-relaxed ${textColor} mb-6`} style={{ fontFamily: sansFont }}>
           The goal of this tutorial (and more to come!) is to create an immersive learning experience where you don't just <em>read</em> about Lightning, you <em>use</em> it! Every checkpoint reward, every quiz payout, every sat earned in this course is a real Lightning transaction. By donating, you directly fund that experience for the next wave of students. More tutorials are coming, and your contribution helps make them just as hands-on.
         </div>
 
-        <div className={`text-[17px] md:text-[19px] leading-relaxed ${textColor}`} style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
+        <div className={`text-[17px] md:text-[19px] leading-relaxed ${textColor}`} style={{ fontFamily: sansFont }}>
           Every sat counts. Thanks for paying it forward!
         </div>
       </div>
 
       {status === "idle" && (
-        <>
+        <div className={`border-2 ${goldBorder} ${cardBg} p-5 md:p-8`}>
+          {/* Amount selection */}
           <div className={`font-pixel text-sm ${goldText} mb-4 tracking-wider`}>CHOOSE AN AMOUNT (SATS)</div>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-5">
             {presetAmounts.map((p) => (
               <button
                 key={p.value}
                 type="button"
                 onClick={() => handlePresetClick(p.value)}
-                className={`border-2 ${goldBorder} ${cardBg} p-4 transition-all hover:scale-[1.02] active:scale-[0.98]`}
+                className={`border-2 ${goldBorder} ${dark ? "bg-[#0b1220]" : "bg-white"} p-4 transition-all hover:scale-[1.02] active:scale-[0.98]`}
                 style={{ cursor: "pointer" }}
                 data-testid={`button-donate-${p.value}`}
               >
                 <div className={`font-pixel text-xl md:text-2xl ${goldText}`}>{p.label}</div>
-                <div className={`text-base md:text-lg ${textMuted} mt-1`} style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>{p.desc}</div>
+                <div className={`text-base md:text-lg ${textMuted} mt-1`} style={{ fontFamily: sansFont }}>{p.desc}</div>
               </button>
             ))}
           </div>
 
-          <div className={`border-2 ${cardBorder} ${cardBg} p-4`}>
+          <div className={`border-2 ${cardBorder} ${dark ? "bg-[#0b1220]" : "bg-white"} p-4 mb-6`}>
             <div className={`font-pixel text-xs ${textMuted} mb-3`}>CUSTOM AMOUNT</div>
             <div className="flex gap-3">
               <input
@@ -1174,7 +1304,7 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
                 onChange={(e) => { setCustomAmount(e.target.value); setErrorMsg(""); }}
                 onKeyDown={(e) => { if (e.key === "Enter") handleCustomSubmit(); }}
                 className={`flex-1 border-2 ${goldBorder} ${dark ? "bg-[#0b1220] text-slate-100" : "bg-white text-black"} px-4 py-3 text-xl md:text-2xl outline-none focus:ring-2 focus:ring-[#FFD700]/50`}
-                style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}
+                style={{ fontFamily: sansFont }}
                 data-testid="input-custom-donate"
               />
               <button
@@ -1190,13 +1320,57 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
               <div className="text-red-500 font-mono text-sm mt-2">{errorMsg}</div>
             )}
           </div>
-        </>
+
+          {/* Divider */}
+          <div className={`h-px ${dark ? "bg-[#2a3552]" : "bg-border"} mb-6`} />
+
+          {/* Name & Message — optional */}
+          <div className={`font-pixel text-xs ${goldText} mb-3 tracking-wider`}>NAME & MESSAGE <span className={textMuted}>(OPTIONAL)</span></div>
+          <div className={`text-sm ${textMuted} mb-4`} style={{ fontFamily: sansFont }}>
+            Want to leave your name and a message? They'll appear on the donor wall below. Leave the name blank and it'll just say "Anon".
+          </div>
+          <div className="space-y-3 mb-5">
+            <div>
+              <label className={`font-pixel text-xs ${textMuted} block mb-1`}>NAME</label>
+              <input
+                type="text"
+                maxLength={50}
+                placeholder="Anon"
+                value={donorName}
+                onChange={(e) => { setDonorName(e.target.value); setModerationError(""); }}
+                className={`w-full border-2 ${cardBorder} ${dark ? "bg-[#0b1220] text-slate-100" : "bg-white text-black"} px-4 py-2.5 text-base outline-none focus:ring-2 focus:ring-[#FFD700]/50`}
+                style={{ fontFamily: sansFont }}
+              />
+            </div>
+            <div>
+              <label className={`font-pixel text-xs ${textMuted} block mb-1`}>MESSAGE</label>
+              <textarea
+                maxLength={280}
+                rows={2}
+                placeholder="Say something nice..."
+                value={donorMessage}
+                onChange={(e) => { setDonorMessage(e.target.value); setModerationError(""); }}
+                className={`w-full border-2 ${cardBorder} ${dark ? "bg-[#0b1220] text-slate-100" : "bg-white text-black"} px-4 py-2.5 text-base outline-none focus:ring-2 focus:ring-[#FFD700]/50 resize-none`}
+                style={{ fontFamily: sansFont }}
+              />
+              <div className={`text-xs ${textMuted} mt-1 text-right`} style={{ fontFamily: sansFont }}>
+                {donorMessage.length}/280
+              </div>
+            </div>
+          </div>
+          <div className={`text-[15px] md:text-[17px] ${textMuted} italic leading-relaxed`} style={{ fontFamily: sansFont }}>
+            While bitcoin is censorship-resistant, this website is not. Any offensive or abusive comments will be removed!
+          </div>
+          {moderationError && (
+            <div className="text-red-500 text-sm mt-3" style={{ fontFamily: sansFont }}>{moderationError}</div>
+          )}
+        </div>
       )}
 
       {status === "creating" && (
         <div className={`border-2 ${goldBorder} ${cardBg} p-8 text-center`}>
           <div className={`font-pixel text-sm ${goldText} mb-3 animate-pulse`}>CREATING INVOICE...</div>
-          <div className={`text-sm ${textMuted}`} style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
+          <div className={`text-sm ${textMuted}`} style={{ fontFamily: sansFont }}>
             Generating a Lightning invoice for {Number(amount).toLocaleString()} sats
           </div>
         </div>
@@ -1260,8 +1434,9 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
         <div className={`border-2 ${goldBorder} ${cardBg} p-8 text-center`}>
           <div className={`font-pixel text-2xl ${greenText} mb-3`}>PAYMENT RECEIVED!</div>
           <div className={`font-pixel text-lg ${goldText} mb-4`}>{Number(amount).toLocaleString()} SATS</div>
-          <div className={`text-[17px] ${textColor} mb-6`} style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
+          <div className={`text-[17px] ${textColor} mb-6`} style={{ fontFamily: sansFont }}>
             Thank you for supporting open-source Bitcoin education. Your donation will fund hands-on Lightning experiences for future students.
+            {donationSaved && " Your name and message have been added to the donor wall below!"}
           </div>
           <button
             type="button"
@@ -1277,7 +1452,7 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
       {status === "error" && (
         <div className={`border-2 border-red-500/50 ${cardBg} p-6 text-center`}>
           <div className="font-pixel text-sm text-red-500 mb-3">ERROR</div>
-          <div className={`text-sm ${textMuted} mb-4`} style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>{errorMsg}</div>
+          <div className={`text-sm ${textMuted} mb-4`} style={{ fontFamily: sansFont }}>{errorMsg}</div>
           <button
             type="button"
             onClick={resetDonation}
@@ -1288,6 +1463,8 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
           </button>
         </div>
       )}
+
+      <DonationWall key={wallKey} theme={theme} />
     </div>
   );
 }

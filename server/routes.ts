@@ -965,9 +965,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let pageStats: Awaited<ReturnType<typeof storage.getPageViewStats>> = [];
       let totalViews = 0;
       let recentEvents: Awaited<ReturnType<typeof storage.getRecentPageEvents>> = [];
+      let recentDonations: Awaited<ReturnType<typeof storage.getRecentDonations>> = [];
 
       try {
-        [recentWithdrawals, users, userCount, checkpointCompletions, pageStats, totalViews, recentEvents] =
+        [recentWithdrawals, users, userCount, checkpointCompletions, pageStats, totalViews, recentEvents, recentDonations] =
           await Promise.all([
             storage.getRecentWithdrawals(100),
             storage.getAllUsers(),
@@ -976,6 +977,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             storage.getPageViewStats(),
             storage.getTotalPageViews(),
             storage.getRecentPageEvents(100),
+            storage.getRecentDonations(100),
           ]);
       } catch (dbErr) {
         console.error("Admin dashboard DB error (continuing with empty data):", dbErr);
@@ -1009,10 +1011,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         totalViews,
         pageStats,
         recentEvents,
+        recentDonations,
       });
     } catch (err) {
       console.error("Admin dashboard error:", err);
       return res.status(500).json({ error: "Failed to load dashboard" });
+    }
+  });
+
+  app.post("/api/admin/donation-spam", async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    if (ip !== ALLOWED_ADMIN_IP) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+    const { password, donation_id } = req.body;
+    const adminPw = process.env.ADMIN_PASSWORD;
+    if (!adminPw || !password || password !== adminPw) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    if (!donation_id || typeof donation_id !== "string") {
+      return res.status(400).json({ error: "Missing donation_id" });
+    }
+    try {
+      await storage.markDonationSpam(donation_id);
+      return res.json({ success: true });
+    } catch (err: any) {
+      console.error("[admin] Error marking donation as spam:", err.message);
+      return res.status(500).json({ error: "Failed to update donation" });
     }
   });
 
@@ -1097,6 +1122,98 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err: any) {
       console.error("[donate] Error checking payment:", err.message);
       return res.status(500).json({ error: "Failed to check payment status" });
+    }
+  });
+
+  // --- Donation message moderation (simple keyword filter) ---
+  const BLOCKED_PATTERNS = [
+    /\bf+u+c+k+/i, /\bs+h+i+t+/i, /\ba+s+s+h+o+l+e/i, /\bb+i+t+c+h/i,
+    /\bd+a+m+n/i, /\bc+u+n+t/i, /\bn+i+g+g/i, /\bf+a+g+/i, /\br+e+t+a+r+d/i,
+    /\bk+i+l+l\s*(your|ur|u)self/i, /\bdie\b/i, /\bkys\b/i,
+    /\bwh+o+r+e/i, /\bs+l+u+t/i, /\bp+e+n+i+s/i, /\bv+a+g+i+n+a/i,
+    /\bd+i+c+k\b/i, /\bc+o+c+k\b/i, /\btits\b/i, /\bboobs\b/i,
+    /\bporn/i, /\bsex\b/i, /\bnazi/i, /\bhitler/i,
+    /\bscam/i, /\brug\s*pull/i,
+  ];
+
+  function isMessageClean(text: string): boolean {
+    if (!text) return true;
+    return !BLOCKED_PATTERNS.some(pattern => pattern.test(text));
+  }
+
+  app.post("/api/donate/moderate", async (req: Request, res: Response) => {
+    const { message, name } = req.body;
+    const issues: string[] = [];
+    if (name && !isMessageClean(name)) issues.push("name");
+    if (message && !isMessageClean(message)) issues.push("message");
+    return res.json({ clean: issues.length === 0, issues });
+  });
+
+  // --- Save completed donation with optional name/message ---
+  const saveDonationLimiter = new RateLimiter(10, 60_000);
+
+  app.post("/api/donate/complete", async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    if (!saveDonationLimiter.check(ip)) {
+      return res.status(429).json({ error: "Too many requests" });
+    }
+
+    const { payment_index, amount_sats, donor_name, message } = req.body;
+
+    if (!payment_index || typeof payment_index !== "string") {
+      return res.status(400).json({ error: "Missing payment index" });
+    }
+    if (!amount_sats || typeof amount_sats !== "number" || amount_sats < 1) {
+      return res.status(400).json({ error: "Invalid amount" });
+    }
+
+    const cleanName = (donor_name || "").trim().slice(0, 50) || "Anon";
+    const cleanMessage = (message || "").trim().slice(0, 280) || null;
+
+    // Verify content is clean
+    if (!isMessageClean(cleanName) || (cleanMessage && !isMessageClean(cleanMessage))) {
+      return res.status(400).json({ error: "Message contains inappropriate content" });
+    }
+
+    // Verify payment is actually paid before saving
+    try {
+      const lexeRes = await fetch(`http://localhost:5393/v2/node/payment?index=${encodeURIComponent(payment_index)}`, {
+        signal: AbortSignal.timeout(15000),
+      });
+      if (lexeRes.ok) {
+        const data = await lexeRes.json() as any;
+        const rawStatus = (data.status || "").toLowerCase();
+        if (!["completed", "paid", "settled", "succeeded"].includes(rawStatus)) {
+          return res.status(400).json({ error: "Payment not yet confirmed" });
+        }
+      } else {
+        return res.status(502).json({ error: "Could not verify payment" });
+      }
+    } catch {
+      return res.status(502).json({ error: "Could not verify payment" });
+    }
+
+    try {
+      const donation = await storage.createDonation(payment_index, amount_sats, cleanName, cleanMessage);
+      return res.json({ success: true, donation });
+    } catch (err: any) {
+      // Duplicate payment_index means already saved — that's fine
+      if (err.code === "23505") {
+        return res.json({ success: true, already_saved: true });
+      }
+      console.error("[donate] Error saving donation:", err.message);
+      return res.status(500).json({ error: "Failed to save donation" });
+    }
+  });
+
+  // --- Get donation wall ---
+  app.get("/api/donate/wall", async (_req: Request, res: Response) => {
+    try {
+      const donations = await storage.getRecentDonations(100);
+      return res.json({ donations });
+    } catch (err: any) {
+      console.error("[donate] Error fetching donation wall:", err.message);
+      return res.status(500).json({ error: "Failed to load donations" });
     }
   });
 
