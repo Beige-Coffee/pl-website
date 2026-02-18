@@ -255,7 +255,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const alreadyDone = await storage.hasCompletedCheckpoint(user.id, checkpointId);
       if (alreadyDone) {
-        return res.status(400).json({ error: "Checkpoint already completed", alreadyCompleted: true });
+        const existing = await storage.getWithdrawalsByUser(user.id);
+        const pending = existing.find(
+          (w: any) => w.status === "pending" || w.status === "created"
+        );
+        if (pending) {
+          await storage.updateWithdrawalStatus(pending.k1, "cancelled");
+        }
+
+        const k1 = generateK1();
+        await storage.createWithdrawal(k1, user.id, String(CHECKPOINT_REWARD_MSATS));
+        const withdrawUrl = `${getBaseUrl(req)}/api/lnurl/withdraw/${k1}`;
+        const lnurl = encodeLnurl(withdrawUrl);
+        return res.json({ k1, lnurl, amountSats: CHECKPOINT_REWARD_SATS, correct: true });
       }
 
       // Check node balance

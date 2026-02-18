@@ -30,13 +30,20 @@ export default function CheckpointQuestion({
 }: CheckpointQuestionProps) {
   const dark = theme === "dark";
 
-  const [selected, setSelected] = useState<number | null>(null);
+  const storageKey = `pl-checkpoint-${checkpointId}`;
+
+  const [selected, setSelected] = useState<number | null>(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved !== null) return JSON.parse(saved);
+    } catch {}
+    return null;
+  });
   const [submitted, setSubmitted] = useState(false);
   const [correct, setCorrect] = useState(false);
   const [wrongAttempt, setWrongAttempt] = useState(false);
   const [shaking, setShaking] = useState(false);
 
-  // Reward state
   const [claiming, setClaiming] = useState(false);
   const [claimError, setClaimError] = useState<string | null>(null);
   const [rewardK1, setRewardK1] = useState<string | null>(null);
@@ -46,7 +53,6 @@ export default function CheckpointQuestion({
   const [rewardCreatedAt, setRewardCreatedAt] = useState<number | null>(null);
   const [countdown, setCountdown] = useState(300);
 
-  // Poll withdrawal status
   useEffect(() => {
     if (!rewardK1 || withdrawalStatus === "paid" || withdrawalStatus === "expired" || withdrawalStatus === "failed") return;
     const interval = setInterval(async () => {
@@ -54,7 +60,10 @@ export default function CheckpointQuestion({
         const res = await fetch(`/api/lnurl/status/${rewardK1}`);
         const data = await res.json();
         setWithdrawalStatus(data.status);
-        if (data.status === "paid" || data.status === "expired" || data.status === "failed") {
+        if (data.status === "paid") {
+          onCompleted(checkpointId);
+          clearInterval(interval);
+        } else if (data.status === "expired" || data.status === "failed") {
           clearInterval(interval);
         }
       } catch {}
@@ -62,7 +71,6 @@ export default function CheckpointQuestion({
     return () => clearInterval(interval);
   }, [rewardK1, withdrawalStatus]);
 
-  // Countdown timer
   useEffect(() => {
     if (!rewardCreatedAt || withdrawalStatus === "paid" || withdrawalStatus === "expired" || withdrawalStatus === "failed") return;
     const interval = setInterval(() => {
@@ -98,7 +106,6 @@ export default function CheckpointQuestion({
       return;
     }
 
-    // Correct answer!
     setSubmitted(true);
     setCorrect(true);
     setWrongAttempt(false);
@@ -118,7 +125,14 @@ export default function CheckpointQuestion({
         },
         body: JSON.stringify({ checkpointId, answer: selected }),
       });
-      const data = await res.json();
+
+      let data: any;
+      try {
+        data = await res.json();
+      } catch {
+        setClaimError(`Server returned non-JSON response (status ${res.status})`);
+        return;
+      }
 
       if (res.ok && data.correct) {
         setRewardK1(data.k1);
@@ -127,7 +141,6 @@ export default function CheckpointQuestion({
         setRewardCreatedAt(Date.now());
         setWithdrawalStatus("pending");
         setCountdown(300);
-        onCompleted(checkpointId);
       } else if (data.alreadyCompleted) {
         onCompleted(checkpointId);
       } else {
@@ -147,7 +160,6 @@ export default function CheckpointQuestion({
     handleClaimReward();
   }, [handleClaimReward]);
 
-  // Styling
   const cardBg = dark ? "bg-[#0f1930]" : "bg-card";
   const cardBorder = dark ? "border-[#2a3552]" : "border-border";
   const textColor = dark ? "text-slate-100" : "text-foreground";
@@ -156,7 +168,6 @@ export default function CheckpointQuestion({
   const goldBorder = "border-[#FFD700]";
   const goldBg = "bg-[#FFD700]";
 
-  // Already completed state
   if (alreadyCompleted && !rewardLnurl) {
     return (
       <div className={`my-8 border-2 ${goldBorder} ${cardBg} p-5`}>
@@ -175,6 +186,9 @@ export default function CheckpointQuestion({
             <div className={`text-[15px] md:text-[17px] ${textMuted} leading-relaxed`}>{explanation}</div>
           </div>
         )}
+        <div className={`mt-4 font-pixel text-sm ${goldText}`}>
+          REWARD CLAIMED
+        </div>
       </div>
     );
   }
@@ -199,7 +213,6 @@ export default function CheckpointQuestion({
 
       <div className={`text-[17px] md:text-[19px] font-semibold ${textColor} mb-4`}>{question}</div>
 
-      {/* Options */}
       <div className="space-y-2 mb-4">
         {options.map((opt, i) => {
           const isSelected = selected === i;
@@ -228,6 +241,7 @@ export default function CheckpointQuestion({
               onClick={() => {
                 if (submitted) return;
                 setSelected(i);
+                try { localStorage.setItem(storageKey, JSON.stringify(i)); } catch {}
                 setWrongAttempt(false);
               }}
               disabled={submitted}
@@ -246,14 +260,12 @@ export default function CheckpointQuestion({
         })}
       </div>
 
-      {/* Wrong attempt feedback */}
       {wrongAttempt && !submitted && (
         <div className="font-pixel text-xs text-red-400 mb-3">
           INCORRECT - TRY AGAIN
         </div>
       )}
 
-      {/* Submit button */}
       {!submitted && (
         <button
           type="button"
@@ -271,7 +283,6 @@ export default function CheckpointQuestion({
         </button>
       )}
 
-      {/* Correct answer - explanation + claim */}
       {submitted && correct && (
         <div className="mt-4">
           <div className="font-pixel text-sm text-green-400 mb-2">CORRECT!</div>
@@ -283,7 +294,6 @@ export default function CheckpointQuestion({
             </div>
           )}
 
-          {/* Reward section */}
           {!rewardLnurl && !alreadyCompleted && (
             <div>
               <button
@@ -302,7 +312,6 @@ export default function CheckpointQuestion({
             </div>
           )}
 
-          {/* QR code display */}
           {rewardLnurl && (
             <div className="mt-4 text-center">
               {withdrawalStatus === "paid" ? (
@@ -353,6 +362,32 @@ export default function CheckpointQuestion({
                   </div>
                   <div className={`mt-1 font-mono text-sm ${countdown <= 60 ? "text-red-400" : textMuted}`}>
                     Expires in {formatCountdown(countdown)}
+                  </div>
+                  <div className={`mt-4 pt-4 border-t ${dark ? "border-[#1f2a44]" : "border-border"} text-left`}>
+                    <div className={`font-pixel text-xs mb-2 ${textMuted}`}>COMPATIBLE WALLETS (LNURL-WITHDRAW)</div>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1">
+                      {[
+                        { name: "Wallet of Satoshi", url: "https://walletofsatoshi.com" },
+                        { name: "Phoenix", url: "https://phoenix.acinq.co" },
+                        { name: "BlueWallet", url: "https://bluewallet.io" },
+                        { name: "Breez", url: "https://breez.technology" },
+                        { name: "Zeus", url: "https://zeusln.com" },
+                        { name: "Alby", url: "https://getalby.com" },
+                        { name: "ZEBEDEE", url: "https://zbd.gg" },
+                        { name: "Bitkit", url: "https://bitkit.to" },
+                        { name: "Muun", url: "https://muun.com" },
+                      ].map((w) => (
+                        <a
+                          key={w.name}
+                          href={w.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={`text-xs font-mono underline ${dark ? "text-slate-400 hover:text-slate-200" : "text-foreground/60 hover:text-foreground"}`}
+                        >
+                          {w.name}
+                        </a>
+                      ))}
+                    </div>
                   </div>
                 </div>
               )}
