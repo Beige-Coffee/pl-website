@@ -1016,6 +1016,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  const donationLimiter = new RateLimiter(10, 60_000);
+
+  app.post("/api/donate/create-invoice", async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    if (!donationLimiter.check(ip)) {
+      return res.status(429).json({ error: "Too many requests, please try again later" });
+    }
+
+    const { amount_sats } = req.body;
+    if (!amount_sats || typeof amount_sats !== "number" || amount_sats < 1 || amount_sats > 1000000 || !Number.isInteger(amount_sats)) {
+      return res.status(400).json({ error: "Invalid amount. Must be a whole number between 1 and 1,000,000 sats." });
+    }
+
+    try {
+      const lexeRes = await fetch("http://localhost:5393/v2/node/create_invoice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount_sat: String(amount_sats),
+          description: `Programming Lightning Donation: ${amount_sats} sats`,
+          expiration_secs: 600,
+        }),
+        signal: AbortSignal.timeout(15000),
+      });
+
+      if (!lexeRes.ok) {
+        const errText = await lexeRes.text();
+        console.error("[donate] Lexe create_invoice failed:", lexeRes.status, errText);
+        return res.status(502).json({ error: "Failed to create invoice. Please try again." });
+      }
+
+      const data = await lexeRes.json() as any;
+      if (!data.invoice || !data.index) {
+        console.error("[donate] Unexpected Lexe response:", JSON.stringify(data));
+        return res.status(502).json({ error: "Invalid response from Lightning node" });
+      }
+      return res.json({
+        invoice: data.invoice,
+        payment_index: data.index,
+        amount_sats,
+        expires_at: data.expires_at || null,
+      });
+    } catch (err: any) {
+      console.error("[donate] Error creating invoice:", err.message);
+      return res.status(500).json({ error: "Failed to create invoice. Lightning node may be unavailable." });
+    }
+  });
+
+  const checkPaymentLimiter = new RateLimiter(60, 60_000);
+
+  app.get("/api/donate/check-payment", async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    if (!checkPaymentLimiter.check(ip)) {
+      return res.status(429).json({ error: "Too many requests" });
+    }
+
+    const { index } = req.query;
+    if (!index || typeof index !== "string") {
+      return res.status(400).json({ error: "Missing payment index" });
+    }
+
+    try {
+      const lexeRes = await fetch(`http://localhost:5393/v2/node/payment?index=${encodeURIComponent(index)}`, {
+        signal: AbortSignal.timeout(15000),
+      });
+
+      if (!lexeRes.ok) {
+        return res.status(502).json({ error: "Failed to check payment status" });
+      }
+
+      const data = await lexeRes.json() as any;
+      const rawStatus = (data.status || "").toLowerCase();
+      const normalizedStatus = ["completed", "paid", "settled", "succeeded"].includes(rawStatus) ? "paid" : rawStatus;
+      return res.json({
+        status: normalizedStatus,
+        amount_sat: data.amount,
+        finalized_at: data.finalized_at,
+      });
+    } catch (err: any) {
+      console.error("[donate] Error checking payment:", err.message);
+      return res.status(500).json({ error: "Failed to check payment status" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

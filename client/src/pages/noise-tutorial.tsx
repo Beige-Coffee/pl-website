@@ -121,7 +121,7 @@ const CHECKPOINT_QUESTIONS: Record<string, {
 type Chapter = {
   id: string;
   title: string;
-  section: "Introduction" | "Foundations" | "The Handshake" | "Encrypted Messaging" | "Quiz";
+  section: "Introduction" | "Foundations" | "The Handshake" | "Encrypted Messaging" | "Quiz" | "Pay It Forward";
   kind: "intro" | "md";
   file?: string;
 };
@@ -203,6 +203,12 @@ const chapters: Chapter[] = [
     kind: "md",
     file: "/noise_tutorial/1.13-quiz.md",
   },
+  {
+    id: "pay-it-forward",
+    title: "Donate Sats",
+    section: "Pay It Forward",
+    kind: "md",
+  },
 ];
 
 const sectionOrder: Chapter["section"][] = [
@@ -211,6 +217,7 @@ const sectionOrder: Chapter["section"][] = [
   "The Handshake",
   "Encrypted Messaging",
   "Quiz",
+  "Pay It Forward",
 ];
 
 function idxOf(id: string) {
@@ -659,7 +666,9 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
             className="noise-article mx-auto w-full max-w-[1100px]"
             data-testid="container-article"
           >
-            {active.section === "Quiz" ? (
+            {active.section === "Pay It Forward" ? (
+              <PayItForward theme={theme} />
+            ) : active.section === "Quiz" ? (
               <InteractiveQuiz
                 theme={theme}
                 authenticated={authenticated}
@@ -982,6 +991,310 @@ function ImageBlock({
         </span>
       ) : null}
     </span>
+  );
+}
+
+function PayItForward({ theme }: { theme: "light" | "dark" }) {
+  const dark = theme === "dark";
+  const [amount, setAmount] = useState("");
+  const [customAmount, setCustomAmount] = useState("");
+  const [invoice, setInvoice] = useState<string | null>(null);
+  const [paymentIndex, setPaymentIndex] = useState<string | null>(null);
+  const [status, setStatus] = useState<"idle" | "creating" | "waiting" | "paid" | "error">("idle");
+  const [errorMsg, setErrorMsg] = useState("");
+  const [expiresAt, setExpiresAt] = useState<number | null>(null);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const expiryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const presetAmounts = [
+    { label: "21", value: 21, desc: "A classic" },
+    { label: "100", value: 100, desc: "Round number" },
+    { label: "1,000", value: 1000, desc: "Generous" },
+    { label: "2,100", value: 2100, desc: "21 × 100" },
+    { label: "10,000", value: 10000, desc: "Big impact" },
+    { label: "21,000", value: 21000, desc: "Legendary" },
+  ];
+
+  const goldText = dark ? "text-[#FFD700]" : "text-[#9a7200]";
+  const goldBorder = dark ? "border-[#FFD700]" : "border-[#b8860b]";
+  const cardBg = dark ? "bg-[#0f1930]" : "bg-card";
+  const cardBorder = dark ? "border-[#2a3552]" : "border-border";
+  const textColor = dark ? "text-slate-100" : "text-black";
+  const textMuted = dark ? "text-slate-400" : "text-black/70";
+  const greenText = dark ? "text-green-400" : "text-green-700";
+
+  useEffect(() => {
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+      if (expiryRef.current) clearTimeout(expiryRef.current);
+    };
+  }, []);
+
+  const createInvoice = useCallback(async (sats: number) => {
+    setStatus("creating");
+    setErrorMsg("");
+    setInvoice(null);
+    setPaymentIndex(null);
+
+    try {
+      const res = await fetch("/api/donate/create-invoice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount_sats: sats }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({ error: "Request failed" }));
+        throw new Error(data.error || "Failed to create invoice");
+      }
+
+      const data = await res.json();
+      setInvoice(data.invoice);
+      setPaymentIndex(data.payment_index);
+      setStatus("waiting");
+
+      const expiry = data.expires_at || (Date.now() + 600_000);
+      setExpiresAt(expiry);
+      if (expiryRef.current) clearTimeout(expiryRef.current);
+      const timeUntilExpiry = Math.max(0, expiry - Date.now());
+      expiryRef.current = setTimeout(() => {
+        setStatus("error");
+        setErrorMsg("Invoice expired. Please try again.");
+        if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; }
+      }, timeUntilExpiry);
+
+      if (pollingRef.current) clearInterval(pollingRef.current);
+      pollingRef.current = setInterval(async () => {
+        try {
+          const checkRes = await fetch(`/api/donate/check-payment?index=${encodeURIComponent(data.payment_index)}`);
+          if (checkRes.ok) {
+            const checkData = await checkRes.json();
+            if (checkData.status === "paid") {
+              setStatus("paid");
+              if (pollingRef.current) {
+                clearInterval(pollingRef.current);
+                pollingRef.current = null;
+              }
+              if (expiryRef.current) {
+                clearTimeout(expiryRef.current);
+                expiryRef.current = null;
+              }
+            }
+          }
+        } catch {}
+      }, 2000);
+    } catch (err: any) {
+      setStatus("error");
+      setErrorMsg(err.message || "Something went wrong");
+    }
+  }, []);
+
+  const handlePresetClick = useCallback((value: number) => {
+    setAmount(String(value));
+    setCustomAmount("");
+    createInvoice(value);
+  }, [createInvoice]);
+
+  const handleCustomSubmit = useCallback(() => {
+    const sats = parseInt(customAmount, 10);
+    if (!sats || sats < 1 || sats > 1000000) {
+      setErrorMsg("Enter a number between 1 and 1,000,000");
+      return;
+    }
+    setAmount(String(sats));
+    createInvoice(sats);
+  }, [customAmount, createInvoice]);
+
+  const resetDonation = useCallback(() => {
+    setStatus("idle");
+    setInvoice(null);
+    setPaymentIndex(null);
+    setAmount("");
+    setCustomAmount("");
+    setErrorMsg("");
+    setExpiresAt(null);
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+    if (expiryRef.current) {
+      clearTimeout(expiryRef.current);
+      expiryRef.current = null;
+    }
+  }, []);
+
+  return (
+    <div className="py-4" data-testid="container-pay-it-forward">
+      <h1 className={`font-pixel text-2xl md:text-3xl mb-2 ${dark ? "text-slate-100" : "text-black"}`}>
+        PAY IT FORWARD
+      </h1>
+      <div className={`h-[3px] ${dark ? "bg-[#FFD700]" : "bg-[#b8860b]"} mb-6`} />
+
+      <div className={`border-2 ${goldBorder} ${cardBg} p-6 md:p-8 mb-8`}>
+        <div className={`font-pixel text-xs ${goldText} mb-4 tracking-wider`}>SUPPORT THE MISSION</div>
+
+        <div className={`text-[17px] md:text-[19px] leading-relaxed ${textColor} mb-6`} style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
+          This tutorial is <span className={`font-semibold ${goldText}`}>100% free and open source</span>. No ads, no paywalls, no data collection.
+        </div>
+
+        <div className={`text-[15px] md:text-[17px] leading-relaxed ${textMuted} mb-6`} style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
+          Our goal is to create an immersive learning experience where you don't just <em>read</em> about Lightning — you <em>use</em> it.
+          Every checkpoint reward, every quiz payout, every sat earned in this course was a real Lightning transaction.
+          By donating, you directly fund that experience for the next wave of students.
+          More tutorials are coming, and your contribution helps make them just as hands-on.
+        </div>
+
+        <div className={`text-[15px] md:text-[17px] leading-relaxed ${textMuted}`} style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
+          Every sat counts. Thanks for paying it forward.
+        </div>
+      </div>
+
+      {status === "idle" && (
+        <>
+          <div className={`font-pixel text-sm ${goldText} mb-4 tracking-wider`}>CHOOSE AN AMOUNT (SATS)</div>
+
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
+            {presetAmounts.map((p) => (
+              <button
+                key={p.value}
+                type="button"
+                onClick={() => handlePresetClick(p.value)}
+                className={`border-2 ${goldBorder} ${cardBg} p-4 transition-all hover:scale-[1.02] active:scale-[0.98]`}
+                style={{ cursor: "pointer" }}
+                data-testid={`button-donate-${p.value}`}
+              >
+                <div className={`font-pixel text-lg ${goldText}`}>{p.label}</div>
+                <div className={`text-xs ${textMuted} mt-1`} style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>{p.desc}</div>
+              </button>
+            ))}
+          </div>
+
+          <div className={`border-2 ${cardBorder} ${cardBg} p-4`}>
+            <div className={`font-pixel text-xs ${textMuted} mb-3`}>CUSTOM AMOUNT</div>
+            <div className="flex gap-3">
+              <input
+                type="number"
+                min="1"
+                max="1000000"
+                placeholder="Enter sats..."
+                value={customAmount}
+                onChange={(e) => { setCustomAmount(e.target.value); setErrorMsg(""); }}
+                onKeyDown={(e) => { if (e.key === "Enter") handleCustomSubmit(); }}
+                className={`flex-1 border-2 ${goldBorder} ${dark ? "bg-[#0b1220] text-slate-100" : "bg-white text-black"} px-4 py-3 font-mono text-lg outline-none focus:ring-2 focus:ring-[#FFD700]/50`}
+                data-testid="input-custom-donate"
+              />
+              <button
+                type="button"
+                onClick={handleCustomSubmit}
+                className={`border-2 ${goldBorder} bg-[#FFD700] text-black font-pixel text-sm px-6 py-3 transition-all hover:brightness-110 active:scale-[0.98]`}
+                data-testid="button-donate-custom"
+              >
+                DONATE
+              </button>
+            </div>
+            {errorMsg && status === "idle" && (
+              <div className="text-red-500 font-mono text-sm mt-2">{errorMsg}</div>
+            )}
+          </div>
+        </>
+      )}
+
+      {status === "creating" && (
+        <div className={`border-2 ${goldBorder} ${cardBg} p-8 text-center`}>
+          <div className={`font-pixel text-sm ${goldText} mb-3 animate-pulse`}>CREATING INVOICE...</div>
+          <div className={`text-sm ${textMuted}`} style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
+            Generating a Lightning invoice for {Number(amount).toLocaleString()} sats
+          </div>
+        </div>
+      )}
+
+      {status === "waiting" && invoice && (
+        <div className={`border-2 ${goldBorder} ${cardBg} p-6 md:p-8`}>
+          <div className={`font-pixel text-sm ${goldText} mb-1 tracking-wider text-center`}>SCAN TO DONATE</div>
+          <div className={`font-pixel text-xs ${textMuted} mb-6 text-center`}>{Number(amount).toLocaleString()} SATS</div>
+
+          <div className="flex justify-center mb-6">
+            <div className={`border-4 ${goldBorder} p-3 ${dark ? "bg-white" : "bg-white"}`}>
+              <QRCodeSVG
+                value={invoice}
+                size={240}
+                bgColor="#ffffff"
+                fgColor="#000000"
+                level="M"
+              />
+            </div>
+          </div>
+
+          <div className={`border-2 ${cardBorder} ${dark ? "bg-[#0b1220]" : "bg-gray-50"} p-3 mb-4`}>
+            <div className={`font-pixel text-xs ${textMuted} mb-1`}>BOLT11 INVOICE</div>
+            <div
+              className={`font-mono text-xs ${textMuted} break-all cursor-pointer select-all leading-relaxed`}
+              onClick={() => { navigator.clipboard.writeText(invoice); }}
+              title="Click to copy"
+              data-testid="text-invoice"
+            >
+              {invoice}
+            </div>
+          </div>
+
+          <div className="flex gap-3 mb-4">
+            <button
+              type="button"
+              onClick={() => { navigator.clipboard.writeText(invoice); }}
+              className={`flex-1 border-2 ${goldBorder} bg-[#FFD700] text-black font-pixel text-sm px-4 py-3 transition-all hover:brightness-110 active:scale-[0.98]`}
+              data-testid="button-copy-invoice"
+            >
+              COPY INVOICE
+            </button>
+            <button
+              type="button"
+              onClick={resetDonation}
+              className={`border-2 ${cardBorder} ${cardBg} ${textColor} font-pixel text-sm px-4 py-3 transition-all hover:brightness-110`}
+              data-testid="button-cancel-donate"
+            >
+              CANCEL
+            </button>
+          </div>
+
+          <div className={`text-center font-pixel text-xs ${goldText} animate-pulse`}>
+            WAITING FOR PAYMENT...
+          </div>
+        </div>
+      )}
+
+      {status === "paid" && (
+        <div className={`border-2 ${goldBorder} ${cardBg} p-8 text-center`}>
+          <div className={`font-pixel text-2xl ${greenText} mb-3`}>PAYMENT RECEIVED!</div>
+          <div className={`font-pixel text-lg ${goldText} mb-4`}>{Number(amount).toLocaleString()} SATS</div>
+          <div className={`text-[17px] ${textColor} mb-6`} style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
+            Thank you for supporting open-source Bitcoin education. Your donation will fund hands-on Lightning experiences for future students.
+          </div>
+          <button
+            type="button"
+            onClick={resetDonation}
+            className={`border-2 ${goldBorder} bg-[#FFD700] text-black font-pixel text-sm px-6 py-3 transition-all hover:brightness-110 active:scale-[0.98]`}
+            data-testid="button-donate-again"
+          >
+            DONATE AGAIN
+          </button>
+        </div>
+      )}
+
+      {status === "error" && (
+        <div className={`border-2 border-red-500/50 ${cardBg} p-6 text-center`}>
+          <div className="font-pixel text-sm text-red-500 mb-3">ERROR</div>
+          <div className={`text-sm ${textMuted} mb-4`} style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>{errorMsg}</div>
+          <button
+            type="button"
+            onClick={resetDonation}
+            className={`border-2 ${goldBorder} ${cardBg} ${textColor} font-pixel text-sm px-6 py-3 transition-all hover:brightness-110`}
+            data-testid="button-retry-donate"
+          >
+            TRY AGAIN
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 

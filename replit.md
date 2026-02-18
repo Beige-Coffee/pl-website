@@ -6,6 +6,8 @@ Free, open-source educational website teaching Bitcoin Lightning Network through
 Created by Austin (Spiral and HRF grantee), inspired by Programming Bitcoin.
 
 ## Recent Changes
+- 2026-02-18: Added "Pay It Forward" donation page (below Quiz in sidebar)
+- 2026-02-18: Donation invoices via Lexe sidecar (POST /api/donate/create-invoice, GET /api/donate/check-payment)
 - 2026-02-16: Added Plausible Analytics for traffic/referrer tracking
 - 2026-02-16: Custom page_events tracking (page views, duration, user progress)
 - 2026-02-16: Admin analytics endpoint (GET /api/admin/analytics)
