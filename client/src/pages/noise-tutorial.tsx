@@ -1138,7 +1138,7 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
         </div>
 
         <div className={`text-[17px] md:text-[19px] leading-relaxed ${textColor}`} style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
-          Every sat counts. Thanks for paying it forward.
+          Every sat counts. Thanks for paying it forward!
         </div>
       </div>
 
@@ -1157,7 +1157,7 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
                 data-testid={`button-donate-${p.value}`}
               >
                 <div className={`font-pixel text-xl md:text-2xl ${goldText}`}>{p.label}</div>
-                <div className={`text-sm md:text-base ${textMuted} mt-1`} style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>{p.desc}</div>
+                <div className={`text-base md:text-lg ${textMuted} mt-1`} style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>{p.desc}</div>
               </button>
             ))}
           </div>
