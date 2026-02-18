@@ -258,6 +258,26 @@ export class DatabaseStorage implements IStorage {
     const [result] = await db.select({ total: count(pageEvents.id) }).from(pageEvents);
     return Number(result.total);
   }
+
+  async getAllUsers(): Promise<Omit<User, "passwordHash">[]> {
+    const rows = await db.select({
+      id: users.id,
+      pubkey: users.pubkey,
+      email: users.email,
+      displayName: users.displayName,
+      rewardClaimed: users.rewardClaimed,
+    }).from(users);
+    return rows as Omit<User, "passwordHash">[];
+  }
+
+  async getUserCount(): Promise<number> {
+    const [result] = await db.select({ total: count(users.id) }).from(users);
+    return Number(result.total);
+  }
+
+  async getAllCheckpointCompletions(): Promise<CheckpointCompletion[]> {
+    return db.select().from(checkpointCompletions).orderBy(desc(checkpointCompletions.createdAt));
+  }
 }
 
 export const storage = new DatabaseStorage();

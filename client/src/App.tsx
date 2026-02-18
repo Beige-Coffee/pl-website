@@ -9,6 +9,7 @@ import Home from "@/pages/home";
 import About from "@/pages/about";
 import Blog from "@/pages/blog";
 import NoiseTutorialPage from "@/pages/noise-tutorial";
+import AdminPage from "@/pages/admin";
 
 function Router() {
   usePageTracking();
@@ -19,6 +20,7 @@ function Router() {
       <Route path="/blog" component={Blog} />
       <Route path="/noise-tutorial" component={NoiseTutorialPage} />
       <Route path="/noise-tutorial/:chapterId" component={NoiseTutorialPage} />
+      <Route path="/admin" component={AdminPage} />
       <Route component={NotFound} />
     </Switch>
   );

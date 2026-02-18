@@ -723,6 +723,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/admin/dashboard", async (req: Request, res: Response) => {
+    try {
+      // TODO: re-enable password auth
+      // const { password } = req.query as Record<string, string>;
+      // const adminPw = process.env.ADMIN_PASSWORD;
+      // if (!adminPw || !password || password !== adminPw) {
+      //   return res.status(401).json({ error: "Unauthorized" });
+      // }
+
+      let recentWithdrawals: Awaited<ReturnType<typeof storage.getRecentWithdrawals>> = [];
+      let users: Awaited<ReturnType<typeof storage.getAllUsers>> = [];
+      let userCount = 0;
+      let checkpointCompletions: Awaited<ReturnType<typeof storage.getAllCheckpointCompletions>> = [];
+      let pageStats: Awaited<ReturnType<typeof storage.getPageViewStats>> = [];
+      let totalViews = 0;
+      let recentEvents: Awaited<ReturnType<typeof storage.getRecentPageEvents>> = [];
+
+      try {
+        [recentWithdrawals, users, userCount, checkpointCompletions, pageStats, totalViews, recentEvents] =
+          await Promise.all([
+            storage.getRecentWithdrawals(100),
+            storage.getAllUsers(),
+            storage.getUserCount(),
+            storage.getAllCheckpointCompletions(),
+            storage.getPageViewStats(),
+            storage.getTotalPageViews(),
+            storage.getRecentPageEvents(100),
+          ]);
+      } catch (dbErr) {
+        console.error("Admin dashboard DB error (continuing with empty data):", dbErr);
+      }
+
+      let nodeBalance: Record<string, unknown> = {};
+      try {
+        const nodeRes = await fetch("http://localhost:5393/v2/node/node_info", {
+          signal: AbortSignal.timeout(20000),
+        });
+        if (nodeRes.ok) {
+          nodeBalance = await nodeRes.json() as Record<string, unknown>;
+        }
+      } catch {}
+
+      const paidWithdrawals = recentWithdrawals.filter((w) => w.status === "paid");
+      const totalSatsPaid = paidWithdrawals.reduce(
+        (sum, w) => sum + Math.floor(parseInt(w.amountMsats, 10) / 1000),
+        0
+      );
+      const pendingCount = recentWithdrawals.filter((w) => w.status === "pending" || w.status === "claimed").length;
+
+      return res.json({
+        nodeBalance,
+        totalSatsPaid,
+        pendingCount,
+        recentWithdrawals,
+        users,
+        userCount,
+        checkpointCompletions,
+        totalViews,
+        pageStats,
+        recentEvents,
+      });
+    } catch (err) {
+      console.error("Admin dashboard error:", err);
+      return res.status(500).json({ error: "Failed to load dashboard" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
