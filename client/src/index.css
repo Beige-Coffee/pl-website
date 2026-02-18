@@ -380,6 +380,15 @@
 
   .noise-md :not(pre) > code {
     font-family: inherit;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    padding: 2px 5px;
+  }
+
+  .noise-md.noise-md-light :not(pre) > code {
+    background: rgba(0, 0, 0, 0.03);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    color: #1a1a1a;
   }
 
   .blog-attention::before {
