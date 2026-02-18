@@ -386,7 +386,8 @@ export default function CheckpointQuestion({
                   <button
                     type="button"
                     onClick={() => handleClaimReward("address")}
-                    className={`font-pixel text-sm border-2 px-5 py-3 transition-all ${goldBorder} ${goldBg} text-black hover:bg-[#FFC800] active:scale-95 flex-1`}
+                    className={`font-pixel text-sm border-2 px-5 py-3 transition-all ${goldBorder} ${goldBg} hover:bg-[#FFC800] active:scale-95 flex-1`}
+                    style={{ color: "#000" }}
                   >
                     LIGHTNING ADDRESS
                   </button>
@@ -399,7 +400,8 @@ export default function CheckpointQuestion({
                 <button
                   type="button"
                   onClick={() => handleClaimReward("lnurl")}
-                  className={`font-pixel text-sm border-2 px-5 py-3 transition-all ${goldBorder} text-black hover:bg-[#FFC800] active:scale-95 flex-1 ${dark ? "bg-transparent text-[#FFD700] hover:text-black" : "bg-transparent text-[#b8860b] hover:text-black"}`}
+                  className={`font-pixel text-sm border-2 px-5 py-3 transition-all ${goldBorder} hover:bg-[#FFC800] active:scale-95 flex-1 bg-transparent`}
+                  style={{ color: dark ? "#FFD700" : "#b8860b" }}
                 >
                   LNURL WITHDRAWAL
                 </button>
