@@ -64,21 +64,23 @@ function truncate(str: string | null, len: number): string {
 
 export default function AdminPage() {
   const [password, setPassword] = useState("");
-  const [authed, setAuthed] = useState(true);
+  const [authed, setAuthed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<DashboardData | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const [storedPassword, setStoredPassword] = useState("");
 
-  const fetchDashboard = useCallback(async (_pw?: string) => {
+  const fetchDashboard = useCallback(async (pw: string) => {
+    if (!pw) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/admin/dashboard");
+      const res = await fetch(`/api/admin/dashboard?password=${encodeURIComponent(pw)}`);
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         setError(body.error || "Failed to load dashboard");
+        setAuthed(false);
         return;
       }
       const json = await res.json();
@@ -97,12 +99,8 @@ export default function AdminPage() {
     fetchDashboard(password);
   };
 
-  useEffect(() => {
-    fetchDashboard();
-  }, [fetchDashboard]);
-
   const refresh = () => {
-    fetchDashboard();
+    fetchDashboard(storedPassword);
   };
 
   // Styles

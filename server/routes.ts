@@ -725,12 +725,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/admin/dashboard", async (req: Request, res: Response) => {
     try {
-      // TODO: re-enable password auth
-      // const { password } = req.query as Record<string, string>;
-      // const adminPw = process.env.ADMIN_PASSWORD;
-      // if (!adminPw || !password || password !== adminPw) {
-      //   return res.status(401).json({ error: "Unauthorized" });
-      // }
+      const { password } = req.query as Record<string, string>;
+      const adminPw = process.env.ADMIN_PASSWORD;
+      if (!adminPw || !password || password !== adminPw) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
 
       let recentWithdrawals: Awaited<ReturnType<typeof storage.getRecentWithdrawals>> = [];
       let users: Awaited<ReturnType<typeof storage.getAllUsers>> = [];
