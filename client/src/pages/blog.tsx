@@ -73,6 +73,7 @@ function ProfileDropdown({
     <div
       ref={dropdownRef}
       className="absolute right-0 top-full mt-2 w-[420px] border-4 z-50 border-border bg-card pixel-shadow"
+      style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}
       data-testid="container-profile-dropdown"
     >
       <div className="px-5 py-5 border-b-2 border-border">

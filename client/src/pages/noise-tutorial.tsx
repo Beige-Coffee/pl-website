@@ -299,6 +299,7 @@ function ProfileDropdown({
       className={`absolute right-0 top-full mt-2 w-[420px] border-4 z-50 ${
         dark ? "border-[#2a3552] bg-[#0f1930]" : "border-border bg-card"
       }`}
+      style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}
       data-testid="container-profile-dropdown"
     >
       <div className={`px-5 py-5 border-b-2 ${dark ? "border-[#1f2a44]" : "border-border"}`}>
