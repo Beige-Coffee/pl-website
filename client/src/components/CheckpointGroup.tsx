@@ -64,7 +64,10 @@ export default function CheckpointGroup({
         const res = await fetch(`/api/lnurl/status/${rewardK1}`);
         const data = await res.json();
         setWithdrawalStatus(data.status);
-        if (data.status === "paid" || data.status === "expired" || data.status === "failed") {
+        if (data.status === "paid") {
+          onCompleted(groupId);
+          clearInterval(interval);
+        } else if (data.status === "expired" || data.status === "failed") {
           clearInterval(interval);
         }
       } catch {}
@@ -159,7 +162,6 @@ export default function CheckpointGroup({
         setRewardCreatedAt(Date.now());
         setWithdrawalStatus("pending");
         setCountdown(300);
-        onCompleted(groupId);
       } else if (data.alreadyCompleted) {
         onCompleted(groupId);
       } else {

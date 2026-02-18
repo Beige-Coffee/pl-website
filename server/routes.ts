@@ -323,7 +323,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check if already completed
       const already = await storage.hasCompletedCheckpoint(user.id, groupId);
       if (already) {
-        return res.json({ alreadyCompleted: true });
+        // Check if they were actually paid — if not, issue a new withdrawal
+        const withdrawals = await storage.getWithdrawalsByUserId(user.id);
+        const paidForGroup = withdrawals.some(
+          (w) => w.status === "paid" && w.amountMsats === String(group.rewardSats * 1000)
+        );
+        if (paidForGroup) {
+          return res.json({ alreadyCompleted: true });
+        }
+        // Cancel any pending/expired withdrawals and issue a fresh one
+        await storage.cancelPendingWithdrawals(user.id);
+        const k1 = generateK1();
+        const rewardMsats = group.rewardSats * 1000;
+        await storage.createWithdrawal(k1, user.id, String(rewardMsats));
+        const withdrawUrl = `${getBaseUrl(req)}/api/lnurl/withdraw/${k1}`;
+        const lnurl = encodeLnurl(withdrawUrl);
+        return res.json({ k1, lnurl, amountSats: group.rewardSats, correct: true });
       }
 
       // Validate all answers
