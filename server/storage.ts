@@ -23,7 +23,7 @@ export interface IStorage {
   createChallenge(k1: string): Promise<LnAuthChallenge>;
   getChallenge(k1: string): Promise<LnAuthChallenge | undefined>;
   completeChallenge(k1: string, pubkey: string, sessionToken: string): Promise<void>;
-  createWithdrawal(k1: string, userId: string, amountMsats: string): Promise<LnurlWithdrawal>;
+  createWithdrawal(k1: string, userId: string, amountMsats: string, checkpointId?: string): Promise<LnurlWithdrawal>;
   getWithdrawalByK1(k1: string): Promise<LnurlWithdrawal | undefined>;
   markWithdrawalClaimed(k1: string, bolt11Invoice: string): Promise<void>;
   markWithdrawalPaid(k1: string, paymentIndex: string): Promise<void>;
@@ -35,6 +35,8 @@ export interface IStorage {
   hasCompletedCheckpoint(userId: string, checkpointId: string): Promise<boolean>;
   markCheckpointCompleted(userId: string, checkpointId: string): Promise<void>;
   getCompletedCheckpoints(userId: string): Promise<string[]>;
+  getPaidWithdrawalForCheckpoint(userId: string, checkpointId: string): Promise<LnurlWithdrawal | undefined>;
+  cancelPendingWithdrawalsForCheckpoint(userId: string, checkpointId: string): Promise<void>;
   createPageEvent(event: InsertPageEvent): Promise<PageEvent>;
   getPageEventById(id: number): Promise<PageEvent | undefined>;
   updatePageEventDuration(id: number, duration: number): Promise<void>;
@@ -116,8 +118,10 @@ export class DatabaseStorage implements IStorage {
       .where(eq(lnAuthChallenges.k1, k1));
   }
 
-  async createWithdrawal(k1: string, userId: string, amountMsats: string): Promise<LnurlWithdrawal> {
-    const [withdrawal] = await db.insert(lnurlWithdrawals).values({ k1, userId, amountMsats }).returning();
+  async createWithdrawal(k1: string, userId: string, amountMsats: string, checkpointId?: string): Promise<LnurlWithdrawal> {
+    const values: any = { k1, userId, amountMsats };
+    if (checkpointId) values.checkpointId = checkpointId;
+    const [withdrawal] = await db.insert(lnurlWithdrawals).values(values).returning();
     return withdrawal;
   }
 
@@ -187,10 +191,40 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getCompletedCheckpoints(userId: string): Promise<string[]> {
-    const rows = await db.select({ checkpointId: checkpointCompletions.checkpointId })
-      .from(checkpointCompletions)
-      .where(eq(checkpointCompletions.userId, userId));
-    return rows.map(r => r.checkpointId);
+    const rows = await db.select({ checkpointId: lnurlWithdrawals.checkpointId })
+      .from(lnurlWithdrawals)
+      .where(
+        and(
+          eq(lnurlWithdrawals.userId, userId),
+          eq(lnurlWithdrawals.status, "paid"),
+          sql`${lnurlWithdrawals.checkpointId} IS NOT NULL`
+        )
+      );
+    return rows.map(r => r.checkpointId).filter((id): id is string => id !== null);
+  }
+
+  async getPaidWithdrawalForCheckpoint(userId: string, checkpointId: string): Promise<LnurlWithdrawal | undefined> {
+    const [row] = await db.select().from(lnurlWithdrawals)
+      .where(
+        and(
+          eq(lnurlWithdrawals.userId, userId),
+          eq(lnurlWithdrawals.checkpointId, checkpointId),
+          eq(lnurlWithdrawals.status, "paid")
+        )
+      );
+    return row;
+  }
+
+  async cancelPendingWithdrawalsForCheckpoint(userId: string, checkpointId: string): Promise<void> {
+    await db.update(lnurlWithdrawals)
+      .set({ status: "expired" })
+      .where(
+        and(
+          eq(lnurlWithdrawals.userId, userId),
+          eq(lnurlWithdrawals.checkpointId, checkpointId),
+          inArray(lnurlWithdrawals.status, ["pending", "claimed"])
+        )
+      );
   }
 
   async createPageEvent(event: InsertPageEvent): Promise<PageEvent> {

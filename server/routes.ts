@@ -253,22 +253,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Incorrect answer", correct: false });
       }
 
-      const alreadyDone = await storage.hasCompletedCheckpoint(user.id, checkpointId);
-      if (alreadyDone) {
-        const existing = await storage.getWithdrawalsByUser(user.id);
-        const pending = existing.find(
-          (w: any) => w.status === "pending" || w.status === "created"
-        );
-        if (pending) {
-          await storage.updateWithdrawalStatus(pending.k1, "cancelled");
-        }
-
-        const k1 = generateK1();
-        await storage.createWithdrawal(k1, user.id, String(CHECKPOINT_REWARD_MSATS));
-        const withdrawUrl = `${getBaseUrl(req)}/api/lnurl/withdraw/${k1}`;
-        const lnurl = encodeLnurl(withdrawUrl);
-        return res.json({ k1, lnurl, amountSats: CHECKPOINT_REWARD_SATS, correct: true });
+      const paidWithdrawal = await storage.getPaidWithdrawalForCheckpoint(user.id, checkpointId);
+      if (paidWithdrawal) {
+        return res.status(400).json({ error: "Reward already claimed", alreadyCompleted: true });
       }
+
+      // Cancel any pending/created withdrawals for this checkpoint
+      await storage.cancelPendingWithdrawalsForCheckpoint(user.id, checkpointId);
 
       // Check node balance
       try {
@@ -284,10 +275,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       } catch {}
 
-      await storage.markCheckpointCompleted(user.id, checkpointId);
-
       const k1 = generateK1();
-      await storage.createWithdrawal(k1, user.id, String(CHECKPOINT_REWARD_MSATS));
+      await storage.createWithdrawal(k1, user.id, String(CHECKPOINT_REWARD_MSATS), checkpointId);
 
       const withdrawUrl = `${getBaseUrl(req)}/api/lnurl/withdraw/${k1}`;
       const lnurl = encodeLnurl(withdrawUrl);
@@ -332,25 +321,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Unknown checkpoint group" });
       }
 
-      // Check if already completed
-      const already = await storage.hasCompletedCheckpoint(user.id, groupId);
-      if (already) {
-        // Check if they were actually paid — if not, issue a new withdrawal
-        const withdrawals = await storage.getWithdrawalsByUserId(user.id);
-        const paidForGroup = withdrawals.some(
-          (w) => w.status === "paid" && w.amountMsats === String(group.rewardSats * 1000)
-        );
-        if (paidForGroup) {
-          return res.json({ alreadyCompleted: true });
-        }
-        // Cancel any pending/expired withdrawals and issue a fresh one
-        await storage.cancelPendingWithdrawals(user.id);
-        const k1 = generateK1();
-        const rewardMsats = group.rewardSats * 1000;
-        await storage.createWithdrawal(k1, user.id, String(rewardMsats));
-        const withdrawUrl = `${getBaseUrl(req)}/api/lnurl/withdraw/${k1}`;
-        const lnurl = encodeLnurl(withdrawUrl);
-        return res.json({ k1, lnurl, amountSats: group.rewardSats, correct: true });
+      // Check if already paid for this group
+      const paidWithdrawal = await storage.getPaidWithdrawalForCheckpoint(user.id, groupId);
+      if (paidWithdrawal) {
+        return res.json({ alreadyCompleted: true });
       }
 
       // Validate all answers
@@ -362,7 +336,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // All correct! Check balance before creating withdrawal
+      // Cancel any pending withdrawals for this checkpoint before issuing new one
+      await storage.cancelPendingWithdrawalsForCheckpoint(user.id, groupId);
+
+      // Check balance before creating withdrawal
       const rewardMsats = group.rewardSats * 1000;
       try {
         const nodeRes = await fetch("http://localhost:5393/v2/node/node_info", {
@@ -377,10 +354,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       } catch {}
 
-      await storage.markCheckpointCompleted(user.id, groupId);
-
       const k1 = generateK1();
-      await storage.createWithdrawal(k1, user.id, String(rewardMsats));
+      await storage.createWithdrawal(k1, user.id, String(rewardMsats), groupId);
 
       const withdrawUrl = `${getBaseUrl(req)}/api/lnurl/withdraw/${k1}`;
       const lnurl = encodeLnurl(withdrawUrl);
@@ -455,10 +430,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       (async () => {
         try {
-          if (withdrawal.userId) {
+          const isQuizReward = !withdrawal.checkpointId;
+          if (isQuizReward && withdrawal.userId) {
             const freshUser = await storage.getUser(withdrawal.userId);
             if (freshUser?.rewardClaimed) {
               await storage.markWithdrawalFailed(k1, "Reward already claimed by user");
+              return;
+            }
+          }
+          if (withdrawal.checkpointId && withdrawal.userId) {
+            const alreadyPaid = await storage.getPaidWithdrawalForCheckpoint(withdrawal.userId, withdrawal.checkpointId);
+            if (alreadyPaid) {
+              await storage.markWithdrawalFailed(k1, "Checkpoint reward already paid");
               return;
             }
           }
@@ -471,8 +454,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (payRes.ok) {
             const payData = await payRes.json() as { index: string };
             await storage.markWithdrawalPaid(k1, payData.index);
-            if (withdrawal.userId) {
+            if (isQuizReward && withdrawal.userId) {
               await storage.setRewardClaimed(withdrawal.userId);
+            }
+            if (withdrawal.checkpointId && withdrawal.userId) {
+              await storage.markCheckpointCompleted(withdrawal.userId, withdrawal.checkpointId);
             }
           } else {
             const errData = await payRes.json().catch(() => ({ msg: "Unknown error" })) as { msg?: string };

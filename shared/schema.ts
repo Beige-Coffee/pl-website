@@ -35,6 +35,7 @@ export const lnurlWithdrawals = pgTable("lnurl_withdrawals", {
   bolt11Invoice: text("bolt11_invoice"),
   paymentIndex: text("payment_index"),
   errorReason: text("error_reason"),
+  checkpointId: text("checkpoint_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   claimedAt: timestamp("claimed_at"),
   paidAt: timestamp("paid_at"),
