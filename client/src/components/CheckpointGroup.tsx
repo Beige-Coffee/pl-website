@@ -51,7 +51,6 @@ export default function CheckpointGroup({
   const [shaking, setShaking] = useState(false);
   const [wrongIds, setWrongIds] = useState<Set<string>>(new Set());
 
-  // Reward state
   const [claiming, setClaiming] = useState(false);
   const [claimError, setClaimError] = useState<string | null>(null);
   const [rewardK1, setRewardK1] = useState<string | null>(null);
@@ -61,6 +60,7 @@ export default function CheckpointGroup({
   const [countdown, setCountdown] = useState(300);
   const [autoPaid, setAutoPaid] = useState(false);
   const [autoPaySending, setAutoPaySending] = useState(false);
+  const [showClaimChoice, setShowClaimChoice] = useState(false);
 
   // Poll withdrawal status
   useEffect(() => {
@@ -131,12 +131,13 @@ export default function CheckpointGroup({
     setWrongIds(new Set());
   }, [allAnswered, authenticated, onLoginRequest, questions, selections]);
 
-  const handleClaimReward = useCallback(async () => {
+  const handleClaimReward = useCallback(async (claimMethod?: "address" | "lnurl") => {
     if (!sessionToken) return;
     setClaiming(true);
     setClaimError(null);
+    setShowClaimChoice(false);
 
-    if (lightningAddress) {
+    if (claimMethod !== "lnurl" && lightningAddress) {
       setAutoPaySending(true);
     }
 
@@ -150,6 +151,7 @@ export default function CheckpointGroup({
         body: JSON.stringify({
           groupId,
           answers: Object.fromEntries(questions.map((q) => [q.id, selections[q.id]])),
+          method: claimMethod === "lnurl" ? "lnurl" : undefined,
         }),
       });
 
@@ -201,7 +203,7 @@ export default function CheckpointGroup({
     setRewardK1(null);
     setRewardLnurl(null);
     setWithdrawalStatus("pending");
-    handleClaimReward();
+    handleClaimReward("lnurl");
   }, [handleClaimReward]);
 
   // Styling
@@ -393,22 +395,56 @@ export default function CheckpointGroup({
             </div>
           )}
 
-          {/* Reward section */}
-          {!rewardLnurl && !alreadyCompleted && !autoPaid && !autoPaySending && (
+          {!rewardLnurl && !alreadyCompleted && !autoPaid && !autoPaySending && !claiming && !showClaimChoice && (
             <div>
               <button
                 type="button"
-                onClick={handleClaimReward}
-                disabled={claiming}
-                className={`font-pixel text-sm border-2 px-6 py-3 transition-all ${goldBorder} ${goldBg} text-black hover:bg-[#FFC800] active:scale-95 ${
-                  claiming ? "opacity-60 cursor-wait" : ""
-                }`}
+                onClick={() => setShowClaimChoice(true)}
+                className={`font-pixel text-sm border-2 px-6 py-3 transition-all ${goldBorder} ${goldBg} text-black hover:bg-[#FFC800] active:scale-95`}
               >
-                {claiming ? (lightningAddress ? "SENDING SATS..." : "GENERATING QR...") : `CLAIM ${rewardSats} SATS`}
+                CLAIM {rewardSats} SATS
               </button>
               {claimError && (
                 <div className="mt-2 font-pixel text-xs text-red-400">{claimError}</div>
               )}
+            </div>
+          )}
+
+          {showClaimChoice && !claiming && (
+            <div className={`border-2 ${dark ? "border-[#2a3552] bg-[#0b1220]" : "border-border bg-background"} p-4`}>
+              <div className={`font-pixel text-xs mb-4 ${goldText}`}>HOW WOULD YOU LIKE TO RECEIVE?</div>
+              <div className="flex flex-col sm:flex-row gap-3">
+                {lightningAddress ? (
+                  <button
+                    type="button"
+                    onClick={() => handleClaimReward("address")}
+                    className={`font-pixel text-sm border-2 px-5 py-3 transition-all ${goldBorder} ${goldBg} text-black hover:bg-[#FFC800] active:scale-95 flex-1`}
+                  >
+                    LIGHTNING ADDRESS
+                  </button>
+                ) : (
+                  <div className={`flex-1 border-2 px-5 py-3 ${dark ? "border-[#2a3552]" : "border-border"} opacity-50`}>
+                    <div className="font-pixel text-sm text-center mb-1" style={{ color: dark ? "#94a3b8" : undefined }}>LIGHTNING ADDRESS</div>
+                    <div className={`text-xs text-center ${textMuted}`}>Set address in profile first</div>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => handleClaimReward("lnurl")}
+                  className={`font-pixel text-sm border-2 px-5 py-3 transition-all ${goldBorder} text-black hover:bg-[#FFC800] active:scale-95 flex-1 ${dark ? "bg-transparent text-[#FFD700] hover:text-black" : "bg-transparent text-[#b8860b] hover:text-black"}`}
+                >
+                  LNURL WITHDRAWAL
+                </button>
+              </div>
+              {claimError && (
+                <div className="mt-3 font-pixel text-xs text-red-400">{claimError}</div>
+              )}
+            </div>
+          )}
+
+          {claiming && (
+            <div className={`font-pixel text-sm ${goldText}`}>
+              {autoPaySending ? `SENDING ${rewardSats} SATS...` : "GENERATING QR..."}
             </div>
           )}
 

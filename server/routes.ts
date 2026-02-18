@@ -412,7 +412,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const { checkpointId, answer } = req.body;
+      const { checkpointId, answer, method } = req.body;
       if (!checkpointId || typeof checkpointId !== "string" || typeof answer !== "number") {
         return res.status(400).json({ error: "Invalid request" });
       }
@@ -431,10 +431,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Reward already claimed", alreadyCompleted: true });
       }
 
-      // Cancel any pending/created withdrawals for this checkpoint
       await storage.cancelPendingWithdrawalsForCheckpoint(user.id, checkpointId);
 
-      // Check node balance
       try {
         const nodeRes = await fetch("http://localhost:5393/v2/node/node_info", {
           signal: AbortSignal.timeout(20000),
@@ -451,8 +449,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const k1 = generateK1();
       await storage.createWithdrawal(k1, user.id, String(CHECKPOINT_REWARD_MSATS), checkpointId);
 
-      // Try auto-pay if user has a lightning address
-      if (user.lightningAddress) {
+      if (method !== "lnurl" && user.lightningAddress) {
         const result = await autoPayLightningAddress(user.lightningAddress, CHECKPOINT_REWARD_MSATS);
         if (result.success) {
           await storage.markWithdrawalClaimed(k1, result.invoice || "");
@@ -500,7 +497,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const { groupId, answers } = req.body;
+      const { groupId, answers, method } = req.body;
       if (!groupId || typeof groupId !== "string" || !answers || typeof answers !== "object") {
         return res.status(400).json({ error: "Invalid request" });
       }
@@ -510,13 +507,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Unknown checkpoint group" });
       }
 
-      // Check if already paid for this group
       const paidWithdrawal = await storage.getPaidWithdrawalForCheckpoint(user.id, groupId);
       if (paidWithdrawal) {
         return res.json({ alreadyCompleted: true });
       }
 
-      // Validate all answers
       for (const qid of group.questionIds) {
         const submitted = answers[qid];
         const correct = CHECKPOINT_ANSWER_KEY[qid];
@@ -525,10 +520,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Cancel any pending withdrawals for this checkpoint before issuing new one
       await storage.cancelPendingWithdrawalsForCheckpoint(user.id, groupId);
 
-      // Check balance before creating withdrawal
       const rewardMsats = group.rewardSats * 1000;
       try {
         const nodeRes = await fetch("http://localhost:5393/v2/node/node_info", {
@@ -546,8 +539,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const k1 = generateK1();
       await storage.createWithdrawal(k1, user.id, String(rewardMsats), groupId);
 
-      // Try auto-pay if user has a lightning address
-      if (user.lightningAddress) {
+      if (method !== "lnurl" && user.lightningAddress) {
         const result = await autoPayLightningAddress(user.lightningAddress, rewardMsats);
         if (result.success) {
           await storage.markWithdrawalClaimed(k1, result.invoice || "");
