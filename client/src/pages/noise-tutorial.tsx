@@ -1210,7 +1210,7 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
           <div className="flex justify-center mb-6">
             <div className={`border-4 ${goldBorder} p-3 ${dark ? "bg-white" : "bg-white"}`}>
               <QRCodeSVG
-                value={invoice}
+                value={`lightning:${invoice}`}
                 size={240}
                 bgColor="#ffffff"
                 fgColor="#000000"
