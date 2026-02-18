@@ -296,26 +296,26 @@ function ProfileDropdown({
   return (
     <div
       ref={dropdownRef}
-      className={`absolute right-0 top-full mt-2 w-80 border-2 z-50 ${
+      className={`absolute right-0 top-full mt-2 w-96 border-4 z-50 ${
         dark ? "border-[#2a3552] bg-[#0f1930]" : "border-border bg-card"
       }`}
       data-testid="container-profile-dropdown"
     >
-      <div className={`px-4 py-3 border-b ${dark ? "border-[#1f2a44]" : "border-border"}`}>
-        <div className={`font-pixel text-xs mb-1 ${dark ? "text-slate-400" : "text-foreground/60"}`}>
+      <div className={`px-5 py-4 border-b-2 ${dark ? "border-[#1f2a44]" : "border-border"}`}>
+        <div className={`font-pixel text-sm mb-1 ${dark ? "text-slate-400" : "text-foreground/60"}`}>
           LOGGED IN AS
         </div>
-        <div className={`font-mono text-sm truncate ${dark ? "text-slate-200" : "text-foreground"}`}>
+        <div className={`font-mono text-lg truncate ${dark ? "text-slate-200" : "text-foreground"}`}>
           {identity}
         </div>
       </div>
 
-      <div className={`px-4 py-3 border-b ${dark ? "border-[#1f2a44]" : "border-border"}`}>
-        <div className={`font-pixel text-xs mb-2 ${dark ? "text-[#FFD700]" : "text-[#b8860b]"}`}>
+      <div className={`px-5 py-4 border-b-2 ${dark ? "border-[#1f2a44]" : "border-border"}`}>
+        <div className={`font-pixel text-sm mb-3 ${dark ? "text-[#FFD700]" : "text-[#b8860b]"}`}>
           LIGHTNING ADDRESS
         </div>
         {lightningAddress && !saveSuccess && (
-          <div className={`font-mono text-xs mb-2 truncate ${dark ? "text-slate-300" : "text-foreground/70"}`}>
+          <div className={`font-mono text-base mb-3 truncate ${dark ? "text-slate-300" : "text-foreground/70"}`}>
             Current: {lightningAddress}
           </div>
         )}
@@ -328,7 +328,7 @@ function ProfileDropdown({
             setSaveSuccess(false);
           }}
           placeholder="you@wallet.com"
-          className={`w-full px-3 py-2 font-mono text-sm border-2 outline-none transition-colors ${
+          className={`w-full px-4 py-3 font-mono text-lg border-4 outline-none transition-colors ${
             dark
               ? "border-[#2a3552] bg-[#0b1220] text-slate-200 placeholder:text-slate-600 focus:border-[#FFD700]"
               : "border-border bg-background text-foreground placeholder:text-foreground/30 focus:border-[#b8860b]"
@@ -338,12 +338,12 @@ function ProfileDropdown({
             if (e.key === "Enter") handleSave();
           }}
         />
-        <div className="flex items-center gap-2 mt-2">
+        <div className="flex items-center gap-3 mt-3">
           <button
             type="button"
             onClick={handleSave}
             disabled={saving}
-            className={`font-pixel text-xs border-2 px-4 py-1.5 transition-all border-[#FFD700] bg-[#FFD700] text-black hover:bg-[#FFC800] active:scale-95 ${
+            className={`font-pixel text-sm border-2 px-5 py-2 transition-all border-[#FFD700] bg-[#FFD700] text-black hover:bg-[#FFC800] active:scale-95 ${
               saving ? "opacity-60 cursor-wait" : ""
             }`}
             data-testid="button-save-lightning-address"
@@ -351,25 +351,25 @@ function ProfileDropdown({
             {saving ? "SAVING..." : "SAVE"}
           </button>
           {saveSuccess && (
-            <span className="font-pixel text-xs text-green-400">SAVED!</span>
+            <span className="font-pixel text-sm text-green-400">SAVED!</span>
           )}
           {saveError && (
-            <span className="font-pixel text-xs text-red-400">{saveError}</span>
+            <span className="font-pixel text-sm text-red-400">{saveError}</span>
           )}
         </div>
-        <div className={`mt-2 font-mono text-[11px] ${dark ? "text-slate-500" : "text-foreground/40"}`}>
+        <div className={`mt-3 font-mono text-sm ${dark ? "text-slate-500" : "text-foreground/40"}`}>
           Rewards will auto-send to this address
         </div>
       </div>
 
-      <div className="px-4 py-3">
+      <div className="px-5 py-4">
         <button
           type="button"
           onClick={() => {
             onLogout();
             onClose();
           }}
-          className={`w-full font-pixel text-xs border-2 px-4 py-2 transition-colors ${
+          className={`w-full font-pixel text-sm border-2 px-4 py-3 transition-colors ${
             dark
               ? "border-[#2a3552] bg-[#0b1220] text-slate-400 hover:text-slate-200 hover:bg-[#132043]"
               : "border-border bg-background text-foreground/60 hover:text-foreground hover:bg-secondary"
