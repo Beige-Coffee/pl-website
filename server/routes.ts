@@ -126,6 +126,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         email: user.email,
         displayName: user.displayName,
         rewardClaimed: user.rewardClaimed,
+        lightningAddress: user.lightningAddress || null,
       });
     } catch (err) {
       console.error("Register error:", err);
@@ -163,6 +164,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         email: user.email,
         displayName: user.displayName,
         rewardClaimed: user.rewardClaimed,
+        lightningAddress: user.lightningAddress || null,
       });
     } catch (err) {
       console.error("Login error:", err);
@@ -182,6 +184,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       email: user.email,
       displayName: user.displayName,
       rewardClaimed: user.rewardClaimed,
+      lightningAddress: user.lightningAddress || null,
     });
   });
 
@@ -192,6 +195,118 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     res.json({ ok: true });
   });
+
+  // --- Lightning Address ---
+
+  const LIGHTNING_ADDRESS_RE = /^[a-z0-9_.+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i;
+
+  app.put("/api/user/lightning-address", async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    if (!claimLimiter.check(ip)) {
+      return res.status(429).json({ error: "Too many attempts, try again later" });
+    }
+    try {
+      const user = await getAuthUser(req);
+      if (!user) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      const { lightningAddress } = req.body;
+
+      // Allow clearing the address
+      if (lightningAddress === null || lightningAddress === "") {
+        await storage.updateUserLightningAddress(user.id, null);
+        return res.json({ ok: true, lightningAddress: null });
+      }
+
+      if (typeof lightningAddress !== "string" || !LIGHTNING_ADDRESS_RE.test(lightningAddress)) {
+        return res.status(400).json({ error: "Invalid lightning address format. Use: user@wallet.com" });
+      }
+
+      if (lightningAddress.length > 256) {
+        return res.status(400).json({ error: "Lightning address too long" });
+      }
+
+      const addr = lightningAddress.toLowerCase();
+      await storage.updateUserLightningAddress(user.id, addr);
+      res.json({ ok: true, lightningAddress: addr });
+    } catch (err) {
+      console.error("Lightning address update error:", err);
+      res.status(500).json({ error: "Failed to update lightning address" });
+    }
+  });
+
+  async function resolveLightningAddress(address: string): Promise<{ callback: string; minSendable: number; maxSendable: number } | null> {
+    try {
+      const [user, domain] = address.split("@");
+      if (!user || !domain) return null;
+
+      const url = `https://${domain}/.well-known/lnurlp/${user}`;
+      const res = await fetch(url, {
+        signal: AbortSignal.timeout(15000),
+        headers: { Accept: "application/json" },
+      });
+
+      if (!res.ok) return null;
+
+      const data = await res.json() as any;
+      if (data.tag !== "payRequest" || !data.callback) return null;
+
+      return {
+        callback: data.callback,
+        minSendable: data.minSendable || 1000,
+        maxSendable: data.maxSendable || 100000000,
+      };
+    } catch (err) {
+      console.error("Lightning address resolution failed:", err);
+      return null;
+    }
+  }
+
+  async function autoPayLightningAddress(address: string, amountMsats: number): Promise<{ success: boolean; invoice?: string; paymentIndex?: string; error?: string }> {
+    try {
+      const resolved = await resolveLightningAddress(address);
+      if (!resolved) return { success: false, error: "Could not resolve lightning address" };
+
+      if (amountMsats < resolved.minSendable || amountMsats > resolved.maxSendable) {
+        return { success: false, error: `Amount ${amountMsats} msats outside range [${resolved.minSendable}, ${resolved.maxSendable}]` };
+      }
+
+      // Request invoice from callback
+      const separator = resolved.callback.includes("?") ? "&" : "?";
+      const invoiceUrl = `${resolved.callback}${separator}amount=${amountMsats}`;
+      const invoiceRes = await fetch(invoiceUrl, {
+        signal: AbortSignal.timeout(15000),
+        headers: { Accept: "application/json" },
+      });
+
+      if (!invoiceRes.ok) return { success: false, error: `Invoice request failed: HTTP ${invoiceRes.status}` };
+
+      const invoiceData = await invoiceRes.json() as any;
+      if (!invoiceData.pr) return { success: false, error: "No invoice in response" };
+
+      const invoice = invoiceData.pr;
+
+      // Pay the invoice
+      const payRes = await fetch("http://localhost:5393/v2/node/pay_invoice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invoice }),
+        signal: AbortSignal.timeout(30000),
+      });
+
+      if (payRes.ok) {
+        const payData = await payRes.json() as { index: string };
+        return { success: true, invoice, paymentIndex: payData.index };
+      } else {
+        const errData = await payRes.json().catch(() => ({ msg: "Unknown error" })) as { msg?: string };
+        return { success: false, invoice, error: errData.msg || `Payment failed: HTTP ${payRes.status}` };
+      }
+    } catch (err: any) {
+      console.error("Auto-pay lightning address error:", err);
+      return { success: false, error: err.message || "Auto-pay failed" };
+    }
+  }
 
   const ALLOWED_ADMIN_IP = "108.236.117.225";
 
@@ -336,6 +451,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const k1 = generateK1();
       await storage.createWithdrawal(k1, user.id, String(CHECKPOINT_REWARD_MSATS), checkpointId);
 
+      // Try auto-pay if user has a lightning address
+      if (user.lightningAddress) {
+        const result = await autoPayLightningAddress(user.lightningAddress, CHECKPOINT_REWARD_MSATS);
+        if (result.success) {
+          await storage.markWithdrawalClaimed(k1, result.invoice || "");
+          await storage.markWithdrawalPaid(k1, result.paymentIndex || "auto-pay");
+          await storage.markCheckpointCompleted(user.id, checkpointId);
+          return res.json({ correct: true, autoPaid: true, amountSats: CHECKPOINT_REWARD_SATS });
+        }
+        console.warn(`Auto-pay failed for ${user.lightningAddress}: ${result.error}, falling back to QR`);
+      }
+
       const withdrawUrl = `${getBaseUrl(req)}/api/lnurl/withdraw/${k1}`;
       const lnurl = encodeLnurl(withdrawUrl);
 
@@ -418,6 +545,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const k1 = generateK1();
       await storage.createWithdrawal(k1, user.id, String(rewardMsats), groupId);
+
+      // Try auto-pay if user has a lightning address
+      if (user.lightningAddress) {
+        const result = await autoPayLightningAddress(user.lightningAddress, rewardMsats);
+        if (result.success) {
+          await storage.markWithdrawalClaimed(k1, result.invoice || "");
+          await storage.markWithdrawalPaid(k1, result.paymentIndex || "auto-pay");
+          await storage.markCheckpointCompleted(user.id, groupId);
+          return res.json({ correct: true, autoPaid: true, amountSats: group.rewardSats });
+        }
+        console.warn(`Auto-pay failed for ${user.lightningAddress}: ${result.error}, falling back to QR`);
+      }
 
       const withdrawUrl = `${getBaseUrl(req)}/api/lnurl/withdraw/${k1}`;
       const lnurl = encodeLnurl(withdrawUrl);
@@ -723,29 +862,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId: user?.id,
         displayName: user?.displayName,
         rewardClaimed: user?.rewardClaimed ?? false,
+        lightningAddress: user?.lightningAddress || null,
       });
     } catch (err) {
       console.error("Status check error:", err);
       return res.json({ authenticated: false });
-    }
-  });
-
-  app.post("/api/auth/course-access", async (req: Request, res: Response) => {
-    const ip = getClientIp(req);
-    if (!authLimiter.check(ip)) {
-      return res.status(429).json({ error: "Too many attempts, try again later" });
-    }
-    try {
-      const { password } = req.body;
-      if (!password || typeof password !== "string") {
-        return res.status(400).json({ error: "Password required" });
-      }
-      if (password === process.env.COURSE_ACCESS_PASSWORD) {
-        return res.json({ granted: true });
-      }
-      return res.status(401).json({ error: "Incorrect password" });
-    } catch (err) {
-      return res.status(500).json({ error: "Server error" });
     }
   });
 

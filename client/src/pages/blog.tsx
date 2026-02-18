@@ -1,5 +1,7 @@
 import { Link } from "wouter";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useAuth } from "../hooks/use-auth";
+import LoginModal from "../components/LoginModal";
 
 const posts = [
   {
@@ -10,121 +12,148 @@ const posts = [
   },
 ];
 
-const ACCESS_KEY = "pl-course-access";
-
-export default function Blog() {
-  const [hasAccess, setHasAccess] = useState(false);
-  const [showPasswordInput, setShowPasswordInput] = useState(false);
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+function ProfileDropdown({
+  email,
+  pubkey,
+  lightningAddress,
+  onSetLightningAddress,
+  onLogout,
+  onClose,
+}: {
+  email: string | null;
+  pubkey: string | null;
+  lightningAddress: string | null;
+  onSetLightningAddress: (address: string | null) => Promise<void>;
+  onLogout: () => void;
+  onClose: () => void;
+}) {
+  const [addressInput, setAddressInput] = useState(lightningAddress || "");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (sessionStorage.getItem(ACCESS_KEY) === "granted") {
-      setHasAccess(true);
-    }
-  }, []);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-    try {
-      const res = await fetch("/api/auth/course-access", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
-      });
-      if (res.ok) {
-        sessionStorage.setItem(ACCESS_KEY, "granted");
-        setHasAccess(true);
-      } else {
-        setError("Incorrect password");
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        onClose();
       }
-    } catch {
-      setError("Something went wrong, try again");
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [onClose]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSaveError(null);
+    setSaveSuccess(false);
+    try {
+      const trimmed = addressInput.trim();
+      await onSetLightningAddress(trimmed || null);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2000);
+    } catch (err: any) {
+      setSaveError(err?.message || "Failed to save");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
-  if (!hasAccess) {
-    return (
-      <div className="min-h-screen flex flex-col relative z-10">
-        <div className="w-full border-b-4 border-border bg-card p-2 flex items-center justify-between pixel-shadow relative z-50">
-          <Link
-            href="/"
-            className="font-pixel text-sm md:text-base hover:text-primary transition-colors border-b-4 border-transparent hover:border-primary pb-1"
-            data-testid="link-back-home"
-          >
-            &lt; BACK TO HOME
-          </Link>
-          <div className="flex items-center gap-6">
-            <Link
-              href="/blog"
-              className="font-pixel text-sm md:text-base hover:text-primary transition-colors border-b-4 border-transparent hover:border-primary pb-1"
-              data-testid="link-blog"
-            >
-              LEARN
-            </Link>
-            <Link
-              href="/about"
-              className="font-pixel text-sm md:text-base hover:text-primary transition-colors border-b-4 border-transparent hover:border-primary pb-1"
-              data-testid="link-about"
-            >
-              ABOUT
-            </Link>
-          </div>
+  const identity = email || (pubkey ? pubkey.slice(0, 12) + "..." : "User");
+
+  return (
+    <div
+      ref={dropdownRef}
+      className="absolute right-0 top-full mt-2 w-80 border-2 z-50 border-border bg-card"
+      data-testid="container-profile-dropdown"
+    >
+      <div className="px-4 py-3 border-b border-border">
+        <div className="font-pixel text-xs mb-1 text-foreground/60">
+          LOGGED IN AS
         </div>
-
-        <div className="flex-1 flex flex-col items-center justify-center px-4">
-          <div className="bg-card border-4 border-border p-8 md:p-12 pixel-shadow max-w-md w-full text-center">
-            <h1 className="font-pixel text-2xl md:text-3xl mb-4 text-shadow-retro" data-testid="text-coming-soon">
-              Coming Soon...
-            </h1>
-            <p className="font-mono text-lg md:text-xl mb-8 text-muted-foreground">
-              This content is not publicly available yet.
-            </p>
-
-            {!showPasswordInput ? (
-              <button
-                onClick={() => setShowPasswordInput(true)}
-                className="bg-primary text-foreground px-6 py-3 font-pixel text-sm border-2 border-border hover:bg-primary/80 transition-colors"
-                data-testid="button-enter-password"
-              >
-                ENTER PASSWORD
-              </button>
-            ) : (
-              <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter access password"
-                  className="w-full px-4 py-3 font-mono text-lg border-4 border-border bg-background text-foreground focus:outline-none focus:border-primary"
-                  autoFocus
-                  data-testid="input-course-password"
-                />
-                {error && (
-                  <p className="font-mono text-sm text-red-500" data-testid="text-password-error">
-                    {error}
-                  </p>
-                )}
-                <button
-                  type="submit"
-                  disabled={loading || !password}
-                  className="bg-primary text-foreground px-6 py-3 font-pixel text-sm border-2 border-border hover:bg-primary/80 transition-colors disabled:opacity-50"
-                  data-testid="button-submit-password"
-                >
-                  {loading ? "CHECKING..." : "SUBMIT"}
-                </button>
-              </form>
-            )}
-          </div>
+        <div className="font-mono text-sm truncate text-foreground">
+          {identity}
         </div>
       </div>
-    );
-  }
+
+      <div className="px-4 py-3 border-b border-border">
+        <div className="font-pixel text-xs mb-2 text-[#b8860b]">
+          LIGHTNING ADDRESS
+        </div>
+        {lightningAddress && !saveSuccess && (
+          <div className="font-mono text-xs mb-2 truncate text-foreground/70">
+            Current: {lightningAddress}
+          </div>
+        )}
+        <input
+          type="text"
+          value={addressInput}
+          onChange={(e) => {
+            setAddressInput(e.target.value);
+            setSaveError(null);
+            setSaveSuccess(false);
+          }}
+          placeholder="you@wallet.com"
+          className="w-full px-3 py-2 font-mono text-sm border-2 outline-none transition-colors border-border bg-background text-foreground placeholder:text-foreground/30 focus:border-[#b8860b]"
+          data-testid="input-lightning-address"
+          onKeyDown={(e) => {
+            if (e.key === "Enter") handleSave();
+          }}
+        />
+        <div className="flex items-center gap-2 mt-2">
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className={`font-pixel text-xs border-2 px-4 py-1.5 transition-all border-[#FFD700] bg-[#FFD700] text-black hover:bg-[#FFC800] active:scale-95 ${
+              saving ? "opacity-60 cursor-wait" : ""
+            }`}
+            data-testid="button-save-lightning-address"
+          >
+            {saving ? "SAVING..." : "SAVE"}
+          </button>
+          {saveSuccess && (
+            <span className="font-pixel text-xs text-green-400">SAVED!</span>
+          )}
+          {saveError && (
+            <span className="font-pixel text-xs text-red-400">{saveError}</span>
+          )}
+        </div>
+        <div className="mt-2 font-mono text-[11px] text-foreground/40">
+          Rewards will auto-send to this address
+        </div>
+      </div>
+
+      <div className="px-4 py-3">
+        <button
+          type="button"
+          onClick={() => {
+            onLogout();
+            onClose();
+          }}
+          className="w-full font-pixel text-xs border-2 px-4 py-2 transition-colors border-border bg-background text-foreground/60 hover:text-foreground hover:bg-secondary"
+          data-testid="button-logout"
+        >
+          LOGOUT
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default function Blog() {
+  const auth = useAuth();
+  const { authenticated, logout, loginWithToken, setLightningAddress } = auth;
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
 
   return (
     <div className="min-h-screen flex flex-col relative z-10">
@@ -137,20 +166,42 @@ export default function Blog() {
           &lt; BACK TO HOME
         </Link>
         <div className="flex items-center gap-6">
-          <Link
-            href="/blog"
-            className="font-pixel text-sm md:text-base hover:text-primary transition-colors border-b-4 border-transparent hover:border-primary pb-1"
-            data-testid="link-blog"
-          >
-            LEARN
-          </Link>
-          <Link
-            href="/about"
-            className="font-pixel text-sm md:text-base hover:text-primary transition-colors border-b-4 border-transparent hover:border-primary pb-1"
-            data-testid="link-about"
-          >
-            ABOUT
-          </Link>
+          {authenticated ? (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowProfileDropdown((v) => !v)}
+                className="p-1 transition-colors text-foreground/70 hover:text-foreground"
+                title={auth.email || auth.pubkey ? `Logged in as ${auth.email || (auth.pubkey?.slice(0, 8) + "...")}` : "Logged in"}
+                data-testid="button-profile"
+                aria-label="Open profile menu"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                  <circle cx="12" cy="7" r="4" />
+                </svg>
+              </button>
+              {showProfileDropdown && (
+                <ProfileDropdown
+                  email={auth.email}
+                  pubkey={auth.pubkey}
+                  lightningAddress={auth.lightningAddress}
+                  onSetLightningAddress={setLightningAddress}
+                  onLogout={logout}
+                  onClose={() => setShowProfileDropdown(false)}
+                />
+              )}
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowLoginModal(true)}
+              className="font-pixel text-sm md:text-base hover:text-primary transition-colors border-b-4 border-transparent hover:border-primary pb-1"
+              data-testid="button-login"
+            >
+              LOGIN
+            </button>
+          )}
         </div>
       </div>
 
@@ -192,6 +243,17 @@ export default function Blog() {
           ))}
         </div>
       </div>
+
+      {showLoginModal && (
+        <LoginModal
+          theme="light"
+          onSuccess={(token, data) => {
+            loginWithToken(token, data);
+            setShowLoginModal(false);
+          }}
+          onClose={() => setShowLoginModal(false)}
+        />
+      )}
     </div>
   );
 }

@@ -16,6 +16,7 @@ interface CheckpointGroupProps {
   theme: "light" | "dark";
   authenticated: boolean;
   sessionToken: string | null;
+  lightningAddress: string | null;
   alreadyCompleted: boolean;
   onLoginRequest: () => void;
   onCompleted: (groupId: string) => void;
@@ -28,6 +29,7 @@ export default function CheckpointGroup({
   theme,
   authenticated,
   sessionToken,
+  lightningAddress,
   alreadyCompleted,
   onLoginRequest,
   onCompleted,
@@ -55,6 +57,8 @@ export default function CheckpointGroup({
   const [withdrawalStatus, setWithdrawalStatus] = useState<string>("pending");
   const [rewardCreatedAt, setRewardCreatedAt] = useState<number | null>(null);
   const [countdown, setCountdown] = useState(300);
+  const [autoPaid, setAutoPaid] = useState(false);
+  const [autoPaySending, setAutoPaySending] = useState(false);
 
   // Poll withdrawal status
   useEffect(() => {
@@ -130,6 +134,10 @@ export default function CheckpointGroup({
     setClaiming(true);
     setClaimError(null);
 
+    if (lightningAddress) {
+      setAutoPaySending(true);
+    }
+
     try {
       const res = await fetch("/api/checkpoint-group/claim", {
         method: "POST",
@@ -145,6 +153,7 @@ export default function CheckpointGroup({
 
       if (!res.ok && res.status === 404) {
         setClaimError("Endpoint not found. Server may need a restart.");
+        setAutoPaySending(false);
         return;
       }
 
@@ -153,27 +162,38 @@ export default function CheckpointGroup({
         data = await res.json();
       } catch {
         setClaimError(`Server returned non-JSON response (status ${res.status})`);
+        setAutoPaySending(false);
         return;
       }
 
       if (res.ok && data.correct) {
-        setRewardK1(data.k1);
-        setRewardLnurl(data.lnurl);
-        setRewardCreatedAt(Date.now());
-        setWithdrawalStatus("pending");
-        setCountdown(300);
+        if (data.autoPaid) {
+          setAutoPaid(true);
+          setAutoPaySending(false);
+          onCompleted(groupId);
+        } else {
+          setAutoPaySending(false);
+          setRewardK1(data.k1);
+          setRewardLnurl(data.lnurl);
+          setRewardCreatedAt(Date.now());
+          setWithdrawalStatus("pending");
+          setCountdown(300);
+        }
       } else if (data.alreadyCompleted) {
+        setAutoPaySending(false);
         onCompleted(groupId);
       } else {
+        setAutoPaySending(false);
         setClaimError(data.error || "Failed to claim reward");
       }
     } catch (err: any) {
       console.error("Checkpoint group claim error:", err);
+      setAutoPaySending(false);
       setClaimError(err?.message || "Network error. Please try again.");
     } finally {
       setClaiming(false);
     }
-  }, [sessionToken, groupId, questions, selections, onCompleted]);
+  }, [sessionToken, groupId, questions, selections, onCompleted, lightningAddress]);
 
   const handleNewQR = useCallback(async () => {
     setRewardK1(null);
@@ -346,8 +366,29 @@ export default function CheckpointGroup({
         <div className="mt-4">
           <div className="font-pixel text-sm text-green-400 mb-4">ALL CORRECT!</div>
 
+          {/* Auto-pay success */}
+          {autoPaid && (
+            <div className="mt-4 text-center">
+              <div className={`font-pixel text-lg mb-2 ${goldText}`}>
+                {rewardSats} SATS SENT!
+              </div>
+              <div className={`text-[15px] ${textColor}`}>
+                Sent to {lightningAddress}. Keep reading!
+              </div>
+            </div>
+          )}
+
+          {/* Auto-pay sending */}
+          {autoPaySending && !autoPaid && (
+            <div className="mt-4 text-center">
+              <div className={`font-pixel text-sm mb-2 ${goldText}`}>
+                SENDING {rewardSats} SATS TO {lightningAddress}...
+              </div>
+            </div>
+          )}
+
           {/* Reward section */}
-          {!rewardLnurl && !alreadyCompleted && (
+          {!rewardLnurl && !alreadyCompleted && !autoPaid && !autoPaySending && (
             <div>
               <button
                 type="button"
@@ -357,7 +398,7 @@ export default function CheckpointGroup({
                   claiming ? "opacity-60 cursor-wait" : ""
                 }`}
               >
-                {claiming ? "GENERATING QR..." : `CLAIM ${rewardSats} SATS`}
+                {claiming ? (lightningAddress ? "SENDING SATS..." : "GENERATING QR...") : `CLAIM ${rewardSats} SATS`}
               </button>
               {claimError && (
                 <div className="mt-2 font-pixel text-xs text-red-400">{claimError}</div>

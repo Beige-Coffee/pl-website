@@ -20,6 +20,7 @@ export interface IStorage {
   deleteSession(token: string): Promise<void>;
   getUserBySessionToken(token: string): Promise<User | undefined>;
   setRewardClaimed(userId: string): Promise<void>;
+  updateUserLightningAddress(userId: string, lightningAddress: string | null): Promise<void>;
   createChallenge(k1: string): Promise<LnAuthChallenge>;
   getChallenge(k1: string): Promise<LnAuthChallenge | undefined>;
   completeChallenge(k1: string, pubkey: string, sessionToken: string): Promise<void>;
@@ -100,6 +101,10 @@ export class DatabaseStorage implements IStorage {
 
   async setRewardClaimed(userId: string): Promise<void> {
     await db.update(users).set({ rewardClaimed: true }).where(eq(users.id, userId));
+  }
+
+  async updateUserLightningAddress(userId: string, lightningAddress: string | null): Promise<void> {
+    await db.update(users).set({ lightningAddress }).where(eq(users.id, userId));
   }
 
   async createChallenge(k1: string): Promise<LnAuthChallenge> {
@@ -266,6 +271,7 @@ export class DatabaseStorage implements IStorage {
       email: users.email,
       displayName: users.displayName,
       rewardClaimed: users.rewardClaimed,
+      lightningAddress: users.lightningAddress,
     }).from(users);
     return rows as Omit<User, "passwordHash">[];
   }

@@ -7,6 +7,7 @@ interface AuthState {
   email: string | null;
   displayName: string | null;
   rewardClaimed: boolean;
+  lightningAddress: string | null;
   completedCheckpoints: string[];
   sessionToken: string | null;
   loading: boolean;
@@ -22,6 +23,7 @@ export function useAuth() {
     email: null,
     displayName: null,
     rewardClaimed: false,
+    lightningAddress: null,
     completedCheckpoints: [],
     sessionToken: null,
     loading: true,
@@ -47,6 +49,7 @@ export function useAuth() {
             email: data.email || null,
             displayName: data.displayName || null,
             rewardClaimed: data.rewardClaimed || false,
+            lightningAddress: data.lightningAddress || null,
             completedCheckpoints: cpData.completed || [],
             sessionToken: token,
             loading: false,
@@ -60,6 +63,7 @@ export function useAuth() {
             email: null,
             displayName: null,
             rewardClaimed: false,
+            lightningAddress: null,
             completedCheckpoints: [],
             sessionToken: null,
             loading: false,
@@ -85,6 +89,7 @@ export function useAuth() {
           email: data.email || null,
           displayName: data.displayName || null,
           rewardClaimed: data.rewardClaimed || false,
+          lightningAddress: data.lightningAddress || null,
           completedCheckpoints: cpData.completed || [],
           sessionToken: token,
           loading: false,
@@ -110,6 +115,7 @@ export function useAuth() {
       email: null,
       displayName: null,
       rewardClaimed: false,
+      lightningAddress: null,
       completedCheckpoints: [],
       sessionToken: null,
       loading: false,
@@ -129,5 +135,23 @@ export function useAuth() {
     }));
   }, []);
 
-  return { ...auth, loginWithToken, logout, markRewardClaimed, markCheckpointCompleted };
+  const setLightningAddress = useCallback(async (address: string | null) => {
+    const token = localStorage.getItem(STORAGE_KEY);
+    if (!token) return;
+    const res = await fetch("/api/user/lightning-address", {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ lightningAddress: address }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "Failed to save lightning address");
+    }
+    setAuth((a) => ({ ...a, lightningAddress: address }));
+  }, []);
+
+  return { ...auth, loginWithToken, logout, markRewardClaimed, markCheckpointCompleted, setLightningAddress };
 }

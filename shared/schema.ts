@@ -10,6 +10,7 @@ export const users = pgTable("users", {
   passwordHash: text("password_hash"),
   displayName: text("display_name"),
   rewardClaimed: boolean("reward_claimed").default(false).notNull(),
+  lightningAddress: text("lightning_address"),
 });
 
 export const sessions = pgTable("sessions", {

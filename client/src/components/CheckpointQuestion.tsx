@@ -10,6 +10,7 @@ interface CheckpointQuestionProps {
   theme: "light" | "dark";
   authenticated: boolean;
   sessionToken: string | null;
+  lightningAddress: string | null;
   alreadyCompleted: boolean;
   onLoginRequest: () => void;
   onCompleted: (checkpointId: string) => void;
@@ -44,6 +45,7 @@ export default function CheckpointQuestion({
   theme,
   authenticated,
   sessionToken,
+  lightningAddress,
   alreadyCompleted,
   onLoginRequest,
   onCompleted,
@@ -72,6 +74,8 @@ export default function CheckpointQuestion({
   const [withdrawalStatus, setWithdrawalStatus] = useState<string>("pending");
   const [rewardCreatedAt, setRewardCreatedAt] = useState<number | null>(null);
   const [countdown, setCountdown] = useState(300);
+  const [autoPaid, setAutoPaid] = useState(false);
+  const [autoPaySending, setAutoPaySending] = useState(false);
 
   useEffect(() => {
     if (!rewardK1 || withdrawalStatus === "paid" || withdrawalStatus === "expired" || withdrawalStatus === "failed") return;
@@ -136,6 +140,11 @@ export default function CheckpointQuestion({
     setClaiming(true);
     setClaimError(null);
 
+    // If user has a lightning address, show sending state
+    if (lightningAddress) {
+      setAutoPaySending(true);
+    }
+
     try {
       const res = await fetch("/api/checkpoint/claim", {
         method: "POST",
@@ -151,27 +160,41 @@ export default function CheckpointQuestion({
         data = await res.json();
       } catch {
         setClaimError(`Server returned non-JSON response (status ${res.status})`);
+        setAutoPaySending(false);
         return;
       }
 
       if (res.ok && data.correct) {
-        setRewardK1(data.k1);
-        setRewardLnurl(data.lnurl);
-        setRewardAmountSats(data.amountSats || 5);
-        setRewardCreatedAt(Date.now());
-        setWithdrawalStatus("pending");
-        setCountdown(300);
+        if (data.autoPaid) {
+          // Auto-pay succeeded, skip QR entirely
+          setAutoPaid(true);
+          setAutoPaySending(false);
+          setRewardAmountSats(data.amountSats || 5);
+          onCompleted(checkpointId);
+        } else {
+          // Fall back to QR flow
+          setAutoPaySending(false);
+          setRewardK1(data.k1);
+          setRewardLnurl(data.lnurl);
+          setRewardAmountSats(data.amountSats || 5);
+          setRewardCreatedAt(Date.now());
+          setWithdrawalStatus("pending");
+          setCountdown(300);
+        }
       } else if (data.alreadyCompleted) {
+        setAutoPaySending(false);
         onCompleted(checkpointId);
       } else {
+        setAutoPaySending(false);
         setClaimError(data.error || "Failed to claim reward");
       }
     } catch {
+      setAutoPaySending(false);
       setClaimError("Network error. Please try again.");
     } finally {
       setClaiming(false);
     }
-  }, [sessionToken, checkpointId, selected, onCompleted]);
+  }, [sessionToken, checkpointId, selected, onCompleted, lightningAddress]);
 
   const handleNewQR = useCallback(async () => {
     setRewardK1(null);
@@ -314,7 +337,26 @@ export default function CheckpointQuestion({
             </div>
           )}
 
-          {!rewardLnurl && !alreadyCompleted && (
+          {autoPaid && (
+            <div className="mt-4 text-center">
+              <div className={`font-pixel text-lg mb-2 ${goldText}`}>
+                {rewardAmountSats} SATS SENT!
+              </div>
+              <div className={`text-[15px] ${textColor}`}>
+                Sent to {lightningAddress}. Keep reading!
+              </div>
+            </div>
+          )}
+
+          {autoPaySending && !autoPaid && (
+            <div className="mt-4 text-center">
+              <div className={`font-pixel text-sm mb-2 ${goldText}`}>
+                SENDING {rewardAmountSats} SATS TO {lightningAddress}...
+              </div>
+            </div>
+          )}
+
+          {!rewardLnurl && !alreadyCompleted && !autoPaid && !autoPaySending && (
             <div>
               <button
                 type="button"
@@ -324,7 +366,7 @@ export default function CheckpointQuestion({
                   claiming ? "opacity-60 cursor-wait" : ""
                 }`}
               >
-                {claiming ? "GENERATING QR..." : `CLAIM ${rewardAmountSats} SATS`}
+                {claiming ? (lightningAddress ? "SENDING SATS..." : "GENERATING QR...") : `CLAIM ${rewardAmountSats} SATS`}
               </button>
               {claimError && (
                 <div className="mt-2 font-pixel text-xs text-red-400">{claimError}</div>
