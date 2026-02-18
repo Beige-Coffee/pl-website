@@ -1,5 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 
+export interface CheckpointClaim {
+  checkpointId: string;
+  amountSats: number;
+  paidAt: string;
+}
+
 interface AuthState {
   authenticated: boolean;
   userId: string | null;
@@ -8,7 +14,7 @@ interface AuthState {
   displayName: string | null;
   rewardClaimed: boolean;
   lightningAddress: string | null;
-  completedCheckpoints: string[];
+  completedCheckpoints: CheckpointClaim[];
   sessionToken: string | null;
   loading: boolean;
 }
@@ -126,12 +132,12 @@ export function useAuth() {
     setAuth((a) => ({ ...a, rewardClaimed: true }));
   }, []);
 
-  const markCheckpointCompleted = useCallback((checkpointId: string) => {
+  const markCheckpointCompleted = useCallback((checkpointId: string, amountSats?: number) => {
     setAuth((a) => ({
       ...a,
-      completedCheckpoints: a.completedCheckpoints.includes(checkpointId)
+      completedCheckpoints: a.completedCheckpoints.some(c => c.checkpointId === checkpointId)
         ? a.completedCheckpoints
-        : [...a.completedCheckpoints, checkpointId],
+        : [...a.completedCheckpoints, { checkpointId, amountSats: amountSats || 0, paidAt: new Date().toISOString() }],
     }));
   }, []);
 

@@ -1614,7 +1614,7 @@ function ChapterContent({
   theme: "light" | "dark";
   authenticated: boolean;
   sessionToken: string | null;
-  completedCheckpoints: string[];
+  completedCheckpoints: { checkpointId: string; amountSats: number; paidAt: string }[];
   lightningAddress: string | null;
   onLoginRequest: () => void;
   onCheckpointCompleted: (id: string) => void;
@@ -1727,13 +1727,13 @@ function ChapterContent({
                 authenticated={authenticated}
                 sessionToken={sessionToken}
                 lightningAddress={lightningAddress}
-                alreadyCompleted={completedCheckpoints.includes(cpId)}
+                alreadyCompleted={completedCheckpoints.some(c => c.checkpointId === cpId)}
+                claimInfo={completedCheckpoints.find(c => c.checkpointId === cpId) || null}
                 onLoginRequest={onLoginRequest}
                 onCompleted={onCheckpointCompleted}
               />
             );
           },
-          // Handle <checkpoint-group id="..." ids="a,b,c" /> for grouped checkpoint rewards
           "checkpoint-group": ({ id, ids }: any) => {
             const groupId = String(id || "");
             const questionIds = String(ids || "").split(",").map((s: string) => s.trim()).filter(Boolean);
@@ -1754,7 +1754,8 @@ function ChapterContent({
                 authenticated={authenticated}
                 sessionToken={sessionToken}
                 lightningAddress={lightningAddress}
-                alreadyCompleted={completedCheckpoints.includes(groupId)}
+                alreadyCompleted={completedCheckpoints.some(c => c.checkpointId === groupId)}
+                claimInfo={completedCheckpoints.find(c => c.checkpointId === groupId) || null}
                 onLoginRequest={onLoginRequest}
                 onCompleted={onCheckpointCompleted}
               />

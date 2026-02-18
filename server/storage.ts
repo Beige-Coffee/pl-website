@@ -35,7 +35,7 @@ export interface IStorage {
   cancelPendingWithdrawals(userId: string): Promise<void>;
   hasCompletedCheckpoint(userId: string, checkpointId: string): Promise<boolean>;
   markCheckpointCompleted(userId: string, checkpointId: string): Promise<void>;
-  getCompletedCheckpoints(userId: string): Promise<string[]>;
+  getCompletedCheckpoints(userId: string): Promise<{ checkpointId: string; amountSats: number; paidAt: string }[]>;
   getPaidWithdrawalForCheckpoint(userId: string, checkpointId: string): Promise<LnurlWithdrawal | undefined>;
   cancelPendingWithdrawalsForCheckpoint(userId: string, checkpointId: string): Promise<void>;
   createPageEvent(event: InsertPageEvent): Promise<PageEvent>;
@@ -195,8 +195,12 @@ export class DatabaseStorage implements IStorage {
     await db.insert(checkpointCompletions).values({ userId, checkpointId });
   }
 
-  async getCompletedCheckpoints(userId: string): Promise<string[]> {
-    const rows = await db.select({ checkpointId: lnurlWithdrawals.checkpointId })
+  async getCompletedCheckpoints(userId: string): Promise<{ checkpointId: string; amountSats: number; paidAt: string }[]> {
+    const rows = await db.select({
+      checkpointId: lnurlWithdrawals.checkpointId,
+      amountMsats: lnurlWithdrawals.amountMsats,
+      paidAt: lnurlWithdrawals.paidAt,
+    })
       .from(lnurlWithdrawals)
       .where(
         and(
@@ -205,7 +209,13 @@ export class DatabaseStorage implements IStorage {
           sql`${lnurlWithdrawals.checkpointId} IS NOT NULL`
         )
       );
-    return rows.map(r => r.checkpointId).filter((id): id is string => id !== null);
+    return rows
+      .filter((r): r is typeof r & { checkpointId: string; paidAt: Date } => r.checkpointId !== null && r.paidAt !== null)
+      .map(r => ({
+        checkpointId: r.checkpointId,
+        amountSats: Math.round(parseInt(r.amountMsats, 10) / 1000),
+        paidAt: r.paidAt.toISOString(),
+      }));
   }
 
   async getPaidWithdrawalForCheckpoint(userId: string, checkpointId: string): Promise<LnurlWithdrawal | undefined> {

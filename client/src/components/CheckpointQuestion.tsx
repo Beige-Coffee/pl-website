@@ -12,6 +12,7 @@ interface CheckpointQuestionProps {
   sessionToken: string | null;
   lightningAddress: string | null;
   alreadyCompleted: boolean;
+  claimInfo: { checkpointId: string; amountSats: number; paidAt: string } | null;
   onLoginRequest: () => void;
   onCompleted: (checkpointId: string) => void;
 }
@@ -47,6 +48,7 @@ export default function CheckpointQuestion({
   sessionToken,
   lightningAddress,
   alreadyCompleted,
+  claimInfo,
   onLoginRequest,
   onCompleted,
 }: CheckpointQuestionProps) {
@@ -230,7 +232,11 @@ export default function CheckpointQuestion({
           </div>
         )}
         <div className={`mt-4 font-pixel text-sm ${goldText}`}>
-          REWARD CLAIMED
+          {claimInfo ? (
+            <>{claimInfo.amountSats} SATS CLAIMED ON {new Date(claimInfo.paidAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} AT {new Date(claimInfo.paidAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</>
+          ) : (
+            <>REWARD CLAIMED</>
+          )}
         </div>
       </div>
     );
