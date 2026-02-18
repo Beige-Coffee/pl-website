@@ -305,7 +305,7 @@ function ProfileDropdown({
         <div className={`font-pixel text-base mb-2 ${dark ? "text-slate-400" : "text-foreground/60"}`}>
           LOGGED IN AS
         </div>
-        <div className={`font-mono text-xl truncate ${dark ? "text-slate-200" : "text-foreground"}`}>
+        <div className={`text-xl truncate ${dark ? "text-slate-200" : "text-foreground"}`}>
           {identity}
         </div>
       </div>
@@ -315,7 +315,7 @@ function ProfileDropdown({
           LIGHTNING ADDRESS
         </div>
         {lightningAddress && !saveSuccess && (
-          <div className={`font-mono text-lg mb-3 truncate ${dark ? "text-slate-300" : "text-foreground/70"}`}>
+          <div className={`text-lg mb-3 truncate ${dark ? "text-slate-300" : "text-foreground/70"}`}>
             Current: {lightningAddress}
           </div>
         )}
@@ -328,7 +328,7 @@ function ProfileDropdown({
             setSaveSuccess(false);
           }}
           placeholder="you@wallet.com"
-          className={`w-full px-4 py-3 font-mono text-xl border-4 outline-none transition-colors ${
+          className={`w-full px-4 py-3 text-xl border-4 outline-none transition-colors ${
             dark
               ? "border-[#2a3552] bg-[#0b1220] text-slate-200 placeholder:text-slate-600 focus:border-[#FFD700]"
               : "border-border bg-background text-foreground placeholder:text-foreground/30 focus:border-[#b8860b]"
@@ -357,7 +357,7 @@ function ProfileDropdown({
             <span className="font-pixel text-base text-red-400">{saveError}</span>
           )}
         </div>
-        <div className={`mt-3 font-mono text-lg ${dark ? "text-slate-300" : "text-foreground/70"}`}>
+        <div className={`mt-3 text-lg ${dark ? "text-slate-300" : "text-foreground/70"}`}>
           Rewards will auto-send to this address
         </div>
       </div>
