@@ -1134,17 +1134,10 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
         <div className={`font-pixel text-xs ${goldText} mb-4 tracking-wider`}>SUPPORT THE MISSION</div>
 
         <div className={`text-[17px] md:text-[19px] leading-relaxed ${textColor} mb-6`} style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
-          This tutorial is <span className={`font-semibold ${goldText}`}>100% free and open source</span>. No ads, no paywalls, no data collection.
+          The goal of this tutorial (and more to come!) is to create an immersive learning experience where you don't just <em>read</em> about Lightning, you <em>use</em> it! Every checkpoint reward, every quiz payout, every sat earned in this course is a real Lightning transaction. By donating, you directly fund that experience for the next wave of students. More tutorials are coming, and your contribution helps make them just as hands-on.
         </div>
 
-        <div className={`text-[15px] md:text-[17px] leading-relaxed ${textMuted} mb-6`} style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
-          Our goal is to create an immersive learning experience where you don't just <em>read</em> about Lightning — you <em>use</em> it.
-          Every checkpoint reward, every quiz payout, every sat earned in this course was a real Lightning transaction.
-          By donating, you directly fund that experience for the next wave of students.
-          More tutorials are coming, and your contribution helps make them just as hands-on.
-        </div>
-
-        <div className={`text-[15px] md:text-[17px] leading-relaxed ${textMuted}`} style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
+        <div className={`text-[17px] md:text-[19px] leading-relaxed ${textColor}`} style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
           Every sat counts. Thanks for paying it forward.
         </div>
       </div>
@@ -1163,8 +1156,8 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
                 style={{ cursor: "pointer" }}
                 data-testid={`button-donate-${p.value}`}
               >
-                <div className={`font-pixel text-lg ${goldText}`}>{p.label}</div>
-                <div className={`text-xs ${textMuted} mt-1`} style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>{p.desc}</div>
+                <div className={`font-pixel text-xl md:text-2xl ${goldText}`}>{p.label}</div>
+                <div className={`text-sm md:text-base ${textMuted} mt-1`} style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>{p.desc}</div>
               </button>
             ))}
           </div>
@@ -1180,7 +1173,8 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
                 value={customAmount}
                 onChange={(e) => { setCustomAmount(e.target.value); setErrorMsg(""); }}
                 onKeyDown={(e) => { if (e.key === "Enter") handleCustomSubmit(); }}
-                className={`flex-1 border-2 ${goldBorder} ${dark ? "bg-[#0b1220] text-slate-100" : "bg-white text-black"} px-4 py-3 font-mono text-lg outline-none focus:ring-2 focus:ring-[#FFD700]/50`}
+                className={`flex-1 border-2 ${goldBorder} ${dark ? "bg-[#0b1220] text-slate-100" : "bg-white text-black"} px-4 py-3 text-xl md:text-2xl outline-none focus:ring-2 focus:ring-[#FFD700]/50`}
+                style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}
                 data-testid="input-custom-donate"
               />
               <button
