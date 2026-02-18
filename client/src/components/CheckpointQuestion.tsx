@@ -208,27 +208,28 @@ export default function CheckpointQuestion({
 
   const cardBg = dark ? "bg-[#0f1930]" : "bg-card";
   const cardBorder = dark ? "border-[#2a3552]" : "border-border";
-  const textColor = dark ? "text-slate-100" : "text-foreground";
-  const textMuted = dark ? "text-slate-400" : "text-foreground/60";
-  const goldText = "text-[#FFD700]";
-  const goldBorder = "border-[#FFD700]";
+  const textColor = dark ? "text-slate-100" : "text-black";
+  const textMuted = dark ? "text-slate-400" : "text-black/80";
+  const goldText = dark ? "text-[#FFD700]" : "text-[#9a7200]";
+  const goldBorder = dark ? "border-[#FFD700]" : "border-[#b8860b]";
   const goldBg = "bg-[#FFD700]";
+  const greenText = dark ? "text-green-400" : "text-green-700";
 
   if (alreadyCompleted && !rewardLnurl) {
     return (
       <div className={`my-8 border-2 ${goldBorder} ${cardBg} p-5`}>
         <div className="flex items-center gap-3 mb-2">
           <div className={`font-pixel text-xs ${goldText}`}>CHECKPOINT</div>
-          <div className="font-pixel text-xs text-green-400">COMPLETED</div>
+          <div className={`font-pixel text-xs ${greenText}`}>COMPLETED</div>
         </div>
         <div className={`text-[17px] md:text-[19px] font-semibold ${textColor} mb-3`}>{renderInlineCode(question, dark)}</div>
         <div className={`text-[15px] md:text-[17px] ${textMuted} leading-relaxed`}>
-          <span className="font-semibold text-green-400">Correct answer: </span>
+          <span className={`font-semibold ${greenText}`}>Correct answer: </span>
           {renderInlineCode(options[answer], dark)}
         </div>
         {explanation && (
           <div className={`mt-3 pt-3 border-t ${dark ? "border-[#1f2a44]" : "border-border"}`}>
-            <div className="font-pixel text-xs text-green-400 mb-1">EXPLANATION</div>
+            <div className={`font-pixel text-xs ${greenText} mb-1`}>EXPLANATION</div>
             <div className={`text-[15px] md:text-[17px] ${textMuted} leading-relaxed`}>{renderInlineCode(explanation, dark)}</div>
           </div>
         )}
@@ -335,11 +336,11 @@ export default function CheckpointQuestion({
 
       {submitted && correct && (
         <div className="mt-4">
-          <div className="font-pixel text-sm text-green-400 mb-2">CORRECT!</div>
+          <div className={`font-pixel text-sm ${greenText} mb-2`}>CORRECT!</div>
 
           {explanation && (
             <div className={`mb-4 pt-3 border-t ${dark ? "border-[#1f2a44]" : "border-border"}`}>
-              <div className="font-pixel text-xs text-green-400 mb-1">EXPLANATION</div>
+              <div className={`font-pixel text-xs ${greenText} mb-1`}>EXPLANATION</div>
               <div className={`text-[15px] md:text-[17px] ${textMuted} leading-relaxed`}>{renderInlineCode(explanation, dark)}</div>
             </div>
           )}

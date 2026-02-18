@@ -209,11 +209,12 @@ export default function CheckpointGroup({
   // Styling
   const cardBg = dark ? "bg-[#0f1930]" : "bg-card";
   const cardBorder = dark ? "border-[#2a3552]" : "border-border";
-  const textColor = dark ? "text-slate-100" : "text-foreground";
-  const textMuted = dark ? "text-slate-400" : "text-foreground/60";
-  const goldText = "text-[#FFD700]";
-  const goldBorder = "border-[#FFD700]";
+  const textColor = dark ? "text-slate-100" : "text-black";
+  const textMuted = dark ? "text-slate-400" : "text-black/80";
+  const goldText = dark ? "text-[#FFD700]" : "text-[#9a7200]";
+  const goldBorder = dark ? "border-[#FFD700]" : "border-[#b8860b]";
   const goldBg = "bg-[#FFD700]";
+  const greenText = dark ? "text-green-400" : "text-green-700";
 
   // Already completed state
   if (alreadyCompleted && !rewardLnurl) {
@@ -221,13 +222,13 @@ export default function CheckpointGroup({
       <div className={`my-8 border-2 ${goldBorder} ${cardBg} p-5`}>
         <div className="flex items-center gap-3 mb-4">
           <div className={`font-pixel text-xs ${goldText}`}>CHECKPOINT REVIEW</div>
-          <div className="font-pixel text-xs text-green-400">COMPLETED</div>
+          <div className={`font-pixel text-xs ${greenText}`}>COMPLETED</div>
         </div>
         {questions.map((q, qi) => (
           <div key={q.id} className={`mb-4 ${qi < questions.length - 1 ? `pb-4 border-b ${dark ? "border-[#1f2a44]" : "border-border"}` : ""}`}>
             <div className={`text-[15px] md:text-[17px] font-semibold ${textColor} mb-2`}>{qi + 1}. {q.question}</div>
             <div className={`text-[14px] md:text-[15px] ${textMuted} leading-relaxed`}>
-              <span className="font-semibold text-green-400">Correct: </span>
+              <span className={`font-semibold ${greenText}`}>Correct: </span>
               {q.options[q.answer]}
             </div>
           </div>
@@ -336,7 +337,7 @@ export default function CheckpointGroup({
             {/* Show explanation after all correct */}
             {isCorrectReveal && q.explanation && (
               <div className={`mt-3 pt-3 border-t ${dark ? "border-[#1f2a44]" : "border-border"}`}>
-                <div className="font-pixel text-xs text-green-400 mb-1">EXPLANATION</div>
+                <div className={`font-pixel text-xs ${greenText} mb-1`}>EXPLANATION</div>
                 <div className={`text-[14px] md:text-[15px] ${textMuted} leading-relaxed`}>{q.explanation}</div>
               </div>
             )}
@@ -372,7 +373,7 @@ export default function CheckpointGroup({
       {/* All correct - claim reward */}
       {submitted && allCorrect && (
         <div className="mt-4">
-          <div className="font-pixel text-sm text-green-400 mb-4">ALL CORRECT!</div>
+          <div className={`font-pixel text-sm ${greenText} mb-4`}>ALL CORRECT!</div>
 
           {/* Auto-pay success */}
           {autoPaid && (
