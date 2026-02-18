@@ -34,8 +34,15 @@ export default function CheckpointGroup({
 }: CheckpointGroupProps) {
   const dark = theme === "dark";
 
-  // Track selected answer per question
-  const [selections, setSelections] = useState<Record<string, number | null>>({});
+  const storageKey = `pl-checkpoint-${groupId}`;
+
+  const [selections, setSelections] = useState<Record<string, number | null>>(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return {};
+  });
   const [submitted, setSubmitted] = useState(false);
   const [shaking, setShaking] = useState(false);
   const [wrongIds, setWrongIds] = useState<Set<string>>(new Set());
@@ -266,7 +273,11 @@ export default function CheckpointGroup({
                     type="button"
                     onClick={() => {
                       if (submitted) return;
-                      setSelections((prev) => ({ ...prev, [q.id]: i }));
+                      setSelections((prev) => {
+                        const next = { ...prev, [q.id]: i };
+                        try { localStorage.setItem(storageKey, JSON.stringify(next)); } catch {}
+                        return next;
+                      });
                       setWrongIds((prev) => {
                         const next = new Set(prev);
                         next.delete(q.id);
