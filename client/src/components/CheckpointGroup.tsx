@@ -208,6 +208,9 @@ export default function CheckpointGroup({
             </div>
           </div>
         ))}
+        <div className={`mt-4 font-pixel text-sm ${goldText}`}>
+          REWARD CLAIMED
+        </div>
       </div>
     );
   }
@@ -413,6 +416,31 @@ export default function CheckpointGroup({
                   </div>
                   <div className={`mt-1 font-mono text-sm ${countdown <= 60 ? "text-red-400" : textMuted}`}>
                     Expires in {formatCountdown(countdown)}
+                  </div>
+                  <div className={`mt-4 pt-4 border-t ${dark ? "border-[#1f2a44]" : "border-border"} text-left`}>
+                    <div className={`font-pixel text-xs mb-2 ${textMuted}`}>COMPATIBLE WALLETS (LNURL-WITHDRAW)</div>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1">
+                      {[
+                        { name: "Wallet of Satoshi", url: "https://walletofsatoshi.com" },
+                        { name: "Phoenix", url: "https://phoenix.acinq.co" },
+                        { name: "BlueWallet", url: "https://bluewallet.io" },
+                        { name: "Breez", url: "https://breez.technology" },
+                        { name: "Zeus", url: "https://zeusln.com" },
+                        { name: "Alby", url: "https://getalby.com" },
+                        { name: "ZEBEDEE", url: "https://zbd.gg" },
+                        { name: "Bitkit", url: "https://bitkit.to" },
+                      ].map((w) => (
+                        <a
+                          key={w.name}
+                          href={w.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={`text-xs font-mono underline ${dark ? "text-slate-400 hover:text-slate-200" : "text-foreground/60 hover:text-foreground"}`}
+                        >
+                          {w.name}
+                        </a>
+                      ))}
+                    </div>
                   </div>
                 </div>
               )}
