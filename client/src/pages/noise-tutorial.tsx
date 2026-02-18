@@ -31,13 +31,13 @@ const CHECKPOINT_QUESTIONS: Record<string, {
   "hash-preimage": {
     question: "An attacker has the SHA256 hash of Alice's public key. Which of the following is true?",
     options: [
-      "The attacker can recover Alice's public key by reversing SHA256 with enough computational power, since SHA256 is a deterministic function",
-      "The attacker can find a different public key that produces the same hash, enabling them to impersonate Alice",
-      "The attacker can verify whether a given public key matches the hash, but cannot work backwards from the hash to discover the key",
+      "The attacker can efficiently reverse SHA256 to recover Alice's public key, since SHA256 is a deterministic function",
+      "The attacker can easily find a different public key that produces the same hash and use it to impersonate Alice",
+      "The attacker can verify whether a given public key matches the hash, but cannot feasibly work backwards from the hash to discover the key",
       "The attacker can determine the length of Alice's public key from the hash output, since SHA256 preserves input length information",
     ],
     answer: 2,
-    explanation: "SHA256 is a one-way function (pre-image resistant), meaning it's computationally infeasible to recover the input from the output. It's also collision resistant, so finding a different input that produces the same hash is practically impossible. However, since SHA256 is deterministic, anyone who has (or guesses) the original public key can hash it and check whether the result matches. SHA256 always produces a fixed 256-bit output regardless of input length, so no length information is leaked.",
+    explanation: "SHA256 is a one-way function (preimage resistant), meaning it is computationally infeasible to recover the input from the output. It is also collision resistant, so finding a different input that produces the same hash is not practically achievable. However, since SHA256 is deterministic, anyone who has (or guesses) the original public key can hash it and check whether the result matches. SHA256 always produces a fixed 256-bit output regardless of input length, so no length information is leaked.",
   },
   "ecdh-security": {
     question: "During ECDH, Alice and Bob exchange public keys over an insecure channel. Why can't an eavesdropper who captures both public keys compute the shared secret?",
@@ -62,10 +62,10 @@ const CHECKPOINT_QUESTIONS: Record<string, {
     explanation: "The Noise Protocol needs multiple independent keys for different purposes at each stage of the handshake: a chaining key (which accumulates entropy across ECDH operations) and a temporary encryption key (used for the current act's encryption). Using the same key for different cryptographic operations, such as both a MAC and an encryption, can create subtle vulnerabilities. HKDF's two-phase design (extract then expand) takes a single input and produces multiple cryptographically independent keys, ensuring that compromising one derived key doesn't compromise the others.",
   },
   "nonce-reuse": {
-    question: "If Alice encrypts two different messages using the same ChaCha20 key and nonce, what can an attacker who intercepts both ciphertexts do?",
+    question: "If Alice encrypts two different messages using ChaCha20 (not AEAD) with the same key and nonce, what can an attacker who intercepts both ciphertexts do?",
     options: [
       "Derive the original ChaCha20 key by brute-forcing the nonce space, since the same nonce was used twice",
-      "Forge valid Poly1305 MACs for arbitrary messages, because the authentication keys are also repeated",
+      "Decrypt both messages directly, because reusing a nonce causes ChaCha20 to output the plaintext in the clear",
       "XOR the two ciphertexts together to cancel the keystream, then use frequency analysis and known plaintext structure to recover both messages",
       "Determine which of the two messages is longer, but learn nothing about their actual contents",
     ],

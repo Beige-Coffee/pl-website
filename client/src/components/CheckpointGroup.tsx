@@ -132,7 +132,19 @@ export default function CheckpointGroup({
           answers: Object.fromEntries(questions.map((q) => [q.id, selections[q.id]])),
         }),
       });
-      const data = await res.json();
+
+      if (!res.ok && res.status === 404) {
+        setClaimError("Endpoint not found. Server may need a restart.");
+        return;
+      }
+
+      let data: any;
+      try {
+        data = await res.json();
+      } catch {
+        setClaimError(`Server returned non-JSON response (status ${res.status})`);
+        return;
+      }
 
       if (res.ok && data.correct) {
         setRewardK1(data.k1);
@@ -146,8 +158,9 @@ export default function CheckpointGroup({
       } else {
         setClaimError(data.error || "Failed to claim reward");
       }
-    } catch {
-      setClaimError("Network error. Please try again.");
+    } catch (err: any) {
+      console.error("Checkpoint group claim error:", err);
+      setClaimError(err?.message || "Network error. Please try again.");
     } finally {
       setClaiming(false);
     }

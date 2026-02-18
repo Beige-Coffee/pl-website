@@ -338,12 +338,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // All correct! Check balance before creating withdrawal
       const rewardMsats = group.rewardSats * 1000;
       try {
-        const nodeRes = await fetch("https://lexe.app/v1/node/info", {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${process.env.LEXE_API_KEY}`,
-          },
+        const nodeRes = await fetch("http://localhost:5393/v2/node/node_info", {
           signal: AbortSignal.timeout(20000),
         });
         if (nodeRes.ok) {
