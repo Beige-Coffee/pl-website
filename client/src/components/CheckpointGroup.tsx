@@ -418,8 +418,8 @@ export default function CheckpointGroup({
                     Expires in {formatCountdown(countdown)}
                   </div>
                   <div className={`mt-4 pt-4 border-t ${dark ? "border-[#1f2a44]" : "border-border"} text-left`}>
-                    <div className={`font-pixel text-xs mb-2 ${textMuted}`}>COMPATIBLE WALLETS (LNURL-WITHDRAW)</div>
-                    <div className="flex flex-wrap gap-x-4 gap-y-1">
+                    <div className={`font-pixel text-sm mb-3 ${textMuted}`}>COMPATIBLE WALLETS (LNURL-WITHDRAW)</div>
+                    <div className="flex flex-wrap gap-x-5 gap-y-2">
                       {[
                         { name: "Wallet of Satoshi", url: "https://walletofsatoshi.com" },
                         { name: "Phoenix", url: "https://phoenix.acinq.co" },
@@ -436,7 +436,7 @@ export default function CheckpointGroup({
                           href={w.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className={`text-xs font-mono underline ${dark ? "text-slate-400 hover:text-slate-200" : "text-foreground/60 hover:text-foreground"}`}
+                          className={`text-base font-mono underline ${dark ? "text-slate-400 hover:text-slate-200" : "text-foreground/60 hover:text-foreground"}`}
                         >
                           {w.name}
                         </a>
