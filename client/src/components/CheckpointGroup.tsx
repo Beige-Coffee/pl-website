@@ -429,6 +429,7 @@ export default function CheckpointGroup({
                         { name: "Alby", url: "https://getalby.com" },
                         { name: "ZEBEDEE", url: "https://zbd.gg" },
                         { name: "Bitkit", url: "https://bitkit.to" },
+                        { name: "Muun", url: "https://muun.com" },
                       ].map((w) => (
                         <a
                           key={w.name}
