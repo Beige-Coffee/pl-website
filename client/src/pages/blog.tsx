@@ -127,7 +127,7 @@ function ProfileDropdown({
             <span className="font-pixel text-base text-red-400">{saveError}</span>
           )}
         </div>
-        <div className="mt-3 font-mono text-base text-foreground/40">
+        <div className="mt-3 font-mono text-lg text-foreground/40">
           Rewards will auto-send to this address
         </div>
       </div>
