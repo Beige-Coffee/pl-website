@@ -70,6 +70,14 @@ export default function AdminPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const [storedPassword, setStoredPassword] = useState("");
+  const [ipAllowed, setIpAllowed] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    fetch("/api/admin/check-ip")
+      .then((r) => r.json())
+      .then((d) => setIpAllowed(d.allowed))
+      .catch(() => setIpAllowed(false));
+  }, []);
 
   const fetchDashboard = useCallback(async (pw: string) => {
     if (!pw) return;
@@ -102,6 +110,18 @@ export default function AdminPage() {
   const refresh = () => {
     fetchDashboard(storedPassword);
   };
+
+  if (ipAllowed === null) {
+    return null;
+  }
+
+  if (!ipAllowed) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="font-pixel text-sm text-foreground/40">404 - PAGE NOT FOUND</div>
+      </div>
+    );
+  }
 
   // Styles
   const cardClass = "border-4 border-border bg-card p-4 pixel-shadow";

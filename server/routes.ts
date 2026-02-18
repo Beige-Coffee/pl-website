@@ -723,8 +723,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  const ALLOWED_ADMIN_IP = "108.236.117.225";
+
+  app.get("/api/admin/check-ip", (req: Request, res: Response) => {
+    const clientIp = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "";
+    const allowed = clientIp === ALLOWED_ADMIN_IP;
+    res.json({ allowed, ip: clientIp });
+  });
+
   app.get("/api/admin/dashboard", async (req: Request, res: Response) => {
     try {
+      const clientIp = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "";
+      if (clientIp !== ALLOWED_ADMIN_IP) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
       const { password } = req.query as Record<string, string>;
       const adminPw = process.env.ADMIN_PASSWORD;
       if (!adminPw || !password || password !== adminPw) {
