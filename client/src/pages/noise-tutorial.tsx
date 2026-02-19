@@ -1135,7 +1135,7 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
 
   const saveDonation = useCallback(async (pIdx: string, sats: number) => {
     try {
-      await fetch("/api/donate/complete", {
+      const res = await fetch("/api/donate/complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1145,9 +1145,16 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
           message: donorMessage.trim() || null,
         }),
       });
-      setDonationSaved(true);
-      setWallKey(k => k + 1);
-    } catch {}
+      if (res.ok) {
+        setDonationSaved(true);
+        setWallKey(k => k + 1);
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        console.error("[saveDonation] Server error:", res.status, errData);
+      }
+    } catch (err) {
+      console.error("[saveDonation] Network error:", err);
+    }
   }, [donorName, donorMessage]);
 
   const createInvoice = useCallback(async (sats: number) => {

@@ -1182,14 +1182,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       if (lexeRes.ok) {
         const data = await lexeRes.json() as any;
-        const rawStatus = (data.status || "").toLowerCase();
-        if (!["completed", "paid", "settled", "succeeded"].includes(rawStatus)) {
-          return res.status(400).json({ error: "Payment not yet confirmed" });
+        console.log("[donate/complete] Lexe payment response:", JSON.stringify(data));
+        // Check status in multiple possible locations
+        const rawStatus = (data.status || data.payment?.status || data.state || "").toString().toLowerCase();
+        if (!["completed", "paid", "settled", "succeeded", "complete"].includes(rawStatus)) {
+          console.log("[donate/complete] Payment not confirmed. rawStatus:", rawStatus);
+          return res.status(400).json({ error: "Payment not yet confirmed", debug_status: rawStatus });
         }
       } else {
+        const errText = await lexeRes.text().catch(() => "");
+        console.error("[donate/complete] Lexe returned non-OK:", lexeRes.status, errText);
         return res.status(502).json({ error: "Could not verify payment" });
       }
-    } catch {
+    } catch (verifyErr: any) {
+      console.error("[donate/complete] Verification error:", verifyErr.message);
       return res.status(502).json({ error: "Could not verify payment" });
     }
 
