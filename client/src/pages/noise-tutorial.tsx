@@ -2170,7 +2170,7 @@ function ChapterContent({
   completedCheckpoints: { checkpointId: string; amountSats: number; paidAt: string }[];
   lightningAddress: string | null;
   onLoginRequest: () => void;
-  onCheckpointCompleted: (id: string) => void;
+  onCheckpointCompleted: (id: string, amountSats?: number) => void;
 }) {
   const [md, setMd] = useState<string>("Loading…");
   const [err, setErr] = useState<string | null>(null);

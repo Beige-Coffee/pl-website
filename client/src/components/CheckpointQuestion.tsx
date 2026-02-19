@@ -14,7 +14,7 @@ interface CheckpointQuestionProps {
   alreadyCompleted: boolean;
   claimInfo: { checkpointId: string; amountSats: number; paidAt: string } | null;
   onLoginRequest: () => void;
-  onCompleted: (checkpointId: string) => void;
+  onCompleted: (checkpointId: string, amountSats?: number) => void;
 }
 
 // Render inline code: converts `text` to <code> elements
@@ -88,7 +88,7 @@ export default function CheckpointQuestion({
         const data = await res.json();
         setWithdrawalStatus(data.status);
         if (data.status === "paid") {
-          onCompleted(checkpointId);
+          onCompleted(checkpointId, rewardAmountSats);
           clearInterval(interval);
         } else if (data.status === "expired" || data.status === "failed") {
           clearInterval(interval);
@@ -173,7 +173,7 @@ export default function CheckpointQuestion({
           setAutoPaid(true);
           setAutoPaySending(false);
           setRewardAmountSats(data.amountSats || 5);
-          onCompleted(checkpointId);
+          onCompleted(checkpointId, data.amountSats || 5);
         } else {
           // Fall back to QR flow
           setAutoPaySending(false);
@@ -186,7 +186,7 @@ export default function CheckpointQuestion({
         }
       } else if (data.alreadyCompleted) {
         setAutoPaySending(false);
-        onCompleted(checkpointId);
+        onCompleted(checkpointId, data.amountSats || rewardAmountSats);
       } else {
         setAutoPaySending(false);
         setClaimError(data.error || "Failed to claim reward");

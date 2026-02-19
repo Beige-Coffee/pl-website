@@ -20,7 +20,7 @@ interface CheckpointGroupProps {
   alreadyCompleted: boolean;
   claimInfo: { checkpointId: string; amountSats: number; paidAt: string } | null;
   onLoginRequest: () => void;
-  onCompleted: (groupId: string) => void;
+  onCompleted: (groupId: string, amountSats?: number) => void;
 }
 
 export default function CheckpointGroup({
@@ -71,7 +71,7 @@ export default function CheckpointGroup({
         const data = await res.json();
         setWithdrawalStatus(data.status);
         if (data.status === "paid") {
-          onCompleted(groupId);
+          onCompleted(groupId, rewardSats);
           clearInterval(interval);
         } else if (data.status === "expired" || data.status === "failed") {
           clearInterval(interval);
@@ -174,7 +174,7 @@ export default function CheckpointGroup({
         if (data.autoPaid) {
           setAutoPaid(true);
           setAutoPaySending(false);
-          onCompleted(groupId);
+          onCompleted(groupId, data.amountSats || rewardSats);
         } else {
           setAutoPaySending(false);
           setRewardK1(data.k1);
@@ -185,7 +185,7 @@ export default function CheckpointGroup({
         }
       } else if (data.alreadyCompleted) {
         setAutoPaySending(false);
-        onCompleted(groupId);
+        onCompleted(groupId, data.amountSats || rewardSats);
       } else {
         setAutoPaySending(false);
         setClaimError(data.error || "Failed to claim reward");
