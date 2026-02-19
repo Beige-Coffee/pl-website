@@ -1114,6 +1114,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const data = await lexeRes.json() as any;
       const rawStatus = (data.status || "").toLowerCase();
       const normalizedStatus = ["completed", "paid", "settled", "succeeded"].includes(rawStatus) ? "paid" : rawStatus;
+
+      if (normalizedStatus === "paid") {
+        const amountSats = data.amount ? Math.round(parseFloat(data.amount)) : 0;
+        const donorName = (req.query.donor_name as string) || "Anon";
+        const message = (req.query.message as string) || null;
+        try {
+          await storage.createDonation(index, amountSats, donorName, message);
+        } catch (err: any) {
+          if (!err.message?.includes("duplicate") && !err.message?.includes("unique")) {
+            console.error("[donate] Error saving donation:", err.message);
+          }
+        }
+      }
+
       return res.json({
         status: normalizedStatus,
         amount_sat: data.amount,
