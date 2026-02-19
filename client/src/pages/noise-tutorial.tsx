@@ -1151,8 +1151,8 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
     { label: "100", value: 100, desc: "Round number" },
     { label: "1,000", value: 1000, desc: "Generous" },
     { label: "2,100", value: 2100, desc: "21 × 100" },
-    { label: "10,000", value: 10000, desc: "Big impact" },
-    { label: "21,000", value: 21000, desc: "Legendary" },
+    { label: "10k", value: 10000, desc: "Big impact" },
+    { label: "21k", value: 21000, desc: "Legendary" },
   ];
 
   const goldText = dark ? "text-[#FFD700]" : "text-[#9a7200]";
