@@ -16,18 +16,22 @@ const SUPPORTED_WALLETS = [
 
 const sansFont = 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
 
+type Screen = "choose" | "login-email" | "login-lightning" | "register";
+
 export default function LoginModal({ theme, onSuccess, onClose }: LoginModalProps) {
-  const [tab, setTab] = useState<"lightning" | "login" | "register">("login");
+  const [screen, setScreen] = useState<Screen>("choose");
   const dark = theme === "dark";
   const border = dark ? "border-[#2a3552]" : "border-gray-800";
   const bg = dark ? "bg-[#0f1930]" : "bg-white";
   const pageBg = dark ? "bg-[#0b1220]" : "bg-white";
-  const textMuted = dark ? "text-slate-400" : "text-gray-500";
 
-  const activeTabClass = dark
-    ? "border-[#FFD700] bg-[#FFD700]/15 text-[#FFD700]"
-    : "border-gray-900 bg-gray-900 text-white";
-  const inactiveTabClass = `${border} ${bg} ${dark ? "text-slate-400" : "text-gray-600"} hover:opacity-80`;
+  const title = screen === "register"
+    ? "REGISTER"
+    : screen === "choose"
+    ? "WELCOME"
+    : "LOGIN";
+
+  const showBack = screen !== "choose";
 
   return (
     <div
@@ -38,8 +42,20 @@ export default function LoginModal({ theme, onSuccess, onClose }: LoginModalProp
       <div className="absolute inset-0 bg-black/60" />
       <div className={`relative w-full max-w-md border-4 ${border} ${pageBg} p-8`}>
         <div className="flex items-center justify-between mb-6">
-          <div className={`font-pixel text-lg ${dark ? "text-[#FFD700]" : "text-gray-900"}`} data-testid="text-login-title">
-            {tab === "register" ? "REGISTER" : "LOGIN"}
+          <div className="flex items-center gap-3">
+            {showBack && (
+              <button
+                type="button"
+                onClick={() => setScreen("choose")}
+                className={`border-2 ${border} ${bg} px-2 py-1.5 font-pixel text-xs hover:opacity-80 ${dark ? "text-slate-300" : "text-gray-700"}`}
+                data-testid="button-back"
+              >
+                {"<"}
+              </button>
+            )}
+            <div className={`font-pixel text-lg ${dark ? "text-[#FFD700]" : "text-gray-900"}`} data-testid="text-login-title">
+              {title}
+            </div>
           </div>
           <button
             type="button"
@@ -51,47 +67,130 @@ export default function LoginModal({ theme, onSuccess, onClose }: LoginModalProp
           </button>
         </div>
 
-        <div className="flex gap-0 mb-6">
-          <button
-            type="button"
-            onClick={() => setTab("login")}
-            className={`flex-1 border-2 px-3 py-3 font-pixel text-xs transition-colors ${
-              tab === "login" ? activeTabClass : inactiveTabClass
-            }`}
-            data-testid="button-tab-login"
-          >
-            LOGIN
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab("register")}
-            className={`flex-1 border-2 border-l-0 px-3 py-3 font-pixel text-xs transition-colors ${
-              tab === "register" ? activeTabClass : inactiveTabClass
-            }`}
-            data-testid="button-tab-register"
-          >
-            REGISTER
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab("lightning")}
-            className={`flex-1 border-2 border-l-0 px-3 py-3 font-pixel text-xs transition-colors ${
-              tab === "lightning" ? activeTabClass : inactiveTabClass
-            }`}
-            data-testid="button-tab-lightning"
-          >
-            LIGHTNING
-          </button>
-        </div>
+        {screen === "choose" && (
+          <ChooseScreen
+            theme={theme}
+            onLogin={() => setScreen("login-email")}
+            onRegister={() => setScreen("register")}
+          />
+        )}
 
-        {tab === "login" ? (
-          <EmailLoginForm theme={theme} onSuccess={onSuccess} onSwitchToRegister={() => setTab("register")} />
-        ) : tab === "register" ? (
-          <EmailRegisterForm theme={theme} onSuccess={onSuccess} onSwitchToLogin={() => setTab("login")} />
-        ) : (
-          <LightningAuthForm theme={theme} onSuccess={onSuccess} />
+        {screen === "login-email" && (
+          <>
+            <LoginMethodTabs
+              theme={theme}
+              active="email"
+              onSwitch={(m) => setScreen(m === "email" ? "login-email" : "login-lightning")}
+            />
+            <EmailLoginForm theme={theme} onSuccess={onSuccess} />
+          </>
+        )}
+
+        {screen === "login-lightning" && (
+          <>
+            <LoginMethodTabs
+              theme={theme}
+              active="lightning"
+              onSwitch={(m) => setScreen(m === "email" ? "login-email" : "login-lightning")}
+            />
+            <LightningAuthForm theme={theme} onSuccess={onSuccess} />
+          </>
+        )}
+
+        {screen === "register" && (
+          <EmailRegisterForm theme={theme} onSuccess={onSuccess} />
         )}
       </div>
+    </div>
+  );
+}
+
+function ChooseScreen({
+  theme,
+  onLogin,
+  onRegister,
+}: {
+  theme: "light" | "dark";
+  onLogin: () => void;
+  onRegister: () => void;
+}) {
+  const dark = theme === "dark";
+  const textMuted = dark ? "text-slate-400" : "text-gray-500";
+
+  return (
+    <div className="space-y-4">
+      <p className={`text-base text-center ${textMuted}`} style={{ fontFamily: sansFont }}>
+        Log in or create an account to track progress and claim sat rewards.
+      </p>
+
+      <button
+        type="button"
+        onClick={onLogin}
+        className={`w-full font-pixel text-base border-2 px-4 py-4 transition-all ${
+          dark
+            ? "border-[#FFD700] bg-[#FFD700] text-black hover:bg-[#FFC800] active:scale-[0.98]"
+            : "border-gray-900 bg-gray-900 text-white hover:bg-gray-800 active:scale-[0.98]"
+        }`}
+        data-testid="button-choose-login"
+      >
+        LOG IN
+      </button>
+
+      <button
+        type="button"
+        onClick={onRegister}
+        className={`w-full font-pixel text-base border-2 px-4 py-4 transition-all ${
+          dark
+            ? "border-[#2a3552] bg-transparent text-[#FFD700] hover:bg-[#FFD700]/10 active:scale-[0.98]"
+            : "border-gray-900 bg-white text-gray-900 hover:bg-gray-100 active:scale-[0.98]"
+        }`}
+        data-testid="button-choose-register"
+      >
+        REGISTER
+      </button>
+    </div>
+  );
+}
+
+function LoginMethodTabs({
+  theme,
+  active,
+  onSwitch,
+}: {
+  theme: "light" | "dark";
+  active: "email" | "lightning";
+  onSwitch: (method: "email" | "lightning") => void;
+}) {
+  const dark = theme === "dark";
+  const border = dark ? "border-[#2a3552]" : "border-gray-800";
+  const bg = dark ? "bg-[#0f1930]" : "bg-white";
+  const activeTabClass = dark
+    ? "border-[#FFD700] bg-[#FFD700]/15 text-[#FFD700]"
+    : "border-gray-900 bg-gray-900 text-white";
+  const inactiveTabClass = `${border} ${bg} ${dark ? "text-slate-400" : "text-gray-600"} hover:opacity-80`;
+
+  return (
+    <div className="flex gap-0 mb-6">
+      <button
+        type="button"
+        onClick={() => onSwitch("email")}
+        className={`flex-1 border-2 px-3 py-3 font-pixel text-xs transition-colors ${
+          active === "email" ? activeTabClass : inactiveTabClass
+        }`}
+        data-testid="button-tab-email"
+      >
+        EMAIL
+      </button>
+      <button
+        type="button"
+        onClick={() => onSwitch("lightning")}
+        className={`flex-1 border-2 border-l-0 px-3 py-3 font-pixel text-xs transition-colors ${
+          active === "lightning" ? activeTabClass : inactiveTabClass
+        }`}
+        data-testid="button-tab-lightning"
+      >
+        LIGHTNING
+      </button>
     </div>
   );
 }
@@ -99,11 +198,9 @@ export default function LoginModal({ theme, onSuccess, onClose }: LoginModalProp
 function EmailLoginForm({
   theme,
   onSuccess,
-  onSwitchToRegister,
 }: {
   theme: "light" | "dark";
   onSuccess: (token: string, data: any) => void;
-  onSwitchToRegister: () => void;
 }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -193,7 +290,6 @@ function EmailLoginForm({
       >
         {loading ? "PLEASE WAIT..." : "LOG IN"}
       </button>
-
     </form>
   );
 }
@@ -201,11 +297,9 @@ function EmailLoginForm({
 function EmailRegisterForm({
   theme,
   onSuccess,
-  onSwitchToLogin,
 }: {
   theme: "light" | "dark";
   onSuccess: (token: string, data: any) => void;
-  onSwitchToLogin: () => void;
 }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -328,7 +422,6 @@ function EmailRegisterForm({
       >
         {loading ? "PLEASE WAIT..." : "CREATE ACCOUNT"}
       </button>
-
     </form>
   );
 }
