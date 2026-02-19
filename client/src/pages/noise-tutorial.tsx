@@ -235,7 +235,11 @@ To bring these same properties (encrypted communication, authentication, and int
 
 In this tutorial, we'll dig deep into Lightning's implementation of Noise, starting with the cryptographic building blocks, then working through the three-act handshake, and finishing with encrypted message transport and key rotation.
 
-Let's get started.`;
+Let's get started.
+
+> ### ⚡ Earn sats as you learn! ⚡
+>
+> This tutorial rewards you with real bitcoin for successfully completing checkpoint quizzes throughout the course. You can redeem your earnings using any wallet that supports LNURL withdrawal, or link a Lightning Address to your account for automatic payouts. Sign in first, then click the profile icon in the top-right corner to set it up!`;
 }
 
 function ProfileDropdown({
@@ -1283,10 +1287,10 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
       </h1>
       <div className={`h-[3px] ${dark ? "bg-[#FFD700]" : "bg-[#b8860b]"} mb-6`} />
 
-      <div className={`border-2 ${goldBorder} ${cardBg} p-6 md:p-8 mb-8`}>
+      <div className="mb-8">
         <div className={`font-pixel text-xs ${goldText} mb-4 tracking-wider`}>SUPPORT THE MISSION</div>
 
-        <div className={`text-[17px] md:text-[19px] leading-relaxed ${textColor} mb-6`} style={{ fontFamily: sansFont }}>
+        <div className={`text-[17px] md:text-[19px] leading-relaxed ${textColor} mb-4`} style={{ fontFamily: sansFont }}>
           The goal of this tutorial (and more to come!) is to create an immersive learning experience where you don't just <em>read</em> about Lightning, you <em>use</em> it! Every checkpoint reward, every quiz payout, every sat earned in this course is a real Lightning transaction. By donating, you directly fund that experience for the next wave of students. More tutorials are coming, and your contribution helps make them just as hands-on.
         </div>
 
@@ -1506,6 +1510,8 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
         </div>
       )}
 
+      {status === "idle" && <DonationWall key={wallKey} theme={theme} />}
+
       {status === "error" && (
         <div className={`border-2 border-red-500/50 ${cardBg} p-6 text-center`}>
           <div className="font-pixel text-sm text-red-500 mb-3">ERROR</div>
@@ -1521,7 +1527,6 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
         </div>
       )}
 
-      <DonationWall key={wallKey} theme={theme} />
     </div>
   );
 }

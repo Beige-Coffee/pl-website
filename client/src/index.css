@@ -190,6 +190,14 @@
 
   .noise-md-light blockquote {
     color: rgba(0, 0, 0, 0.75);
+    border-left-color: #b8860b;
+  }
+
+  .noise-md-light blockquote h1,
+  .noise-md-light blockquote h2,
+  .noise-md-light blockquote h3,
+  .noise-md-light blockquote h4 {
+    color: #9a7200;
   }
 
   .noise-md-light hr {
@@ -215,7 +223,7 @@
   .noise-md-dark h2,
   .noise-md-dark h3,
   .noise-md-dark h4 {
-    font-family: var(--font-pixel);
+    font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
     color: #ffd700;
   }
 
@@ -365,7 +373,7 @@
   }
 
   .noise-md blockquote {
-    border-left: 4px solid rgba(255, 215, 0, 0.5);
+    border-left: 4px solid #b8860b;
     padding-left: 14px;
     margin: 1.1em 0;
     color: rgba(229, 231, 235, 0.9);
