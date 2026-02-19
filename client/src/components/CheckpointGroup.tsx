@@ -406,8 +406,8 @@ export default function CheckpointGroup({
             <div>
               {authenticated && !canClaimRewards && (
                 <div className={`border-2 ${dark ? "border-[#2a3552] bg-[#0b1220]" : "border-border bg-background"} p-3 mb-3`}>
-                  <div className="font-pixel text-xs text-[#FFD700] mb-1">EMAIL NOT VERIFIED</div>
-                  <p className={`text-xs ${textMuted}`}>Verify your email to claim sat rewards.</p>
+                  <div className={`font-pixel text-sm ${dark ? "text-[#FFD700]" : "text-[#9a7200]"} mb-2`}>EMAIL NOT VERIFIED</div>
+                  <p className={`text-xs ${textMuted}`} style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>Throughout the educational material, there are checkpoints that offer real bitcoin rewards when completed successfully. To mitigate spam, users must either verify their email or log in with LNURL-Auth to claim these rewards.</p>
                 </div>
               )}
               <button
