@@ -613,7 +613,7 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
         <aside
           className={`${
             mobileNavOpen ? "fixed inset-y-0 left-0 w-[300px] z-50 overflow-y-auto shadow-xl" : "hidden"
-          } md:relative md:block md:sticky md:top-[68px] md:w-auto md:z-auto md:shadow-none h-fit ${theme === "dark" ? "bg-[#0b1220]" : "bg-card"}`}
+          } md:relative md:block md:sticky md:top-[68px] md:w-auto md:z-auto md:shadow-none md:h-fit ${theme === "dark" ? "bg-[#0b1220]" : "bg-card"}`}
         >
           <div className="md:hidden flex items-center justify-between px-4 pt-4 pb-2">
             <div className={`font-pixel text-sm ${theme === "dark" ? "text-slate-200" : "text-foreground"}`}>
