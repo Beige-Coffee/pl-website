@@ -21,6 +21,8 @@ export interface IStorage {
   getUserBySessionToken(token: string): Promise<User | undefined>;
   setRewardClaimed(userId: string): Promise<void>;
   updateUserLightningAddress(userId: string, lightningAddress: string | null): Promise<void>;
+  setVerificationToken(userId: string, token: string, expiry: Date): Promise<void>;
+  verifyEmail(token: string): Promise<User | undefined>;
   createChallenge(k1: string): Promise<LnAuthChallenge>;
   getChallenge(k1: string): Promise<LnAuthChallenge | undefined>;
   completeChallenge(k1: string, pubkey: string, sessionToken: string): Promise<void>;
@@ -108,6 +110,19 @@ export class DatabaseStorage implements IStorage {
 
   async updateUserLightningAddress(userId: string, lightningAddress: string | null): Promise<void> {
     await db.update(users).set({ lightningAddress }).where(eq(users.id, userId));
+  }
+
+  async setVerificationToken(userId: string, token: string, expiry: Date): Promise<void> {
+    await db.update(users).set({ verificationToken: token, verificationExpiry: expiry }).where(eq(users.id, userId));
+  }
+
+  async verifyEmail(token: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.verificationToken, token));
+    if (!user) return undefined;
+    if (user.verificationExpiry && user.verificationExpiry < new Date()) return undefined;
+    await db.update(users).set({ emailVerified: true, verificationToken: null, verificationExpiry: null }).where(eq(users.id, user.id));
+    const [updated] = await db.select().from(users).where(eq(users.id, user.id));
+    return updated;
   }
 
   async createChallenge(k1: string): Promise<LnAuthChallenge> {

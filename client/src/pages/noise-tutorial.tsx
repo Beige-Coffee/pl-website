@@ -678,6 +678,8 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
                 authenticated={authenticated}
                 rewardClaimed={auth.rewardClaimed}
                 sessionToken={auth.sessionToken}
+                emailVerified={auth.emailVerified}
+                pubkey={auth.pubkey}
                 onLoginRequest={() => setShowLoginModal(true)}
               />
             ) : (
@@ -688,6 +690,8 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
                 sessionToken={auth.sessionToken}
                 completedCheckpoints={auth.completedCheckpoints}
                 lightningAddress={auth.lightningAddress}
+                emailVerified={auth.emailVerified}
+                pubkey={auth.pubkey}
                 onLoginRequest={() => setShowLoginModal(true)}
                 onCheckpointCompleted={auth.markCheckpointCompleted}
               />
@@ -1698,14 +1702,19 @@ function InteractiveQuiz({
   authenticated,
   rewardClaimed,
   sessionToken,
+  emailVerified,
+  pubkey,
   onLoginRequest,
 }: {
   theme: "light" | "dark";
   authenticated: boolean;
   rewardClaimed: boolean;
   sessionToken: string | null;
+  emailVerified: boolean;
+  pubkey: string | null;
   onLoginRequest: () => void;
 }) {
+  const canClaimRewards = !!pubkey || emailVerified;
   const [selections, setSelections] = useState<Record<number, number>>(() => {
     try {
       const saved = localStorage.getItem("pl-quiz-selections");
@@ -1885,12 +1894,21 @@ function InteractiveQuiz({
 
           {passed && !showReward && !rewardClaimed && (
             <div>
+              {authenticated && !canClaimRewards && (
+                <div className={`mt-4 border-2 ${border} ${bg} p-4 mb-3`} data-testid="container-verify-warning">
+                  <div className="font-pixel text-xs text-[#FFD700] mb-2">EMAIL NOT VERIFIED</div>
+                  <p className={`text-sm ${textMuted} mb-3`}>
+                    You must verify your email before you can claim sat rewards. Check your inbox for the verification link.
+                  </p>
+                  <ResendVerificationButton sessionToken={sessionToken} theme={theme} />
+                </div>
+              )}
               <button
                 type="button"
                 onClick={handleClaimReward}
-                disabled={claimingReward}
+                disabled={claimingReward || (authenticated && !canClaimRewards)}
                 className={`mt-4 font-pixel text-sm border-2 px-6 py-3 transition-all border-[#FFD700] bg-[#FFD700] text-black hover:bg-[#FFC800] active:scale-95 ${
-                  claimingReward ? "opacity-60 cursor-wait" : ""
+                  claimingReward || (authenticated && !canClaimRewards) ? "opacity-60 cursor-wait" : ""
                 }`}
                 data-testid="button-claim-reward"
               >
@@ -2160,6 +2178,8 @@ function ChapterContent({
   sessionToken,
   completedCheckpoints,
   lightningAddress,
+  emailVerified,
+  pubkey,
   onLoginRequest,
   onCheckpointCompleted,
 }: {
@@ -2169,6 +2189,8 @@ function ChapterContent({
   sessionToken: string | null;
   completedCheckpoints: { checkpointId: string; amountSats: number; paidAt: string }[];
   lightningAddress: string | null;
+  emailVerified: boolean;
+  pubkey: string | null;
   onLoginRequest: () => void;
   onCheckpointCompleted: (id: string, amountSats?: number) => void;
 }) {
@@ -2280,6 +2302,8 @@ function ChapterContent({
                 authenticated={authenticated}
                 sessionToken={sessionToken}
                 lightningAddress={lightningAddress}
+                emailVerified={emailVerified}
+                pubkey={pubkey}
                 alreadyCompleted={completedCheckpoints.some(c => c.checkpointId === cpId)}
                 claimInfo={completedCheckpoints.find(c => c.checkpointId === cpId) || null}
                 onLoginRequest={onLoginRequest}
@@ -2307,6 +2331,8 @@ function ChapterContent({
                 authenticated={authenticated}
                 sessionToken={sessionToken}
                 lightningAddress={lightningAddress}
+                emailVerified={emailVerified}
+                pubkey={pubkey}
                 alreadyCompleted={completedCheckpoints.some(c => c.checkpointId === groupId)}
                 claimInfo={completedCheckpoints.find(c => c.checkpointId === groupId) || null}
                 onLoginRequest={onLoginRequest}
@@ -2319,6 +2345,55 @@ function ChapterContent({
         {rewriteTutorialImagePaths(md)}
       </ReactMarkdown>
 
+    </div>
+  );
+}
+
+function ResendVerificationButton({ sessionToken, theme }: { sessionToken: string | null; theme: "light" | "dark" }) {
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const dark = theme === "dark";
+  const border = dark ? "border-[#2a3552]" : "border-gray-400";
+
+  const handleResend = async () => {
+    if (!sessionToken) return;
+    setSending(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${sessionToken}` },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSent(true);
+      } else {
+        setError(data.error || "Failed to resend");
+      }
+    } catch {
+      setError("Network error");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  if (sent) {
+    return <div className="font-pixel text-xs text-green-400" data-testid="text-verification-sent">VERIFICATION EMAIL SENT</div>;
+  }
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={handleResend}
+        disabled={sending}
+        className={`font-pixel text-xs border-2 ${border} px-4 py-2 ${dark ? "text-slate-300 hover:text-[#FFD700]" : "text-gray-700 hover:text-gray-900"} transition-colors ${sending ? "opacity-60" : ""}`}
+        data-testid="button-resend-verification"
+      >
+        {sending ? "SENDING..." : "RESEND VERIFICATION EMAIL"}
+      </button>
+      {error && <div className="mt-1 text-xs text-red-400">{error}</div>}
     </div>
   );
 }

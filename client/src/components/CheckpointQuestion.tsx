@@ -11,6 +11,8 @@ interface CheckpointQuestionProps {
   authenticated: boolean;
   sessionToken: string | null;
   lightningAddress: string | null;
+  emailVerified: boolean;
+  pubkey: string | null;
   alreadyCompleted: boolean;
   claimInfo: { checkpointId: string; amountSats: number; paidAt: string } | null;
   onLoginRequest: () => void;
@@ -47,12 +49,15 @@ export default function CheckpointQuestion({
   authenticated,
   sessionToken,
   lightningAddress,
+  emailVerified,
+  pubkey,
   alreadyCompleted,
   claimInfo,
   onLoginRequest,
   onCompleted,
 }: CheckpointQuestionProps) {
   const dark = theme === "dark";
+  const canClaimRewards = !!pubkey || emailVerified;
 
   const storageKey = `pl-checkpoint-${checkpointId}`;
 
@@ -366,10 +371,17 @@ export default function CheckpointQuestion({
 
           {!rewardLnurl && !alreadyCompleted && !autoPaid && !autoPaySending && !claiming && !showClaimChoice && (
             <div>
+              {authenticated && !canClaimRewards && (
+                <div className={`border-2 ${dark ? "border-[#2a3552] bg-[#0b1220]" : "border-border bg-background"} p-3 mb-3`}>
+                  <div className="font-pixel text-xs text-[#FFD700] mb-1">EMAIL NOT VERIFIED</div>
+                  <p className={`text-xs ${textMuted}`}>Verify your email to claim sat rewards.</p>
+                </div>
+              )}
               <button
                 type="button"
                 onClick={() => setShowClaimChoice(true)}
-                className={`font-pixel text-sm border-2 px-6 py-3 transition-all ${goldBorder} ${goldBg} text-black hover:bg-[#FFC800] active:scale-95`}
+                disabled={authenticated && !canClaimRewards}
+                className={`font-pixel text-sm border-2 px-6 py-3 transition-all ${goldBorder} ${goldBg} text-black hover:bg-[#FFC800] active:scale-95 ${authenticated && !canClaimRewards ? "opacity-60 cursor-not-allowed" : ""}`}
               >
                 CLAIM {rewardAmountSats} SATS
               </button>
