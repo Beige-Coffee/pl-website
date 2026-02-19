@@ -1,14 +1,34 @@
 import fs from "node:fs";
-import { type Server } from "node:http";
-import path from "node:path";
 
-import type { Express } from "express";
-import { nanoid } from "nanoid";
-import { createServer as createViteServer, createLogger } from "vite";
+// Load .env BEFORE any other imports that use process.env
+try {
+  if (fs.existsSync(".env")) {
+    const envContent = fs.readFileSync(".env", "utf-8");
+    for (const line of envContent.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const eqIdx = trimmed.indexOf("=");
+      if (eqIdx === -1) continue;
+      const key = trimmed.slice(0, eqIdx).trim();
+      const value = trimmed.slice(eqIdx + 1).trim();
+      if (!process.env[key]) {
+        process.env[key] = value;
+      }
+    }
+    console.log("[env] Loaded .env file");
+  }
+} catch {}
 
-import runApp from "./app";
+// Dynamic imports so process.env is set before modules read it
+const { type: _Server } = await import("node:http");
+const path = await import("node:path");
+const { nanoid } = await import("nanoid");
+const { createServer: createViteServer, createLogger } = await import("vite");
+const { default: runApp } = await import("./app");
+const viteConfig = (await import("../vite.config")).default;
 
-import viteConfig from "../vite.config";
+type Server = import("node:http").Server;
+type Express = import("express").Express;
 
 const viteLogger = createLogger();
 

@@ -1074,7 +1074,7 @@ function DonationWall({ theme }: { theme: "light" | "dark" }) {
                   </div>
                   {d.message && (
                     <div className={`text-sm ${textColor} leading-relaxed`} style={{ fontFamily: sansFont }}>
-                      "{d.message}"
+                      {d.message}
                     </div>
                   )}
                 </div>
@@ -1517,7 +1517,7 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
         </div>
       )}
 
-      {status === "idle" && <DonationWall key={wallKey} theme={theme} />}
+      {(status === "idle" || status === "paid") && <DonationWall key={wallKey} theme={theme} />}
 
       {status === "error" && (
         <div className={`border-2 border-red-500/50 ${cardBg} p-6 text-center`}>

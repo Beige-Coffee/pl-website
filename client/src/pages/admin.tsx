@@ -70,6 +70,32 @@ function truncate(str: string | null, len: number): string {
   return str.length > len ? str.slice(0, len) + "..." : str;
 }
 
+const ADMIN_SESSION_KEY = "pl_admin_session";
+const SESSION_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours
+
+function getSavedSession(): string | null {
+  try {
+    const raw = localStorage.getItem(ADMIN_SESSION_KEY);
+    if (!raw) return null;
+    const { password, expiresAt } = JSON.parse(raw);
+    if (Date.now() > expiresAt) {
+      localStorage.removeItem(ADMIN_SESSION_KEY);
+      return null;
+    }
+    return password;
+  } catch {
+    return null;
+  }
+}
+
+function saveSession(pw: string) {
+  localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify({ password: pw, expiresAt: Date.now() + SESSION_TTL_MS }));
+}
+
+function clearSession() {
+  localStorage.removeItem(ADMIN_SESSION_KEY);
+}
+
 export default function AdminPage() {
   const [password, setPassword] = useState("");
   const [authed, setAuthed] = useState(false);
@@ -82,16 +108,6 @@ export default function AdminPage() {
   const [spamming, setSpamming] = useState<Set<string>>(new Set());
   const [revealedMessages, setRevealedMessages] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    fetch("/api/admin/check-ip")
-      .then((r) => {
-        if (!r.ok) return { allowed: false };
-        return r.json();
-      })
-      .then((d) => setIpAllowed(!!d.allowed))
-      .catch(() => setIpAllowed(false));
-  }, []);
-
   const fetchDashboard = useCallback(async (pw: string) => {
     if (!pw) return;
     setLoading(true);
@@ -102,18 +118,36 @@ export default function AdminPage() {
         const body = await res.json().catch(() => ({}));
         setError(body.error || "Failed to load dashboard");
         setAuthed(false);
+        clearSession();
         return;
       }
       const json = await res.json();
       setData(json);
       setAuthed(true);
       setStoredPassword(pw);
+      saveSession(pw);
     } catch {
       setError("Network error");
     } finally {
       setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    fetch("/api/admin/check-ip")
+      .then((r) => {
+        if (!r.ok) return { allowed: false };
+        return r.json();
+      })
+      .then((d) => {
+        setIpAllowed(!!d.allowed);
+        if (d.allowed) {
+          const savedPw = getSavedSession();
+          if (savedPw) fetchDashboard(savedPw);
+        }
+      })
+      .catch(() => setIpAllowed(false));
+  }, [fetchDashboard]);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -177,10 +211,11 @@ export default function AdminPage() {
   // Styles
   const cardClass = "border-4 border-border bg-card p-4 pixel-shadow";
   const tableClass = "w-full text-left text-sm";
-  const thClass = "font-pixel text-[10px] p-2 border-b-2 border-border bg-primary/20";
-  const tdClass = "p-2 border-b border-border/30 font-mono text-xs";
+  const thClass = "font-pixel text-base p-3 border-b-2 border-border bg-primary/20";
+  const sansFont = 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+  const tdClass = "p-3 border-b border-border/30 text-base";
   const tabClass = (tab: Tab) =>
-    `font-pixel text-[10px] px-4 py-2 border-2 transition-all cursor-pointer ${
+    `font-pixel text-base px-6 py-3 border-2 transition-all cursor-pointer ${
       activeTab === tab
         ? "border-border bg-primary text-black pixel-shadow"
         : "border-border/50 bg-card hover:bg-primary/20"
@@ -295,7 +330,7 @@ export default function AdminPage() {
         {/* Users Tab */}
         {activeTab === "users" && (
           <div className={`${cardClass} overflow-x-auto`}>
-            <table className={tableClass}>
+            <table className={tableClass} style={{ fontFamily: sansFont }}>
               <thead>
                 <tr>
                   <th className={thClass}>ID</th>
@@ -330,7 +365,7 @@ export default function AdminPage() {
         {/* Withdrawals Tab */}
         {activeTab === "withdrawals" && (
           <div className={`${cardClass} overflow-x-auto`}>
-            <table className={tableClass}>
+            <table className={tableClass} style={{ fontFamily: sansFont }}>
               <thead>
                 <tr>
                   <th className={thClass}>STATUS</th>
@@ -375,7 +410,7 @@ export default function AdminPage() {
         {/* Checkpoints Tab */}
         {activeTab === "checkpoints" && (
           <div className={`${cardClass} overflow-x-auto`}>
-            <table className={tableClass}>
+            <table className={tableClass} style={{ fontFamily: sansFont }}>
               <thead>
                 <tr>
                   <th className={thClass}>USER</th>
@@ -405,7 +440,7 @@ export default function AdminPage() {
             {/* Page stats */}
             <div className={`${cardClass} overflow-x-auto`}>
               <div className="font-pixel text-xs mb-3">PAGE VIEWS</div>
-              <table className={tableClass}>
+              <table className={tableClass} style={{ fontFamily: sansFont }}>
                 <thead>
                   <tr>
                     <th className={thClass}>PAGE</th>
@@ -428,7 +463,7 @@ export default function AdminPage() {
             {/* Recent events */}
             <div className={`${cardClass} overflow-x-auto`}>
               <div className="font-pixel text-xs mb-3">RECENT EVENTS</div>
-              <table className={tableClass}>
+              <table className={tableClass} style={{ fontFamily: sansFont }}>
                 <thead>
                   <tr>
                     <th className={thClass}>PAGE</th>
@@ -460,7 +495,7 @@ export default function AdminPage() {
             <div className="font-pixel text-xs mb-3">
               DONATIONS &mdash; {(data.recentDonations || []).reduce((s, d) => s + d.amountSats, 0).toLocaleString()} TOTAL SATS
             </div>
-            <table className={tableClass}>
+            <table className={tableClass} style={{ fontFamily: sansFont }}>
               <thead>
                 <tr>
                   <th className={thClass}>NAME</th>
@@ -484,44 +519,19 @@ export default function AdminPage() {
                           <span className="text-foreground/30">-</span>
                         ) : isSpammed ? (
                           <span title="Marked as spam">{d.message}</span>
-                        ) : isRevealed ? (
-                          <span>
-                            {d.message}
-                            <button
-                              onClick={() => toggleReveal(d.id)}
-                              className="ml-2 text-foreground/40 hover:text-foreground text-[10px]"
-                              title="Hide message"
-                            >
-                              [hide]
-                            </button>
-                          </span>
                         ) : (
-                          <span>
-                            <span
-                              className="bg-foreground/80 text-foreground/80 rounded px-1 select-none cursor-pointer hover:bg-foreground/60"
-                              onClick={() => toggleReveal(d.id)}
-                              title="Click to reveal"
-                            >
-                              {d.message}
-                            </span>
-                            <button
-                              onClick={() => toggleReveal(d.id)}
-                              className="ml-2 text-foreground/40 hover:text-foreground text-[10px]"
-                            >
-                              [reveal]
-                            </button>
-                          </span>
+                          <span>{d.message}</span>
                         )}
                       </td>
                       <td className={tdClass}>{formatDate(d.createdAt)}</td>
                       <td className={tdClass}>
                         {isSpammed ? (
-                          <span className="font-pixel text-[10px] text-foreground/30">REMOVED</span>
+                          <span className="font-pixel text-sm text-foreground/30">REMOVED</span>
                         ) : (
                           <button
                             onClick={() => markSpam(d.id)}
                             disabled={spamming.has(d.id)}
-                            className="font-pixel text-[10px] border border-red-500/50 text-red-500 px-2 py-1 hover:bg-red-500/10 disabled:opacity-50"
+                            className="font-pixel text-sm border border-red-500/50 text-red-500 px-3 py-1.5 hover:bg-red-500/10 disabled:opacity-50"
                           >
                             {spamming.has(d.id) ? "..." : "SPAM"}
                           </button>

@@ -309,6 +309,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
 
   const ALLOWED_ADMIN_IP = "108.236.117.225";
+  const LOCALHOST_IPS = ["127.0.0.1", "::1", "::ffff:127.0.0.1"];
 
   const QUIZ_ANSWER_KEY = [3, 0, 0, 2, 1, 0, 3, 0, 3, 1];
   const QUIZ_PASS_THRESHOLD = 0.9;
@@ -712,7 +713,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/admin/stats", async (req: Request, res: Response) => {
     const ip = getClientIp(req);
-    if (ip !== ALLOWED_ADMIN_IP) {
+    if (ip !== ALLOWED_ADMIN_IP && !LOCALHOST_IPS.includes(ip)) {
       return res.status(403).json({ error: "Access denied" });
     }
     if (!adminLimiter.check(ip)) {
@@ -912,7 +913,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/admin/analytics", async (req: Request, res: Response) => {
     try {
       const ip = getClientIp(req);
-      if (ip !== ALLOWED_ADMIN_IP) {
+      if (ip !== ALLOWED_ADMIN_IP && !LOCALHOST_IPS.includes(ip)) {
         return res.status(403).json({ error: "Access denied" });
       }
       if (!adminLimiter.check(ip)) {
@@ -936,7 +937,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/admin/check-ip", (req: Request, res: Response) => {
     const ip = getClientIp(req);
-    if (ip !== ALLOWED_ADMIN_IP) {
+    console.log("[admin] check-ip detected:", ip, "| allowed:", ip === ALLOWED_ADMIN_IP || LOCALHOST_IPS.includes(ip));
+    if (ip !== ALLOWED_ADMIN_IP && !LOCALHOST_IPS.includes(ip)) {
       return res.status(404).json({ error: "Not found" });
     }
     res.json({ allowed: true });
@@ -945,7 +947,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/admin/dashboard", async (req: Request, res: Response) => {
     try {
       const ip = getClientIp(req);
-      if (ip !== ALLOWED_ADMIN_IP) {
+      if (ip !== ALLOWED_ADMIN_IP && !LOCALHOST_IPS.includes(ip)) {
         return res.status(403).json({ error: "Access denied" });
       }
       if (!adminLimiter.check(ip)) {
@@ -1021,7 +1023,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/admin/donation-spam", async (req: Request, res: Response) => {
     const ip = getClientIp(req);
-    if (ip !== ALLOWED_ADMIN_IP) {
+    if (ip !== ALLOWED_ADMIN_IP && !LOCALHOST_IPS.includes(ip)) {
       return res.status(403).json({ error: "Access denied" });
     }
     const { password, donation_id } = req.body;

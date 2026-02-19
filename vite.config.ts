@@ -43,6 +43,15 @@ export default defineConfig({
   server: {
     host: "0.0.0.0",
     allowedHosts: true,
+    proxy: process.env.REPL_ID
+      ? undefined
+      : {
+          "/api": {
+            target: "https://programminglightning.com",
+            changeOrigin: true,
+            secure: true,
+          },
+        },
     fs: {
       strict: true,
       deny: ["**/.*"],
