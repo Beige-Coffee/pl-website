@@ -164,7 +164,7 @@ function ProfileDropdown({
             >
               ADD LIGHTNING ADDRESS
             </button>
-            <p className="mt-3 text-sm leading-relaxed text-foreground/60">
+            <p className="mt-3 text-base font-medium leading-relaxed text-foreground/70">
               Adding a Lightning address makes for a much more seamless experience. Complete checkpoints and receive sats automatically without having to scan a QR code.
             </p>
           </div>
