@@ -31,6 +31,7 @@ function ProfileDropdown({
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [showAddressForm, setShowAddressForm] = useState(!!lightningAddress);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -76,61 +77,79 @@ function ProfileDropdown({
       style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}
       data-testid="container-profile-dropdown"
     >
-      <div className="px-5 py-5 border-b-2 border-border">
-        <div className="font-pixel text-base mb-2 text-foreground/60">
+      <div className="px-5 py-4 border-b-2 border-border">
+        <div className="font-pixel text-xs mb-1 text-foreground/60">
           LOGGED IN AS
         </div>
-        <div className="text-xl truncate text-foreground">
+        <div className="text-base truncate text-foreground">
           {identity}
         </div>
       </div>
 
-      <div className="px-5 py-5 border-b-2 border-border">
-        <div className="font-pixel text-base mb-3 text-[#b8860b]">
-          LIGHTNING ADDRESS
-        </div>
-        {lightningAddress && !saveSuccess && (
-          <div className="text-lg mb-3 truncate text-foreground/70">
-            Current: {lightningAddress}
+      <div className="px-5 py-4 border-b-2 border-border">
+        {!showAddressForm ? (
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowAddressForm(true)}
+              className="w-full font-pixel text-sm border-2 px-4 py-3 transition-all border-[#b8860b] text-[#9a7200] bg-[#FFD700]/10 hover:bg-[#FFD700]/20"
+              data-testid="button-add-lightning-address"
+            >
+              ADD LIGHTNING ADDRESS
+            </button>
+            <p className="mt-3 text-sm leading-relaxed text-foreground/60">
+              Adding a Lightning address makes for a much more seamless experience. Complete checkpoints and receive sats automatically without having to scan a QR code.
+            </p>
+          </div>
+        ) : (
+          <div>
+            <div className="font-pixel text-xs mb-2 text-[#9a7200]">
+              LIGHTNING ADDRESS
+            </div>
+            {lightningAddress && !saveSuccess && (
+              <div className="text-sm mb-2 truncate text-foreground/70">
+                Current: {lightningAddress}
+              </div>
+            )}
+            <input
+              type="text"
+              value={addressInput}
+              onChange={(e) => {
+                setAddressInput(e.target.value);
+                setSaveError(null);
+                setSaveSuccess(false);
+              }}
+              placeholder="you@wallet.com"
+              className="w-full px-3 py-2 text-base border-2 outline-none transition-colors border-border bg-background text-foreground placeholder:text-foreground/30 focus:border-[#b8860b]"
+              data-testid="input-lightning-address"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSave();
+              }}
+            />
+            <div className="flex items-center gap-3 mt-3">
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving}
+                className={`font-pixel text-xs border-2 px-4 py-2 transition-all border-[#FFD700] bg-[#FFD700] text-black hover:bg-[#FFC800] active:scale-95 ${
+                  saving ? "opacity-60 cursor-wait" : ""
+                }`}
+                data-testid="button-save-lightning-address"
+              >
+                {saving ? "SAVING..." : "SAVE"}
+              </button>
+              {saveSuccess && (
+                <span className="font-pixel text-xs text-green-400">SAVED!</span>
+              )}
+              {saveError && (
+                <span className="font-pixel text-xs text-red-400">{saveError}</span>
+              )}
+            </div>
+            <p className="mt-3 text-sm leading-relaxed text-foreground/60">
+              Rewards will auto-send to this address, so you can complete checkpoints and receive sats without scanning a QR code.
+            </p>
           </div>
         )}
-        <input
-          type="text"
-          value={addressInput}
-          onChange={(e) => {
-            setAddressInput(e.target.value);
-            setSaveError(null);
-            setSaveSuccess(false);
-          }}
-          placeholder="you@wallet.com"
-          className="w-full px-4 py-3 text-xl border-4 outline-none transition-colors border-border bg-background text-foreground placeholder:text-foreground/30 focus:border-[#b8860b]"
-          data-testid="input-lightning-address"
-          onKeyDown={(e) => {
-            if (e.key === "Enter") handleSave();
-          }}
-        />
-        <div className="flex items-center gap-3 mt-4">
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving}
-            className={`font-pixel text-base border-2 px-6 py-3 transition-all border-[#FFD700] bg-[#FFD700] text-black hover:bg-[#FFC800] active:scale-95 ${
-              saving ? "opacity-60 cursor-wait" : ""
-            }`}
-            data-testid="button-save-lightning-address"
-          >
-            {saving ? "SAVING..." : "SAVE"}
-          </button>
-          {saveSuccess && (
-            <span className="font-pixel text-base text-green-400">SAVED!</span>
-          )}
-          {saveError && (
-            <span className="font-pixel text-base text-red-400">{saveError}</span>
-          )}
-        </div>
-        <div className="mt-3 text-lg text-foreground/70">
-          Rewards will auto-send to this address
-        </div>
       </div>
 
       <div className="px-5 py-5">
