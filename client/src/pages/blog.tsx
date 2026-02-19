@@ -16,6 +16,8 @@ function ProfileDropdown({
   email,
   pubkey,
   lightningAddress,
+  sessionToken,
+  emailVerified,
   onSetLightningAddress,
   onLogout,
   onClose,
@@ -23,6 +25,8 @@ function ProfileDropdown({
   email: string | null;
   pubkey: string | null;
   lightningAddress: string | null;
+  sessionToken: string | null;
+  emailVerified: boolean;
   onSetLightningAddress: (address: string | null) => Promise<void>;
   onLogout: () => void;
   onClose: () => void;
@@ -32,7 +36,11 @@ function ProfileDropdown({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [showAddressForm, setShowAddressForm] = useState(!!lightningAddress);
+  const [resending, setResending] = useState(false);
+  const [resendMsg, setResendMsg] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const isLightningUser = !!pubkey;
+  const needsVerification = !!email && !emailVerified && !isLightningUser;
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -51,6 +59,29 @@ function ProfileDropdown({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
+
+  const handleResendVerification = async () => {
+    if (!sessionToken) return;
+    setResending(true);
+    setResendMsg(null);
+    try {
+      const res = await fetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionToken }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setResendMsg("Verification email sent! Check your inbox.");
+      } else {
+        setResendMsg(data.error || "Failed to send");
+      }
+    } catch {
+      setResendMsg("Failed to send");
+    } finally {
+      setResending(false);
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -84,7 +115,43 @@ function ProfileDropdown({
         <div className="text-base truncate text-foreground">
           {identity}
         </div>
+        {email && (
+          <div className="mt-2 flex items-center gap-2">
+            {emailVerified ? (
+              <span className="text-xs font-pixel text-green-700">VERIFIED</span>
+            ) : (
+              <span className="text-xs font-pixel text-[#9a7200]">NOT VERIFIED</span>
+            )}
+          </div>
+        )}
+        {isLightningUser && !email && (
+          <div className="mt-2">
+            <span className="text-xs font-pixel text-green-700">LIGHTNING AUTH</span>
+          </div>
+        )}
       </div>
+
+      {needsVerification && (
+        <div className="px-5 py-4 border-b-2 border-border">
+          <p className="text-sm leading-relaxed mb-3 text-foreground/70">
+            Verify your email to claim bitcoin rewards from checkpoints. You can also log in with LNURL-Auth instead.
+          </p>
+          <button
+            type="button"
+            onClick={handleResendVerification}
+            disabled={resending}
+            className={`font-pixel text-xs border-2 px-4 py-2 transition-all border-[#b8860b] text-[#9a7200] bg-[#FFD700]/10 hover:bg-[#FFD700]/20 ${resending ? "opacity-60 cursor-wait" : ""}`}
+            data-testid="button-resend-verification"
+          >
+            {resending ? "SENDING..." : "RESEND VERIFICATION EMAIL"}
+          </button>
+          {resendMsg && (
+            <p className={`mt-2 text-xs ${resendMsg.includes("sent") ? "text-green-700" : "text-red-400"}`}>
+              {resendMsg}
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="px-5 py-4 border-b-2 border-border">
         {!showAddressForm ? (
@@ -206,6 +273,8 @@ export default function Blog() {
                   email={auth.email}
                   pubkey={auth.pubkey}
                   lightningAddress={auth.lightningAddress}
+                  sessionToken={auth.sessionToken}
+                  emailVerified={auth.emailVerified}
                   onSetLightningAddress={setLightningAddress}
                   onLogout={logout}
                   onClose={() => setShowProfileDropdown(false)}
