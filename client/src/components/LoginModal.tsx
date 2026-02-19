@@ -9,8 +9,11 @@ interface LoginModalProps {
 
 const SUPPORTED_WALLETS = [
   { name: "Phoenix", url: "https://phoenix.acinq.co/" },
-  { name: "Zeus", url: "https://zeusln.com/" },
+  { name: "Zeus", url: "https://zeusln.app/" },
   { name: "Breez", url: "https://breez.technology/" },
+  { name: "BlueWallet", url: "https://bluewallet.io/" },
+  { name: "Blixt", url: "https://blixtwallet.github.io/" },
+  { name: "BitBanana", url: "https://bitbanana.app/" },
   { name: "Alby", url: "https://getalby.com/", note: "browser extension" },
 ];
 
@@ -523,7 +526,18 @@ function LightningAuthForm({
       )}
 
       <div className={`border-t-2 ${border} pt-4 mt-4`}>
-        <div className={`font-pixel text-xs mb-3 text-center ${textMuted}`}>SUPPORTED WALLETS</div>
+        <p className={`text-sm text-center mb-3 ${textMuted}`} style={{ fontFamily: sansFont }}>
+          Works with any wallet that supports{" "}
+          <a
+            href="https://github.com/lnurl/luds/blob/luds/04.md"
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`underline ${dark ? "text-[#FFD700]" : "text-gray-900"}`}
+          >
+            LNURL-auth
+          </a>
+          , including:
+        </p>
         <div className="flex flex-wrap justify-center gap-2">
           {SUPPORTED_WALLETS.map((w) => (
             <a
