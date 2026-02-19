@@ -311,7 +311,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const ALLOWED_ADMIN_IP = "108.236.117.225";
   const LOCALHOST_IPS = ["127.0.0.1", "::1", "::ffff:127.0.0.1"];
 
-  const QUIZ_ANSWER_KEY = [3, 0, 0, 2, 1, 0, 3, 0, 3, 1];
+  const QUIZ_ANSWER_KEY = [3, 0, 2, 2, 1, 0, 3, 0, 3, 1];
   const QUIZ_PASS_THRESHOLD = 0.9;
   const REWARD_AMOUNT_SATS = parseInt(process.env.REWARD_AMOUNT_SATS || "21", 10);
   const REWARD_AMOUNT_MSATS = REWARD_AMOUNT_SATS * 1000;
@@ -322,7 +322,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "pubkey-compression": 1,
     "hash-preimage": 2,
     "ecdh-security": 1,
-    "hkdf-purpose": 1,
+    "hkdf-purpose": 0,
     "nonce-reuse": 2,
     "setup-wrong-key": 1,
     "act2-both-ephemeral": 3,
