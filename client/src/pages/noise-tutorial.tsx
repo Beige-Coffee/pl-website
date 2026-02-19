@@ -1232,18 +1232,28 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
   const handlePresetClick = useCallback((value: number) => {
     setAmount(String(value));
     setCustomAmount("");
-    createInvoice(value);
-  }, [createInvoice]);
+    setShowCustom(false);
+    setErrorMsg("");
+  }, []);
 
-  const handleCustomSubmit = useCallback(() => {
+  const handleCustomConfirm = useCallback(() => {
     const sats = parseInt(customAmount, 10);
     if (!sats || sats < 1 || sats > 1000000) {
       setErrorMsg("Enter a number between 1 and 1,000,000");
       return;
     }
     setAmount(String(sats));
+    setErrorMsg("");
+  }, [customAmount]);
+
+  const handleDonate = useCallback(() => {
+    const sats = parseInt(amount, 10);
+    if (!sats || sats < 1) {
+      setErrorMsg("Please select an amount first");
+      return;
+    }
     createInvoice(sats);
-  }, [customAmount, createInvoice]);
+  }, [amount, createInvoice]);
 
   const resetDonation = useCallback(() => {
     setStatus("idle");
@@ -1291,19 +1301,26 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
           <div className={`font-pixel text-sm ${goldText} mb-4 tracking-wider`}>CHOOSE AN AMOUNT (SATS)</div>
 
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-5">
-            {presetAmounts.map((p) => (
-              <button
-                key={p.value}
-                type="button"
-                onClick={() => handlePresetClick(p.value)}
-                className={`border-2 ${goldBorder} ${dark ? "bg-[#0b1220]" : "bg-white"} p-4 transition-all hover:scale-[1.02] active:scale-[0.98]`}
-                style={{ cursor: "pointer" }}
-                data-testid={`button-donate-${p.value}`}
-              >
-                <div className={`font-pixel text-xl md:text-2xl ${goldText}`}>{p.label}</div>
-                <div className={`text-base md:text-lg ${textMuted} mt-1`} style={{ fontFamily: sansFont }}>{p.desc}</div>
-              </button>
-            ))}
+            {presetAmounts.map((p) => {
+              const isSelected = amount === String(p.value) && !customAmount;
+              return (
+                <button
+                  key={p.value}
+                  type="button"
+                  onClick={() => handlePresetClick(p.value)}
+                  className={`border-2 p-4 transition-all hover:scale-[1.02] active:scale-[0.98] ${
+                    isSelected
+                      ? `${goldBorder} ${dark ? "bg-[#FFD700]/15" : "bg-[#FFD700]/20"} ring-2 ring-[#FFD700]/50`
+                      : `${goldBorder} ${dark ? "bg-[#0b1220]" : "bg-white"}`
+                  }`}
+                  style={{ cursor: "pointer" }}
+                  data-testid={`button-donate-${p.value}`}
+                >
+                  <div className={`font-pixel text-xl md:text-2xl ${goldText}`}>{p.label}</div>
+                  <div className={`text-base md:text-lg ${textMuted} mt-1`} style={{ fontFamily: sansFont }}>{p.desc}</div>
+                </button>
+              );
+            })}
           </div>
 
           <div className="mb-6">
@@ -1325,20 +1342,18 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
                     max="1000000"
                     placeholder="Enter sats..."
                     value={customAmount}
-                    onChange={(e) => { setCustomAmount(e.target.value); setErrorMsg(""); }}
-                    onKeyDown={(e) => { if (e.key === "Enter") handleCustomSubmit(); }}
+                    onChange={(e) => {
+                      setCustomAmount(e.target.value);
+                      setErrorMsg("");
+                      // Auto-set amount as they type
+                      const v = parseInt(e.target.value, 10);
+                      if (v && v >= 1 && v <= 1000000) setAmount(String(v));
+                    }}
+                    onKeyDown={(e) => { if (e.key === "Enter") handleCustomConfirm(); }}
                     className={`flex-1 border-2 ${goldBorder} ${dark ? "bg-[#0b1220] text-slate-100" : "bg-white text-black"} px-4 py-3 text-xl md:text-2xl outline-none focus:ring-2 focus:ring-[#FFD700]/50`}
                     style={{ fontFamily: sansFont }}
                     data-testid="input-custom-donate"
                   />
-                  <button
-                    type="button"
-                    onClick={handleCustomSubmit}
-                    className={`border-2 ${goldBorder} bg-[#FFD700] text-black font-pixel text-sm px-6 py-3 transition-all hover:brightness-110 active:scale-[0.98]`}
-                    data-testid="button-donate-custom"
-                  >
-                    DONATE
-                  </button>
                 </div>
                 {errorMsg && status === "idle" && (
                   <div className="text-red-500 font-mono text-sm mt-2">{errorMsg}</div>
@@ -1390,6 +1405,22 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
           {moderationError && (
             <div className="text-red-500 text-sm mt-3" style={{ fontFamily: sansFont }}>{moderationError}</div>
           )}
+          {errorMsg && status === "idle" && (
+            <div className="text-red-500 font-mono text-sm mt-3">{errorMsg}</div>
+          )}
+
+          {/* Donate button */}
+          <button
+            type="button"
+            onClick={handleDonate}
+            className={`w-full mt-6 border-2 ${goldBorder} bg-[#FFD700] text-black font-pixel text-lg md:text-xl py-4 transition-all hover:brightness-110 active:scale-[0.98] ${
+              amount ? "" : "opacity-50"
+            }`}
+            style={{ cursor: "pointer" }}
+            data-testid="button-donate-submit"
+          >
+            {amount ? `DONATE ${Number(amount).toLocaleString()} SATS` : "SELECT AN AMOUNT TO DONATE"}
+          </button>
         </div>
       )}
 
