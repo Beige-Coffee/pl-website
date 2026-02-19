@@ -17,6 +17,7 @@ interface CheckpointQuestionProps {
   claimInfo: { checkpointId: string; amountSats: number; paidAt: string } | null;
   onLoginRequest: () => void;
   onCompleted: (checkpointId: string, amountSats?: number) => void;
+  onOpenProfile?: () => void;
 }
 
 // Render inline code: converts `text` to <code> elements
@@ -55,6 +56,7 @@ export default function CheckpointQuestion({
   claimInfo,
   onLoginRequest,
   onCompleted,
+  onOpenProfile,
 }: CheckpointQuestionProps) {
   const dark = theme === "dark";
   const canClaimRewards = !!pubkey || emailVerified;
@@ -406,10 +408,14 @@ export default function CheckpointQuestion({
                     LIGHTNING ADDRESS
                   </button>
                 ) : (
-                  <div className={`flex-1 border-2 px-5 py-3 ${dark ? "border-[#2a3552]" : "border-border"} opacity-50`}>
+                  <button
+                    type="button"
+                    onClick={() => onOpenProfile?.()}
+                    className={`flex-1 border-2 px-5 py-3 cursor-pointer hover:opacity-70 transition-opacity ${dark ? "border-[#2a3552]" : "border-border"} opacity-60 bg-transparent`}
+                  >
                     <div className="font-pixel text-sm text-center mb-1" style={{ color: dark ? "#94a3b8" : undefined }}>LIGHTNING ADDRESS</div>
-                    <div className={`text-xs text-center ${textMuted}`}>Set address in profile first</div>
-                  </div>
+                    <div className={`text-sm text-center font-bold ${textMuted}`}>Set address in profile first</div>
+                  </button>
                 )}
                 <button
                   type="button"

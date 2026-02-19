@@ -459,7 +459,7 @@ function ProfileDropdown({
                 <span className="font-pixel text-xs text-red-400">{saveError}</span>
               )}
             </div>
-            <p className={`mt-3 text-sm leading-relaxed ${dark ? "text-slate-400" : "text-foreground/60"}`}>
+            <p className={`mt-3 text-base leading-relaxed ${dark ? "text-slate-300" : "text-foreground/70"}`}>
               Rewards will auto-send to this address, so you can complete checkpoints and receive sats without scanning a QR code.
             </p>
           </div>
@@ -821,6 +821,7 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
                 pubkey={auth.pubkey}
                 onLoginRequest={() => setShowLoginModal(true)}
                 onCheckpointCompleted={auth.markCheckpointCompleted}
+                onOpenProfile={() => setShowProfileDropdown(true)}
               />
             )}
 
@@ -2319,6 +2320,7 @@ function ChapterContent({
   pubkey,
   onLoginRequest,
   onCheckpointCompleted,
+  onOpenProfile,
 }: {
   chapter: Chapter;
   theme: "light" | "dark";
@@ -2330,6 +2332,7 @@ function ChapterContent({
   pubkey: string | null;
   onLoginRequest: () => void;
   onCheckpointCompleted: (id: string, amountSats?: number) => void;
+  onOpenProfile: () => void;
 }) {
   const [md, setMd] = useState<string>("Loading…");
   const [err, setErr] = useState<string | null>(null);
@@ -2445,6 +2448,7 @@ function ChapterContent({
                 claimInfo={completedCheckpoints.find(c => c.checkpointId === cpId) || null}
                 onLoginRequest={onLoginRequest}
                 onCompleted={onCheckpointCompleted}
+                onOpenProfile={onOpenProfile}
               />
             );
           },
@@ -2474,6 +2478,7 @@ function ChapterContent({
                 claimInfo={completedCheckpoints.find(c => c.checkpointId === groupId) || null}
                 onLoginRequest={onLoginRequest}
                 onCompleted={onCheckpointCompleted}
+                onOpenProfile={onOpenProfile}
               />
             );
           },

@@ -212,7 +212,7 @@ function ProfileDropdown({
                 <span className="font-pixel text-xs text-red-400">{saveError}</span>
               )}
             </div>
-            <p className="mt-3 text-sm leading-relaxed text-foreground/60">
+            <p className="mt-3 text-base leading-relaxed text-foreground/70">
               Rewards will auto-send to this address, so you can complete checkpoints and receive sats without scanning a QR code.
             </p>
           </div>
