@@ -43,7 +43,8 @@ export default function CheckpointGroup({
   const dark = theme === "dark";
   const canClaimRewards = !!pubkey || emailVerified;
 
-  const storageKey = `pl-checkpoint-${groupId}`;
+  const userSuffix = sessionToken ? `-${sessionToken.slice(0, 8)}` : "";
+  const storageKey = `pl-checkpoint-${groupId}${userSuffix}`;
 
   const [selections, setSelections] = useState<Record<string, number | null>>(() => {
     try {

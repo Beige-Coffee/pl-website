@@ -59,7 +59,8 @@ export default function CheckpointQuestion({
   const dark = theme === "dark";
   const canClaimRewards = !!pubkey || emailVerified;
 
-  const storageKey = `pl-checkpoint-${checkpointId}`;
+  const userSuffix = sessionToken ? `-${sessionToken.slice(0, 8)}` : "";
+  const storageKey = `pl-checkpoint-${checkpointId}${userSuffix}`;
 
   const [selected, setSelected] = useState<number | null>(() => {
     try {

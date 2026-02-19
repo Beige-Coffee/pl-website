@@ -1757,9 +1757,11 @@ function InteractiveQuiz({
   onLoginRequest: () => void;
 }) {
   const canClaimRewards = !!pubkey || emailVerified;
+  const quizUserSuffix = sessionToken ? `-${sessionToken.slice(0, 8)}` : "";
+  const quizStorageKey = `pl-quiz-selections${quizUserSuffix}`;
   const [selections, setSelections] = useState<Record<number, number>>(() => {
     try {
-      const saved = localStorage.getItem("pl-quiz-selections");
+      const saved = localStorage.getItem(quizStorageKey);
       return saved ? JSON.parse(saved) : {};
     } catch { return {}; }
   });
@@ -1785,7 +1787,7 @@ function InteractiveQuiz({
     if (submitted) return;
     setSelections((prev) => {
       const next = { ...prev, [qIndex]: optIndex };
-      try { localStorage.setItem("pl-quiz-selections", JSON.stringify(next)); } catch {}
+      try { localStorage.setItem(quizStorageKey, JSON.stringify(next)); } catch {}
       return next;
     });
   };
@@ -1876,7 +1878,7 @@ function InteractiveQuiz({
 
   const handleReset = () => {
     setSelections({});
-    try { localStorage.removeItem("pl-quiz-selections"); } catch {}
+    try { localStorage.removeItem(quizStorageKey); } catch {}
     setSubmitted(false);
     setScore(0);
     setShowReward(false);
