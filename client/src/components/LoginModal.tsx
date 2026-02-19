@@ -14,6 +14,8 @@ const SUPPORTED_WALLETS = [
   { name: "Alby", url: "https://getalby.com/", note: "browser extension" },
 ];
 
+const sansFont = 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+
 export default function LoginModal({ theme, onSuccess, onClose }: LoginModalProps) {
   const [tab, setTab] = useState<"lightning" | "login" | "register">("login");
   const dark = theme === "dark";
@@ -150,7 +152,8 @@ function EmailLoginForm({
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
-          className={`w-full border-2 ${border} ${inputBg} ${textColor} px-4 py-3 text-base font-mono focus:outline-none focus:border-gray-900 placeholder:text-gray-400`}
+          className={`w-full border-2 ${border} ${inputBg} ${textColor} px-4 py-3 text-base focus:outline-none focus:border-gray-900 placeholder:text-gray-400`}
+          style={{ fontFamily: sansFont }}
           placeholder="you@example.com"
           data-testid="input-email"
         />
@@ -163,14 +166,15 @@ function EmailLoginForm({
           onChange={(e) => setPassword(e.target.value)}
           required
           minLength={6}
-          className={`w-full border-2 ${border} ${inputBg} ${textColor} px-4 py-3 text-base font-mono focus:outline-none focus:border-gray-900 placeholder:text-gray-400`}
+          className={`w-full border-2 ${border} ${inputBg} ${textColor} px-4 py-3 text-base focus:outline-none focus:border-gray-900 placeholder:text-gray-400`}
+          style={{ fontFamily: sansFont }}
           placeholder="Your password"
           data-testid="input-password"
         />
       </div>
 
       {error && (
-        <div className="font-pixel text-sm text-red-500 text-center" data-testid="text-auth-error">
+        <div className="text-sm text-red-500 text-center" style={{ fontFamily: sansFont }} data-testid="text-auth-error">
           {error}
         </div>
       )}
@@ -190,10 +194,10 @@ function EmailLoginForm({
         {loading ? "PLEASE WAIT..." : "LOG IN"}
       </button>
 
-      <div className={`text-center font-pixel text-xs ${textMuted}`}>
-        DON'T HAVE AN ACCOUNT?{" "}
+      <div className={`text-center text-sm ${textMuted}`} style={{ fontFamily: sansFont }}>
+        Don't have an account?{" "}
         <button type="button" onClick={onSwitchToRegister} className={`${dark ? "text-[#FFD700]" : "text-gray-900"} underline`} data-testid="link-switch-register">
-          REGISTER
+          Register
         </button>
       </div>
     </form>
@@ -260,10 +264,10 @@ function EmailRegisterForm({
           CHECK YOUR EMAIL
         </div>
         <div className={`border-2 ${border} ${dark ? "bg-[#0f1930]" : "bg-gray-50"} p-4`}>
-          <p className={`text-base ${dark ? "text-slate-300" : "text-gray-700"} mb-3`}>
+          <p className={`text-base ${dark ? "text-slate-300" : "text-gray-700"} mb-3`} style={{ fontFamily: sansFont }}>
             We sent a verification link to <strong>{email}</strong>.
           </p>
-          <p className={`text-sm ${textMuted}`}>
+          <p className={`text-sm ${textMuted}`} style={{ fontFamily: sansFont }}>
             You must verify your email before you can claim sat rewards. Check your inbox (and spam folder) for the verification email.
           </p>
         </div>
@@ -277,7 +281,7 @@ function EmailRegisterForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       <div className={`border-2 ${border} ${dark ? "bg-[#FFD700]/5" : "bg-yellow-50"} p-3 mb-2`}>
-        <p className={`text-sm ${dark ? "text-slate-300" : "text-gray-700"}`}>
+        <p className={`text-sm ${dark ? "text-slate-300" : "text-gray-700"}`} style={{ fontFamily: sansFont }}>
           After registering, you will receive a verification email. You must verify your email to claim sat rewards.
         </p>
       </div>
@@ -289,7 +293,8 @@ function EmailRegisterForm({
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
-          className={`w-full border-2 ${border} ${inputBg} ${textColor} px-4 py-3 text-base font-mono focus:outline-none focus:border-gray-900 placeholder:text-gray-400`}
+          className={`w-full border-2 ${border} ${inputBg} ${textColor} px-4 py-3 text-base focus:outline-none focus:border-gray-900 placeholder:text-gray-400`}
+          style={{ fontFamily: sansFont }}
           placeholder="you@example.com"
           data-testid="input-register-email"
         />
@@ -302,14 +307,15 @@ function EmailRegisterForm({
           onChange={(e) => setPassword(e.target.value)}
           required
           minLength={6}
-          className={`w-full border-2 ${border} ${inputBg} ${textColor} px-4 py-3 text-base font-mono focus:outline-none focus:border-gray-900 placeholder:text-gray-400`}
+          className={`w-full border-2 ${border} ${inputBg} ${textColor} px-4 py-3 text-base focus:outline-none focus:border-gray-900 placeholder:text-gray-400`}
+          style={{ fontFamily: sansFont }}
           placeholder="Min 6 characters"
           data-testid="input-register-password"
         />
       </div>
 
       {error && (
-        <div className="font-pixel text-sm text-red-500 text-center" data-testid="text-auth-error">
+        <div className="text-sm text-red-500 text-center" style={{ fontFamily: sansFont }} data-testid="text-auth-error">
           {error}
         </div>
       )}
@@ -329,10 +335,10 @@ function EmailRegisterForm({
         {loading ? "PLEASE WAIT..." : "CREATE ACCOUNT"}
       </button>
 
-      <div className={`text-center font-pixel text-xs ${textMuted}`}>
-        ALREADY HAVE AN ACCOUNT?{" "}
+      <div className={`text-center text-sm ${textMuted}`} style={{ fontFamily: sansFont }}>
+        Already have an account?{" "}
         <button type="button" onClick={onSwitchToLogin} className={`${dark ? "text-[#FFD700]" : "text-gray-900"} underline`} data-testid="link-switch-login">
-          LOG IN
+          Log in
         </button>
       </div>
     </form>
@@ -379,7 +385,7 @@ function LightningAuthForm({
 
   return (
     <div>
-      <p className={`text-base ${dark ? "text-slate-300" : "text-gray-700"} mb-4 text-center`}>
+      <p className={`text-base ${dark ? "text-slate-300" : "text-gray-700"} mb-4 text-center`} style={{ fontFamily: sansFont }}>
         Scan with a Lightning wallet that supports LNURL-auth
       </p>
 
@@ -445,6 +451,7 @@ function LightningAuthForm({
               target="_blank"
               rel="noopener noreferrer"
               className={`border ${border} px-3 py-1.5 text-sm ${dark ? "text-slate-300" : "text-gray-700"} hover:opacity-70`}
+              style={{ fontFamily: sansFont }}
             >
               {w.name}
               {w.note && <span className={`ml-1 ${textMuted} text-xs`}>({w.note})</span>}
