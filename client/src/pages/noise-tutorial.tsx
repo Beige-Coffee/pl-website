@@ -307,7 +307,7 @@ function ProfileDropdown({
   return (
     <div
       ref={dropdownRef}
-      className={`absolute right-0 top-full mt-2 w-[420px] border-4 z-50 ${
+      className={`absolute right-0 top-full mt-2 w-[calc(100vw-2rem)] sm:w-[420px] max-w-[420px] border-4 z-50 ${
         dark ? "border-[#2a3552] bg-[#0f1930]" : "border-border bg-card"
       }`}
       style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}
@@ -483,11 +483,11 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
 
   return (
     <div className={`min-h-screen ${t.pageBg} ${t.pageText}`} data-theme={theme}>
-      <div className={`w-full border-b-4 ${t.headerBorder} ${t.headerBg} px-4 py-3 flex items-center justify-between sticky top-0 z-50`}>
-        <div className="flex items-center gap-3">
+      <div className={`w-full border-b-4 ${t.headerBorder} ${t.headerBg} px-2 py-2 md:px-4 md:py-3 flex items-center justify-between sticky top-0 z-50`}>
+        <div className="flex items-center gap-2 md:gap-3">
           <button
             type="button"
-            className={`md:hidden font-pixel text-xs border-2 ${theme === "dark" ? "border-[#2a3552] bg-[#0f1930] hover:bg-[#132043]" : "border-border bg-card hover:bg-secondary"} px-3 py-2 transition-colors`}
+            className={`md:hidden font-pixel text-xs border-2 ${theme === "dark" ? "border-[#2a3552] bg-[#0f1930] hover:bg-[#132043]" : "border-border bg-card hover:bg-secondary"} px-2 py-1.5 transition-colors`}
             onClick={() => setMobileNavOpen((v) => !v)}
             data-testid="button-sidebar-toggle"
           >
@@ -495,10 +495,21 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
           </button>
           <Link
             href="/learn"
-            className="font-pixel text-xs md:text-sm hover:text-primary transition-colors"
+            className="hidden md:inline font-pixel text-xs md:text-sm hover:text-primary transition-colors"
             data-testid="link-back-blog"
           >
             &lt; BACK TO LEARN
+          </Link>
+          <Link
+            href="/learn"
+            className={`md:hidden p-1 transition-colors ${theme === "dark" ? "text-slate-300 hover:text-slate-100" : "text-foreground/70 hover:text-foreground"}`}
+            data-testid="link-back-blog-mobile"
+            aria-label="Back to Learn"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 12H5" />
+              <path d="M12 19l-7-7 7-7" />
+            </svg>
           </Link>
         </div>
 
@@ -574,7 +585,7 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
             <button
               type="button"
               onClick={() => setShowLoginModal(true)}
-              className={`p-2 font-pixel text-xs md:text-sm transition-colors ${
+              className={`p-1 md:p-2 font-pixel text-[10px] md:text-sm transition-colors ${
                 theme === "dark"
                   ? "text-slate-200 hover:text-white"
                   : "text-foreground hover:text-foreground/80"
@@ -593,11 +604,34 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
           gridTemplateColumns: sidebarCollapsed ? `60px minmax(0, 1fr)` : `360px minmax(0, 1fr)`,
         }}
       >
+        {mobileNavOpen && (
+          <div
+            className="md:hidden fixed inset-0 bg-black/50 z-40"
+            onClick={() => setMobileNavOpen(false)}
+          />
+        )}
         <aside
           className={`${
-            mobileNavOpen ? "block" : "hidden"
-          } md:block md:sticky md:top-[68px] h-fit ${theme === "dark" ? "bg-[#0b1220]" : "bg-card"}`}
+            mobileNavOpen ? "fixed inset-y-0 left-0 w-[300px] z-50 overflow-y-auto shadow-xl" : "hidden"
+          } md:relative md:block md:sticky md:top-[68px] md:w-auto md:z-auto md:shadow-none h-fit ${theme === "dark" ? "bg-[#0b1220]" : "bg-card"}`}
         >
+          <div className="md:hidden flex items-center justify-between px-4 pt-4 pb-2">
+            <div className={`font-pixel text-sm ${theme === "dark" ? "text-slate-200" : "text-foreground"}`}>
+              Chapters
+            </div>
+            <button
+              type="button"
+              onClick={() => setMobileNavOpen(false)}
+              className={`border-2 px-2 py-1 font-pixel text-xs transition-colors ${
+                theme === "dark"
+                  ? "border-[#2a3552] bg-[#0f1930] hover:bg-[#132043]"
+                  : "border-border bg-card hover:bg-secondary"
+              }`}
+              aria-label="Close menu"
+            >
+              ✕
+            </button>
+          </div>
           <div className="hidden md:flex items-center justify-between px-4 pt-4">
             <div
               className={`font-pixel text-sm ${theme === "dark" ? "text-slate-200" : "text-foreground"} ${
@@ -697,15 +731,15 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
               />
             )}
 
-            <div className={`mt-10 pt-6 border-t ${theme === "dark" ? "border-[#1f2a44]" : "border-border"} flex items-center justify-between gap-3`}>
+            <div className={`mt-10 pt-6 border-t ${theme === "dark" ? "border-[#1f2a44]" : "border-border"} flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3`}>
               {prev ? (
                 <Link
                   href={prev.id === "intro" ? "/noise-tutorial" : `/noise-tutorial/${prev.id}`}
-                  className={`inline-flex items-center gap-2 border-2 px-4 py-2 transition-colors ${t.navPrev}`}
+                  className={`inline-flex items-center gap-2 border-2 px-3 py-2 md:px-4 transition-colors w-full md:w-auto ${t.navPrev}`}
                   data-testid="link-prev"
                 >
-                  <span className={`font-pixel text-base ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`}>PREV</span>
-                  <span className="font-mono text-lg">{prev.title}</span>
+                  <span className={`font-pixel text-sm md:text-base shrink-0 ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`}>PREV</span>
+                  <span className="font-mono text-base md:text-lg truncate hidden sm:inline">{prev.title}</span>
                 </Link>
               ) : (
                 <div />
@@ -714,11 +748,11 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
               {next ? (
                 <Link
                   href={next.id === "intro" ? "/noise-tutorial" : `/noise-tutorial/${next.id}`}
-                  className={`inline-flex items-center gap-2 border-2 px-4 py-2 transition-all ${t.navNext}`}
+                  className={`inline-flex items-center gap-2 border-2 px-3 py-2 md:px-4 transition-all w-full md:w-auto ${t.navNext}`}
                   data-testid="link-next"
                 >
-                  <span className="font-pixel text-base">NEXT</span>
-                  <span className="font-mono text-lg">{next.title}</span>
+                  <span className="font-pixel text-sm md:text-base shrink-0">NEXT</span>
+                  <span className="font-mono text-base md:text-lg truncate hidden sm:inline">{next.title}</span>
                 </Link>
               ) : (
                 <div />
@@ -1331,8 +1365,8 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
                   style={{ cursor: "pointer" }}
                   data-testid={`button-donate-${p.value}`}
                 >
-                  <div className={`font-pixel text-xl md:text-2xl ${goldText}`}>{p.label}</div>
-                  <div className={`text-base md:text-lg ${textMuted} mt-1`} style={{ fontFamily: sansFont }}>{p.desc}</div>
+                  <div className={`font-pixel text-xl md:text-2xl ${goldText} text-center`}>{p.label}</div>
+                  <div className={`text-base md:text-lg ${textMuted} mt-1 text-center`} style={{ fontFamily: sansFont }}>{p.desc}</div>
                 </button>
               );
             })}
@@ -1467,13 +1501,21 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
 
           <div className={`border-2 ${cardBorder} ${dark ? "bg-[#0b1220]" : "bg-gray-50"} p-3 mb-4`}>
             <div className={`font-pixel text-xs ${textMuted} mb-1`}>BOLT11 INVOICE</div>
-            <div
-              className={`font-mono text-xs ${textMuted} break-all cursor-pointer select-all leading-relaxed`}
-              onClick={() => { navigator.clipboard.writeText(invoice); }}
-              title="Click to copy"
-              data-testid="text-invoice"
-            >
-              {invoice}
+            <div className="flex items-center gap-2">
+              <div
+                className={`font-mono text-xs ${textMuted} truncate flex-1 leading-relaxed`}
+                data-testid="text-invoice"
+              >
+                {invoice.slice(0, 30)}...
+              </div>
+              <button
+                type="button"
+                onClick={() => { navigator.clipboard.writeText(invoice); }}
+                className={`shrink-0 border-2 ${goldBorder} bg-[#FFD700] text-black font-pixel text-xs px-3 py-1.5 transition-all hover:brightness-110 active:scale-[0.98]`}
+                data-testid="button-copy-invoice-inline"
+              >
+                COPY
+              </button>
             </div>
           </div>
 

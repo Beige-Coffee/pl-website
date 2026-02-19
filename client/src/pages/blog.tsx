@@ -72,7 +72,7 @@ function ProfileDropdown({
   return (
     <div
       ref={dropdownRef}
-      className="absolute right-0 top-full mt-2 w-[420px] border-4 z-50 border-border bg-card pixel-shadow"
+      className="absolute right-0 top-full mt-2 w-[calc(100vw-2rem)] sm:w-[420px] max-w-[420px] border-4 z-50 border-border bg-card pixel-shadow"
       style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}
       data-testid="container-profile-dropdown"
     >
@@ -224,17 +224,17 @@ export default function Blog() {
               className="bg-card border-4 border-border p-4 md:p-5 pixel-shadow pixel-shadow-hover transition-all hover:bg-secondary block"
               data-testid="card-post-noise"
             >
-              <div className="flex items-start justify-between gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
                 <div className="min-w-0">
-                  <h2 className="font-pixel text-lg md:text-xl leading-relaxed" data-testid="text-post-title">
+                  <h2 className="font-pixel text-sm sm:text-lg md:text-xl leading-relaxed" data-testid="text-post-title">
                     {post.title}
                   </h2>
-                  <p className="text-lg md:text-xl mt-2 text-muted-foreground" style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }} data-testid="text-post-description">
+                  <p className="text-base sm:text-lg md:text-xl mt-2 text-muted-foreground" style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }} data-testid="text-post-description">
                     {post.description}
                   </p>
                 </div>
                 <div
-                  className="bg-primary text-foreground px-6 py-3 font-pixel text-base md:text-lg border-2 border-border shrink-0"
+                  className="bg-primary text-foreground px-6 py-3 font-pixel text-base md:text-lg border-2 border-border shrink-0 self-start sm:self-auto"
                   data-testid="badge-read"
                 >
                   READ
