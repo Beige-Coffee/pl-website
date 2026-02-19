@@ -54,6 +54,14 @@ export async function setupVite(app: Express, server: Server) {
   });
 
   app.use(vite.middlewares);
+  const ogOverrides: Record<string, { title: string; description: string; image?: string }> = {
+    "/noise-tutorial": {
+      title: "Programming Lightning: Noise Protocol Tutorial",
+      description: "An approachable deep dive into Lightning's Noise Protocol. Interactive tutorial covering cryptographic foundations, the three-act handshake, and encrypted messaging.",
+      image: "https://programminglightning.com/og-image.png",
+    },
+  };
+
   app.use("*", async (req, res, next) => {
     const url = req.originalUrl;
 
@@ -65,12 +73,25 @@ export async function setupVite(app: Express, server: Server) {
         "index.html",
       );
 
-      // always reload the index.html file from disk incase it changes
       let template = await fs.promises.readFile(clientTemplate, "utf-8");
       template = template.replace(
         `src="/src/main.tsx"`,
         `src="/src/main.tsx?v=${nanoid()}"`,
       );
+
+      const override = ogOverrides[url.split("?")[0]];
+      if (override) {
+        const { title, description, image } = override;
+        const ogImage = image || "https://programminglightning.com/og-home.png";
+        template = template
+          .replace(/(<meta property="og:title" content=")([^"]*)(")/, `$1${title}$3`)
+          .replace(/(<meta property="og:description" content=")([^"]*)(")/, `$1${description}$3`)
+          .replace(/(<meta property="og:image" content=")([^"]*)(")/, `$1${ogImage}$3`)
+          .replace(/(<meta name="twitter:title" content=")([^"]*)(")/, `$1${title}$3`)
+          .replace(/(<meta name="twitter:description" content=")([^"]*)(")/, `$1${description}$3`)
+          .replace(/(<meta name="twitter:image" content=")([^"]*)(")/, `$1${ogImage}$3`);
+      }
+
       const page = await vite.transformIndexHtml(url, template);
       res.status(200).set({ "Content-Type": "text/html" }).end(page);
     } catch (e) {

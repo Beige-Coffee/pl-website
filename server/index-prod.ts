@@ -17,15 +17,11 @@ export async function serveStatic(app: Express, server: Server) {
 
   app.use(express.static(distPath));
 
-  // Page-specific OG meta overrides for social-media previews
   const ogOverrides: Record<string, { title: string; description: string; image?: string }> = {
     "/noise-tutorial": {
-      title: "Lightning's Noise Protocol: A Deep Dive",
-      description: "A deep dive into Lightning's Noise Protocol — the encryption handshake that secures every Lightning Network connection.",
-    },
-    "/learn": {
-      title: "Programming Lightning — An Interactive Tutorial",
-      description: "An interactive tutorial covering the math, cryptography, and code behind the Lightning Network.",
+      title: "Programming Lightning: Noise Protocol Tutorial",
+      description: "An approachable deep dive into Lightning's Noise Protocol. Interactive tutorial covering cryptographic foundations, the three-act handshake, and encrypted messaging.",
+      image: "https://programminglightning.com/og-image.png",
     },
   };
 
@@ -41,7 +37,7 @@ export async function serveStatic(app: Express, server: Server) {
     // Read HTML and replace OG tags for this route
     let html = fs.readFileSync(htmlPath, "utf-8");
     const { title, description, image } = override;
-    const ogImage = image || "https://programminglightning.com/og-image.png";
+    const ogImage = image || "https://programminglightning.com/og-home.png";
 
     html = html
       .replace(/(<meta property="og:title" content=")([^"]*)(")/, `$1${title}$3`)
