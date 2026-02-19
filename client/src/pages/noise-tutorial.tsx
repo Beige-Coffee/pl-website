@@ -490,7 +490,7 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
             MENU
           </button>
           <Link
-            href="/blog"
+            href="/learn"
             className="font-pixel text-xs md:text-sm hover:text-primary transition-colors"
             data-testid="link-back-blog"
           >
@@ -649,7 +649,7 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
                           } w-full text-left border-2 px-3 py-1.5 transition-colors`}
                           data-testid={`button-chapter-${c.id}`}
                         >
-                          <div className="font-mono text-[20px] leading-tight">{c.title}</div>
+                          <div className="text-[16px] leading-snug" style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>{c.title}</div>
                         </button>
                       );
                     })}
@@ -761,10 +761,12 @@ function ImageBlock({
   useEffect(() => {
     if (!open) return;
     setHasManualZoom(false);
+    setImgNatural(null);
   }, [open, rawSrc]);
 
   const zoomBodyRef = useRef<HTMLSpanElement | null>(null);
   const zoomImgRef = useRef<HTMLImageElement | null>(null);
+  const [imgNatural, setImgNatural] = useState<{ w: number; h: number } | null>(null);
 
 
   useEffect(() => {
@@ -963,19 +965,29 @@ function ImageBlock({
                 }`}
                 data-testid={`container-zoom-body-${srcKey}`}
               >
-                <span style={{ transform: `scale(${zoom})`, transformOrigin: "top left" }}>
+                <span style={{
+                  display: "block",
+                  width: imgNatural ? `${imgNatural.w * zoom}px` : "auto",
+                  height: imgNatural ? `${imgNatural.h * zoom}px` : "auto",
+                }}>
                   <img
                     ref={zoomImgRef}
                     {...props}
                     src={rawSrc}
                     width={undefined}
                     height={height}
+                    onLoad={(e) => {
+                      const img = e.currentTarget;
+                      if (img.naturalWidth && img.naturalHeight) {
+                        setImgNatural({ w: img.naturalWidth, h: img.naturalHeight });
+                      }
+                    }}
                     style={{
                       ...(style ?? {}),
                       display: "block",
                       maxWidth: "none",
-                      width: "auto",
-                      height: "auto",
+                      width: imgNatural ? `${imgNatural.w * zoom}px` : "auto",
+                      height: imgNatural ? `${imgNatural.h * zoom}px` : "auto",
                       imageRendering: "auto",
                     }}
                     data-testid={`img-zoomed-${srcKey}`}
@@ -1078,6 +1090,7 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
   const dark = theme === "dark";
   const [amount, setAmount] = useState("");
   const [customAmount, setCustomAmount] = useState("");
+  const [showCustom, setShowCustom] = useState(false);
   const [invoice, setInvoice] = useState<string | null>(null);
   const [paymentIndex, setPaymentIndex] = useState<string | null>(null);
   const [status, setStatus] = useState<"idle" | "creating" | "waiting" | "paid" | "error">("idle");
@@ -1238,6 +1251,7 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
     setPaymentIndex(null);
     setAmount("");
     setCustomAmount("");
+    setShowCustom(false);
     setErrorMsg("");
     setModerationError("");
     setExpiresAt(null);
@@ -1292,32 +1306,44 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
             ))}
           </div>
 
-          <div className={`border-2 ${cardBorder} ${dark ? "bg-[#0b1220]" : "bg-white"} p-4 mb-6`}>
-            <div className={`font-pixel text-xs ${textMuted} mb-3`}>CUSTOM AMOUNT</div>
-            <div className="flex gap-3">
-              <input
-                type="number"
-                min="1"
-                max="1000000"
-                placeholder="Enter sats..."
-                value={customAmount}
-                onChange={(e) => { setCustomAmount(e.target.value); setErrorMsg(""); }}
-                onKeyDown={(e) => { if (e.key === "Enter") handleCustomSubmit(); }}
-                className={`flex-1 border-2 ${goldBorder} ${dark ? "bg-[#0b1220] text-slate-100" : "bg-white text-black"} px-4 py-3 text-xl md:text-2xl outline-none focus:ring-2 focus:ring-[#FFD700]/50`}
-                style={{ fontFamily: sansFont }}
-                data-testid="input-custom-donate"
-              />
-              <button
-                type="button"
-                onClick={handleCustomSubmit}
-                className={`border-2 ${goldBorder} bg-[#FFD700] text-black font-pixel text-sm px-6 py-3 transition-all hover:brightness-110 active:scale-[0.98]`}
-                data-testid="button-donate-custom"
-              >
-                DONATE
-              </button>
-            </div>
-            {errorMsg && status === "idle" && (
-              <div className="text-red-500 font-mono text-sm mt-2">{errorMsg}</div>
+          <div className="mb-6">
+            <button
+              type="button"
+              onClick={() => setShowCustom(v => !v)}
+              className={`w-full border-2 ${cardBorder} ${dark ? "bg-[#0b1220]" : "bg-white"} px-4 py-3 flex items-center justify-between transition-colors ${dark ? "hover:bg-[#111d38]" : "hover:bg-gray-50"}`}
+              style={{ cursor: "pointer" }}
+            >
+              <span className={`font-pixel text-xs ${textMuted} tracking-wider`}>CUSTOM AMOUNT</span>
+              <span className={`font-pixel text-xs ${textMuted} transition-transform ${showCustom ? "rotate-180" : ""}`}>▼</span>
+            </button>
+            {showCustom && (
+              <div className={`border-2 border-t-0 ${cardBorder} ${dark ? "bg-[#0b1220]" : "bg-white"} p-4`}>
+                <div className="flex gap-3">
+                  <input
+                    type="number"
+                    min="1"
+                    max="1000000"
+                    placeholder="Enter sats..."
+                    value={customAmount}
+                    onChange={(e) => { setCustomAmount(e.target.value); setErrorMsg(""); }}
+                    onKeyDown={(e) => { if (e.key === "Enter") handleCustomSubmit(); }}
+                    className={`flex-1 border-2 ${goldBorder} ${dark ? "bg-[#0b1220] text-slate-100" : "bg-white text-black"} px-4 py-3 text-xl md:text-2xl outline-none focus:ring-2 focus:ring-[#FFD700]/50`}
+                    style={{ fontFamily: sansFont }}
+                    data-testid="input-custom-donate"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCustomSubmit}
+                    className={`border-2 ${goldBorder} bg-[#FFD700] text-black font-pixel text-sm px-6 py-3 transition-all hover:brightness-110 active:scale-[0.98]`}
+                    data-testid="button-donate-custom"
+                  >
+                    DONATE
+                  </button>
+                </div>
+                {errorMsg && status === "idle" && (
+                  <div className="text-red-500 font-mono text-sm mt-2">{errorMsg}</div>
+                )}
+              </div>
             )}
           </div>
 
@@ -1326,7 +1352,7 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
 
           {/* Name & Message — optional */}
           <div className={`font-pixel text-xs ${goldText} mb-3 tracking-wider`}>NAME & MESSAGE <span className={textMuted}>(OPTIONAL)</span></div>
-          <div className={`text-sm ${textMuted} mb-4`} style={{ fontFamily: sansFont }}>
+          <div className={`text-[16px] md:text-[18px] leading-relaxed ${textMuted} mb-4`} style={{ fontFamily: sansFont }}>
             Want to leave your name and a message? They'll appear on the donor wall below. Leave the name blank and it'll just say "Anon".
           </div>
           <div className="space-y-3 mb-5">

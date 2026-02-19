@@ -45,7 +45,7 @@ export default function Home() {
       {/* Top Banner */}
       <div className="w-full border-b-4 border-border bg-card p-2 flex items-center justify-end gap-6 pixel-shadow relative z-50">
         <Link
-          href="/blog"
+          href="/learn"
           data-testid="link-blog"
           className="font-pixel text-sm md:text-base hover:text-primary transition-colors border-b-4 border-transparent hover:border-primary pb-1 blog-attention"
         >
