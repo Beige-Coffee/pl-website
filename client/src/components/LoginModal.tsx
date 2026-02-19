@@ -372,7 +372,7 @@ function EmailRegisterForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       <div className={`border-2 ${border} ${dark ? "bg-[#FFD700]/5" : "bg-yellow-50"} p-3 mb-2`}>
-        <p className={`text-sm ${dark ? "text-slate-300" : "text-gray-700"}`} style={{ fontFamily: sansFont }}>
+        <p className={`text-sm font-semibold ${dark ? "text-slate-300" : "text-gray-700"}`} style={{ fontFamily: sansFont }}>
           After registering, you will receive a verification email. You must verify your email to claim sat rewards.
         </p>
       </div>
