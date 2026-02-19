@@ -271,6 +271,7 @@ function ProfileDropdown({
   const [showAddressForm, setShowAddressForm] = useState(!!lightningAddress);
   const [resending, setResending] = useState(false);
   const [resendMsg, setResendMsg] = useState<string | null>(null);
+  const [showVerificationSection, setShowVerificationSection] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const isLightningUser = !!pubkey;
   const needsVerification = !!email && !emailVerified && !isLightningUser;
@@ -355,7 +356,17 @@ function ProfileDropdown({
             {emailVerified ? (
               <span className={`text-xs font-pixel ${dark ? "text-green-400" : "text-green-700"}`}>VERIFIED</span>
             ) : (
-              <span className={`text-xs font-pixel ${dark ? "text-[#FFD700]" : "text-[#9a7200]"}`}>NOT VERIFIED</span>
+              <button
+                type="button"
+                onClick={() => setShowVerificationSection(v => !v)}
+                className={`font-pixel text-xs border-2 px-3 py-1.5 transition-all cursor-pointer ${
+                  dark
+                    ? "border-[#FFD700] text-[#FFD700] bg-[#FFD700]/10 hover:bg-[#FFD700]/20"
+                    : "border-[#b8860b] text-[#9a7200] bg-[#FFD700]/10 hover:bg-[#FFD700]/20"
+                }`}
+              >
+                NOT VERIFIED
+              </button>
             )}
           </div>
         )}
@@ -366,16 +377,16 @@ function ProfileDropdown({
         )}
       </div>
 
-      {needsVerification && (
+      {needsVerification && showVerificationSection && (
         <div className={`px-5 py-4 border-b-2 ${dark ? "border-[#1f2a44]" : "border-border"}`}>
-          <p className={`text-sm leading-relaxed mb-3 ${dark ? "text-slate-300" : "text-foreground/70"}`}>
+          <p className={`text-base leading-relaxed mb-3 ${dark ? "text-slate-300" : "text-foreground/70"}`}>
             Verify your email to claim bitcoin rewards from checkpoints. You can also log in with LNURL-Auth instead.
           </p>
           <button
             type="button"
             onClick={handleResendVerification}
             disabled={resending}
-            className={`font-pixel text-xs border-2 px-4 py-2 transition-all ${
+            className={`font-pixel text-sm border-2 px-5 py-3 transition-all ${
               dark
                 ? "border-[#FFD700] text-[#FFD700] bg-[#FFD700]/10 hover:bg-[#FFD700]/20"
                 : "border-[#b8860b] text-[#9a7200] bg-[#FFD700]/10 hover:bg-[#FFD700]/20"
@@ -385,7 +396,7 @@ function ProfileDropdown({
             {resending ? "SENDING..." : "RESEND VERIFICATION EMAIL"}
           </button>
           {resendMsg && (
-            <p className={`mt-2 text-xs ${resendMsg.includes("sent") ? (dark ? "text-green-400" : "text-green-700") : "text-red-400"}`}>
+            <p className={`mt-2 text-sm ${resendMsg.includes("sent") ? (dark ? "text-green-400" : "text-green-700") : "text-red-400"}`}>
               {resendMsg}
             </p>
           )}
