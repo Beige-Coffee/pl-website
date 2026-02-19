@@ -1066,7 +1066,7 @@ function DonationWall({ theme }: { theme: "light" | "dark" }) {
   const cardBg = dark ? "bg-[#0f1930]" : "bg-card";
   const cardBorder = dark ? "border-[#2a3552]" : "border-border";
   const textColor = dark ? "text-slate-100" : "text-black";
-  const textMuted = dark ? "text-slate-400" : "text-black/70";
+  const textMuted = dark ? "text-slate-300" : "text-black/70";
   const sansFont = 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
 
   const fetchDonations = useCallback(async () => {
@@ -1160,7 +1160,7 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
   const cardBg = dark ? "bg-[#0f1930]" : "bg-card";
   const cardBorder = dark ? "border-[#2a3552]" : "border-border";
   const textColor = dark ? "text-slate-100" : "text-black";
-  const textMuted = dark ? "text-slate-400" : "text-black/70";
+  const textMuted = dark ? "text-slate-300" : "text-black/70";
   const greenText = dark ? "text-green-400" : "text-green-700";
   const sansFont = 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
 
