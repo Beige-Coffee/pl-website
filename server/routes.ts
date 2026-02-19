@@ -234,7 +234,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const user = await storage.verifyEmail(token);
       if (!user) {
-        return res.status(400).send(verificationResultPage(false, "This verification link is invalid or has expired."));
+        return res.status(400).send(verificationResultPage(false, "This verification link is invalid, expired, or has already been used. If you've already verified your email, you're all set!"));
       }
       return res.send(verificationResultPage(true, "Your email has been verified! You can now claim sat rewards."));
     } catch (err) {
