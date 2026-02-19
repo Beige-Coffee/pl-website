@@ -96,18 +96,18 @@ async function getAuthUser(req: Request) {
 }
 
 function verificationResultPage(success: boolean, message: string): string {
-  const color = success ? "#FFD700" : "#ef4444";
+  const color = success ? "#b8860b" : "#dc2626";
   const icon = success ? "&#10003;" : "&#10007;";
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 <title>${success ? "Email Verified" : "Verification Failed"}</title>
-<style>body{margin:0;background:#0b1220;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:'VT323',monospace;}
-.box{background:#0f1930;border:4px solid #2a3552;padding:48px;max-width:480px;text-align:center;}
+<style>body{margin:0;background:#f5f0e1;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+.box{background:#fffdf5;border:4px solid #b8860b;padding:48px;max-width:480px;text-align:center;}
 .icon{font-size:48px;color:${color};margin-bottom:16px;}
 h1{font-family:'Press Start 2P',monospace;font-size:14px;color:${color};margin:0 0 20px;}
-p{font-size:20px;color:#cbd5e1;line-height:1.5;margin:0 0 24px;}
-a{display:inline-block;background:#FFD700;color:#000;font-family:'Press Start 2P',monospace;font-size:11px;padding:14px 28px;text-decoration:none;border:2px solid #FFD700;}
+p{font-size:18px;color:#1a1a1a;line-height:1.6;margin:0 0 24px;}
+a{display:inline-block;background:#FFD700;color:#000;font-family:'Press Start 2P',monospace;font-size:11px;padding:14px 28px;text-decoration:none;border:2px solid #b8860b;}
 a:hover{opacity:0.9;}</style></head>
 <body><div class="box"><div class="icon">${icon}</div>
 <h1>${success ? "VERIFIED" : "ERROR"}</h1>
