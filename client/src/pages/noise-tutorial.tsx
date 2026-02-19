@@ -2046,7 +2046,7 @@ function InteractiveQuiz({
               {authenticated && !canClaimRewards && (
                 <div className={`mt-4 border-2 ${border} ${bg} p-4 mb-3`} data-testid="container-verify-warning">
                   <div className={`font-pixel text-sm ${dark ? "text-[#FFD700]" : "text-[#9a7200]"} mb-2`}>EMAIL NOT VERIFIED</div>
-                  <p className={`text-sm ${textMuted} mb-3`} style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
+                  <p className={`text-base leading-relaxed ${textMuted} mb-3`} style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
                     Throughout the educational material, there are checkpoints that offer real bitcoin rewards when completed successfully. To mitigate spam, users must either verify their email or log in with LNURL-Auth to claim these rewards. Check your inbox for the verification link.
                   </p>
                   <ResendVerificationButton sessionToken={sessionToken} theme={theme} />
