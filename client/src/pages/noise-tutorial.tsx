@@ -1349,7 +1349,7 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
           {/* Amount selection */}
           <div className={`font-pixel text-sm ${goldText} mb-4 tracking-wider`}>CHOOSE AN AMOUNT (SATS)</div>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-5">
+          <div className="grid grid-cols-3 gap-2 md:gap-3 mb-5">
             {presetAmounts.map((p) => {
               const isSelected = amount === String(p.value) && !customAmount;
               return (
@@ -1357,7 +1357,7 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
                   key={p.value}
                   type="button"
                   onClick={() => handlePresetClick(p.value)}
-                  className={`border-2 p-4 transition-all hover:scale-[1.02] active:scale-[0.98] ${
+                  className={`border-2 p-2 md:p-4 transition-all hover:scale-[1.02] active:scale-[0.98] ${
                     isSelected
                       ? `${goldBorder} ${dark ? "bg-[#FFD700]/15" : "bg-[#FFD700]/20"} ring-2 ring-[#FFD700]/50`
                       : `${goldBorder} ${dark ? "bg-[#0b1220]" : "bg-white"}`
@@ -1365,8 +1365,8 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
                   style={{ cursor: "pointer" }}
                   data-testid={`button-donate-${p.value}`}
                 >
-                  <div className={`font-pixel text-xl md:text-2xl ${goldText} text-center`}>{p.label}</div>
-                  <div className={`text-base md:text-lg ${textMuted} mt-1 text-center`} style={{ fontFamily: sansFont }}>{p.desc}</div>
+                  <div className={`font-pixel text-sm md:text-2xl ${goldText} text-center`}>{p.label}</div>
+                  <div className={`text-xs md:text-lg ${textMuted} mt-1 text-center`} style={{ fontFamily: sansFont }}>{p.desc}</div>
                 </button>
               );
             })}
