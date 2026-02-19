@@ -8,7 +8,7 @@ const posts = [
     title: "An Approachable Deep Dive Into Lightning's Noise Protocol",
     href: "/noise-tutorial",
     description:
-      "A multi-chapter tutorial covering cryptographic foundations, the three-act handshake, and encrypted messaging in Lightning transport.",
+      "An interactive tutorial covering cryptographic foundations, the three-act handshake, and encrypted messaging in Lightning transport.",
   },
 ];
 
@@ -211,7 +211,7 @@ export default function Blog() {
           <h1 className="font-pixel text-2xl md:text-4xl leading-tight text-shadow-retro mb-3" data-testid="text-blog-title">
             Learn
           </h1>
-          <p className="font-mono text-xl md:text-2xl" data-testid="text-blog-subtitle">
+          <p className="font-mono text-2xl md:text-3xl" data-testid="text-blog-subtitle">
             Long-form technical articles and tutorials.
           </p>
         </header>
@@ -229,12 +229,12 @@ export default function Blog() {
                   <h2 className="font-pixel text-lg md:text-xl leading-relaxed" data-testid="text-post-title">
                     {post.title}
                   </h2>
-                  <p className="font-mono text-lg md:text-xl mt-2 text-muted-foreground" data-testid="text-post-description">
+                  <p className="text-lg md:text-xl mt-2 text-muted-foreground" style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }} data-testid="text-post-description">
                     {post.description}
                   </p>
                 </div>
                 <div
-                  className="bg-primary text-foreground px-2 py-1 font-pixel text-[10px] border-2 border-border shrink-0"
+                  className="bg-primary text-foreground px-6 py-3 font-pixel text-base md:text-lg border-2 border-border shrink-0"
                   data-testid="badge-read"
                 >
                   READ
