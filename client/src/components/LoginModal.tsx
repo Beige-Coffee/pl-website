@@ -194,12 +194,6 @@ function EmailLoginForm({
         {loading ? "PLEASE WAIT..." : "LOG IN"}
       </button>
 
-      <div className={`text-center text-sm ${textMuted}`} style={{ fontFamily: sansFont }}>
-        Don't have an account?{" "}
-        <button type="button" onClick={onSwitchToRegister} className={`${dark ? "text-[#FFD700]" : "text-gray-900"} underline`} data-testid="link-switch-register">
-          Register
-        </button>
-      </div>
     </form>
   );
 }
@@ -335,12 +329,6 @@ function EmailRegisterForm({
         {loading ? "PLEASE WAIT..." : "CREATE ACCOUNT"}
       </button>
 
-      <div className={`text-center text-sm ${textMuted}`} style={{ fontFamily: sansFont }}>
-        Already have an account?{" "}
-        <button type="button" onClick={onSwitchToLogin} className={`${dark ? "text-[#FFD700]" : "text-gray-900"} underline`} data-testid="link-switch-login">
-          Log in
-        </button>
-      </div>
     </form>
   );
 }
