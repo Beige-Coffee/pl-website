@@ -510,18 +510,6 @@ function LightningAuthForm({
               WAITING FOR WALLET...
             </div>
           )}
-
-          <div className="text-center mb-4">
-            <a
-              href={`lightning:${challenge.lnurl}`}
-              className={`inline-block border-2 px-5 py-3 font-pixel text-sm hover:opacity-80 ${
-                dark ? "border-[#2a3552] bg-[#0f1930] text-[#FFD700]" : "border-gray-900 bg-gray-900 text-white"
-              }`}
-              data-testid="link-open-wallet"
-            >
-              OPEN IN WALLET
-            </a>
-          </div>
         </>
       )}
 
