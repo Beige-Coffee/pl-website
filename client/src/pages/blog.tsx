@@ -1,4 +1,4 @@
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "../hooks/use-auth";
 import LoginModal from "../components/LoginModal";
@@ -155,6 +155,7 @@ export default function Blog() {
   const { authenticated, logout, loginWithToken, setLightningAddress } = auth;
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+  const [, setLocation] = useLocation();
 
   return (
     <div className="min-h-screen flex flex-col relative z-10">
@@ -218,10 +219,9 @@ export default function Blog() {
 
         <div className="grid gap-4">
           {posts.map((post) => (
-            <Link
+            <div
               key={post.href}
-              href={post.href}
-              className="bg-card border-4 border-border p-4 md:p-5 pixel-shadow pixel-shadow-hover transition-all hover:bg-secondary block"
+              className="bg-card border-4 border-border p-4 md:p-5 pixel-shadow transition-all"
               data-testid="card-post-noise"
             >
               <div className="flex items-start justify-between gap-4">
@@ -233,14 +233,32 @@ export default function Blog() {
                     {post.description}
                   </p>
                 </div>
-                <div
-                  className="bg-primary text-foreground px-6 py-3 font-pixel text-base md:text-lg border-2 border-border shrink-0"
-                  data-testid="badge-read"
-                >
-                  READ
+                <div className="flex flex-col gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      localStorage.removeItem("pl-tutorial-mode");
+                      setLocation(post.href);
+                    }}
+                    className="bg-primary text-foreground px-6 py-3 font-pixel text-base md:text-lg border-2 border-border text-center hover:brightness-110 transition-all cursor-pointer"
+                    data-testid="badge-read"
+                  >
+                    READ
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      localStorage.setItem("pl-tutorial-mode", "code");
+                      setLocation(post.href);
+                    }}
+                    className="bg-[#1a1a2e] text-[#ffd700] px-6 py-3 font-pixel text-base md:text-lg border-2 border-[#ffd700]/30 text-center hover:border-[#ffd700]/60 hover:bg-[#1a1a2e]/80 transition-all cursor-pointer"
+                    data-testid="badge-code"
+                  >
+                    CODE
+                  </button>
                 </div>
               </div>
-            </Link>
+            </div>
           ))}
         </div>
       </div>

@@ -9,6 +9,10 @@ import LoginModal from "../components/LoginModal";
 import { QRCodeSVG } from "qrcode.react";
 import CheckpointQuestion from "../components/CheckpointQuestion";
 import CheckpointGroup from "../components/CheckpointGroup";
+import CodeExercise from "../components/CodeExercise";
+import Scratchpad from "../components/Scratchpad";
+import { CollapsibleItem, CollapsibleGroup } from "../components/CollapsibleSection";
+import { CODE_EXERCISES } from "../data/code-exercises";
 
 // --- Checkpoint questions embedded inline in tutorial chapters ---
 const CHECKPOINT_QUESTIONS: Record<string, {
@@ -403,6 +407,21 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
 
+  // Tutorial mode: "read" (checkpoints only) or "code" (coding exercises)
+  // URL param takes priority (set from blog page), then falls back to localStorage
+  const [tutorialMode] = useState<"read" | "code">(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("mode") === "code") {
+        localStorage.setItem("pl-tutorial-mode", "code");
+        return "code";
+      }
+      const stored = localStorage.getItem("pl-tutorial-mode");
+      if (stored === "code") return "code";
+    }
+    return "read";
+  });
+
   const activeIndex = idxOf(activeId);
   const active = chapters[activeIndex] ?? chapters[0];
   const prev = chapters[activeIndex - 1];
@@ -493,13 +512,17 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
           >
             MENU
           </button>
-          <Link
-            href="/learn"
-            className="font-pixel text-xs md:text-sm hover:text-primary transition-colors"
+          <button
+            type="button"
+            onClick={() => {
+              localStorage.removeItem("pl-tutorial-mode");
+              setLocation("/learn");
+            }}
+            className="font-pixel text-xs md:text-sm hover:text-primary transition-colors cursor-pointer bg-transparent border-none p-0"
             data-testid="link-back-blog"
           >
             &lt; BACK TO LEARN
-          </Link>
+          </button>
         </div>
 
         <div className="hidden md:flex items-center gap-3">
@@ -684,6 +707,7 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
               <ChapterContent
                 chapter={active}
                 theme={theme}
+                tutorialMode={tutorialMode}
                 authenticated={authenticated}
                 sessionToken={auth.sessionToken}
                 completedCheckpoints={auth.completedCheckpoints}
@@ -724,6 +748,10 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
           </div>
         </main>
       </div>
+
+      {tutorialMode === "code" && (
+        <Scratchpad theme={theme} />
+      )}
 
       {showLoginModal && (
         <LoginModal
@@ -2156,6 +2184,7 @@ function InteractiveQuiz({
 function ChapterContent({
   chapter,
   theme,
+  tutorialMode,
   authenticated,
   sessionToken,
   completedCheckpoints,
@@ -2165,6 +2194,7 @@ function ChapterContent({
 }: {
   chapter: Chapter;
   theme: "light" | "dark";
+  tutorialMode: "read" | "code";
   authenticated: boolean;
   sessionToken: string | null;
   completedCheckpoints: { checkpointId: string; amountSats: number; paidAt: string }[];
@@ -2269,23 +2299,119 @@ function ChapterContent({
             const cpId = String(id || "");
             const cpData = CHECKPOINT_QUESTIONS[cpId];
             if (!cpData) return null;
+            const isCompleted = completedCheckpoints.some(c => c.checkpointId === cpId);
             return (
-              <CheckpointQuestion
-                checkpointId={cpId}
-                question={cpData.question}
-                options={cpData.options}
-                answer={cpData.answer}
-                explanation={cpData.explanation}
+              <CollapsibleItem
+                title={cpData.question}
+                completed={isCompleted}
                 theme={theme}
-                authenticated={authenticated}
-                sessionToken={sessionToken}
-                lightningAddress={lightningAddress}
-                alreadyCompleted={completedCheckpoints.some(c => c.checkpointId === cpId)}
-                claimInfo={completedCheckpoints.find(c => c.checkpointId === cpId) || null}
-                onLoginRequest={onLoginRequest}
-                onCompleted={onCheckpointCompleted}
-              />
+                label="CHECKPOINT"
+                storageKey={`pl-collapse-cp-${cpId}`}
+              >
+                <CheckpointQuestion
+                  checkpointId={cpId}
+                  question={cpData.question}
+                  options={cpData.options}
+                  answer={cpData.answer}
+                  explanation={cpData.explanation}
+                  theme={theme}
+                  authenticated={authenticated}
+                  sessionToken={sessionToken}
+                  lightningAddress={lightningAddress}
+                  alreadyCompleted={isCompleted}
+                  claimInfo={completedCheckpoints.find(c => c.checkpointId === cpId) || null}
+                  onLoginRequest={onLoginRequest}
+                  onCompleted={onCheckpointCompleted}
+                />
+              </CollapsibleItem>
             );
+          },
+          "code-intro": ({ heading, description, exercises: exerciseIds }: any) => {
+            if (tutorialMode !== "code") return null;
+            const ids = String(exerciseIds || "").split(",").map((s: string) => s.trim()).filter(Boolean);
+            const exerciseList = ids
+              .map((exId: string) => ({ id: exId, data: CODE_EXERCISES[exId] }))
+              .filter((e: any) => e.data);
+            if (exerciseList.length === 0) return null;
+
+            const completedCount = exerciseList.filter((e: any) =>
+              completedCheckpoints.some(c => c.checkpointId === e.id)
+            ).length;
+
+            // Single exercise: render as a single CollapsibleItem (no nesting)
+            if (exerciseList.length === 1) {
+              const ex = exerciseList[0];
+              const isCompleted = completedCheckpoints.some(c => c.checkpointId === ex.id);
+              return (
+                <CollapsibleItem
+                  title={ex.data.title}
+                  completed={isCompleted}
+                  theme={theme}
+                  label="EXERCISE"
+                  storageKey={`pl-collapse-ex-${ex.id}`}
+                >
+                  <CodeExercise
+                    exerciseId={ex.id}
+                    data={ex.data}
+                    theme={theme}
+                    authenticated={authenticated}
+                    sessionToken={sessionToken}
+                    lightningAddress={lightningAddress}
+                    alreadyCompleted={isCompleted}
+                    claimInfo={completedCheckpoints.find(c => c.checkpointId === ex.id) || null}
+                    onLoginRequest={onLoginRequest}
+                    onCompleted={onCheckpointCompleted}
+                  />
+                </CollapsibleItem>
+              );
+            }
+
+            // Multiple exercises: render as CollapsibleGroup with nested CollapsibleItems
+            return (
+              <CollapsibleGroup
+                heading={heading}
+                description={description}
+                completedCount={completedCount}
+                totalCount={exerciseList.length}
+                theme={theme}
+                storageKey={`pl-collapse-group-${ids.join("-")}`}
+              >
+                {exerciseList.map((ex: any) => {
+                  const isCompleted = completedCheckpoints.some(c => c.checkpointId === ex.id);
+                  return (
+                    <CollapsibleItem
+                      key={ex.id}
+                      title={ex.data.title}
+                      completed={isCompleted}
+                      theme={theme}
+                      label="EXERCISE"
+                      storageKey={`pl-collapse-ex-${ex.id}`}
+                    >
+                      <CodeExercise
+                        exerciseId={ex.id}
+                        data={ex.data}
+                        theme={theme}
+                        authenticated={authenticated}
+                        sessionToken={sessionToken}
+                        lightningAddress={lightningAddress}
+                        alreadyCompleted={isCompleted}
+                        claimInfo={completedCheckpoints.find(c => c.checkpointId === ex.id) || null}
+                        onLoginRequest={onLoginRequest}
+                        onCompleted={onCheckpointCompleted}
+                      />
+                    </CollapsibleItem>
+                  );
+                })}
+              </CollapsibleGroup>
+            );
+          },
+          "code-outro": ({ text }: any) => {
+            if (tutorialMode !== "code") return null;
+            return <p className="mt-4 opacity-80">{text}</p>;
+          },
+          "code-exercise": () => {
+            // Individual code-exercise tags are now handled by code-intro
+            return null;
           },
           "checkpoint-group": ({ id, ids }: any) => {
             const groupId = String(id || "");
@@ -2298,20 +2424,29 @@ function ChapterContent({
               })
               .filter(Boolean) as Array<{ id: string; question: string; options: string[]; answer: number; explanation: string }>;
             if (groupQuestions.length === 0) return null;
+            const isGroupCompleted = completedCheckpoints.some(c => c.checkpointId === groupId);
             return (
-              <CheckpointGroup
-                groupId={groupId}
-                questions={groupQuestions}
-                rewardSats={210}
+              <CollapsibleItem
+                title="Checkpoint Quiz"
+                completed={isGroupCompleted}
                 theme={theme}
-                authenticated={authenticated}
-                sessionToken={sessionToken}
-                lightningAddress={lightningAddress}
-                alreadyCompleted={completedCheckpoints.some(c => c.checkpointId === groupId)}
-                claimInfo={completedCheckpoints.find(c => c.checkpointId === groupId) || null}
-                onLoginRequest={onLoginRequest}
-                onCompleted={onCheckpointCompleted}
-              />
+                label="CHECKPOINT"
+                storageKey={`pl-collapse-cpg-${groupId}`}
+              >
+                <CheckpointGroup
+                  groupId={groupId}
+                  questions={groupQuestions}
+                  rewardSats={210}
+                  theme={theme}
+                  authenticated={authenticated}
+                  sessionToken={sessionToken}
+                  lightningAddress={lightningAddress}
+                  alreadyCompleted={isGroupCompleted}
+                  claimInfo={completedCheckpoints.find(c => c.checkpointId === groupId) || null}
+                  onLoginRequest={onLoginRequest}
+                  onCompleted={onCheckpointCompleted}
+                />
+              </CollapsibleItem>
             );
           },
         } as any}

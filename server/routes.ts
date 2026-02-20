@@ -328,6 +328,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "act2-both-ephemeral": 3,
     "act3-nonce-one": 2,
     "message-length-limit": 0,
+    // Coding exercise IDs — answer 0 means "all tests passed"
+    "exercise-generate-keypair": 0,
+    "exercise-ecdh": 0,
+    "exercise-hkdf": 0,
+    "exercise-init-state": 0,
+    "exercise-act1-initiator": 0,
+    "exercise-act1-responder": 0,
+    "exercise-act2-responder": 0,
+    "exercise-act2-initiator": 0,
+    "exercise-act3-initiator": 0,
+    "exercise-encrypt": 0,
+    "exercise-decrypt": 0,
+    "exercise-key-rotation": 0,
   };
   const CHECKPOINT_REWARD_SATS = parseInt(process.env.CHECKPOINT_REWARD_SATS || "5", 10);
   const CHECKPOINT_REWARD_MSATS = CHECKPOINT_REWARD_SATS * 1000;
