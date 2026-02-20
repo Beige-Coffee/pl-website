@@ -14,6 +14,7 @@ interface AuthState {
   displayName: string | null;
   rewardClaimed: boolean;
   lightningAddress: string | null;
+  emailVerified: boolean;
   completedCheckpoints: CheckpointClaim[];
   sessionToken: string | null;
   loading: boolean;
@@ -30,6 +31,7 @@ export function useAuth() {
     displayName: null,
     rewardClaimed: false,
     lightningAddress: null,
+    emailVerified: false,
     completedCheckpoints: [],
     sessionToken: null,
     loading: true,
@@ -56,6 +58,7 @@ export function useAuth() {
             displayName: data.displayName || null,
             rewardClaimed: data.rewardClaimed || false,
             lightningAddress: data.lightningAddress || null,
+            emailVerified: data.emailVerified || !!data.pubkey,
             completedCheckpoints: cpData.completed || [],
             sessionToken: token,
             loading: false,
@@ -70,6 +73,7 @@ export function useAuth() {
             displayName: null,
             rewardClaimed: false,
             lightningAddress: null,
+            emailVerified: false,
             completedCheckpoints: [],
             sessionToken: null,
             loading: false,
@@ -83,7 +87,6 @@ export function useAuth() {
 
   const loginWithToken = useCallback((token: string, data: Partial<AuthState>) => {
     localStorage.setItem(STORAGE_KEY, token);
-    // Fetch checkpoint status after login
     fetch("/api/checkpoint/status", { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => r.json())
       .catch(() => ({ completed: [] }))
@@ -96,6 +99,7 @@ export function useAuth() {
           displayName: data.displayName || null,
           rewardClaimed: data.rewardClaimed || false,
           lightningAddress: data.lightningAddress || null,
+          emailVerified: data.emailVerified || !!data.pubkey,
           completedCheckpoints: cpData.completed || [],
           sessionToken: token,
           loading: false,
@@ -122,6 +126,7 @@ export function useAuth() {
       displayName: null,
       rewardClaimed: false,
       lightningAddress: null,
+      emailVerified: false,
       completedCheckpoints: [],
       sessionToken: null,
       loading: false,
