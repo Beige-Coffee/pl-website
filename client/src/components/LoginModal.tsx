@@ -9,18 +9,32 @@ interface LoginModalProps {
 
 const SUPPORTED_WALLETS = [
   { name: "Phoenix", url: "https://phoenix.acinq.co/" },
-  { name: "Zeus", url: "https://zeusln.com/" },
+  { name: "Zeus", url: "https://zeusln.app/" },
   { name: "Breez", url: "https://breez.technology/" },
+  { name: "BlueWallet", url: "https://bluewallet.io/" },
+  { name: "Blixt", url: "https://blixtwallet.github.io/" },
+  { name: "BitBanana", url: "https://bitbanana.app/" },
   { name: "Alby", url: "https://getalby.com/", note: "browser extension" },
 ];
 
+const sansFont = 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+
+type Screen = "choose" | "login-email" | "login-lightning" | "register";
+
 export default function LoginModal({ theme, onSuccess, onClose }: LoginModalProps) {
-  const [tab, setTab] = useState<"lightning" | "email">("email");
+  const [screen, setScreen] = useState<Screen>("choose");
   const dark = theme === "dark";
   const border = dark ? "border-[#2a3552]" : "border-gray-800";
   const bg = dark ? "bg-[#0f1930]" : "bg-white";
   const pageBg = dark ? "bg-[#0b1220]" : "bg-white";
-  const textMuted = dark ? "text-slate-400" : "text-gray-500";
+
+  const title = screen === "register"
+    ? "REGISTER"
+    : screen === "choose"
+    ? "WELCOME"
+    : "LOGIN";
+
+  const showBack = screen !== "choose";
 
   return (
     <div
@@ -31,8 +45,20 @@ export default function LoginModal({ theme, onSuccess, onClose }: LoginModalProp
       <div className="absolute inset-0 bg-black/60" />
       <div className={`relative w-full max-w-md border-4 ${border} ${pageBg} p-8`}>
         <div className="flex items-center justify-between mb-6">
-          <div className={`font-pixel text-lg ${dark ? "text-[#FFD700]" : "text-gray-900"}`} data-testid="text-login-title">
-            LOGIN / REGISTER
+          <div className="flex items-center gap-3">
+            {showBack && (
+              <button
+                type="button"
+                onClick={() => setScreen("choose")}
+                className={`border-2 ${border} ${bg} px-2 py-1.5 font-pixel text-xs hover:opacity-80 ${dark ? "text-slate-300" : "text-gray-700"}`}
+                data-testid="button-back"
+              >
+                {"<"}
+              </button>
+            )}
+            <div className={`font-pixel text-lg ${dark ? "text-[#FFD700]" : "text-gray-900"}`} data-testid="text-login-title">
+              {title}
+            </div>
           </div>
           <button
             type="button"
@@ -44,48 +70,135 @@ export default function LoginModal({ theme, onSuccess, onClose }: LoginModalProp
           </button>
         </div>
 
-        <div className="flex gap-0 mb-6">
-          <button
-            type="button"
-            onClick={() => setTab("email")}
-            className={`flex-1 border-2 px-4 py-3 font-pixel text-sm transition-colors ${
-              tab === "email"
-                ? dark
-                  ? "border-[#FFD700] bg-[#FFD700]/15 text-[#FFD700]"
-                  : "border-gray-900 bg-gray-900 text-white"
-                : `${border} ${bg} ${dark ? "text-slate-400" : "text-gray-600"} hover:opacity-80`
-            }`}
-            data-testid="button-tab-email"
-          >
-            EMAIL
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab("lightning")}
-            className={`flex-1 border-2 border-l-0 px-4 py-3 font-pixel text-sm transition-colors ${
-              tab === "lightning"
-                ? dark
-                  ? "border-[#FFD700] bg-[#FFD700]/15 text-[#FFD700]"
-                  : "border-gray-900 bg-gray-900 text-white"
-                : `${border} ${bg} ${dark ? "text-slate-400" : "text-gray-600"} hover:opacity-80`
-            }`}
-            data-testid="button-tab-lightning"
-          >
-            LIGHTNING
-          </button>
-        </div>
+        {screen === "choose" && (
+          <ChooseScreen
+            theme={theme}
+            onLogin={() => setScreen("login-email")}
+            onRegister={() => setScreen("register")}
+          />
+        )}
 
-        {tab === "email" ? (
-          <EmailAuthForm theme={theme} onSuccess={onSuccess} />
-        ) : (
-          <LightningAuthForm theme={theme} onSuccess={onSuccess} />
+        {screen === "login-email" && (
+          <>
+            <LoginMethodTabs
+              theme={theme}
+              active="email"
+              onSwitch={(m) => setScreen(m === "email" ? "login-email" : "login-lightning")}
+            />
+            <EmailLoginForm theme={theme} onSuccess={onSuccess} />
+          </>
+        )}
+
+        {screen === "login-lightning" && (
+          <>
+            <LoginMethodTabs
+              theme={theme}
+              active="lightning"
+              onSwitch={(m) => setScreen(m === "email" ? "login-email" : "login-lightning")}
+            />
+            <LightningAuthForm theme={theme} onSuccess={onSuccess} />
+          </>
+        )}
+
+        {screen === "register" && (
+          <EmailRegisterForm theme={theme} onSuccess={onSuccess} />
         )}
       </div>
     </div>
   );
 }
 
-function EmailAuthForm({
+function ChooseScreen({
+  theme,
+  onLogin,
+  onRegister,
+}: {
+  theme: "light" | "dark";
+  onLogin: () => void;
+  onRegister: () => void;
+}) {
+  const dark = theme === "dark";
+  const textMuted = dark ? "text-slate-400" : "text-gray-500";
+
+  return (
+    <div className="space-y-4">
+      <p className={`text-base text-center ${textMuted}`} style={{ fontFamily: sansFont }}>
+        Log in or create an account to track progress and claim sat rewards.
+      </p>
+
+      <button
+        type="button"
+        onClick={onLogin}
+        className={`w-full font-pixel text-base border-2 px-4 py-4 transition-all ${
+          dark
+            ? "border-[#FFD700] bg-[#FFD700] text-black hover:bg-[#FFC800] active:scale-[0.98]"
+            : "border-gray-900 bg-gray-900 text-white hover:bg-gray-800 active:scale-[0.98]"
+        }`}
+        data-testid="button-choose-login"
+      >
+        LOG IN
+      </button>
+
+      <button
+        type="button"
+        onClick={onRegister}
+        className={`w-full font-pixel text-base border-2 px-4 py-4 transition-all ${
+          dark
+            ? "border-[#2a3552] bg-transparent text-[#FFD700] hover:bg-[#FFD700]/10 active:scale-[0.98]"
+            : "border-gray-900 bg-white text-gray-900 hover:bg-gray-100 active:scale-[0.98]"
+        }`}
+        data-testid="button-choose-register"
+      >
+        REGISTER
+      </button>
+    </div>
+  );
+}
+
+function LoginMethodTabs({
+  theme,
+  active,
+  onSwitch,
+}: {
+  theme: "light" | "dark";
+  active: "email" | "lightning";
+  onSwitch: (method: "email" | "lightning") => void;
+}) {
+  const dark = theme === "dark";
+  const border = dark ? "border-[#2a3552]" : "border-gray-800";
+  const bg = dark ? "bg-[#0f1930]" : "bg-white";
+  const activeTabClass = dark
+    ? "border-[#FFD700] bg-[#FFD700]/15 text-[#FFD700]"
+    : "border-gray-900 bg-gray-900 text-white";
+  const inactiveTabClass = `${border} ${bg} ${dark ? "text-slate-400" : "text-gray-600"} hover:opacity-80`;
+
+  return (
+    <div className="flex gap-0 mb-6">
+      <button
+        type="button"
+        onClick={() => onSwitch("email")}
+        className={`flex-1 border-2 px-3 py-3 font-pixel text-xs transition-colors ${
+          active === "email" ? activeTabClass : inactiveTabClass
+        }`}
+        data-testid="button-tab-email"
+      >
+        EMAIL
+      </button>
+      <button
+        type="button"
+        onClick={() => onSwitch("lightning")}
+        className={`flex-1 border-2 border-l-0 px-3 py-3 font-pixel text-xs transition-colors ${
+          active === "lightning" ? activeTabClass : inactiveTabClass
+        }`}
+        data-testid="button-tab-lightning"
+      >
+        LIGHTNING
+      </button>
+    </div>
+  );
+}
+
+function EmailLoginForm({
   theme,
   onSuccess,
 }: {
@@ -110,38 +223,19 @@ function EmailAuthForm({
     setLoading(true);
 
     try {
-      // Try login first
-      const loginRes = await fetch("/api/auth/login", {
+      const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
-      const loginData = await loginRes.json();
+      const data = await res.json();
 
-      if (loginRes.ok) {
-        onSuccess(loginData.sessionToken, loginData);
+      if (res.ok) {
+        onSuccess(data.sessionToken, data);
         return;
       }
 
-      // Login failed - try registering (email might not exist yet)
-      const registerRes = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-      const registerData = await registerRes.json();
-
-      if (registerRes.ok) {
-        onSuccess(registerData.sessionToken, registerData);
-        return;
-      }
-
-      // Register also failed - if email already exists, password was wrong
-      if (registerRes.status === 409) {
-        setError("Incorrect password");
-      } else {
-        setError(registerData.error || "Something went wrong");
-      }
+      setError(data.error || "Invalid email or password");
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -158,7 +252,8 @@ function EmailAuthForm({
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
-          className={`w-full border-2 ${border} ${inputBg} ${textColor} px-4 py-3 text-base font-mono focus:outline-none focus:border-gray-900 placeholder:text-gray-400`}
+          className={`w-full border-2 ${border} ${inputBg} ${textColor} px-4 py-3 text-base focus:outline-none focus:border-gray-900 placeholder:text-gray-400`}
+          style={{ fontFamily: sansFont }}
           placeholder="you@example.com"
           data-testid="input-email"
         />
@@ -171,14 +266,15 @@ function EmailAuthForm({
           onChange={(e) => setPassword(e.target.value)}
           required
           minLength={6}
-          className={`w-full border-2 ${border} ${inputBg} ${textColor} px-4 py-3 text-base font-mono focus:outline-none focus:border-gray-900 placeholder:text-gray-400`}
-          placeholder="Min 6 characters"
+          className={`w-full border-2 ${border} ${inputBg} ${textColor} px-4 py-3 text-base focus:outline-none focus:border-gray-900 placeholder:text-gray-400`}
+          style={{ fontFamily: sansFont }}
+          placeholder="Your password"
           data-testid="input-password"
         />
       </div>
 
       {error && (
-        <div className="font-pixel text-sm text-red-500 text-center" data-testid="text-auth-error">
+        <div className="text-sm text-red-500 text-center" style={{ fontFamily: sansFont }} data-testid="text-auth-error">
           {error}
         </div>
       )}
@@ -195,12 +291,140 @@ function EmailAuthForm({
         }`}
         data-testid="button-auth-submit"
       >
-        {loading ? "PLEASE WAIT..." : "CONTINUE"}
+        {loading ? "PLEASE WAIT..." : "LOG IN"}
       </button>
+    </form>
+  );
+}
 
-      <div className={`text-center font-pixel text-xs ${textMuted}`}>
-        NEW USERS ARE REGISTERED AUTOMATICALLY
+function EmailRegisterForm({
+  theme,
+  onSuccess,
+}: {
+  theme: "light" | "dark";
+  onSuccess: (token: string, data: any) => void;
+}) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [registered, setRegistered] = useState(false);
+
+  const dark = theme === "dark";
+  const border = dark ? "border-[#2a3552]" : "border-gray-400";
+  const bg = dark ? "bg-[#0f1930]" : "bg-white";
+  const textColor = dark ? "text-slate-200" : "text-gray-900";
+  const textMuted = dark ? "text-slate-400" : "text-gray-600";
+  const inputBg = dark ? "bg-[#0b1220]" : "bg-white";
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+
+    try {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+
+      if (res.ok) {
+        setRegistered(true);
+        onSuccess(data.sessionToken, data);
+        return;
+      }
+
+      if (res.status === 409) {
+        setError("This email is already registered. Please log in instead.");
+      } else {
+        setError(data.error || "Registration failed");
+      }
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (registered) {
+    return (
+      <div className="text-center space-y-4">
+        <div className={`font-pixel text-sm ${dark ? "text-[#FFD700]" : "text-gray-900"}`}>
+          CHECK YOUR EMAIL
+        </div>
+        <div className={`border-2 ${border} ${dark ? "bg-[#0f1930]" : "bg-gray-50"} p-4`}>
+          <p className={`text-base ${dark ? "text-slate-300" : "text-gray-700"} mb-3`} style={{ fontFamily: sansFont }}>
+            We sent a verification link to <strong>{email}</strong>.
+          </p>
+          <p className={`text-sm ${textMuted}`} style={{ fontFamily: sansFont }}>
+            You must verify your email before you can claim sat rewards. Check your inbox (and spam folder) for the verification email.
+          </p>
+        </div>
+        <p className={`font-pixel text-xs ${textMuted}`}>
+          ACCOUNT CREATED SUCCESSFULLY
+        </p>
       </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-5">
+      <div className={`border-2 ${border} ${dark ? "bg-[#FFD700]/5" : "bg-yellow-50"} p-3 mb-2`}>
+        <p className={`text-sm font-semibold ${dark ? "text-slate-300" : "text-gray-700"}`} style={{ fontFamily: sansFont }}>
+          After registering, you will receive a verification email. You must verify your email to claim sat rewards.
+        </p>
+      </div>
+
+      <div>
+        <label className={`block font-pixel text-xs mb-2 ${dark ? "text-slate-400" : "text-gray-700"}`}>EMAIL</label>
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+          className={`w-full border-2 ${border} ${inputBg} ${textColor} px-4 py-3 text-base focus:outline-none focus:border-gray-900 placeholder:text-gray-400`}
+          style={{ fontFamily: sansFont }}
+          placeholder="you@example.com"
+          data-testid="input-register-email"
+        />
+      </div>
+      <div>
+        <label className={`block font-pixel text-xs mb-2 ${dark ? "text-slate-400" : "text-gray-700"}`}>PASSWORD</label>
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+          minLength={6}
+          className={`w-full border-2 ${border} ${inputBg} ${textColor} px-4 py-3 text-base focus:outline-none focus:border-gray-900 placeholder:text-gray-400`}
+          style={{ fontFamily: sansFont }}
+          placeholder="Min 6 characters"
+          data-testid="input-register-password"
+        />
+      </div>
+
+      {error && (
+        <div className="text-sm text-red-500 text-center" style={{ fontFamily: sansFont }} data-testid="text-auth-error">
+          {error}
+        </div>
+      )}
+
+      <button
+        type="submit"
+        disabled={loading}
+        className={`w-full font-pixel text-base border-2 px-4 py-4 transition-all ${
+          loading
+            ? `${border} ${bg} ${textMuted} cursor-wait`
+            : dark
+            ? "border-[#FFD700] bg-[#FFD700] text-black hover:bg-[#FFC800] active:scale-[0.98]"
+            : "border-gray-900 bg-gray-900 text-white hover:bg-gray-800 active:scale-[0.98]"
+        }`}
+        data-testid="button-register-submit"
+      >
+        {loading ? "PLEASE WAIT..." : "CREATE ACCOUNT"}
+      </button>
     </form>
   );
 }
@@ -245,7 +469,7 @@ function LightningAuthForm({
 
   return (
     <div>
-      <p className={`text-base ${dark ? "text-slate-300" : "text-gray-700"} mb-4 text-center`}>
+      <p className={`text-base ${dark ? "text-slate-300" : "text-gray-700"} mb-4 text-center`} style={{ fontFamily: sansFont }}>
         Scan with a Lightning wallet that supports LNURL-auth
       </p>
 
@@ -286,23 +510,22 @@ function LightningAuthForm({
               WAITING FOR WALLET...
             </div>
           )}
-
-          <div className="text-center mb-4">
-            <a
-              href={`lightning:${challenge.lnurl}`}
-              className={`inline-block border-2 px-5 py-3 font-pixel text-sm hover:opacity-80 ${
-                dark ? "border-[#2a3552] bg-[#0f1930] text-[#FFD700]" : "border-gray-900 bg-gray-900 text-white"
-              }`}
-              data-testid="link-open-wallet"
-            >
-              OPEN IN WALLET
-            </a>
-          </div>
         </>
       )}
 
       <div className={`border-t-2 ${border} pt-4 mt-4`}>
-        <div className={`font-pixel text-xs mb-3 text-center ${textMuted}`}>SUPPORTED WALLETS</div>
+        <p className={`text-sm text-center mb-3 ${textMuted}`} style={{ fontFamily: sansFont }}>
+          Works with any wallet that supports{" "}
+          <a
+            href="https://github.com/lnurl/luds/blob/luds/04.md"
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`underline ${dark ? "text-[#FFD700]" : "text-gray-900"}`}
+          >
+            LNURL-auth
+          </a>
+          , including:
+        </p>
         <div className="flex flex-wrap justify-center gap-2">
           {SUPPORTED_WALLETS.map((w) => (
             <a
@@ -311,6 +534,7 @@ function LightningAuthForm({
               target="_blank"
               rel="noopener noreferrer"
               className={`border ${border} px-3 py-1.5 text-sm ${dark ? "text-slate-300" : "text-gray-700"} hover:opacity-70`}
+              style={{ fontFamily: sansFont }}
             >
               {w.name}
               {w.note && <span className={`ml-1 ${textMuted} text-xs`}>({w.note})</span>}

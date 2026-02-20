@@ -11,10 +11,13 @@ interface CheckpointQuestionProps {
   authenticated: boolean;
   sessionToken: string | null;
   lightningAddress: string | null;
+  emailVerified: boolean;
+  pubkey: string | null;
   alreadyCompleted: boolean;
   claimInfo: { checkpointId: string; amountSats: number; paidAt: string } | null;
   onLoginRequest: () => void;
   onCompleted: (checkpointId: string, amountSats?: number) => void;
+  onOpenProfile?: () => void;
 }
 
 // Render inline code: converts `text` to <code> elements
@@ -47,14 +50,19 @@ export default function CheckpointQuestion({
   authenticated,
   sessionToken,
   lightningAddress,
+  emailVerified,
+  pubkey,
   alreadyCompleted,
   claimInfo,
   onLoginRequest,
   onCompleted,
+  onOpenProfile,
 }: CheckpointQuestionProps) {
   const dark = theme === "dark";
+  const canClaimRewards = !!pubkey || emailVerified;
 
-  const storageKey = `pl-checkpoint-${checkpointId}`;
+  const userSuffix = sessionToken ? `-${sessionToken.slice(0, 8)}` : "";
+  const storageKey = `pl-checkpoint-${checkpointId}${userSuffix}`;
 
   const [selected, setSelected] = useState<number | null>(() => {
     try {
@@ -366,10 +374,17 @@ export default function CheckpointQuestion({
 
           {!rewardLnurl && !alreadyCompleted && !autoPaid && !autoPaySending && !claiming && !showClaimChoice && (
             <div>
+              {authenticated && !canClaimRewards && (
+                <div className={`border-2 ${dark ? "border-[#2a3552] bg-[#0b1220]" : "border-border bg-background"} p-3 mb-3`}>
+                  <div className={`font-pixel text-sm ${dark ? "text-[#FFD700]" : "text-[#9a7200]"} mb-2`}>EMAIL NOT VERIFIED</div>
+                  <p className={`text-xs ${textMuted}`} style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>Throughout the educational material, there are checkpoints that offer real bitcoin rewards when completed successfully. To mitigate spam, users must either verify their email or log in with LNURL-Auth to claim these rewards.</p>
+                </div>
+              )}
               <button
                 type="button"
                 onClick={() => setShowClaimChoice(true)}
-                className={`font-pixel text-sm border-2 px-6 py-3 transition-all ${goldBorder} ${goldBg} text-black hover:bg-[#FFC800] active:scale-95`}
+                disabled={authenticated && !canClaimRewards}
+                className={`font-pixel text-sm border-2 px-6 py-3 transition-all ${goldBorder} ${goldBg} text-black hover:bg-[#FFC800] active:scale-95 ${authenticated && !canClaimRewards ? "opacity-60 cursor-not-allowed" : ""}`}
               >
                 CLAIM {rewardAmountSats} SATS
               </button>
@@ -393,10 +408,14 @@ export default function CheckpointQuestion({
                     LIGHTNING ADDRESS
                   </button>
                 ) : (
-                  <div className={`flex-1 border-2 px-5 py-3 ${dark ? "border-[#2a3552]" : "border-border"} opacity-50`}>
+                  <button
+                    type="button"
+                    onClick={() => onOpenProfile?.()}
+                    className={`flex-1 border-2 px-5 py-3 cursor-pointer hover:opacity-70 transition-opacity ${dark ? "border-[#2a3552]" : "border-border"} opacity-60 bg-transparent`}
+                  >
                     <div className="font-pixel text-sm text-center mb-1" style={{ color: dark ? "#94a3b8" : undefined }}>LIGHTNING ADDRESS</div>
-                    <div className={`text-xs text-center ${textMuted}`}>Set address in profile first</div>
-                  </div>
+                    <div className={`text-sm text-center font-bold ${textMuted}`}>Set address in profile first</div>
+                  </button>
                 )}
                 <button
                   type="button"

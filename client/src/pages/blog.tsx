@@ -16,6 +16,8 @@ function ProfileDropdown({
   email,
   pubkey,
   lightningAddress,
+  sessionToken,
+  emailVerified,
   onSetLightningAddress,
   onLogout,
   onClose,
@@ -23,6 +25,8 @@ function ProfileDropdown({
   email: string | null;
   pubkey: string | null;
   lightningAddress: string | null;
+  sessionToken: string | null;
+  emailVerified: boolean;
   onSetLightningAddress: (address: string | null) => Promise<void>;
   onLogout: () => void;
   onClose: () => void;
@@ -31,7 +35,13 @@ function ProfileDropdown({
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [showAddressForm, setShowAddressForm] = useState(!!lightningAddress);
+  const [resending, setResending] = useState(false);
+  const [resendMsg, setResendMsg] = useState<string | null>(null);
+  const [showVerificationSection, setShowVerificationSection] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const isLightningUser = !!pubkey;
+  const needsVerification = !!email && !emailVerified && !isLightningUser;
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -50,6 +60,29 @@ function ProfileDropdown({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
+
+  const handleResendVerification = async () => {
+    if (!sessionToken) return;
+    setResending(true);
+    setResendMsg(null);
+    try {
+      const res = await fetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionToken }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setResendMsg("Verification email sent! Check your inbox.");
+      } else {
+        setResendMsg(data.error || "Failed to send");
+      }
+    } catch {
+      setResendMsg("Failed to send");
+    } finally {
+      setResending(false);
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -72,65 +105,125 @@ function ProfileDropdown({
   return (
     <div
       ref={dropdownRef}
-      className="absolute right-0 top-full mt-2 w-[420px] border-4 z-50 border-border bg-card pixel-shadow"
+      className="absolute right-0 top-full mt-2 w-[calc(100vw-2rem)] sm:w-[420px] max-w-[420px] border-4 z-50 border-border bg-card pixel-shadow"
       style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}
       data-testid="container-profile-dropdown"
     >
-      <div className="px-5 py-5 border-b-2 border-border">
-        <div className="font-pixel text-base mb-2 text-foreground/60">
+      <div className="px-5 py-4 border-b-2 border-border">
+        <div className="font-pixel text-xs mb-1 text-foreground/60">
           LOGGED IN AS
         </div>
-        <div className="text-xl truncate text-foreground">
+        <div className="text-base truncate text-foreground">
           {identity}
         </div>
-      </div>
-
-      <div className="px-5 py-5 border-b-2 border-border">
-        <div className="font-pixel text-base mb-3 text-[#b8860b]">
-          LIGHTNING ADDRESS
-        </div>
-        {lightningAddress && !saveSuccess && (
-          <div className="text-lg mb-3 truncate text-foreground/70">
-            Current: {lightningAddress}
+        {email && (
+          <div className="mt-2 flex items-center gap-2">
+            {emailVerified ? (
+              <span className="text-xs font-pixel text-green-700">VERIFIED</span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowVerificationSection(v => !v)}
+                className="font-pixel text-xs border-2 px-3 py-1.5 transition-all cursor-pointer border-[#b8860b] text-[#9a7200] bg-[#FFD700]/10 hover:bg-[#FFD700]/20"
+              >
+                NOT VERIFIED
+              </button>
+            )}
           </div>
         )}
-        <input
-          type="text"
-          value={addressInput}
-          onChange={(e) => {
-            setAddressInput(e.target.value);
-            setSaveError(null);
-            setSaveSuccess(false);
-          }}
-          placeholder="you@wallet.com"
-          className="w-full px-4 py-3 text-xl border-4 outline-none transition-colors border-border bg-background text-foreground placeholder:text-foreground/30 focus:border-[#b8860b]"
-          data-testid="input-lightning-address"
-          onKeyDown={(e) => {
-            if (e.key === "Enter") handleSave();
-          }}
-        />
-        <div className="flex items-center gap-3 mt-4">
+        {isLightningUser && !email && (
+          <div className="mt-2">
+            <span className="text-xs font-pixel text-green-700">LIGHTNING AUTH</span>
+          </div>
+        )}
+      </div>
+
+      {needsVerification && showVerificationSection && (
+        <div className="px-5 py-4 border-b-2 border-border">
+          <p className="text-base leading-relaxed mb-3 text-foreground/70">
+            Verify your email to claim bitcoin rewards from checkpoints. You can also log in with LNURL-Auth instead.
+          </p>
           <button
             type="button"
-            onClick={handleSave}
-            disabled={saving}
-            className={`font-pixel text-base border-2 px-6 py-3 transition-all border-[#FFD700] bg-[#FFD700] text-black hover:bg-[#FFC800] active:scale-95 ${
-              saving ? "opacity-60 cursor-wait" : ""
-            }`}
-            data-testid="button-save-lightning-address"
+            onClick={handleResendVerification}
+            disabled={resending}
+            className={`font-pixel text-sm border-2 px-5 py-3 transition-all border-[#b8860b] text-[#9a7200] bg-[#FFD700]/10 hover:bg-[#FFD700]/20 ${resending ? "opacity-60 cursor-wait" : ""}`}
+            data-testid="button-resend-verification"
           >
-            {saving ? "SAVING..." : "SAVE"}
+            {resending ? "SENDING..." : "RESEND VERIFICATION EMAIL"}
           </button>
-          {saveSuccess && (
-            <span className="font-pixel text-base text-green-400">SAVED!</span>
-          )}
-          {saveError && (
-            <span className="font-pixel text-base text-red-400">{saveError}</span>
+          {resendMsg && (
+            <p className={`mt-2 text-sm ${resendMsg.includes("sent") ? "text-green-700" : "text-red-400"}`}>
+              {resendMsg}
+            </p>
           )}
         </div>
-        <div className="mt-3 text-lg text-foreground/70">
-          Rewards will auto-send to this address
-        </div>
+      )}
+
+      <div className="px-5 py-4 border-b-2 border-border">
+        {!showAddressForm ? (
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowAddressForm(true)}
+              className="w-full font-pixel text-sm border-2 px-4 py-3 transition-all border-[#b8860b] text-[#9a7200] bg-[#FFD700]/10 hover:bg-[#FFD700]/20"
+              data-testid="button-add-lightning-address"
+            >
+              ADD LIGHTNING ADDRESS
+            </button>
+            <p className="mt-3 text-base font-medium leading-relaxed text-foreground/70">
+              Adding a Lightning address makes for a much more seamless experience. Complete checkpoints and receive sats automatically without having to scan a QR code.
+            </p>
+          </div>
+        ) : (
+          <div>
+            <div className="font-pixel text-xs mb-2 text-[#9a7200]">
+              LIGHTNING ADDRESS
+            </div>
+            {lightningAddress && !saveSuccess && (
+              <div className="text-sm mb-2 truncate text-foreground/70">
+                Current: {lightningAddress}
+              </div>
+            )}
+            <input
+              type="text"
+              value={addressInput}
+              onChange={(e) => {
+                setAddressInput(e.target.value);
+                setSaveError(null);
+                setSaveSuccess(false);
+              }}
+              placeholder="you@wallet.com"
+              className="w-full px-3 py-2 text-base border-2 outline-none transition-colors border-border bg-background text-foreground placeholder:text-foreground/30 focus:border-[#b8860b]"
+              data-testid="input-lightning-address"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSave();
+              }}
+            />
+            <div className="flex items-center gap-3 mt-3">
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving}
+                className={`font-pixel text-xs border-2 px-4 py-2 transition-all border-[#FFD700] bg-[#FFD700] text-black hover:bg-[#FFC800] active:scale-95 ${
+                  saving ? "opacity-60 cursor-wait" : ""
+                }`}
+                data-testid="button-save-lightning-address"
+              >
+                {saving ? "SAVING..." : "SAVE"}
+              </button>
+              {saveSuccess && (
+                <span className="font-pixel text-xs text-green-400">SAVED!</span>
+              )}
+              {saveError && (
+                <span className="font-pixel text-xs text-red-400">{saveError}</span>
+              )}
+            </div>
+            <p className="mt-3 text-base leading-relaxed text-foreground/70">
+              Rewards will auto-send to this address, so you can complete checkpoints and receive sats without scanning a QR code.
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="px-5 py-5">
@@ -188,6 +281,8 @@ export default function Blog() {
                   email={auth.email}
                   pubkey={auth.pubkey}
                   lightningAddress={auth.lightningAddress}
+                  sessionToken={auth.sessionToken}
+                  emailVerified={auth.emailVerified}
                   onSetLightningAddress={setLightningAddress}
                   onLogout={logout}
                   onClose={() => setShowProfileDropdown(false)}
@@ -224,12 +319,12 @@ export default function Blog() {
               className="bg-card border-4 border-border p-4 md:p-5 pixel-shadow transition-all"
               data-testid="card-post-noise"
             >
-              <div className="flex items-start justify-between gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
                 <div className="min-w-0">
-                  <h2 className="font-pixel text-lg md:text-xl leading-relaxed" data-testid="text-post-title">
+                  <h2 className="font-pixel text-sm sm:text-lg md:text-xl leading-relaxed" data-testid="text-post-title">
                     {post.title}
                   </h2>
-                  <p className="text-lg md:text-xl mt-2 text-muted-foreground" style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }} data-testid="text-post-description">
+                  <p className="text-base sm:text-lg md:text-xl mt-2 text-muted-foreground" style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }} data-testid="text-post-description">
                     {post.description}
                   </p>
                 </div>
