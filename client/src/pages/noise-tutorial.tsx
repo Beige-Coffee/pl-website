@@ -252,7 +252,6 @@ function ProfileDropdown({
   pubkey,
   lightningAddress,
   sessionToken,
-  emailVerified,
   onSetLightningAddress,
   onLogout,
   onClose,
@@ -262,7 +261,6 @@ function ProfileDropdown({
   pubkey: string | null;
   lightningAddress: string | null;
   sessionToken: string | null;
-  emailVerified: boolean;
   onSetLightningAddress: (address: string | null) => Promise<void>;
   onLogout: () => void;
   onClose: () => void;
@@ -272,13 +270,7 @@ function ProfileDropdown({
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const [showAddressForm, setShowAddressForm] = useState(!!lightningAddress);
-  const [resending, setResending] = useState(false);
-  const [resendMsg, setResendMsg] = useState<string | null>(null);
-  const [showVerificationSection, setShowVerificationSection] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const isLightningUser = !!pubkey;
-  const needsVerification = !!email && !emailVerified && !isLightningUser;
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -297,29 +289,6 @@ function ProfileDropdown({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
-
-  const handleResendVerification = async () => {
-    if (!sessionToken) return;
-    setResending(true);
-    setResendMsg(null);
-    try {
-      const res = await fetch("/api/auth/resend-verification", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionToken }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setResendMsg("Verification email sent! Check your inbox.");
-      } else {
-        setResendMsg(data.error || "Failed to send");
-      }
-    } catch {
-      setResendMsg("Failed to send");
-    } finally {
-      setResending(false);
-    }
-  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -342,143 +311,71 @@ function ProfileDropdown({
   return (
     <div
       ref={dropdownRef}
-      className={`absolute right-0 top-full mt-2 w-[calc(100vw-2rem)] sm:w-[420px] max-w-[420px] border-4 z-50 ${
+      className={`absolute right-0 top-full mt-2 w-[420px] border-4 z-50 ${
         dark ? "border-[#2a3552] bg-[#0f1930]" : "border-border bg-card"
       }`}
       style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}
       data-testid="container-profile-dropdown"
     >
-      <div className={`px-5 py-4 border-b-2 ${dark ? "border-[#1f2a44]" : "border-border"}`}>
-        <div className={`font-pixel text-xs mb-1 ${dark ? "text-slate-400" : "text-foreground/60"}`}>
+      <div className={`px-5 py-5 border-b-2 ${dark ? "border-[#1f2a44]" : "border-border"}`}>
+        <div className={`font-pixel text-base mb-2 ${dark ? "text-slate-400" : "text-foreground/60"}`}>
           LOGGED IN AS
         </div>
-        <div className={`text-base truncate ${dark ? "text-slate-200" : "text-foreground"}`}>
+        <div className={`text-xl truncate ${dark ? "text-slate-200" : "text-foreground"}`}>
           {identity}
         </div>
-        {email && (
-          <div className="mt-2 flex items-center gap-2">
-            {emailVerified ? (
-              <span className={`text-xs font-pixel ${dark ? "text-green-400" : "text-green-700"}`}>VERIFIED</span>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setShowVerificationSection(v => !v)}
-                className={`font-pixel text-xs border-2 px-3 py-1.5 transition-all cursor-pointer ${
-                  dark
-                    ? "border-[#FFD700] text-[#FFD700] bg-[#FFD700]/10 hover:bg-[#FFD700]/20"
-                    : "border-[#b8860b] text-[#9a7200] bg-[#FFD700]/10 hover:bg-[#FFD700]/20"
-                }`}
-              >
-                NOT VERIFIED
-              </button>
-            )}
-          </div>
-        )}
-        {isLightningUser && !email && (
-          <div className="mt-2">
-            <span className={`text-xs font-pixel ${dark ? "text-green-400" : "text-green-700"}`}>LIGHTNING AUTH</span>
-          </div>
-        )}
       </div>
 
-      {needsVerification && showVerificationSection && (
-        <div className={`px-5 py-4 border-b-2 ${dark ? "border-[#1f2a44]" : "border-border"}`}>
-          <p className={`text-base leading-relaxed mb-3 ${dark ? "text-slate-300" : "text-foreground/70"}`}>
-            Verify your email to claim bitcoin rewards from checkpoints. You can also log in with LNURL-Auth instead.
-          </p>
-          <button
-            type="button"
-            onClick={handleResendVerification}
-            disabled={resending}
-            className={`font-pixel text-sm border-2 px-5 py-3 transition-all ${
-              dark
-                ? "border-[#FFD700] text-[#FFD700] bg-[#FFD700]/10 hover:bg-[#FFD700]/20"
-                : "border-[#b8860b] text-[#9a7200] bg-[#FFD700]/10 hover:bg-[#FFD700]/20"
-            } ${resending ? "opacity-60 cursor-wait" : ""}`}
-            data-testid="button-resend-verification"
-          >
-            {resending ? "SENDING..." : "RESEND VERIFICATION EMAIL"}
-          </button>
-          {resendMsg && (
-            <p className={`mt-2 text-sm ${resendMsg.includes("sent") ? (dark ? "text-green-400" : "text-green-700") : "text-red-400"}`}>
-              {resendMsg}
-            </p>
-          )}
+      <div className={`px-5 py-5 border-b-2 ${dark ? "border-[#1f2a44]" : "border-border"}`}>
+        <div className={`font-pixel text-base mb-3 ${dark ? "text-[#FFD700]" : "text-[#b8860b]"}`}>
+          LIGHTNING ADDRESS
         </div>
-      )}
-
-      <div className={`px-5 py-4 border-b-2 ${dark ? "border-[#1f2a44]" : "border-border"}`}>
-        {!showAddressForm ? (
-          <div>
-            <button
-              type="button"
-              onClick={() => setShowAddressForm(true)}
-              className={`w-full font-pixel text-sm border-2 px-4 py-3 transition-all ${
-                dark
-                  ? "border-[#FFD700] text-[#FFD700] bg-[#FFD700]/10 hover:bg-[#FFD700]/20"
-                  : "border-[#b8860b] text-[#9a7200] bg-[#FFD700]/10 hover:bg-[#FFD700]/20"
-              }`}
-              data-testid="button-add-lightning-address"
-            >
-              ADD LIGHTNING ADDRESS
-            </button>
-            <p className={`mt-3 text-base font-medium leading-relaxed ${dark ? "text-slate-300" : "text-foreground/70"}`}>
-              Adding a Lightning address makes for a much more seamless experience. Complete checkpoints and receive sats automatically without having to scan a QR code.
-            </p>
-          </div>
-        ) : (
-          <div>
-            <div className={`font-pixel text-xs mb-2 ${dark ? "text-[#FFD700]" : "text-[#9a7200]"}`}>
-              LIGHTNING ADDRESS
-            </div>
-            {lightningAddress && !saveSuccess && (
-              <div className={`text-sm mb-2 truncate ${dark ? "text-slate-300" : "text-foreground/70"}`}>
-                Current: {lightningAddress}
-              </div>
-            )}
-            <input
-              type="text"
-              value={addressInput}
-              onChange={(e) => {
-                setAddressInput(e.target.value);
-                setSaveError(null);
-                setSaveSuccess(false);
-              }}
-              placeholder="you@wallet.com"
-              className={`w-full px-3 py-2 text-base border-2 outline-none transition-colors ${
-                dark
-                  ? "border-[#2a3552] bg-[#0b1220] text-slate-200 placeholder:text-slate-600 focus:border-[#FFD700]"
-                  : "border-border bg-background text-foreground placeholder:text-foreground/30 focus:border-[#b8860b]"
-              }`}
-              data-testid="input-lightning-address"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleSave();
-              }}
-            />
-            <div className="flex items-center gap-3 mt-3">
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={saving}
-                className={`font-pixel text-xs border-2 px-4 py-2 transition-all border-[#FFD700] bg-[#FFD700] text-black hover:bg-[#FFC800] active:scale-95 ${
-                  saving ? "opacity-60 cursor-wait" : ""
-                }`}
-                data-testid="button-save-lightning-address"
-              >
-                {saving ? "SAVING..." : "SAVE"}
-              </button>
-              {saveSuccess && (
-                <span className="font-pixel text-xs text-green-400">SAVED!</span>
-              )}
-              {saveError && (
-                <span className="font-pixel text-xs text-red-400">{saveError}</span>
-              )}
-            </div>
-            <p className={`mt-3 text-base leading-relaxed ${dark ? "text-slate-300" : "text-foreground/70"}`}>
-              Rewards will auto-send to this address, so you can complete checkpoints and receive sats without scanning a QR code.
-            </p>
+        {lightningAddress && !saveSuccess && (
+          <div className={`text-lg mb-3 truncate ${dark ? "text-slate-300" : "text-foreground/70"}`}>
+            Current: {lightningAddress}
           </div>
         )}
+        <input
+          type="text"
+          value={addressInput}
+          onChange={(e) => {
+            setAddressInput(e.target.value);
+            setSaveError(null);
+            setSaveSuccess(false);
+          }}
+          placeholder="you@wallet.com"
+          className={`w-full px-4 py-3 text-xl border-4 outline-none transition-colors ${
+            dark
+              ? "border-[#2a3552] bg-[#0b1220] text-slate-200 placeholder:text-slate-600 focus:border-[#FFD700]"
+              : "border-border bg-background text-foreground placeholder:text-foreground/30 focus:border-[#b8860b]"
+          }`}
+          data-testid="input-lightning-address"
+          onKeyDown={(e) => {
+            if (e.key === "Enter") handleSave();
+          }}
+        />
+        <div className="flex items-center gap-3 mt-4">
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className={`font-pixel text-base border-2 px-6 py-3 transition-all border-[#FFD700] bg-[#FFD700] text-black hover:bg-[#FFC800] active:scale-95 ${
+              saving ? "opacity-60 cursor-wait" : ""
+            }`}
+            data-testid="button-save-lightning-address"
+          >
+            {saving ? "SAVING..." : "SAVE"}
+          </button>
+          {saveSuccess && (
+            <span className="font-pixel text-base text-green-400">SAVED!</span>
+          )}
+          {saveError && (
+            <span className="font-pixel text-base text-red-400">{saveError}</span>
+          )}
+        </div>
+        <div className={`mt-3 text-lg ${dark ? "text-slate-300" : "text-foreground/70"}`}>
+          Rewards will auto-send to this address
+        </div>
       </div>
 
       <div className="px-5 py-5">
@@ -605,34 +502,27 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
 
   return (
     <div className={`min-h-screen ${t.pageBg} ${t.pageText}`} data-theme={theme}>
-      <div className={`w-full border-b-4 ${t.headerBorder} ${t.headerBg} px-2 py-2 md:px-4 md:py-3 flex items-center justify-between sticky top-0 z-50`}>
-        <div className="flex items-center gap-2 md:gap-3">
+      <div className={`w-full border-b-4 ${t.headerBorder} ${t.headerBg} px-4 py-3 flex items-center justify-between sticky top-0 z-50`}>
+        <div className="flex items-center gap-3">
           <button
             type="button"
-            className={`md:hidden font-pixel text-xs border-2 ${theme === "dark" ? "border-[#2a3552] bg-[#0f1930] hover:bg-[#132043]" : "border-border bg-card hover:bg-secondary"} px-2 py-1.5 transition-colors`}
+            className={`md:hidden font-pixel text-xs border-2 ${theme === "dark" ? "border-[#2a3552] bg-[#0f1930] hover:bg-[#132043]" : "border-border bg-card hover:bg-secondary"} px-3 py-2 transition-colors`}
             onClick={() => setMobileNavOpen((v) => !v)}
             data-testid="button-sidebar-toggle"
           >
             MENU
           </button>
-          <Link
-            href="/learn"
-            className="hidden md:inline font-pixel text-xs md:text-sm hover:text-primary transition-colors"
+          <button
+            type="button"
+            onClick={() => {
+              localStorage.removeItem("pl-tutorial-mode");
+              setLocation("/learn");
+            }}
+            className="font-pixel text-xs md:text-sm hover:text-primary transition-colors cursor-pointer bg-transparent border-none p-0"
             data-testid="link-back-blog"
           >
             &lt; BACK TO LEARN
-          </Link>
-          <Link
-            href="/learn"
-            className={`md:hidden p-1 transition-colors ${theme === "dark" ? "text-slate-300 hover:text-slate-100" : "text-foreground/70 hover:text-foreground"}`}
-            data-testid="link-back-blog-mobile"
-            aria-label="Back to Learn"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M19 12H5" />
-              <path d="M12 19l-7-7 7-7" />
-            </svg>
-          </Link>
+          </button>
         </div>
 
         <div className="hidden md:flex items-center gap-3">
@@ -697,7 +587,6 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
                   pubkey={auth.pubkey}
                   lightningAddress={auth.lightningAddress}
                   sessionToken={auth.sessionToken}
-                  emailVerified={auth.emailVerified}
                   onSetLightningAddress={setLightningAddress}
                   onLogout={logout}
                   onClose={() => setShowProfileDropdown(false)}
@@ -708,7 +597,7 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
             <button
               type="button"
               onClick={() => setShowLoginModal(true)}
-              className={`p-1 md:p-2 font-pixel text-[10px] md:text-sm transition-colors ${
+              className={`p-2 font-pixel text-xs md:text-sm transition-colors ${
                 theme === "dark"
                   ? "text-slate-200 hover:text-white"
                   : "text-foreground hover:text-foreground/80"
@@ -727,34 +616,11 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
           gridTemplateColumns: sidebarCollapsed ? `60px minmax(0, 1fr)` : `360px minmax(0, 1fr)`,
         }}
       >
-        {mobileNavOpen && (
-          <div
-            className="md:hidden fixed inset-0 bg-black/50 z-40"
-            onClick={() => setMobileNavOpen(false)}
-          />
-        )}
         <aside
           className={`${
-            mobileNavOpen ? "fixed inset-y-0 left-0 w-[300px] z-50 overflow-y-auto shadow-xl" : "hidden"
-          } md:relative md:block md:sticky md:top-[68px] md:w-auto md:z-auto md:shadow-none md:h-fit ${theme === "dark" ? "bg-[#0b1220]" : "bg-card"}`}
+            mobileNavOpen ? "block" : "hidden"
+          } md:block md:sticky md:top-[68px] h-fit ${theme === "dark" ? "bg-[#0b1220]" : "bg-card"}`}
         >
-          <div className="md:hidden flex items-center justify-between px-4 pt-4 pb-2">
-            <div className={`font-pixel text-sm ${theme === "dark" ? "text-slate-200" : "text-foreground"}`}>
-              Chapters
-            </div>
-            <button
-              type="button"
-              onClick={() => setMobileNavOpen(false)}
-              className={`border-2 px-2 py-1 font-pixel text-xs transition-colors ${
-                theme === "dark"
-                  ? "border-[#2a3552] bg-[#0f1930] hover:bg-[#132043]"
-                  : "border-border bg-card hover:bg-secondary"
-              }`}
-              aria-label="Close menu"
-            >
-              ✕
-            </button>
-          </div>
           <div className="hidden md:flex items-center justify-between px-4 pt-4">
             <div
               className={`font-pixel text-sm ${theme === "dark" ? "text-slate-200" : "text-foreground"} ${
@@ -835,8 +701,6 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
                 authenticated={authenticated}
                 rewardClaimed={auth.rewardClaimed}
                 sessionToken={auth.sessionToken}
-                emailVerified={auth.emailVerified}
-                pubkey={auth.pubkey}
                 onLoginRequest={() => setShowLoginModal(true)}
               />
             ) : (
@@ -848,23 +712,20 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
                 sessionToken={auth.sessionToken}
                 completedCheckpoints={auth.completedCheckpoints}
                 lightningAddress={auth.lightningAddress}
-                emailVerified={auth.emailVerified}
-                pubkey={auth.pubkey}
                 onLoginRequest={() => setShowLoginModal(true)}
                 onCheckpointCompleted={auth.markCheckpointCompleted}
-                onOpenProfile={() => setShowProfileDropdown(true)}
               />
             )}
 
-            <div className={`mt-10 pt-6 border-t ${theme === "dark" ? "border-[#1f2a44]" : "border-border"} flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3`}>
+            <div className={`mt-10 pt-6 border-t ${theme === "dark" ? "border-[#1f2a44]" : "border-border"} flex items-center justify-between gap-3`}>
               {prev ? (
                 <Link
                   href={prev.id === "intro" ? "/noise-tutorial" : `/noise-tutorial/${prev.id}`}
-                  className={`inline-flex items-center gap-2 border-2 px-3 py-2 md:px-4 transition-colors w-full md:w-auto ${t.navPrev}`}
+                  className={`inline-flex items-center gap-2 border-2 px-4 py-2 transition-colors ${t.navPrev}`}
                   data-testid="link-prev"
                 >
-                  <span className={`font-pixel text-sm md:text-base shrink-0 ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`}>PREV</span>
-                  <span className="font-mono text-base md:text-lg truncate hidden sm:inline">{prev.title}</span>
+                  <span className={`font-pixel text-base ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`}>PREV</span>
+                  <span className="font-mono text-lg">{prev.title}</span>
                 </Link>
               ) : (
                 <div />
@@ -873,11 +734,11 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
               {next ? (
                 <Link
                   href={next.id === "intro" ? "/noise-tutorial" : `/noise-tutorial/${next.id}`}
-                  className={`inline-flex items-center gap-2 border-2 px-3 py-2 md:px-4 transition-all w-full md:w-auto ${t.navNext}`}
+                  className={`inline-flex items-center gap-2 border-2 px-4 py-2 transition-all ${t.navNext}`}
                   data-testid="link-next"
                 >
-                  <span className="font-pixel text-sm md:text-base shrink-0">NEXT</span>
-                  <span className="font-mono text-base md:text-lg truncate hidden sm:inline">{next.title}</span>
+                  <span className="font-pixel text-base">NEXT</span>
+                  <span className="font-mono text-lg">{next.title}</span>
                 </Link>
               ) : (
                 <div />
@@ -1195,7 +1056,7 @@ function DonationWall({ theme }: { theme: "light" | "dark" }) {
   const cardBg = dark ? "bg-[#0f1930]" : "bg-card";
   const cardBorder = dark ? "border-[#2a3552]" : "border-border";
   const textColor = dark ? "text-slate-100" : "text-black";
-  const textMuted = dark ? "text-slate-300" : "text-black/70";
+  const textMuted = dark ? "text-slate-400" : "text-black/70";
   const sansFont = 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
 
   const fetchDonations = useCallback(async () => {
@@ -1280,8 +1141,8 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
     { label: "100", value: 100, desc: "Round number" },
     { label: "1,000", value: 1000, desc: "Generous" },
     { label: "2,100", value: 2100, desc: "21 × 100" },
-    { label: "10k", value: 10000, desc: "Big impact" },
-    { label: "21k", value: 21000, desc: "Legendary" },
+    { label: "10,000", value: 10000, desc: "Big impact" },
+    { label: "21,000", value: 21000, desc: "Legendary" },
   ];
 
   const goldText = dark ? "text-[#FFD700]" : "text-[#9a7200]";
@@ -1289,7 +1150,7 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
   const cardBg = dark ? "bg-[#0f1930]" : "bg-card";
   const cardBorder = dark ? "border-[#2a3552]" : "border-border";
   const textColor = dark ? "text-slate-100" : "text-black";
-  const textMuted = dark ? "text-slate-300" : "text-black/70";
+  const textMuted = dark ? "text-slate-400" : "text-black/70";
   const greenText = dark ? "text-green-400" : "text-green-700";
   const sansFont = 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
 
@@ -1478,7 +1339,7 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
           {/* Amount selection */}
           <div className={`font-pixel text-sm ${goldText} mb-4 tracking-wider`}>CHOOSE AN AMOUNT (SATS)</div>
 
-          <div className="grid grid-cols-3 gap-2 md:gap-3 mb-5">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-5">
             {presetAmounts.map((p) => {
               const isSelected = amount === String(p.value) && !customAmount;
               return (
@@ -1486,7 +1347,7 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
                   key={p.value}
                   type="button"
                   onClick={() => handlePresetClick(p.value)}
-                  className={`border-2 p-2 md:p-4 transition-all hover:scale-[1.02] active:scale-[0.98] ${
+                  className={`border-2 p-4 transition-all hover:scale-[1.02] active:scale-[0.98] ${
                     isSelected
                       ? `${goldBorder} ${dark ? "bg-[#FFD700]/15" : "bg-[#FFD700]/20"} ring-2 ring-[#FFD700]/50`
                       : `${goldBorder} ${dark ? "bg-[#0b1220]" : "bg-white"}`
@@ -1494,8 +1355,8 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
                   style={{ cursor: "pointer" }}
                   data-testid={`button-donate-${p.value}`}
                 >
-                  <div className={`font-pixel text-sm md:text-2xl ${goldText} text-center`}>{p.label}</div>
-                  <div className={`text-xs md:text-lg ${textMuted} mt-1 text-center`} style={{ fontFamily: sansFont }}>{p.desc}</div>
+                  <div className={`font-pixel text-xl md:text-2xl ${goldText}`}>{p.label}</div>
+                  <div className={`text-base md:text-lg ${textMuted} mt-1`} style={{ fontFamily: sansFont }}>{p.desc}</div>
                 </button>
               );
             })}
@@ -1630,21 +1491,13 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
 
           <div className={`border-2 ${cardBorder} ${dark ? "bg-[#0b1220]" : "bg-gray-50"} p-3 mb-4`}>
             <div className={`font-pixel text-xs ${textMuted} mb-1`}>BOLT11 INVOICE</div>
-            <div className="flex items-center gap-2">
-              <div
-                className={`font-mono text-xs ${textMuted} truncate flex-1 leading-relaxed`}
-                data-testid="text-invoice"
-              >
-                {invoice.slice(0, 30)}...
-              </div>
-              <button
-                type="button"
-                onClick={() => { navigator.clipboard.writeText(invoice); }}
-                className={`shrink-0 border-2 ${goldBorder} bg-[#FFD700] text-black font-pixel text-xs px-3 py-1.5 transition-all hover:brightness-110 active:scale-[0.98]`}
-                data-testid="button-copy-invoice-inline"
-              >
-                COPY
-              </button>
+            <div
+              className={`font-mono text-xs ${textMuted} break-all cursor-pointer select-all leading-relaxed`}
+              onClick={() => { navigator.clipboard.writeText(invoice); }}
+              title="Click to copy"
+              data-testid="text-invoice"
+            >
+              {invoice}
             </div>
           </div>
 
@@ -1873,24 +1726,17 @@ function InteractiveQuiz({
   authenticated,
   rewardClaimed,
   sessionToken,
-  emailVerified,
-  pubkey,
   onLoginRequest,
 }: {
   theme: "light" | "dark";
   authenticated: boolean;
   rewardClaimed: boolean;
   sessionToken: string | null;
-  emailVerified: boolean;
-  pubkey: string | null;
   onLoginRequest: () => void;
 }) {
-  const canClaimRewards = !!pubkey || emailVerified;
-  const quizUserSuffix = sessionToken ? `-${sessionToken.slice(0, 8)}` : "";
-  const quizStorageKey = `pl-quiz-selections${quizUserSuffix}`;
   const [selections, setSelections] = useState<Record<number, number>>(() => {
     try {
-      const saved = localStorage.getItem(quizStorageKey);
+      const saved = localStorage.getItem("pl-quiz-selections");
       return saved ? JSON.parse(saved) : {};
     } catch { return {}; }
   });
@@ -1916,7 +1762,7 @@ function InteractiveQuiz({
     if (submitted) return;
     setSelections((prev) => {
       const next = { ...prev, [qIndex]: optIndex };
-      try { localStorage.setItem(quizStorageKey, JSON.stringify(next)); } catch {}
+      try { localStorage.setItem("pl-quiz-selections", JSON.stringify(next)); } catch {}
       return next;
     });
   };
@@ -2007,7 +1853,7 @@ function InteractiveQuiz({
 
   const handleReset = () => {
     setSelections({});
-    try { localStorage.removeItem(quizStorageKey); } catch {}
+    try { localStorage.removeItem("pl-quiz-selections"); } catch {}
     setSubmitted(false);
     setScore(0);
     setShowReward(false);
@@ -2067,21 +1913,12 @@ function InteractiveQuiz({
 
           {passed && !showReward && !rewardClaimed && (
             <div>
-              {authenticated && !canClaimRewards && (
-                <div className={`mt-4 border-2 ${border} ${bg} p-4 mb-3`} data-testid="container-verify-warning">
-                  <div className={`font-pixel text-sm ${dark ? "text-[#FFD700]" : "text-[#9a7200]"} mb-2`}>EMAIL NOT VERIFIED</div>
-                  <p className={`text-base leading-relaxed ${textMuted} mb-3`} style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
-                    Throughout the educational material, there are checkpoints that offer real bitcoin rewards when completed successfully. To mitigate spam, users must either verify their email or log in with LNURL-Auth to claim these rewards. Check your inbox for the verification link.
-                  </p>
-                  <ResendVerificationButton sessionToken={sessionToken} theme={theme} />
-                </div>
-              )}
               <button
                 type="button"
                 onClick={handleClaimReward}
-                disabled={claimingReward || (authenticated && !canClaimRewards)}
+                disabled={claimingReward}
                 className={`mt-4 font-pixel text-sm border-2 px-6 py-3 transition-all border-[#FFD700] bg-[#FFD700] text-black hover:bg-[#FFC800] active:scale-95 ${
-                  claimingReward || (authenticated && !canClaimRewards) ? "opacity-60 cursor-wait" : ""
+                  claimingReward ? "opacity-60 cursor-wait" : ""
                 }`}
                 data-testid="button-claim-reward"
               >
@@ -2352,11 +2189,8 @@ function ChapterContent({
   sessionToken,
   completedCheckpoints,
   lightningAddress,
-  emailVerified,
-  pubkey,
   onLoginRequest,
   onCheckpointCompleted,
-  onOpenProfile,
 }: {
   chapter: Chapter;
   theme: "light" | "dark";
@@ -2365,11 +2199,8 @@ function ChapterContent({
   sessionToken: string | null;
   completedCheckpoints: { checkpointId: string; amountSats: number; paidAt: string }[];
   lightningAddress: string | null;
-  emailVerified: boolean;
-  pubkey: string | null;
   onLoginRequest: () => void;
   onCheckpointCompleted: (id: string, amountSats?: number) => void;
-  onOpenProfile: () => void;
 }) {
   const [md, setMd] = useState<string>("Loading…");
   const [err, setErr] = useState<string | null>(null);
@@ -2487,13 +2318,10 @@ function ChapterContent({
                   authenticated={authenticated}
                   sessionToken={sessionToken}
                   lightningAddress={lightningAddress}
-                  emailVerified={emailVerified}
-                  pubkey={pubkey}
                   alreadyCompleted={isCompleted}
                   claimInfo={completedCheckpoints.find(c => c.checkpointId === cpId) || null}
                   onLoginRequest={onLoginRequest}
                   onCompleted={onCheckpointCompleted}
-                  onOpenProfile={onOpenProfile}
                 />
               </CollapsibleItem>
             );
@@ -2613,13 +2441,10 @@ function ChapterContent({
                   authenticated={authenticated}
                   sessionToken={sessionToken}
                   lightningAddress={lightningAddress}
-                  emailVerified={emailVerified}
-                  pubkey={pubkey}
                   alreadyCompleted={isGroupCompleted}
                   claimInfo={completedCheckpoints.find(c => c.checkpointId === groupId) || null}
                   onLoginRequest={onLoginRequest}
                   onCompleted={onCheckpointCompleted}
-                  onOpenProfile={onOpenProfile}
                 />
               </CollapsibleItem>
             );
@@ -2629,55 +2454,6 @@ function ChapterContent({
         {rewriteTutorialImagePaths(md)}
       </ReactMarkdown>
 
-    </div>
-  );
-}
-
-function ResendVerificationButton({ sessionToken, theme }: { sessionToken: string | null; theme: "light" | "dark" }) {
-  const [sending, setSending] = useState(false);
-  const [sent, setSent] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const dark = theme === "dark";
-  const border = dark ? "border-[#2a3552]" : "border-gray-400";
-
-  const handleResend = async () => {
-    if (!sessionToken) return;
-    setSending(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/auth/resend-verification", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${sessionToken}` },
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setSent(true);
-      } else {
-        setError(data.error || "Failed to resend");
-      }
-    } catch {
-      setError("Network error");
-    } finally {
-      setSending(false);
-    }
-  };
-
-  if (sent) {
-    return <div className="font-pixel text-xs text-green-400" data-testid="text-verification-sent">VERIFICATION EMAIL SENT</div>;
-  }
-
-  return (
-    <div>
-      <button
-        type="button"
-        onClick={handleResend}
-        disabled={sending}
-        className={`font-pixel text-xs border-2 ${border} px-4 py-2 ${dark ? "text-slate-300 hover:text-[#FFD700]" : "text-gray-700 hover:text-gray-900"} transition-colors ${sending ? "opacity-60" : ""}`}
-        data-testid="button-resend-verification"
-      >
-        {sending ? "SENDING..." : "RESEND VERIFICATION EMAIL"}
-      </button>
-      {error && <div className="mt-1 text-xs text-red-400">{error}</div>}
     </div>
   );
 }

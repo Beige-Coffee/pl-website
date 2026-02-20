@@ -10,7 +10,6 @@ import bcrypt from "bcryptjs";
 import { decode as decodeBolt11 } from "light-bolt11-decoder";
 import { emailAuthSchema, insertPageEventSchema } from "@shared/schema";
 import { existsSync } from "fs";
-import { sendVerificationEmail } from "./email";
 
 class RateLimiter {
   private attempts: Map<string, number[]> = new Map();
@@ -95,26 +94,6 @@ async function getAuthUser(req: Request) {
   return storage.getUserBySessionToken(token);
 }
 
-function verificationResultPage(success: boolean, message: string): string {
-  const color = success ? "#b8860b" : "#dc2626";
-  const icon = success ? "&#10003;" : "&#10007;";
-  return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-<title>${success ? "Email Verified" : "Verification Failed"}</title>
-<style>body{margin:0;background:#f5f0e1;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
-.box{background:#fffdf5;border:4px solid #b8860b;padding:48px;max-width:480px;text-align:center;}
-.icon{font-size:48px;color:${color};margin-bottom:16px;}
-h1{font-family:'Press Start 2P',monospace;font-size:14px;color:${color};margin:0 0 20px;}
-p{font-size:18px;color:#1a1a1a;line-height:1.6;margin:0 0 24px;}
-a{display:inline-block;background:#FFD700;color:#000;font-family:'Press Start 2P',monospace;font-size:11px;padding:14px 28px;text-decoration:none;border:2px solid #b8860b;}
-a:hover{opacity:0.9;}</style></head>
-<body><div class="box"><div class="icon">${icon}</div>
-<h1>${success ? "VERIFIED" : "ERROR"}</h1>
-<p>${message}</p>
-<a href="/noise-tutorial">BACK TO TUTORIAL</a></div></body></html>`;
-}
-
 export async function registerRoutes(app: Express): Promise<Server> {
 
   startLexeSidecar();
@@ -133,24 +112,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const existing = await storage.getUserByEmail(email);
       if (existing) {
-        return res.status(409).json({ error: "Email already registered. Please log in instead." });
+        return res.status(409).json({ error: "Email already registered" });
       }
 
       const passwordHash = await bcrypt.hash(password, 10);
       const user = await storage.createUserWithPassword(email, passwordHash, email.split("@")[0]);
-
-      const verificationToken = randomBytes(32).toString("hex");
-      const verificationExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
-      await storage.setVerificationToken(user.id, verificationToken, verificationExpiry);
-
-      const baseUrl = getBaseUrl(req);
-      const verificationUrl = `${baseUrl}/api/auth/verify-email?token=${verificationToken}`;
-
-      try {
-        await sendVerificationEmail(email, verificationUrl);
-      } catch (emailErr) {
-        console.error("Failed to send verification email:", emailErr);
-      }
 
       const session = await storage.createSession(user.id);
       res.json({
@@ -161,8 +127,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         displayName: user.displayName,
         rewardClaimed: user.rewardClaimed,
         lightningAddress: user.lightningAddress || null,
-        emailVerified: false,
-        needsVerification: true,
       });
     } catch (err) {
       console.error("Register error:", err);
@@ -201,7 +165,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         displayName: user.displayName,
         rewardClaimed: user.rewardClaimed,
         lightningAddress: user.lightningAddress || null,
-        emailVerified: user.emailVerified,
       });
     } catch (err) {
       console.error("Login error:", err);
@@ -222,57 +185,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       displayName: user.displayName,
       rewardClaimed: user.rewardClaimed,
       lightningAddress: user.lightningAddress || null,
-      emailVerified: user.emailVerified,
     });
-  });
-
-  app.get("/api/auth/verify-email", async (req: Request, res: Response) => {
-    const { token } = req.query;
-    if (!token || typeof token !== "string") {
-      return res.status(400).send(verificationResultPage(false, "Invalid verification link."));
-    }
-    try {
-      const user = await storage.verifyEmail(token);
-      if (!user) {
-        return res.status(400).send(verificationResultPage(false, "This verification link is invalid, expired, or has already been used. If you've already verified your email, you're all set!"));
-      }
-      return res.send(verificationResultPage(true, "Your email has been verified! You can now claim sat rewards."));
-    } catch (err) {
-      console.error("Email verification error:", err);
-      return res.status(500).send(verificationResultPage(false, "Something went wrong. Please try again."));
-    }
-  });
-
-  app.post("/api/auth/resend-verification", async (req: Request, res: Response) => {
-    const ip = getClientIp(req);
-    if (!authLimiter.check(ip)) {
-      return res.status(429).json({ error: "Too many attempts, try again later" });
-    }
-    try {
-      const user = await getAuthUser(req);
-      if (!user) {
-        return res.status(401).json({ error: "Not authenticated" });
-      }
-      if (user.emailVerified) {
-        return res.json({ ok: true, alreadyVerified: true });
-      }
-      if (!user.email) {
-        return res.status(400).json({ error: "No email on account" });
-      }
-
-      const verificationToken = randomBytes(32).toString("hex");
-      const verificationExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
-      await storage.setVerificationToken(user.id, verificationToken, verificationExpiry);
-
-      const baseUrl = getBaseUrl(req);
-      const verificationUrl = `${baseUrl}/api/auth/verify-email?token=${verificationToken}`;
-      await sendVerificationEmail(user.email, verificationUrl);
-
-      res.json({ ok: true });
-    } catch (err) {
-      console.error("Resend verification error:", err);
-      res.status(500).json({ error: "Failed to resend verification email" });
-    }
   });
 
   app.post("/api/auth/logout", async (req: Request, res: Response) => {
@@ -451,11 +364,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const isVerified = user.pubkey || user.emailVerified;
-      if (!isVerified) {
-        return res.status(403).json({ error: "Please verify your email before claiming rewards. Check your inbox for the verification link." });
-      }
-
       if (user.rewardClaimed) {
         return res.status(400).json({ error: "Reward already claimed" });
       }
@@ -516,11 +424,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await getAuthUser(req);
       if (!user) {
         return res.status(401).json({ error: "Not authenticated" });
-      }
-
-      const isVerified = user.pubkey || user.emailVerified;
-      if (!isVerified) {
-        return res.status(403).json({ error: "Please verify your email before claiming rewards. Check your inbox for the verification link." });
       }
 
       const { checkpointId, answer, method } = req.body;
@@ -606,11 +509,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await getAuthUser(req);
       if (!user) {
         return res.status(401).json({ error: "Not authenticated" });
-      }
-
-      const isVerified = user.pubkey || user.emailVerified;
-      if (!isVerified) {
-        return res.status(403).json({ error: "Please verify your email before claiming rewards. Check your inbox for the verification link." });
       }
 
       const { groupId, answers, method } = req.body;

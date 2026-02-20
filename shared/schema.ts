@@ -11,9 +11,6 @@ export const users = pgTable("users", {
   displayName: text("display_name"),
   rewardClaimed: boolean("reward_claimed").default(false).notNull(),
   lightningAddress: text("lightning_address"),
-  emailVerified: boolean("email_verified").default(false).notNull(),
-  verificationToken: text("verification_token"),
-  verificationExpiry: timestamp("verification_expiry"),
 });
 
 export const sessions = pgTable("sessions", {
