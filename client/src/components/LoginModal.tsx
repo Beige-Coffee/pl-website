@@ -101,7 +101,7 @@ export default function LoginModal({ theme, onSuccess, onClose }: LoginModalProp
         )}
 
         {screen === "register" && (
-          <EmailRegisterForm theme={theme} onSuccess={onSuccess} />
+          <EmailRegisterForm theme={theme} onSuccess={onSuccess} onGoToLogin={() => setScreen("login-email")} />
         )}
       </div>
     </div>
@@ -300,9 +300,11 @@ function EmailLoginForm({
 function EmailRegisterForm({
   theme,
   onSuccess,
+  onGoToLogin,
 }: {
   theme: "light" | "dark";
   onSuccess: (token: string, data: any) => void;
+  onGoToLogin: () => void;
 }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -406,8 +408,24 @@ function EmailRegisterForm({
       </div>
 
       {error && (
-        <div className="text-sm text-red-500 text-center" style={{ fontFamily: sansFont }} data-testid="text-auth-error">
-          {error}
+        <div className="text-center" style={{ fontFamily: sansFont }} data-testid="text-auth-error">
+          <div className="text-base text-red-700 font-semibold">
+            {error}
+          </div>
+          {error.includes("already registered") && (
+            <button
+              type="button"
+              onClick={() => { setError(""); onGoToLogin(); }}
+              className={`mt-2 font-pixel text-sm border-2 px-5 py-2.5 transition-all ${
+                dark
+                  ? "border-[#FFD700] bg-[#FFD700] text-black hover:bg-[#FFC800] active:scale-[0.98]"
+                  : "border-gray-900 bg-gray-900 text-white hover:bg-gray-800 active:scale-[0.98]"
+              }`}
+              data-testid="button-go-to-login"
+            >
+              LOG IN
+            </button>
+          )}
         </div>
       )}
 
