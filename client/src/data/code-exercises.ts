@@ -21,7 +21,7 @@ export const CODE_EXERCISES: Record<string, CodeExerciseData> = {
     id: "exercise-generate-keypair",
     title: "Exercise 1: Generate a secp256k1 Keypair",
     description:
-      "Implement secp256k1 keypair generation  -  the foundation of all Diffie-Hellman operations in Lightning's Noise Protocol. Lightning uses secp256k1 (the same curve as Bitcoin) rather than Curve25519. Return a 32-byte private key and a 33-byte compressed public key.",
+      "Implement secp256k1 keypair generation - the foundation of all Diffie-Hellman operations in Lightning's Noise Protocol. Lightning uses secp256k1 (the same curve as Bitcoin). Return a 32-byte private key and a 33-byte compressed public key.",
     starterCode: `from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
