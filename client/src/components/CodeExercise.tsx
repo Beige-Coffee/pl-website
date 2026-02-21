@@ -666,7 +666,7 @@ export default function CodeExercise({
         </div>
         <div className="fixed inset-0 z-[9999] flex items-start justify-center" onClick={(e) => { if (e.target === e.currentTarget) setExpanded(false); }}>
           <div className={`absolute inset-0 ${dark ? "bg-black/80" : "bg-black/50"} backdrop-blur-sm`} />
-          <div className={`relative w-full max-w-6xl mx-4 my-6 max-h-[calc(100vh-48px)] overflow-y-auto border-2 ${completedDisplay ? goldBorder : cardBorder} ${cardBg} p-6`}>
+          <div className={`relative w-full max-w-6xl mx-4 my-4 max-h-[calc(100vh-32px)] min-h-[80vh] overflow-y-auto border-2 ${completedDisplay ? goldBorder : cardBorder} ${cardBg} p-6`}>
             <button
               onClick={() => setExpanded(false)}
               className={`absolute top-3 right-3 font-pixel text-xs border-2 px-3 py-1.5 transition-all z-10 ${
