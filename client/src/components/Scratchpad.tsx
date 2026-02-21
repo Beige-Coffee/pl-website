@@ -25,17 +25,17 @@ const sansFont = { fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe 
 
 const DEFAULT_CODE = `# Scratchpad - experiment freely here!
 # Common libraries are available:
-from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X25519PublicKey
-from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat, PrivateFormat, NoEncryption
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 import hashlib
 import hmac
 import struct
 
-# Try it out:
-key = X25519PrivateKey.generate()
-pub = key.public_key().public_bytes_raw()
+# Try it out - generate a secp256k1 keypair (same curve as Bitcoin/Lightning):
+key = ec.generate_private_key(ec.SECP256K1())
+pub = key.public_key().public_bytes(Encoding.X962, PublicFormat.CompressedPoint)
 print("Public key:", pub.hex())
-print("Length:", len(pub), "bytes")
+print("Length:", len(pub), "bytes (33-byte compressed SEC1)")
 `;
 
 // ─── Component ───────────────────────────────────────────────────────────────

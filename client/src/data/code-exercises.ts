@@ -15,32 +15,40 @@ export interface CodeExerciseData {
 export const CODE_EXERCISES: Record<string, CodeExerciseData> = {
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 1  -  Generate X25519 Keypair
+  // EXERCISE 1  -  Generate secp256k1 Keypair
   // ═══════════════════════════════════════════════════════════════════════════
   "exercise-generate-keypair": {
     id: "exercise-generate-keypair",
-    title: "Exercise 1: Generate an X25519 Keypair",
+    title: "Exercise 1: Generate a secp256k1 Keypair",
     description:
-      "Implement X25519 keypair generation  -  the foundation of all Diffie-Hellman operations in the Noise Protocol. Return both the private and public key as raw 32-byte values.",
-    starterCode: `from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
-from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat, PrivateFormat, NoEncryption
+      "Implement secp256k1 keypair generation  -  the foundation of all Diffie-Hellman operations in Lightning's Noise Protocol. Lightning uses secp256k1 (the same curve as Bitcoin) rather than Curve25519. Return a 32-byte private key and a 33-byte compressed public key.",
+    starterCode: `from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
 def generate_keypair():
     """
-    Generate a random X25519 keypair.
+    Generate a random secp256k1 keypair.
+
+    Lightning nodes use secp256k1 keys for identity and encryption.
+    The public key is serialized in SEC1 compressed format (33 bytes):
+      - 1-byte prefix (0x02 for even y, 0x03 for odd y)
+      - 32-byte x-coordinate
 
     Returns:
         tuple: (private_key_bytes, public_key_bytes)
-               Both should be 32-byte 'bytes' objects.
+               private_key_bytes: 32-byte 'bytes' object
+               public_key_bytes:  33-byte compressed SEC1 'bytes' object
     """
-    # TODO: Generate a new X25519 private key
+    # TODO: Generate a new secp256k1 private key using ec.generate_private_key()
     # TODO: Derive the public key from the private key
-    # TODO: Serialize both to raw bytes and return them
+    # TODO: Serialize private key to 32-byte big-endian bytes
+    # TODO: Serialize public key to 33-byte compressed SEC1 format
+    # TODO: Return them as a tuple
     pass
 `,
     testCode: `
-from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
-from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat, PrivateFormat, NoEncryption
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
 def test_returns_tuple():
     result = generate_keypair()
@@ -52,12 +60,17 @@ def test_key_lengths():
     assert isinstance(priv, bytes), f"Private key must be bytes, got {type(priv).__name__}"
     assert isinstance(pub, bytes), f"Public key must be bytes, got {type(pub).__name__}"
     assert len(priv) == 32, f"Private key must be 32 bytes, got {len(priv)}"
-    assert len(pub) == 32, f"Public key must be 32 bytes, got {len(pub)}"
+    assert len(pub) == 33, f"Public key must be 33 bytes (compressed SEC1), got {len(pub)}"
+
+def test_compressed_prefix():
+    _, pub = generate_keypair()
+    assert pub[0] in (0x02, 0x03), f"Compressed pubkey must start with 0x02 or 0x03, got 0x{pub[0]:02x}"
 
 def test_public_derives_from_private():
     priv, pub = generate_keypair()
-    reconstructed = X25519PrivateKey.from_private_bytes(priv)
-    expected_pub = reconstructed.public_key().public_bytes_raw()
+    priv_int = int.from_bytes(priv, 'big')
+    reconstructed = ec.derive_private_key(priv_int, ec.SECP256K1())
+    expected_pub = reconstructed.public_key().public_bytes(Encoding.X962, PublicFormat.CompressedPoint)
     assert pub == expected_pub, "Public key must be derived from the private key"
 
 def test_randomness():
@@ -68,17 +81,17 @@ def test_randomness():
 `,
     hints: {
       conceptual:
-        "<p>X25519 is the Diffie-Hellman function used in the Noise Protocol. A keypair consists of a 32-byte private key (a random scalar) and a 32-byte public key (the scalar multiplied by the curve's base point). The <code>cryptography</code> library provides <code>X25519PrivateKey.generate()</code> to create a new random private key.</p>",
+        "<p>Lightning uses <strong>secp256k1</strong>  -  the same elliptic curve as Bitcoin  -  for node identity keys and the Noise handshake. A keypair consists of a 32-byte private key (a random scalar) and a 33-byte compressed public key (SEC1 format: a 02/03 prefix byte plus the 32-byte x-coordinate). The <code>cryptography</code> library provides <code>ec.generate_private_key(ec.SECP256K1())</code> to create a new key.</p>",
       steps:
-        '<ol><li>Call <code>X25519PrivateKey.generate()</code> to create a new private key object.</li><li>Call <code>.public_key()</code> on the private key object to derive the public key.</li><li>Serialize the private key to raw bytes using <code>.private_bytes_raw()</code>.</li><li>Serialize the public key to raw bytes using <code>.public_bytes_raw()</code>.</li><li>Return them as a tuple <code>(private_bytes, public_bytes)</code>.</li></ol>',
-      code: `from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
+        '<ol><li>Call <code>ec.generate_private_key(ec.SECP256K1())</code> to create a new private key object.</li><li>Get the public key via <code>private_key.public_key()</code>.</li><li>Serialize the private key: <code>private_key.private_numbers().private_value.to_bytes(32, "big")</code>.</li><li>Serialize the public key to compressed format: <code>public_key.public_bytes(Encoding.X962, PublicFormat.CompressedPoint)</code>.</li><li>Return them as a tuple <code>(priv_bytes, pub_bytes)</code>.</li></ol>',
+      code: `from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
 def generate_keypair():
-    private_key = X25519PrivateKey.generate()
+    private_key = ec.generate_private_key(ec.SECP256K1())
     public_key = private_key.public_key()
-    # Serialize to raw 32-byte representations
-    priv_bytes = private_key.private_bytes_raw()
-    pub_bytes = public_key.public_bytes_raw()
+    priv_bytes = private_key.private_numbers().private_value.to_bytes(32, 'big')
+    pub_bytes = public_key.public_bytes(Encoding.X962, PublicFormat.CompressedPoint)
     return (priv_bytes, pub_bytes)`,
     },
     rewardSats: 21,
@@ -91,67 +104,95 @@ def generate_keypair():
     id: "exercise-ecdh",
     title: "Exercise 2: Perform ECDH Key Exchange",
     description:
-      "Implement the Elliptic Curve Diffie-Hellman exchange. Given your private key bytes and a remote party's public key bytes, compute the 32-byte shared secret. This is the core operation behind every handshake token (ee, es, se, ss).",
-    starterCode: `from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X25519PublicKey
+      "Implement the secp256k1 ECDH exchange as defined in BOLT 8. Given your 32-byte private key and a remote party's 33-byte compressed public key, compute the 32-byte shared secret. BOLT 8 defines ECDH as: compute the shared point, then return its SHA-256 hash. This is the core operation behind every handshake token (ee, es, se, ss).",
+    starterCode: `from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+import hashlib
 
 def ecdh(local_private_key_bytes, remote_public_key_bytes):
     """
-    Perform X25519 Diffie-Hellman key exchange.
+    Perform secp256k1 ECDH key exchange (BOLT 8 variant).
+
+    BOLT 8 defines ECDH(k, rk) as: perform an EC Diffie-Hellman using
+    secp256k1 private key k and public key rk, then return the SHA-256
+    hash of the raw shared secret.
 
     Args:
-        local_private_key_bytes: 32-byte private key (bytes)
-        remote_public_key_bytes: 32-byte public key (bytes)
+        local_private_key_bytes:  32-byte private key (bytes)
+        remote_public_key_bytes:  33-byte compressed public key (bytes)
 
     Returns:
-        bytes: 32-byte shared secret
+        bytes: 32-byte shared secret (SHA-256 hashed)
     """
-    # TODO: Reconstruct the private key object from raw bytes
-    # TODO: Reconstruct the remote public key object from raw bytes
-    # TODO: Perform the DH exchange and return the shared secret
+    # TODO: Reconstruct the private key from raw bytes using ec.derive_private_key()
+    # TODO: Reconstruct the remote public key from compressed bytes
+    # TODO: Perform the ECDH exchange
+    # TODO: Return SHA-256 of the raw shared secret
     pass
 `,
     testCode: `
-from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X25519PublicKey
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+import hashlib
+
+def _gen_key():
+    sk = ec.generate_private_key(ec.SECP256K1())
+    priv = sk.private_numbers().private_value.to_bytes(32, 'big')
+    pub = sk.public_key().public_bytes(Encoding.X962, PublicFormat.CompressedPoint)
+    return priv, pub
 
 def test_output_length():
-    k1 = X25519PrivateKey.generate()
-    k2 = X25519PrivateKey.generate()
-    secret = ecdh(k1.private_bytes_raw(), k2.public_key().public_bytes_raw())
+    priv1, _ = _gen_key()
+    _, pub2 = _gen_key()
+    secret = ecdh(priv1, pub2)
     assert isinstance(secret, bytes), f"Must return bytes, got {type(secret).__name__}"
     assert len(secret) == 32, f"Shared secret must be 32 bytes, got {len(secret)}"
 
 def test_commutativity():
-    k1 = X25519PrivateKey.generate()
-    k2 = X25519PrivateKey.generate()
-    secret_ab = ecdh(k1.private_bytes_raw(), k2.public_key().public_bytes_raw())
-    secret_ba = ecdh(k2.private_bytes_raw(), k1.public_key().public_bytes_raw())
+    priv1, pub1 = _gen_key()
+    priv2, pub2 = _gen_key()
+    secret_ab = ecdh(priv1, pub2)
+    secret_ba = ecdh(priv2, pub1)
     assert secret_ab == secret_ba, "ECDH must be commutative: DH(a,B) == DH(b,A)"
 
 def test_determinism():
-    k1 = X25519PrivateKey.generate()
-    k2 = X25519PrivateKey.generate()
-    s1 = ecdh(k1.private_bytes_raw(), k2.public_key().public_bytes_raw())
-    s2 = ecdh(k1.private_bytes_raw(), k2.public_key().public_bytes_raw())
+    priv1, _ = _gen_key()
+    _, pub2 = _gen_key()
+    s1 = ecdh(priv1, pub2)
+    s2 = ecdh(priv1, pub2)
     assert s1 == s2, "Same inputs must produce same shared secret"
 
 def test_different_keys_different_secrets():
-    k1 = X25519PrivateKey.generate()
-    k2 = X25519PrivateKey.generate()
-    k3 = X25519PrivateKey.generate()
-    s12 = ecdh(k1.private_bytes_raw(), k2.public_key().public_bytes_raw())
-    s13 = ecdh(k1.private_bytes_raw(), k3.public_key().public_bytes_raw())
+    priv1, _ = _gen_key()
+    _, pub2 = _gen_key()
+    _, pub3 = _gen_key()
+    s12 = ecdh(priv1, pub2)
+    s13 = ecdh(priv1, pub3)
     assert s12 != s13, "Different remote keys must produce different secrets"
+
+def test_is_hashed():
+    priv1, _ = _gen_key()
+    _, pub2 = _gen_key()
+    secret = ecdh(priv1, pub2)
+    # The raw ECDH exchange produces a value; BOLT 8 requires SHA-256 hashing
+    priv_int = int.from_bytes(priv1, 'big')
+    sk = ec.derive_private_key(priv_int, ec.SECP256K1())
+    pk = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256K1(), pub2)
+    raw = sk.exchange(ec.ECDH(), pk)
+    assert secret == hashlib.sha256(raw).digest(), "ECDH must return SHA-256 of raw shared secret"
 `,
     hints: {
       conceptual:
-        "<p>ECDH lets two parties compute a shared secret from their key pairs without transmitting private keys. You need to reconstruct key objects from raw bytes using <code>X25519PrivateKey.from_private_bytes()</code> and <code>X25519PublicKey.from_public_bytes()</code>, then call the <code>.exchange()</code> method.</p>",
+        "<p>ECDH lets two parties compute a shared secret from their key pairs without transmitting private keys. BOLT 8 uses <strong>secp256k1</strong> (not Curve25519) and defines the ECDH output as the SHA-256 hash of the raw shared secret. Reconstruct the private key with <code>ec.derive_private_key()</code>, the public key with <code>EllipticCurvePublicKey.from_encoded_point()</code>, then call <code>.exchange(ec.ECDH(), ...)</code> and hash the result.</p>",
       steps:
-        "<ol><li>Call <code>X25519PrivateKey.from_private_bytes(local_private_key_bytes)</code> to reconstruct the private key object.</li><li>Call <code>X25519PublicKey.from_public_bytes(remote_public_key_bytes)</code> to reconstruct the remote public key object.</li><li>Call <code>private_key.exchange(remote_public_key)</code> to compute the shared secret.</li><li>Return the 32-byte result.</li></ol>",
+        '<ol><li>Convert private key bytes to integer: <code>int.from_bytes(local_private_key_bytes, "big")</code></li><li>Reconstruct private key: <code>ec.derive_private_key(priv_int, ec.SECP256K1())</code></li><li>Reconstruct remote public key: <code>ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256K1(), remote_public_key_bytes)</code></li><li>Perform ECDH: <code>shared_key = private_key.exchange(ec.ECDH(), remote_public_key)</code></li><li>Return <code>hashlib.sha256(shared_key).digest()</code></li></ol>',
       code: `def ecdh(local_private_key_bytes, remote_public_key_bytes):
-    private_key = X25519PrivateKey.from_private_bytes(local_private_key_bytes)
-    remote_public_key = X25519PublicKey.from_public_bytes(remote_public_key_bytes)
-    shared_secret = private_key.exchange(remote_public_key)
-    return shared_secret`,
+    priv_int = int.from_bytes(local_private_key_bytes, 'big')
+    private_key = ec.derive_private_key(priv_int, ec.SECP256K1())
+    remote_public_key = ec.EllipticCurvePublicKey.from_encoded_point(
+        ec.SECP256K1(), remote_public_key_bytes)
+    shared_key = private_key.exchange(ec.ECDH(), remote_public_key)
+    return hashlib.sha256(shared_key).digest()`,
     },
     rewardSats: 21,
   },
@@ -271,7 +312,8 @@ def initialize_symmetric_state(responder_static_pubkey):
       5. Mix in responder's static public key: h = SHA256(h || rs_pub)
 
     Args:
-        responder_static_pubkey: bytes (32 bytes)  -  the responder's static public key
+        responder_static_pubkey: bytes (33 bytes)  -  the responder's compressed
+                                 secp256k1 public key
 
     Returns:
         tuple: (h, ck)
@@ -288,28 +330,36 @@ def initialize_symmetric_state(responder_static_pubkey):
 `,
     testCode: `
 import hashlib
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+
+def _gen_key():
+    sk = ec.generate_private_key(ec.SECP256K1())
+    priv = sk.private_numbers().private_value.to_bytes(32, 'big')
+    pub = sk.public_key().public_bytes(Encoding.X962, PublicFormat.CompressedPoint)
+    return priv, pub
 
 def test_returns_tuple():
-    rs_pub = bytes(32)
+    _, rs_pub = _gen_key()
     result = initialize_symmetric_state(rs_pub)
     assert isinstance(result, tuple), "Must return a tuple"
     assert len(result) == 2, "Must return (h, ck)"
 
 def test_output_lengths():
-    rs_pub = bytes(32)
+    _, rs_pub = _gen_key()
     h, ck = initialize_symmetric_state(rs_pub)
     assert len(h) == 32, f"h must be 32 bytes, got {len(h)}"
     assert len(ck) == 32, f"ck must be 32 bytes, got {len(ck)}"
 
 def test_ck_is_initial_hash():
-    rs_pub = bytes(32)
+    _, rs_pub = _gen_key()
     h, ck = initialize_symmetric_state(rs_pub)
     protocol_name = b"Noise_XK_secp256k1_ChaChaPoly_SHA256"
     expected_ck = hashlib.sha256(protocol_name).digest()
     assert ck == expected_ck, f"ck should be SHA256(protocol_name). Expected {expected_ck.hex()}, got {ck.hex()}"
 
 def test_h_with_known_key():
-    rs_pub = b'\\x02' * 32
+    _, rs_pub = _gen_key()
     protocol_name = b"Noise_XK_secp256k1_ChaChaPoly_SHA256"
     h0 = hashlib.sha256(protocol_name).digest()
     h1 = hashlib.sha256(h0 + b"lightning").digest()
@@ -318,13 +368,15 @@ def test_h_with_known_key():
     assert h == h2, f"h mismatch after mixing prologue and rs_pub. Expected {h2.hex()}, got {h.hex()}"
 
 def test_different_keys_different_h():
-    h1, _ = initialize_symmetric_state(b'\\x01' * 32)
-    h2, _ = initialize_symmetric_state(b'\\x02' * 32)
+    _, pub1 = _gen_key()
+    _, pub2 = _gen_key()
+    h1, _ = initialize_symmetric_state(pub1)
+    h2, _ = initialize_symmetric_state(pub2)
     assert h1 != h2, "Different responder keys must produce different h"
 `,
     hints: {
       conceptual:
-        '<p>The handshake state initialization binds the protocol identity and the known keys into the cryptographic state before any messages are exchanged. The protocol name becomes the starting hash, then the prologue (<code>b"lightning"</code>) and the responder\'s static public key are mixed in using SHA256 chaining: <code>h = SHA256(h || data)</code>. This is the <code>MixHash</code> operation.</p>',
+        '<p>The handshake state initialization binds the protocol identity and the known keys into the cryptographic state before any messages are exchanged. The protocol name becomes the starting hash, then the prologue (<code>b"lightning"</code>) and the responder\'s 33-byte compressed secp256k1 static public key are mixed in using SHA256 chaining: <code>h = SHA256(h || data)</code>. This is the <code>MixHash</code> operation.</p>',
       steps:
         '<ol><li>Set <code>protocol_name = b"Noise_XK_secp256k1_ChaChaPoly_SHA256"</code></li><li>Compute <code>h = hashlib.sha256(protocol_name).digest()</code> (since the name is longer than 32 bytes)</li><li>Set <code>ck = h</code> (chaining key starts as a copy of h)</li><li>MixHash the prologue: <code>h = hashlib.sha256(h + b"lightning").digest()</code></li><li>MixHash the responder\'s key: <code>h = hashlib.sha256(h + responder_static_pubkey).digest()</code></li><li>Return <code>(h, ck)</code></li></ol>',
       code: `def initialize_symmetric_state(responder_static_pubkey):
@@ -350,7 +402,8 @@ def test_different_keys_different_h():
       "Implement Act 1 of the XK handshake from Alice's (initiator) perspective. Mix the ephemeral public key into h, perform ECDH with the responder's static key (the 'es' token), derive a temporary key via HKDF, encrypt an empty payload, and produce the 50-byte Act 1 message.",
     starterCode: `import hashlib
 import hmac
-from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X25519PublicKey
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 
 def hkdf_two_keys(salt, ikm):
@@ -362,9 +415,11 @@ def hkdf_two_keys(salt, ikm):
 
 def ecdh(priv_bytes, pub_bytes):
     """ECDH helper  -  you implemented this in Exercise 2."""
-    priv = X25519PrivateKey.from_private_bytes(priv_bytes)
-    pub = X25519PublicKey.from_public_bytes(pub_bytes)
-    return priv.exchange(pub)
+    priv_int = int.from_bytes(priv_bytes, 'big')
+    private_key = ec.derive_private_key(priv_int, ec.SECP256K1())
+    public_key = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256K1(), pub_bytes)
+    shared_key = private_key.exchange(ec.ECDH(), public_key)
+    return hashlib.sha256(shared_key).digest()
 
 def act_one_initiator(h, ck, e_priv, e_pub, rs_pub):
     """
@@ -383,13 +438,13 @@ def act_one_initiator(h, ck, e_priv, e_pub, rs_pub):
     Args:
         h:      32-byte handshake hash
         ck:     32-byte chaining key
-        e_priv: 32-byte ephemeral private key
-        e_pub:  32-byte ephemeral public key
-        rs_pub: 32-byte responder's static public key
+        e_priv: 32-byte ephemeral private key (secp256k1)
+        e_pub:  33-byte ephemeral public key (compressed secp256k1)
+        rs_pub: 33-byte responder's static public key (compressed secp256k1)
 
     Returns:
         tuple: (message, h, ck)
-            message  -  50 bytes (1 + 33 ephemeral + 16 tag... actually 1 + 32 + 16 = 49? No: version(1) + e_pub(32) + encrypted_empty(16) = 49 bytes)
+            message  -  50 bytes: version(1) + e_pub(33) + tag(16)
     """
     # TODO: Step 1  -  MixHash the ephemeral public key
     # TODO: Step 2  -  Perform ECDH between ephemeral and responder's static key
@@ -404,7 +459,8 @@ def act_one_initiator(h, ck, e_priv, e_pub, rs_pub):
     testCode: `
 import hashlib
 import hmac
-from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X25519PublicKey
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 
 def _ref_hkdf(salt, ikm):
@@ -414,16 +470,21 @@ def _ref_hkdf(salt, ikm):
     return (o1, o2)
 
 def _ref_ecdh(priv_bytes, pub_bytes):
-    priv = X25519PrivateKey.from_private_bytes(priv_bytes)
-    pub = X25519PublicKey.from_public_bytes(pub_bytes)
-    return priv.exchange(pub)
+    priv_int = int.from_bytes(priv_bytes, 'big')
+    sk = ec.derive_private_key(priv_int, ec.SECP256K1())
+    pk = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256K1(), pub_bytes)
+    raw = sk.exchange(ec.ECDH(), pk)
+    return hashlib.sha256(raw).digest()
+
+def _gen_key():
+    sk = ec.generate_private_key(ec.SECP256K1())
+    priv = sk.private_numbers().private_value.to_bytes(32, 'big')
+    pub = sk.public_key().public_bytes(Encoding.X962, PublicFormat.CompressedPoint)
+    return priv, pub
 
 def _setup_act1():
-    rs_priv = X25519PrivateKey.generate()
-    rs_pub = rs_priv.public_key().public_bytes_raw()
-    e_priv_obj = X25519PrivateKey.generate()
-    e_priv = e_priv_obj.private_bytes_raw()
-    e_pub = e_priv_obj.public_key().public_bytes_raw()
+    rs_priv, rs_pub = _gen_key()
+    e_priv, e_pub = _gen_key()
 
     protocol_name = b"Noise_XK_secp256k1_ChaChaPoly_SHA256"
     h = hashlib.sha256(protocol_name).digest()
@@ -446,10 +507,8 @@ def test_returns_correct_types():
 def test_message_length():
     h, ck, e_priv, e_pub, rs_pub, _ = _setup_act1()
     msg, _, _ = act_one_initiator(h, ck, e_priv, e_pub, rs_pub)
-    assert len(msg) == 50, f"Act 1 message must be 50 bytes (1 version + 32 ephemeral + 16 tag + 1... wait). Actually: version(1) + e_pub(32) + encrypted_empty(16) = 49 bytes. Let me reconsider..."
-    # Actually Noise XK Act 1: version(1) + e_pub(32) + tag(16) = 49 bytes
-    # But BOLT 8 uses 50 bytes. Let's accept either.
-    assert len(msg) in (49, 50), f"Act 1 message must be 49-50 bytes, got {len(msg)}"
+    # BOLT 8 Act 1: version(1) + e_pub(33) + tag(16) = 50 bytes
+    assert len(msg) == 50, f"Act 1 message must be 50 bytes, got {len(msg)}"
 
 def test_starts_with_version_byte():
     h, ck, e_priv, e_pub, rs_pub, _ = _setup_act1()
@@ -459,14 +518,14 @@ def test_starts_with_version_byte():
 def test_contains_ephemeral_pubkey():
     h, ck, e_priv, e_pub, rs_pub, _ = _setup_act1()
     msg, _, _ = act_one_initiator(h, ck, e_priv, e_pub, rs_pub)
-    assert msg[1:33] == e_pub, "Bytes 1-33 must be the ephemeral public key"
+    assert msg[1:34] == e_pub, "Bytes 1-34 must be the 33-byte compressed ephemeral public key"
 
 def test_verifiable_by_responder():
     h, ck, e_priv, e_pub, rs_pub, rs_priv = _setup_act1()
     msg, new_h, new_ck = act_one_initiator(h, ck, e_priv, e_pub, rs_pub)
     # Responder side verification
-    re_pub = msg[1:33]
-    c = msg[33:]
+    re_pub = msg[1:34]
+    c = msg[34:]
     # Responder recomputes h
     protocol_name = b"Noise_XK_secp256k1_ChaChaPoly_SHA256"
     rh = hashlib.sha256(protocol_name).digest()
@@ -476,7 +535,7 @@ def test_verifiable_by_responder():
     # MixHash(re_pub)
     rh = hashlib.sha256(rh + re_pub).digest()
     # ECDH(s, re)
-    ss = _ref_ecdh(rs_priv.private_bytes_raw(), re_pub)
+    ss = _ref_ecdh(rs_priv, re_pub)
     rck, temp_k = _ref_hkdf(rck, ss)
     # Decrypt
     cipher = ChaCha20Poly1305(temp_k)
@@ -489,11 +548,11 @@ def test_verifiable_by_responder():
 `,
     hints: {
       conceptual:
-        "<p>Act 1 is the initiator's opening message. The <code>e</code> token means 'send your ephemeral public key' and <code>es</code> means 'perform ECDH between your ephemeral key and the responder's static key.' After the ECDH, you derive a temporary encryption key via HKDF and use it to encrypt (authenticate) an empty payload with ChaCha20-Poly1305. The tag proves you know the responder's identity.</p>",
+        "<p>Act 1 is the initiator's opening message. The <code>e</code> token means 'send your 33-byte compressed ephemeral public key' and <code>es</code> means 'perform ECDH between your ephemeral key and the responder's static key.' After the ECDH, you derive a temporary encryption key via HKDF and use it to encrypt (authenticate) an empty payload with ChaCha20-Poly1305. The 16-byte tag proves you know the responder's identity.</p>",
       steps:
-        '<ol><li><strong>MixHash(e_pub)</strong>: <code>h = SHA256(h + e_pub)</code></li><li><strong>ECDH(e, rs)</strong>: <code>ss = ecdh(e_priv, rs_pub)</code></li><li><strong>MixKey</strong>: <code>ck, temp_k = hkdf_two_keys(ck, ss)</code></li><li><strong>Encrypt</strong>: Create <code>ChaCha20Poly1305(temp_k)</code>, encrypt with <code>nonce = (0).to_bytes(12, "little")</code>, <code>aad = h</code>, <code>plaintext = b""</code></li><li><strong>MixHash(c)</strong>: <code>h = SHA256(h + ciphertext)</code></li><li>Assemble: <code>b"\\x00" + e_pub + ciphertext</code></li></ol>',
+        '<ol><li><strong>MixHash(e_pub)</strong>: <code>h = SHA256(h + e_pub)</code> (e_pub is 33 bytes)</li><li><strong>ECDH(e, rs)</strong>: <code>ss = ecdh(e_priv, rs_pub)</code></li><li><strong>MixKey</strong>: <code>ck, temp_k = hkdf_two_keys(ck, ss)</code></li><li><strong>Encrypt</strong>: Create <code>ChaCha20Poly1305(temp_k)</code>, encrypt with <code>nonce = (0).to_bytes(12, "little")</code>, <code>aad = h</code>, <code>plaintext = b""</code></li><li><strong>MixHash(c)</strong>: <code>h = SHA256(h + ciphertext)</code></li><li>Assemble: <code>b"\\x00" + e_pub + ciphertext</code> (1 + 33 + 16 = 50 bytes)</li></ol>',
       code: `def act_one_initiator(h, ck, e_priv, e_pub, rs_pub):
-    # 1. MixHash ephemeral
+    # 1. MixHash ephemeral (33-byte compressed secp256k1 key)
     h = hashlib.sha256(h + e_pub).digest()
     # 2. ECDH(e, rs)
     ss = ecdh(e_priv, rs_pub)
@@ -505,7 +564,7 @@ def test_verifiable_by_responder():
     c = cipher.encrypt(nonce, b"", h)
     # 5. MixHash ciphertext
     h = hashlib.sha256(h + c).digest()
-    # 6. Assemble
+    # 6. Assemble: version(1) + e_pub(33) + tag(16) = 50 bytes
     return (b'\\x00' + e_pub + c, h, ck)`,
     },
     rewardSats: 21,
@@ -521,7 +580,8 @@ def test_verifiable_by_responder():
       "Implement the responder's processing of Act 1. Parse the message, extract the initiator's ephemeral public key, perform the ECDH (using your static private key), derive the temporary key, and verify the authentication tag.",
     starterCode: `import hashlib
 import hmac
-from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X25519PublicKey
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 
 def hkdf_two_keys(salt, ikm):
@@ -531,16 +591,18 @@ def hkdf_two_keys(salt, ikm):
     return (out1, out2)
 
 def ecdh(priv_bytes, pub_bytes):
-    priv = X25519PrivateKey.from_private_bytes(priv_bytes)
-    pub = X25519PublicKey.from_public_bytes(pub_bytes)
-    return priv.exchange(pub)
+    priv_int = int.from_bytes(priv_bytes, 'big')
+    private_key = ec.derive_private_key(priv_int, ec.SECP256K1())
+    public_key = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256K1(), pub_bytes)
+    shared_key = private_key.exchange(ec.ECDH(), public_key)
+    return hashlib.sha256(shared_key).digest()
 
 def act_one_responder(h, ck, s_priv, message):
     """
     Process Act 1 message (responder side).
 
     Steps:
-      1. Parse: version(1) || re_pub(32) || c(16)
+      1. Parse: version(1) || re_pub(33) || c(16)
       2. Check version == 0x00
       3. MixHash(re_pub):   h = SHA256(h || re_pub)
       4. ECDH(s, re):       ss = ECDH(s_priv, re_pub)
@@ -552,18 +614,18 @@ def act_one_responder(h, ck, s_priv, message):
         h:       32-byte handshake hash
         ck:      32-byte chaining key
         s_priv:  32-byte responder's static private key
-        message: the Act 1 message bytes
+        message: the 50-byte Act 1 message
 
     Returns:
         tuple: (re_pub, h, ck)
-            re_pub  -  32-byte initiator's ephemeral public key
+            re_pub  -  33-byte initiator's ephemeral public key (compressed)
             h       -  updated handshake hash
             ck      -  updated chaining key
 
     Raises:
         ValueError if version is wrong or tag verification fails.
     """
-    # TODO: Parse the message into version, re_pub, and ciphertext
+    # TODO: Parse the message: version(1) + re_pub(33) + c(16) = 50 bytes
     # TODO: Check version byte
     # TODO: MixHash(re_pub)
     # TODO: ECDH(s_priv, re_pub)
@@ -576,7 +638,8 @@ def act_one_responder(h, ck, s_priv, message):
     testCode: `
 import hashlib
 import hmac
-from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X25519PublicKey
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 
 def _ref_hkdf(salt, ikm):
@@ -586,17 +649,21 @@ def _ref_hkdf(salt, ikm):
     return (o1, o2)
 
 def _ref_ecdh(priv_bytes, pub_bytes):
-    priv = X25519PrivateKey.from_private_bytes(priv_bytes)
-    pub = X25519PublicKey.from_public_bytes(pub_bytes)
-    return priv.exchange(pub)
+    priv_int = int.from_bytes(priv_bytes, 'big')
+    sk = ec.derive_private_key(priv_int, ec.SECP256K1())
+    pk = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256K1(), pub_bytes)
+    raw = sk.exchange(ec.ECDH(), pk)
+    return hashlib.sha256(raw).digest()
+
+def _gen_key():
+    sk = ec.generate_private_key(ec.SECP256K1())
+    priv = sk.private_numbers().private_value.to_bytes(32, 'big')
+    pub = sk.public_key().public_bytes(Encoding.X962, PublicFormat.CompressedPoint)
+    return priv, pub
 
 def _make_act1():
-    rs_priv_obj = X25519PrivateKey.generate()
-    rs_priv = rs_priv_obj.private_bytes_raw()
-    rs_pub = rs_priv_obj.public_key().public_bytes_raw()
-    e_priv_obj = X25519PrivateKey.generate()
-    e_priv = e_priv_obj.private_bytes_raw()
-    e_pub = e_priv_obj.public_key().public_bytes_raw()
+    rs_priv, rs_pub = _gen_key()
+    e_priv, e_pub = _gen_key()
 
     protocol_name = b"Noise_XK_secp256k1_ChaChaPoly_SHA256"
     h = hashlib.sha256(protocol_name).digest()
@@ -604,7 +671,7 @@ def _make_act1():
     h = hashlib.sha256(h + b"lightning").digest()
     h = hashlib.sha256(h + rs_pub).digest()
 
-    h_for_resp = h  # save for responder
+    h_for_resp = h
     ck_for_resp = ck
 
     # Initiator builds Act 1
@@ -628,7 +695,7 @@ def test_returns_correct_types():
 def test_extracts_ephemeral_key():
     msg, h, ck, rs_priv, e_pub, _, _ = _make_act1()
     re_pub, _, _ = act_one_responder(h, ck, rs_priv, msg)
-    assert re_pub == e_pub, "Must extract the correct ephemeral public key"
+    assert re_pub == e_pub, "Must extract the correct 33-byte ephemeral public key"
 
 def test_state_matches_initiator():
     msg, h, ck, rs_priv, _, init_h, init_ck = _make_act1()
@@ -643,7 +710,7 @@ def test_rejects_tampered_message():
         act_one_responder(h, ck, rs_priv, tampered)
         assert False, "Should have raised an error for tampered message"
     except (ValueError, Exception):
-        pass  # Expected
+        pass
 
 def test_rejects_wrong_version():
     msg, h, ck, rs_priv, _, _, _ = _make_act1()
@@ -658,13 +725,13 @@ def test_rejects_wrong_version():
       conceptual:
         "<p>The responder mirrors the initiator's operations. Since both sides perform the same MixHash and MixKey steps on the same data, they arrive at the same cryptographic state. The responder uses their static <em>private</em> key (instead of the initiator's ephemeral) for the ECDH  -  this works because ECDH is commutative: <code>DH(e, S) == DH(s, E)</code>.</p>",
       steps:
-        '<ol><li>Parse: <code>version = message[0:1]</code>, <code>re_pub = message[1:33]</code>, <code>c = message[33:]</code></li><li>Verify <code>version == b"\\x00"</code>, raise <code>ValueError</code> if not</li><li>MixHash: <code>h = SHA256(h + re_pub)</code></li><li>ECDH: <code>ss = ecdh(s_priv, re_pub)</code></li><li>MixKey: <code>ck, temp_k = hkdf_two_keys(ck, ss)</code></li><li>Decrypt: <code>ChaCha20Poly1305(temp_k).decrypt(nonce=0, data=c, aad=h)</code>  -  raises on bad tag</li><li>MixHash: <code>h = SHA256(h + c)</code></li><li>Return <code>(re_pub, h, ck)</code></li></ol>',
+        '<ol><li>Parse: <code>version = message[0:1]</code>, <code>re_pub = message[1:34]</code>, <code>c = message[34:]</code> (33-byte compressed key)</li><li>Verify <code>version == b"\\x00"</code>, raise <code>ValueError</code> if not</li><li>MixHash: <code>h = SHA256(h + re_pub)</code></li><li>ECDH: <code>ss = ecdh(s_priv, re_pub)</code></li><li>MixKey: <code>ck, temp_k = hkdf_two_keys(ck, ss)</code></li><li>Decrypt: <code>ChaCha20Poly1305(temp_k).decrypt(nonce=0, data=c, aad=h)</code>  -  raises on bad tag</li><li>MixHash: <code>h = SHA256(h + c)</code></li><li>Return <code>(re_pub, h, ck)</code></li></ol>',
       code: `def act_one_responder(h, ck, s_priv, message):
     version = message[0:1]
     if version != b'\\x00':
         raise ValueError("Bad version")
-    re_pub = message[1:33]
-    c = message[33:]
+    re_pub = message[1:34]  # 33-byte compressed secp256k1 key
+    c = message[34:]
     h = hashlib.sha256(h + re_pub).digest()
     ss = ecdh(s_priv, re_pub)
     ck, temp_k = hkdf_two_keys(ck, ss)
@@ -687,7 +754,8 @@ def test_rejects_wrong_version():
       "Implement Act 2 from the responder's perspective. Generate and send the responder's ephemeral public key, perform the 'ee' ECDH (ephemeral-ephemeral), derive a new temporary key, and encrypt an empty payload. This introduces forward secrecy.",
     starterCode: `import hashlib
 import hmac
-from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X25519PublicKey
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 
 def hkdf_two_keys(salt, ikm):
@@ -697,9 +765,11 @@ def hkdf_two_keys(salt, ikm):
     return (out1, out2)
 
 def ecdh(priv_bytes, pub_bytes):
-    priv = X25519PrivateKey.from_private_bytes(priv_bytes)
-    pub = X25519PublicKey.from_public_bytes(pub_bytes)
-    return priv.exchange(pub)
+    priv_int = int.from_bytes(priv_bytes, 'big')
+    private_key = ec.derive_private_key(priv_int, ec.SECP256K1())
+    public_key = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256K1(), pub_bytes)
+    shared_key = private_key.exchange(ec.ECDH(), public_key)
+    return hashlib.sha256(shared_key).digest()
 
 def act_two_responder(h, ck, e_priv, e_pub, re_pub):
     """
@@ -719,11 +789,12 @@ def act_two_responder(h, ck, e_priv, e_pub, re_pub):
         h:      32-byte handshake hash (after Act 1)
         ck:     32-byte chaining key (after Act 1)
         e_priv: 32-byte responder's ephemeral private key
-        e_pub:  32-byte responder's ephemeral public key
-        re_pub: 32-byte initiator's ephemeral public key (from Act 1)
+        e_pub:  33-byte responder's ephemeral public key (compressed secp256k1)
+        re_pub: 33-byte initiator's ephemeral public key (from Act 1)
 
     Returns:
         tuple: (message, h, ck)
+            message  -  50 bytes: version(1) + e_pub(33) + tag(16)
     """
     # TODO: This follows the exact same structure as Act 1!
     # TODO: The only difference is which keys are used for ECDH.
@@ -733,7 +804,8 @@ def act_two_responder(h, ck, e_priv, e_pub, re_pub):
     testCode: `
 import hashlib
 import hmac
-from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X25519PublicKey
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 
 def _ref_hkdf(salt, ikm):
@@ -743,43 +815,44 @@ def _ref_hkdf(salt, ikm):
     return (o1, o2)
 
 def _ref_ecdh(priv_bytes, pub_bytes):
-    priv = X25519PrivateKey.from_private_bytes(priv_bytes)
-    pub = X25519PublicKey.from_public_bytes(pub_bytes)
-    return priv.exchange(pub)
+    priv_int = int.from_bytes(priv_bytes, 'big')
+    sk = ec.derive_private_key(priv_int, ec.SECP256K1())
+    pk = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256K1(), pub_bytes)
+    raw = sk.exchange(ec.ECDH(), pk)
+    return hashlib.sha256(raw).digest()
+
+def _gen_key():
+    sk = ec.generate_private_key(ec.SECP256K1())
+    priv = sk.private_numbers().private_value.to_bytes(32, 'big')
+    pub = sk.public_key().public_bytes(Encoding.X962, PublicFormat.CompressedPoint)
+    return priv, pub
 
 def _setup_act2():
-    # Generate keys
-    rs_priv_obj = X25519PrivateKey.generate()
-    rs_priv = rs_priv_obj.private_bytes_raw()
-    rs_pub = rs_priv_obj.public_key().public_bytes_raw()
-    ie_priv_obj = X25519PrivateKey.generate()
-    ie_pub = ie_priv_obj.public_key().public_bytes_raw()
-    re_priv_obj = X25519PrivateKey.generate()
-    re_priv = re_priv_obj.private_bytes_raw()
-    re_pub = re_priv_obj.public_key().public_bytes_raw()
+    rs_priv, rs_pub = _gen_key()
+    ie_priv, ie_pub = _gen_key()
+    re_priv, re_pub = _gen_key()
 
-    # Init state
     protocol_name = b"Noise_XK_secp256k1_ChaChaPoly_SHA256"
     h = hashlib.sha256(protocol_name).digest()
     ck = h
     h = hashlib.sha256(h + b"lightning").digest()
     h = hashlib.sha256(h + rs_pub).digest()
 
-    # Simulate Act 1 (both sides arrive at same state)
+    # Simulate Act 1
     h = hashlib.sha256(h + ie_pub).digest()
-    ss = _ref_ecdh(ie_priv_obj.private_bytes_raw(), rs_pub)
+    ss = _ref_ecdh(ie_priv, rs_pub)
     ck, temp_k = _ref_hkdf(ck, ss)
     cipher = ChaCha20Poly1305(temp_k)
     c = cipher.encrypt((0).to_bytes(12, 'little'), b"", h)
     h = hashlib.sha256(h + c).digest()
 
-    return h, ck, re_priv, re_pub, ie_pub, ie_priv_obj.private_bytes_raw()
+    return h, ck, re_priv, re_pub, ie_pub, ie_priv
 
 def test_message_format():
     h, ck, e_priv, e_pub, re_pub, _ = _setup_act2()
     msg, _, _ = act_two_responder(h, ck, e_priv, e_pub, re_pub)
     assert msg[0:1] == b'\\x00', "Must start with version 0x00"
-    assert msg[1:33] == e_pub, "Bytes 1-33 must be responder's ephemeral public key"
+    assert msg[1:34] == e_pub, "Bytes 1-34 must be responder's 33-byte ephemeral public key"
     assert len(msg) == 50, f"Message must be 50 bytes, got {len(msg)}"
 
 def test_verifiable_by_initiator():
@@ -787,8 +860,8 @@ def test_verifiable_by_initiator():
     msg, resp_h, resp_ck = act_two_responder(h, ck, e_priv, e_pub, ie_pub)
 
     # Initiator verifies
-    re_pub = msg[1:33]
-    c = msg[33:]
+    re_pub = msg[1:34]
+    c = msg[34:]
     init_h = hashlib.sha256(h + re_pub).digest()
     ss = _ref_ecdh(ie_priv, re_pub)
     init_ck, temp_k = _ref_hkdf(ck, ss)
@@ -807,12 +880,16 @@ def test_verifiable_by_initiator():
       steps:
         '<ol><li><strong>MixHash(e_pub)</strong>: <code>h = SHA256(h + e_pub)</code></li><li><strong>ECDH(e, re)</strong>: <code>ss = ecdh(e_priv, re_pub)</code>  -  note this is ephemeral-ephemeral!</li><li><strong>MixKey</strong>: <code>ck, temp_k = hkdf_two_keys(ck, ss)</code></li><li><strong>Encrypt</strong>: <code>ChaCha20Poly1305(temp_k).encrypt(nonce=0, plaintext=b"", aad=h)</code></li><li><strong>MixHash(c)</strong>: <code>h = SHA256(h + c)</code></li><li>Assemble: <code>b"\\x00" + e_pub + c</code></li></ol>',
       code: `def act_two_responder(h, ck, e_priv, e_pub, re_pub):
+    # 1. MixHash ephemeral (33-byte compressed secp256k1)
     h = hashlib.sha256(h + e_pub).digest()
-    ss = ecdh(e_priv, re_pub)  # ee DH
+    # 2. ee DH
+    ss = ecdh(e_priv, re_pub)
+    # 3. MixKey
     ck, temp_k = hkdf_two_keys(ck, ss)
     cipher = ChaCha20Poly1305(temp_k)
     c = cipher.encrypt((0).to_bytes(12, 'little'), b"", h)
     h = hashlib.sha256(h + c).digest()
+    # version(1) + e_pub(33) + tag(16) = 50 bytes
     return (b'\\x00' + e_pub + c, h, ck)`,
     },
     rewardSats: 21,
@@ -828,7 +905,8 @@ def test_verifiable_by_initiator():
       "Implement the initiator's processing of Act 2. Parse the responder's message, extract their ephemeral public key, perform the 'ee' ECDH, derive the temporary key, and verify the tag.",
     starterCode: `import hashlib
 import hmac
-from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X25519PublicKey
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 
 def hkdf_two_keys(salt, ikm):
@@ -838,16 +916,18 @@ def hkdf_two_keys(salt, ikm):
     return (out1, out2)
 
 def ecdh(priv_bytes, pub_bytes):
-    priv = X25519PrivateKey.from_private_bytes(priv_bytes)
-    pub = X25519PublicKey.from_public_bytes(pub_bytes)
-    return priv.exchange(pub)
+    priv_int = int.from_bytes(priv_bytes, 'big')
+    private_key = ec.derive_private_key(priv_int, ec.SECP256K1())
+    public_key = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256K1(), pub_bytes)
+    shared_key = private_key.exchange(ec.ECDH(), public_key)
+    return hashlib.sha256(shared_key).digest()
 
 def act_two_initiator(h, ck, e_priv, message):
     """
     Process Act 2 message (initiator side).
 
     Steps:
-      1. Parse: version(1) || re_pub(32) || c(16)
+      1. Parse: version(1) || re_pub(33) || c(16)
       2. Check version == 0x00
       3. MixHash(re_pub):   h = SHA256(h || re_pub)
       4. ECDH(e, re):       ss = ECDH(e_priv, re_pub)  [ee DH]
@@ -859,10 +939,11 @@ def act_two_initiator(h, ck, e_priv, message):
         h:       32-byte handshake hash (after Act 1)
         ck:      32-byte chaining key (after Act 1)
         e_priv:  32-byte initiator's ephemeral private key
-        message: Act 2 message bytes
+        message: 50-byte Act 2 message
 
     Returns:
         tuple: (re_pub, h, ck)
+            re_pub  -  33-byte responder's ephemeral public key
 
     Raises:
         ValueError if version is wrong or tag fails.
@@ -873,7 +954,8 @@ def act_two_initiator(h, ck, e_priv, message):
     testCode: `
 import hashlib
 import hmac
-from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X25519PublicKey
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 
 def _ref_hkdf(salt, ikm):
@@ -883,22 +965,23 @@ def _ref_hkdf(salt, ikm):
     return (o1, o2)
 
 def _ref_ecdh(priv_bytes, pub_bytes):
-    priv = X25519PrivateKey.from_private_bytes(priv_bytes)
-    pub = X25519PublicKey.from_public_bytes(pub_bytes)
-    return priv.exchange(pub)
+    priv_int = int.from_bytes(priv_bytes, 'big')
+    sk = ec.derive_private_key(priv_int, ec.SECP256K1())
+    pk = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256K1(), pub_bytes)
+    raw = sk.exchange(ec.ECDH(), pk)
+    return hashlib.sha256(raw).digest()
+
+def _gen_key():
+    sk = ec.generate_private_key(ec.SECP256K1())
+    priv = sk.private_numbers().private_value.to_bytes(32, 'big')
+    pub = sk.public_key().public_bytes(Encoding.X962, PublicFormat.CompressedPoint)
+    return priv, pub
 
 def _setup_full_act2():
-    rs_priv_obj = X25519PrivateKey.generate()
-    rs_priv = rs_priv_obj.private_bytes_raw()
-    rs_pub = rs_priv_obj.public_key().public_bytes_raw()
-    ie_priv_obj = X25519PrivateKey.generate()
-    ie_priv = ie_priv_obj.private_bytes_raw()
-    ie_pub = ie_priv_obj.public_key().public_bytes_raw()
-    re_priv_obj = X25519PrivateKey.generate()
-    re_priv = re_priv_obj.private_bytes_raw()
-    re_pub = re_priv_obj.public_key().public_bytes_raw()
+    rs_priv, rs_pub = _gen_key()
+    ie_priv, ie_pub = _gen_key()
+    re_priv, re_pub = _gen_key()
 
-    # Init
     protocol_name = b"Noise_XK_secp256k1_ChaChaPoly_SHA256"
     h = hashlib.sha256(protocol_name).digest()
     ck = h
@@ -933,7 +1016,7 @@ def test_returns_correct_types():
 def test_extracts_responder_ephemeral():
     msg, h, ck, ie_priv, re_pub, _, _ = _setup_full_act2()
     got_re_pub, _, _ = act_two_initiator(h, ck, ie_priv, msg)
-    assert got_re_pub == re_pub, "Must extract correct responder ephemeral public key"
+    assert got_re_pub == re_pub, "Must extract correct 33-byte responder ephemeral public key"
 
 def test_state_matches_responder():
     msg, h, ck, ie_priv, _, resp_h, resp_ck = _setup_full_act2()
@@ -954,13 +1037,13 @@ def test_rejects_tampered():
       conceptual:
         "<p>This is the mirror of Exercise 6 (Act 1 responder). The structure is identical  -  parse, MixHash, ECDH, MixKey, decrypt  -  but here you use the initiator's <em>ephemeral</em> private key for the ECDH instead of a static key. This is the <code>ee</code> DH that provides forward secrecy.</p>",
       steps:
-        '<ol><li>Parse: <code>version = message[0:1]</code>, <code>re_pub = message[1:33]</code>, <code>c = message[33:]</code></li><li>Verify version is <code>b"\\x00"</code></li><li>MixHash: <code>h = SHA256(h + re_pub)</code></li><li>ECDH: <code>ss = ecdh(e_priv, re_pub)</code></li><li>MixKey: <code>ck, temp_k = hkdf_two_keys(ck, ss)</code></li><li>Decrypt: <code>ChaCha20Poly1305(temp_k).decrypt(nonce=0, data=c, aad=h)</code></li><li>MixHash: <code>h = SHA256(h + c)</code></li></ol>',
+        '<ol><li>Parse: <code>version = message[0:1]</code>, <code>re_pub = message[1:34]</code>, <code>c = message[34:]</code> (33-byte compressed key)</li><li>Verify version is <code>b"\\x00"</code></li><li>MixHash: <code>h = SHA256(h + re_pub)</code></li><li>ECDH: <code>ss = ecdh(e_priv, re_pub)</code></li><li>MixKey: <code>ck, temp_k = hkdf_two_keys(ck, ss)</code></li><li>Decrypt: <code>ChaCha20Poly1305(temp_k).decrypt(nonce=0, data=c, aad=h)</code></li><li>MixHash: <code>h = SHA256(h + c)</code></li></ol>',
       code: `def act_two_initiator(h, ck, e_priv, message):
     version = message[0:1]
     if version != b'\\x00':
         raise ValueError("Bad version")
-    re_pub = message[1:33]
-    c = message[33:]
+    re_pub = message[1:34]  # 33-byte compressed secp256k1 key
+    c = message[34:]
     h = hashlib.sha256(h + re_pub).digest()
     ss = ecdh(e_priv, re_pub)
     ck, temp_k = hkdf_two_keys(ck, ss)
@@ -978,10 +1061,11 @@ def test_rejects_tampered():
     id: "exercise-act3-initiator",
     title: "Exercise 9: Act 3  -  Identity Reveal & Key Split",
     description:
-      "Implement Act 3, where the initiator reveals their identity by sending their encrypted static public key, performs the final 'se' ECDH, and derives the transport encryption keys via Split().",
+      "Implement Act 3 (BOLT 8), where the initiator reveals their identity by encrypting their static public key with temp_k2 at nonce=1 (since nonce=0 was used in Act 2). Then perform the final 'se' ECDH and derive the transport encryption keys via Split().",
     starterCode: `import hashlib
 import hmac
-from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X25519PublicKey
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 
 def hkdf_two_keys(salt, ikm):
@@ -991,70 +1075,51 @@ def hkdf_two_keys(salt, ikm):
     return (out1, out2)
 
 def ecdh(priv_bytes, pub_bytes):
-    priv = X25519PrivateKey.from_private_bytes(priv_bytes)
-    pub = X25519PublicKey.from_public_bytes(pub_bytes)
-    return priv.exchange(pub)
+    priv_int = int.from_bytes(priv_bytes, 'big')
+    private_key = ec.derive_private_key(priv_int, ec.SECP256K1())
+    public_key = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256K1(), pub_bytes)
+    shared_key = private_key.exchange(ec.ECDH(), public_key)
+    return hashlib.sha256(shared_key).digest()
 
-def act_three_initiator(h, ck, s_priv, s_pub, re_pub):
+def act_three_initiator(h, ck, temp_k2, s_priv, s_pub, re_pub):
     """
-    Construct Act 3 message and derive transport keys.
+    Construct Act 3 message and derive transport keys (BOLT 8).
 
     Handshake pattern for Act 3 (XK): -> s, se
 
+    After Act 2, the CipherState holds temp_k2 with its nonce at 1
+    (nonce=0 was used in Act 2's empty payload encryption).
+
     Steps:
-      1. Encrypt static public key:
-         c1 = ChaCha20Poly1305(temp_k2, nonce=1, ad=h, pt=s_pub)
-         Note: temp_k2 is the current encryption key from the CipherState.
-         But wait  -  we need to derive it. After Act 2, the current temp_k
-         was already used with nonce=0. So we use nonce=1 here.
-         Actually, let's re-derive: ck, temp_k = HKDF(ck, b"")... no.
-
-         The correct approach for Act 3:
-         a. We need the temp_k from the LAST MixKey (from Act 2's ECDH).
-            But we only have h and ck. In the Noise spec, the CipherState
-            retains temp_k with nonce tracking. For simplicity, we pass
-            temp_k as a parameter or re-derive.
-
-         Actually, for BOLT 8 Act 3:
-         a. c1 = encryptWithAD(temp_k2, 1, h, s_pub)   -  uses nonce=1
-            because nonce=0 was used in Act 2's empty encrypt.
-            But we don't have temp_k2 here...
-
-         Let me simplify: we'll derive a fresh temp_k for Act 3.
-         ck, temp_k = HKDF(ck, b"")   -  this is wrong too.
-
-         The real flow: After Act 2, the CipherState has temp_k2 with
-         nonce counter at 1 (0 was used in Act 2). For Act 3:
-         - Encrypt s_pub using temp_k2 at nonce=1
-         - MixHash(c1)
-         - ECDH(s, re) to get se shared secret
-         - MixKey(se_ss) to get ck, temp_k3
-         - Encrypt empty payload with temp_k3 at nonce=0
-         - MixHash(c2)
-         - Split: send_key, recv_key = HKDF(ck, b"")
-
-    Simplified for this exercise  -  we pass temp_k2 as a parameter.
+      1. Encrypt static key:  c1 = encrypt(temp_k2, nonce=1, ad=h, pt=s_pub)
+      2. MixHash(c1):         h = SHA256(h || c1)
+      3. ECDH(s, re):         ss = ecdh(s_priv, re_pub)  [se DH]
+      4. MixKey(ss):           ck, temp_k3 = HKDF(ck, ss)
+      5. Encrypt auth tag:    c2 = encrypt(temp_k3, nonce=0, ad=h, pt=b"")
+      6. MixHash(c2):         h = SHA256(h || c2)
+      7. Split:               send_key, recv_key = HKDF(ck, b"")
 
     Args:
-        h:       32-byte handshake hash (after Act 2)
-        ck:      32-byte chaining key (after Act 2)
-        s_priv:  32-byte initiator's static private key
-        s_pub:   32-byte initiator's static public key
-        re_pub:  32-byte responder's ephemeral public key
+        h:        32-byte handshake hash (after Act 2)
+        ck:       32-byte chaining key (after Act 2)
+        temp_k2:  32-byte encryption key from Act 2's MixKey
+        s_priv:   32-byte initiator's static private key
+        s_pub:    33-byte initiator's static public key (compressed secp256k1)
+        re_pub:   33-byte responder's ephemeral public key (compressed secp256k1)
 
     Returns:
         tuple: (message, send_key, recv_key)
-            message   -  version(1) + encrypted_s_pub(48) + auth_tag(16) = 66 bytes
+            message   -  66 bytes: version(1) + encrypted_s_pub(33+16=49) + auth_tag(16)
             send_key  -  32-byte key for initiator -> responder messages
             recv_key  -  32-byte key for responder -> initiator messages
     """
-    # TODO: Encrypt static public key with current temp_k (from ck state)
-    #       First derive temp_k: ck, temp_k = HKDF(ck, b"")
-    # TODO: c1 = ChaCha20Poly1305(temp_k, nonce=0, ad=h, pt=s_pub)
+    # TODO: Encrypt static public key using temp_k2 with nonce=1
+    #       (nonce=0 was consumed in Act 2)
+    #       c1 = ChaCha20Poly1305(temp_k2, nonce=1, ad=h, pt=s_pub)
     # TODO: MixHash(c1): h = SHA256(h || c1)
-    # TODO: ECDH(s, re): ss = ecdh(s_priv, re_pub)
-    # TODO: MixKey: ck, temp_k = HKDF(ck, ss)
-    # TODO: c2 = ChaCha20Poly1305(temp_k, nonce=0, ad=h, pt=b"")
+    # TODO: ECDH(s, re): ss = ecdh(s_priv, re_pub)  [se token]
+    # TODO: MixKey: ck, temp_k3 = HKDF(ck, ss)
+    # TODO: c2 = ChaCha20Poly1305(temp_k3, nonce=0, ad=h, pt=b"")
     # TODO: MixHash(c2): h = SHA256(h || c2)
     # TODO: Split: send_key, recv_key = HKDF(ck, b"")
     # TODO: Return (b"\\x00" + c1 + c2, send_key, recv_key)
@@ -1063,7 +1128,8 @@ def act_three_initiator(h, ck, s_priv, s_pub, re_pub):
     testCode: `
 import hashlib
 import hmac
-from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X25519PublicKey
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 
 def _ref_hkdf(salt, ikm):
@@ -1073,24 +1139,23 @@ def _ref_hkdf(salt, ikm):
     return (o1, o2)
 
 def _ref_ecdh(priv_bytes, pub_bytes):
-    priv = X25519PrivateKey.from_private_bytes(priv_bytes)
-    pub = X25519PublicKey.from_public_bytes(pub_bytes)
-    return priv.exchange(pub)
+    priv_int = int.from_bytes(priv_bytes, 'big')
+    sk = ec.derive_private_key(priv_int, ec.SECP256K1())
+    pk = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256K1(), pub_bytes)
+    raw = sk.exchange(ec.ECDH(), pk)
+    return hashlib.sha256(raw).digest()
+
+def _gen_key():
+    sk = ec.generate_private_key(ec.SECP256K1())
+    priv = sk.private_numbers().private_value.to_bytes(32, 'big')
+    pub = sk.public_key().public_bytes(Encoding.X962, PublicFormat.CompressedPoint)
+    return priv, pub
 
 def _setup_act3():
-    # Generate all keys
-    is_priv_obj = X25519PrivateKey.generate()
-    is_priv = is_priv_obj.private_bytes_raw()
-    is_pub = is_priv_obj.public_key().public_bytes_raw()
-    rs_priv_obj = X25519PrivateKey.generate()
-    rs_priv = rs_priv_obj.private_bytes_raw()
-    rs_pub = rs_priv_obj.public_key().public_bytes_raw()
-    ie_priv_obj = X25519PrivateKey.generate()
-    ie_priv = ie_priv_obj.private_bytes_raw()
-    ie_pub = ie_priv_obj.public_key().public_bytes_raw()
-    re_priv_obj = X25519PrivateKey.generate()
-    re_priv = re_priv_obj.private_bytes_raw()
-    re_pub = re_priv_obj.public_key().public_bytes_raw()
+    is_priv, is_pub = _gen_key()
+    rs_priv, rs_pub = _gen_key()
+    ie_priv, ie_pub = _gen_key()
+    re_priv, re_pub = _gen_key()
 
     # Init
     h = hashlib.sha256(b"Noise_XK_secp256k1_ChaChaPoly_SHA256").digest()
@@ -1112,11 +1177,12 @@ def _setup_act3():
     c2 = ChaCha20Poly1305(tk2).encrypt((0).to_bytes(12, 'little'), b"", h)
     h = hashlib.sha256(h + c2).digest()
 
-    return h, ck, is_priv, is_pub, re_pub, re_priv, rs_priv
+    # tk2 is the temp_k2 needed for Act 3 (nonce=0 was used above)
+    return h, ck, tk2, is_priv, is_pub, re_pub, re_priv, rs_priv
 
 def test_returns_correct_types():
-    h, ck, s_priv, s_pub, re_pub, _, _ = _setup_act3()
-    result = act_three_initiator(h, ck, s_priv, s_pub, re_pub)
+    h, ck, tk2, s_priv, s_pub, re_pub, _, _ = _setup_act3()
+    result = act_three_initiator(h, ck, tk2, s_priv, s_pub, re_pub)
     assert isinstance(result, tuple), "Must return a tuple"
     assert len(result) == 3, "Must return (message, send_key, recv_key)"
     msg, sk, rk = result
@@ -1125,57 +1191,57 @@ def test_returns_correct_types():
     assert isinstance(rk, bytes), "recv_key must be bytes"
 
 def test_message_length():
-    h, ck, s_priv, s_pub, re_pub, _, _ = _setup_act3()
-    msg, _, _ = act_three_initiator(h, ck, s_priv, s_pub, re_pub)
-    # version(1) + encrypted_s_pub(32+16=48) + auth_tag(16) = 65 or 66
-    assert len(msg) == 66, f"Act 3 message must be 66 bytes (1+48+16+1?). Got {len(msg)}. Acceptable: 65 or 66."
+    h, ck, tk2, s_priv, s_pub, re_pub, _, _ = _setup_act3()
+    msg, _, _ = act_three_initiator(h, ck, tk2, s_priv, s_pub, re_pub)
+    # BOLT 8: version(1) + encrypted_s_pub(33+16=49) + auth_tag(16) = 66 bytes
+    assert len(msg) == 66, f"Act 3 message must be 66 bytes, got {len(msg)}"
 
 def test_transport_keys_length():
-    h, ck, s_priv, s_pub, re_pub, _, _ = _setup_act3()
-    _, sk, rk = act_three_initiator(h, ck, s_priv, s_pub, re_pub)
+    h, ck, tk2, s_priv, s_pub, re_pub, _, _ = _setup_act3()
+    _, sk, rk = act_three_initiator(h, ck, tk2, s_priv, s_pub, re_pub)
     assert len(sk) == 32, f"send_key must be 32 bytes, got {len(sk)}"
     assert len(rk) == 32, f"recv_key must be 32 bytes, got {len(rk)}"
 
 def test_transport_keys_are_different():
-    h, ck, s_priv, s_pub, re_pub, _, _ = _setup_act3()
-    _, sk, rk = act_three_initiator(h, ck, s_priv, s_pub, re_pub)
+    h, ck, tk2, s_priv, s_pub, re_pub, _, _ = _setup_act3()
+    _, sk, rk = act_three_initiator(h, ck, tk2, s_priv, s_pub, re_pub)
     assert sk != rk, "send_key and recv_key must be different"
 
 def test_responder_can_decrypt_static_key():
-    h, ck, s_priv, s_pub, re_pub, re_priv, rs_priv = _setup_act3()
-    msg, init_sk, init_rk = act_three_initiator(h, ck, s_priv, s_pub, re_pub)
+    h, ck, tk2, s_priv, s_pub, re_pub, re_priv, rs_priv = _setup_act3()
+    msg, init_sk, init_rk = act_three_initiator(h, ck, tk2, s_priv, s_pub, re_pub)
 
-    # Responder decrypts Act 3
-    # First, responder needs to derive same temp_k to decrypt c1
-    resp_ck, resp_tk = _ref_hkdf(ck, b"")
-    c1 = msg[1:49]
-    c2 = msg[49:]
-    cipher = ChaCha20Poly1305(resp_tk)
+    # Responder uses same temp_k2 with nonce=1 to decrypt c1
+    c1 = msg[1:50]  # 33-byte encrypted pubkey + 16-byte tag = 49 bytes
+    c2 = msg[50:]   # 16-byte auth tag
+    cipher = ChaCha20Poly1305(tk2)
     try:
-        decrypted_s_pub = cipher.decrypt((0).to_bytes(12, 'little'), c1, h)
+        decrypted_s_pub = cipher.decrypt((1).to_bytes(12, 'little'), c1, h)
     except Exception as ex:
         assert False, f"Responder failed to decrypt initiator's static key: {ex}"
-    assert decrypted_s_pub == s_pub, "Decrypted static key must match initiator's"
+    assert decrypted_s_pub == s_pub, "Decrypted static key must match initiator's 33-byte compressed pubkey"
 `,
     hints: {
       conceptual:
-        "<p>Act 3 is the most complex message. The initiator encrypts their static public key (identity hiding!), performs the final <code>se</code> DH, and derives the transport keys. The key insight: since the static key is encrypted with a key derived from prior ECDH operations, an eavesdropper cannot learn the initiator's identity.</p>",
+        "<p>Act 3 is the most complex message. The initiator encrypts their 33-byte static public key using <code>temp_k2</code> (from Act 2) at <strong>nonce=1</strong> (because nonce=0 was already used in Act 2). Then the <code>se</code> ECDH provides final mutual authentication, and <code>Split()</code> derives the transport keys. Since the static key is encrypted with keys from prior ECDH operations, an eavesdropper cannot learn the initiator's identity.</p>",
       steps:
-        '<ol><li>Derive encryption key for static key: <code>ck, temp_k = hkdf_two_keys(ck, b"")</code></li><li>Encrypt static public key: <code>c1 = ChaCha20Poly1305(temp_k).encrypt(nonce=0, plaintext=s_pub, aad=h)</code></li><li>MixHash: <code>h = SHA256(h + c1)</code></li><li>ECDH(s, re): <code>ss = ecdh(s_priv, re_pub)</code></li><li>MixKey: <code>ck, temp_k = hkdf_two_keys(ck, ss)</code></li><li>Encrypt auth tag: <code>c2 = ChaCha20Poly1305(temp_k).encrypt(nonce=0, plaintext=b"", aad=h)</code></li><li>MixHash: <code>h = SHA256(h + c2)</code></li><li>Split: <code>send_key, recv_key = hkdf_two_keys(ck, b"")</code></li><li>Return <code>(b"\\x00" + c1 + c2, send_key, recv_key)</code></li></ol>',
-      code: `def act_three_initiator(h, ck, s_priv, s_pub, re_pub):
-    # Derive temp_k for encrypting static key
-    ck, temp_k = hkdf_two_keys(ck, b"")
-    c1 = ChaCha20Poly1305(temp_k).encrypt(
-        (0).to_bytes(12, 'little'), s_pub, h)
+        '<ol><li>Encrypt static public key with temp_k2 at nonce=1: <code>c1 = ChaCha20Poly1305(temp_k2).encrypt(nonce=1, plaintext=s_pub, aad=h)</code></li><li>MixHash: <code>h = SHA256(h + c1)</code></li><li>ECDH(s, re): <code>ss = ecdh(s_priv, re_pub)</code></li><li>MixKey: <code>ck, temp_k3 = hkdf_two_keys(ck, ss)</code></li><li>Encrypt auth tag with temp_k3 at nonce=0: <code>c2 = ChaCha20Poly1305(temp_k3).encrypt(nonce=0, plaintext=b"", aad=h)</code></li><li>MixHash: <code>h = SHA256(h + c2)</code></li><li>Split: <code>send_key, recv_key = hkdf_two_keys(ck, b"")</code></li><li>Return <code>(b"\\x00" + c1 + c2, send_key, recv_key)</code></li></ol>',
+      code: `def act_three_initiator(h, ck, temp_k2, s_priv, s_pub, re_pub):
+    # Encrypt static key with temp_k2 at nonce=1
+    # (nonce=0 was used in Act 2's empty payload encryption)
+    c1 = ChaCha20Poly1305(temp_k2).encrypt(
+        (1).to_bytes(12, 'little'), s_pub, h)
     h = hashlib.sha256(h + c1).digest()
     # se ECDH
     ss = ecdh(s_priv, re_pub)
-    ck, temp_k = hkdf_two_keys(ck, ss)
-    c2 = ChaCha20Poly1305(temp_k).encrypt(
+    ck, temp_k3 = hkdf_two_keys(ck, ss)
+    # Auth tag with temp_k3 at nonce=0
+    c2 = ChaCha20Poly1305(temp_k3).encrypt(
         (0).to_bytes(12, 'little'), b"", h)
     h = hashlib.sha256(h + c2).digest()
     # Split into transport keys
     send_key, recv_key = hkdf_two_keys(ck, b"")
+    # version(1) + c1(49) + c2(16) = 66 bytes
     return (b'\\x00' + c1 + c2, send_key, recv_key)`,
     },
     rewardSats: 21,
