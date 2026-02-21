@@ -343,19 +343,42 @@ export default function Scratchpad({ theme }: ScratchpadProps) {
 
   // ── Toggle button (when closed) ─────────────────────────────────────────
 
+  const [showToggleTooltip, setShowToggleTooltip] = useState(false);
+
   if (!isOpen) {
     return (
-      <button
-        onClick={() => setIsOpen(true)}
-        className={`fixed top-[78px] right-4 z-40 hidden lg:flex items-center gap-2
-          font-pixel text-[10px] px-3 py-2 border-2 transition-all cursor-pointer
-          ${goldBorder} ${dark ? "bg-[#0f1930] text-[#FFD700] hover:bg-[#132043]" : "bg-[#f0e8d8] text-[#9a7200] hover:bg-[#e8dcc8]"}
-          shadow-lg hover:shadow-xl active:scale-95`}
-        title="Open Scratchpad"
-      >
-        <span className="text-sm leading-none" style={{ fontFamily: "monospace" }}>{"{ }"}</span>
-        <span>SCRATCHPAD</span>
-      </button>
+      <div className="fixed top-[78px] right-4 z-40 hidden lg:block">
+        <button
+          onClick={() => setIsOpen(true)}
+          onMouseEnter={() => setShowToggleTooltip(true)}
+          onMouseLeave={() => setShowToggleTooltip(false)}
+          className={`flex items-center gap-2
+            font-pixel text-[10px] px-3 py-2 border-2 transition-all cursor-pointer
+            ${goldBorder} ${dark ? "bg-[#0f1930] text-[#FFD700] hover:bg-[#132043]" : "bg-[#f0e8d8] text-[#9a7200] hover:bg-[#e8dcc8]"}
+            shadow-lg hover:shadow-xl active:scale-95`}
+        >
+          <span className="text-sm leading-none" style={{ fontFamily: "monospace" }}>{"{ }"}</span>
+          <span>SCRATCHPAD</span>
+        </button>
+        {showToggleTooltip && (
+          <div
+            className={`absolute top-full right-0 mt-2 w-56 px-3 py-2.5 text-xs z-50 border ${
+              dark
+                ? "bg-[#0f1930] border-[#2a3552] text-slate-300"
+                : "bg-white border-[#d4c9a8] text-black/70"
+            } shadow-lg`}
+            style={sansFont}
+          >
+            <div className={`font-pixel text-[10px] mb-1 ${goldText}`}>PYTHON SANDBOX</div>
+            <div style={sansFont}>
+              Experiment with Python code alongside the exercises. Use "Scratchpad" buttons in exercises to load sample inputs.
+            </div>
+            <div className={`absolute bottom-full right-4 w-0 h-0 border-l-[5px] border-r-[5px] border-b-[5px] border-l-transparent border-r-transparent ${
+              dark ? "border-b-[#2a3552]" : "border-b-[#d4c9a8]"
+            }`} />
+          </div>
+        )}
+      </div>
     );
   }
 
@@ -386,6 +409,13 @@ export default function Scratchpad({ theme }: ScratchpadProps) {
         >
           CLOSE
         </button>
+      </div>
+
+      {/* Description */}
+      <div className={`px-3 py-2 border-b ${panelBorder} shrink-0`} style={sansFont}>
+        <div className={`text-[11px] leading-snug ${textMuted}`}>
+          Sandbox for experimenting with Python. Click <span className={`font-pixel text-[9px] ${goldText}`}>SCRATCHPAD</span> in any exercise to load sample inputs here.
+        </div>
       </div>
 
       {/* Editor area (flex portion controlled by splitRatio) */}
