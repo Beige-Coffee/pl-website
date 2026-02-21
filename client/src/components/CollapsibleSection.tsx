@@ -45,6 +45,8 @@ interface CollapsibleItemProps {
   storageKey?: string;
   children: React.ReactNode;
   label?: string; // e.g. "EXERCISE" or "CHECKPOINT"
+  subtitle?: string;
+  subtitleLabel?: string;
 }
 
 export function CollapsibleItem({
@@ -55,6 +57,8 @@ export function CollapsibleItem({
   storageKey,
   children,
   label,
+  subtitle,
+  subtitleLabel,
 }: CollapsibleItemProps) {
   const dark = theme === "dark";
   const scopeId = useId().replace(/:/g, "");
@@ -110,6 +114,17 @@ export function CollapsibleItem({
           <div className={`text-[15px] md:text-[17px] font-semibold ${textColor} truncate`}>
             {title}
           </div>
+          {subtitleLabel && (
+            <div className="flex items-center gap-2 mt-1">
+              <span className={`font-pixel text-[10px] ${goldText}`}>{subtitleLabel}</span>
+            </div>
+          )}
+          {subtitle && (
+            <div className={`text-[13px] md:text-[14px] mt-0.5 ${dark ? "text-slate-400" : "text-black/60"}`}
+              style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
+              {subtitle}
+            </div>
+          )}
         </div>
         <CompletionCircle completed={completed} dark={dark} />
       </button>

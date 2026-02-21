@@ -265,15 +265,6 @@ export default function CheckpointGroup({
         .animate-shake { animation: shake 0.4s ease-in-out; }
       `}</style>
 
-      <div className="flex items-center gap-3 mb-4">
-        <div className={`font-pixel text-xs ${goldText}`}>CHECKPOINT REVIEW</div>
-        <div className={`font-pixel text-xs ${goldText}`}>EARN {rewardSats} SATS</div>
-      </div>
-
-      <div className={`text-[14px] md:text-[15px] ${textMuted} mb-5`}>
-        Answer all {questions.length} questions correctly to claim your reward.
-      </div>
-
       {/* Questions */}
       {questions.map((q, qi) => {
         const isWrong = wrongIds.has(q.id);

@@ -2662,6 +2662,8 @@ function ChapterContent({
                 completed={isGroupCompleted}
                 theme={theme}
                 label="CHECKPOINT"
+                subtitleLabel={isGroupCompleted ? undefined : "EARN 210 SATS"}
+                subtitle={isGroupCompleted ? undefined : `Answer all ${groupQuestions.length} questions correctly to claim your reward.`}
                 storageKey={`pl-collapse-cpg-${groupId}`}
               >
                 <CheckpointGroup
