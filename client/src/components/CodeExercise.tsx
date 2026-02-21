@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { EditorView, keymap, placeholder as cmPlaceholder } from "@codemirror/view";
 import { EditorState } from "@codemirror/state";
+import { indentUnit } from "@codemirror/language";
 import { python } from "@codemirror/lang-python";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { defaultKeymap, indentWithTab } from "@codemirror/commands";
@@ -156,6 +157,8 @@ export default function CodeExercise({
     const extensions = [
       basicSetup,
       python(),
+      indentUnit.of("    "),
+      EditorState.tabSize.of(4),
       keymap.of([...defaultKeymap, indentWithTab]),
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {
