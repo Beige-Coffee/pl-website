@@ -382,17 +382,31 @@ export default function CodeExercise({
   const greenText = dark ? "text-green-400" : "text-green-700";
 
   const exerciseContent = (
-    <div className={expanded ? "" : `my-8 border-2 ${completedDisplay ? goldBorder : cardBorder} ${cardBg} p-5`}>
-      {/* Description */}
-      <div className={`text-lg md:text-[19px] ${textMuted} mb-4 leading-relaxed`} style={sansFont}>
-        {data.description}
+    <div className={expanded ? "" : `my-4 border-2 ${completedDisplay ? goldBorder : cardBorder} ${cardBg} p-5`}>
+      {/* Description + Expand button */}
+      <div className="flex items-start gap-3 mb-3">
+        <div className={`text-lg md:text-[19px] ${textMuted} leading-relaxed flex-1`} style={sansFont}>
+          {data.description}
+        </div>
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className={`font-pixel text-[10px] border-2 px-2.5 py-1.5 transition-all shrink-0 mt-0.5 ${
+            dark
+              ? "border-[#2a3552] bg-[#0f1930] text-slate-400 hover:text-slate-200 hover:bg-[#132043]"
+              : "border-border bg-background text-foreground/60 hover:text-foreground hover:bg-secondary"
+          }`}
+          title={expanded ? "Exit full screen" : "Expand to full screen"}
+          data-testid="button-expand-exercise"
+        >
+          {expanded ? "⊟" : "⊞"}
+        </button>
       </div>
 
       {/* Code Editor */}
-      <div ref={editorRef} className="mb-4" />
+      <div ref={editorRef} className="mb-3" />
 
       {/* Action buttons */}
-      <div className="flex items-center gap-2 mb-4 flex-wrap">
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
         <button
           onClick={handleRunTests}
           disabled={running}
@@ -421,19 +435,6 @@ export default function CodeExercise({
           }`}
         >
           RESET
-        </button>
-
-        <button
-          onClick={() => setExpanded((v) => !v)}
-          className={`font-pixel text-xs border-2 px-5 py-2.5 transition-all ml-auto ${
-            dark
-              ? "border-[#2a3552] bg-[#0f1930] text-slate-400 hover:text-slate-200 hover:bg-[#132043]"
-              : "border-border bg-background text-foreground/60 hover:text-foreground hover:bg-secondary"
-          }`}
-          title={expanded ? "Exit full screen" : "Expand to full screen"}
-          data-testid="button-expand-exercise"
-        >
-          {expanded ? "COLLAPSE" : "EXPAND"}
         </button>
       </div>
 
@@ -655,7 +656,7 @@ export default function CodeExercise({
   if (expanded) {
     return (
       <>
-        <div className={`my-8 border-2 ${completedDisplay ? goldBorder : cardBorder} ${cardBg} p-5`}>
+        <div className={`my-4 border-2 ${completedDisplay ? goldBorder : cardBorder} ${cardBg} p-5`}>
           <div className={`text-sm ${textMuted} text-center py-4`} style={sansFont}>
             Exercise is open in expanded view.{" "}
             <button onClick={() => setExpanded(false)} className={`${goldText} underline cursor-pointer`}>Close expanded view</button>
@@ -685,9 +686,5 @@ export default function CodeExercise({
     );
   }
 
-  return (
-    <div className={`my-8 border-2 ${completedDisplay ? goldBorder : cardBorder} ${cardBg} p-5`}>
-      {exerciseContent}
-    </div>
-  );
+  return exerciseContent;
 }
