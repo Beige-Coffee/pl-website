@@ -183,7 +183,7 @@ def test_is_hashed():
 `,
     hints: {
       conceptual:
-        "<p>ECDH lets two parties compute a shared secret from their key pairs without transmitting private keys. BOLT 8 uses <strong>secp256k1</strong> (not Curve25519) and defines the ECDH output as the SHA-256 hash of the raw shared secret. Reconstruct the private key with <code>ec.derive_private_key()</code>, the public key with <code>EllipticCurvePublicKey.from_encoded_point()</code>, then call <code>.exchange(ec.ECDH(), ...)</code> and hash the result.</p>",
+        "<p>ECDH lets two parties compute a shared secret from their key pairs without transmitting private keys. BOLT 8 uses <strong>secp256k1</strong> and defines the ECDH output as the SHA-256 hash of the raw shared secret. Reconstruct the private key with <code>ec.derive_private_key()</code>, the public key with <code>EllipticCurvePublicKey.from_encoded_point()</code>, then call <code>.exchange(ec.ECDH(), ...)</code> and hash the result.</p>",
       steps:
         '<ol><li>Convert private key bytes to integer: <code>int.from_bytes(local_private_key_bytes, "big")</code></li><li>Reconstruct private key: <code>ec.derive_private_key(priv_int, ec.SECP256K1())</code></li><li>Reconstruct remote public key: <code>ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256K1(), remote_public_key_bytes)</code></li><li>Perform ECDH: <code>shared_key = private_key.exchange(ec.ECDH(), remote_public_key)</code></li><li>Return <code>hashlib.sha256(shared_key).digest()</code></li></ol>',
       code: `def ecdh(local_private_key_bytes, remote_public_key_bytes):
