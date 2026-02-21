@@ -68,8 +68,7 @@ function ProfileDropdown({
     try {
       const res = await fetch("/api/auth/resend-verification", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionToken }),
+        headers: { Authorization: `Bearer ${sessionToken}` },
       });
       const data = await res.json();
       if (res.ok) {

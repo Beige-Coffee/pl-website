@@ -224,6 +224,25 @@ export default function CodeExercise({
     return `${m}:${sec.toString().padStart(2, "0")}`;
   };
 
+  // ── Auto-pay when tests pass ────────────────────────────────────────────
+  const completedDisplay = alreadyCompleted || autoPaid;
+
+  useEffect(() => {
+    if (
+      allPassed &&
+      !completedDisplay &&
+      !autoPaid &&
+      !autoPaySending &&
+      !claiming &&
+      !rewardK1 &&
+      authenticated &&
+      lightningAddress &&
+      sessionToken
+    ) {
+      handleClaimReward("address");
+    }
+  }, [allPassed]);
+
   // ── Run tests ────────────────────────────────────────────────────────────
 
   const handleRunTests = useCallback(async () => {
@@ -345,8 +364,6 @@ export default function CodeExercise({
   const goldText = dark ? "text-[#FFD700]" : "text-[#9a7200]";
   const goldBorder = dark ? "border-[#FFD700]" : "border-[#b8860b]";
   const greenText = dark ? "text-green-400" : "text-green-700";
-
-  const completedDisplay = alreadyCompleted || autoPaid;
 
   return (
     <div className={`my-8 border-2 ${completedDisplay ? goldBorder : cardBorder} ${cardBg} p-5`}>
@@ -481,55 +498,14 @@ export default function CodeExercise({
       {/* Reward Section */}
       {allPassed && !completedDisplay && (
         <div className="mt-4">
-          {!rewardK1 && !autoPaid && !autoPaySending && (
-            <>
-              <div className={`font-pixel text-sm mb-3 ${greenText}`}>ALL TESTS PASSED!</div>
-              {!authenticated ? (
-                <button
-                  onClick={onLoginRequest}
-                  className={`font-pixel text-sm border-2 px-6 py-3 transition-all ${goldBorder} bg-[#FFD700] text-black hover:bg-[#FFC800] active:scale-95`}
-                >
-                  LOGIN & CLAIM {rewardAmountSats} SATS
-                </button>
-              ) : lightningAddress ? (
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <button
-                    onClick={() => handleClaimReward("address")}
-                    disabled={claiming}
-                    className={`font-pixel text-sm border-2 px-5 py-3 transition-all ${goldBorder} bg-[#FFD700] text-black hover:bg-[#FFC800] active:scale-95 disabled:opacity-50`}
-                  >
-                    {claiming ? "CLAIMING..." : `SEND ${rewardAmountSats} SATS TO ${lightningAddress.toUpperCase()}`}
-                  </button>
-                  <button
-                    onClick={() => handleClaimReward("lnurl")}
-                    disabled={claiming}
-                    className={`font-pixel text-sm border-2 px-5 py-3 transition-all ${goldBorder} bg-transparent hover:bg-[#FFC800] active:scale-95 disabled:opacity-50`}
-                    style={{ color: dark ? "#FFD700" : "#b8860b" }}
-                  >
-                    LNURL WITHDRAWAL
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => handleClaimReward("lnurl")}
-                  disabled={claiming}
-                  className={`font-pixel text-sm border-2 px-6 py-3 transition-all ${goldBorder} bg-[#FFD700] text-black hover:bg-[#FFC800] active:scale-95 disabled:opacity-50`}
-                >
-                  {claiming ? "GENERATING QR..." : `CLAIM ${rewardAmountSats} SATS`}
-                </button>
-              )}
-              {claimError && (
-                <div className="mt-2 font-pixel text-xs text-red-400">{claimError}</div>
-              )}
-            </>
-          )}
-
+          {/* Auto-pay in progress */}
           {autoPaySending && (
             <div className={`font-pixel text-sm ${goldText}`}>
               SENDING {rewardAmountSats} SATS TO {lightningAddress}...
             </div>
           )}
 
+          {/* Auto-pay succeeded */}
           {autoPaid && (
             <div className="mt-4 text-center">
               <div className={`font-pixel text-lg mb-2 ${goldText}`}>
@@ -539,6 +515,58 @@ export default function CodeExercise({
                 Sent to {lightningAddress}. Keep coding!
               </div>
             </div>
+          )}
+
+          {/* Manual claim fallback: no lightning address, not authenticated, or auto-pay failed */}
+          {!rewardK1 && !autoPaid && !autoPaySending && !(authenticated && lightningAddress && !claimError) && (
+            <>
+              <div className={`font-pixel text-sm mb-3 ${greenText}`}>ALL TESTS PASSED!</div>
+              {!authenticated ? (
+                <button
+                  onClick={onLoginRequest}
+                  className={`font-pixel text-sm border-2 px-6 py-3 transition-all ${goldBorder} bg-[#FFD700] text-black hover:bg-[#FFC800] active:scale-95`}
+                >
+                  LOGIN & CLAIM {rewardAmountSats} SATS
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleClaimReward("lnurl")}
+                  disabled={claiming}
+                  className={`font-pixel text-sm border-2 px-6 py-3 transition-all ${goldBorder} bg-[#FFD700] text-black hover:bg-[#FFC800] active:scale-95 disabled:opacity-50`}
+                >
+                  {claiming ? "GENERATING QR..." : `CLAIM ${rewardAmountSats} SATS`}
+                </button>
+              )}
+            </>
+          )}
+
+          {/* Auto-pay failed — show error + manual fallback buttons */}
+          {claimError && authenticated && lightningAddress && !rewardK1 && !autoPaid && (
+            <div className="mt-2">
+              <div className="font-pixel text-xs text-red-400 mb-3">{claimError}</div>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  onClick={() => { setClaimError(null); handleClaimReward("address"); }}
+                  disabled={claiming}
+                  className={`font-pixel text-sm border-2 px-5 py-3 transition-all ${goldBorder} bg-[#FFD700] text-black hover:bg-[#FFC800] active:scale-95 disabled:opacity-50`}
+                >
+                  {claiming ? "RETRYING..." : `RETRY SEND TO ${lightningAddress.toUpperCase()}`}
+                </button>
+                <button
+                  onClick={() => handleClaimReward("lnurl")}
+                  disabled={claiming}
+                  className={`font-pixel text-sm border-2 px-5 py-3 transition-all ${goldBorder} bg-transparent hover:bg-[#FFC800] active:scale-95 disabled:opacity-50`}
+                  style={{ color: dark ? "#FFD700" : "#b8860b" }}
+                >
+                  LNURL WITHDRAWAL
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Non-address claim error */}
+          {claimError && !(authenticated && lightningAddress) && (
+            <div className="mt-2 font-pixel text-xs text-red-400">{claimError}</div>
           )}
 
           {rewardLnurl && withdrawalStatus === "pending" && (

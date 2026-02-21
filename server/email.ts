@@ -1,8 +1,8 @@
 import { Resend } from "resend";
 
-let connectionSettings: any;
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || "Programming Lightning <noreply@programminglightning.com>";
 
-async function getCredentials() {
+async function getReplitCredentials(): Promise<{ apiKey: string; fromEmail: string } | null> {
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
   const xReplitToken = process.env.REPL_IDENTITY
     ? "repl " + process.env.REPL_IDENTITY
@@ -10,44 +10,42 @@ async function getCredentials() {
     ? "depl " + process.env.WEB_REPL_RENEWAL
     : null;
 
-  if (!xReplitToken) {
-    throw new Error("X_REPLIT_TOKEN not found for repl/depl");
-  }
+  if (!hostname || !xReplitToken) return null;
 
-  connectionSettings = await fetch(
-    "https://" + hostname + "/api/v2/connection?include_secrets=true&connector_names=resend",
-    {
-      headers: {
-        Accept: "application/json",
-        X_REPLIT_TOKEN: xReplitToken,
-      },
+  try {
+    const data = await fetch(
+      "https://" + hostname + "/api/v2/connection?include_secrets=true&connector_names=resend",
+      { headers: { Accept: "application/json", X_REPLIT_TOKEN: xReplitToken } }
+    ).then((res) => res.json());
+
+    const settings = data.items?.[0]?.settings;
+    if (settings?.api_key) {
+      return { apiKey: settings.api_key, fromEmail: settings.from_email || FROM_EMAIL };
     }
-  )
-    .then((res) => res.json())
-    .then((data) => data.items?.[0]);
-
-  if (!connectionSettings || !connectionSettings.settings.api_key) {
-    throw new Error("Resend not connected");
-  }
-  return {
-    apiKey: connectionSettings.settings.api_key,
-    fromEmail: connectionSettings.settings.from_email,
-  };
+  } catch {}
+  return null;
 }
 
-async function getUncachableResendClient() {
-  const { apiKey, fromEmail } = await getCredentials();
-  return {
-    client: new Resend(apiKey),
-    fromEmail,
-  };
+async function getResendClient(): Promise<{ client: Resend; fromEmail: string }> {
+  // Try Replit connector first (works on Replit deployments)
+  const replitCreds = await getReplitCredentials();
+  if (replitCreds) {
+    return { client: new Resend(replitCreds.apiKey), fromEmail: replitCreds.fromEmail };
+  }
+
+  // Fall back to env var (works locally)
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    throw new Error("No Resend credentials found. Set RESEND_API_KEY in .env or connect Resend on Replit.");
+  }
+  return { client: new Resend(apiKey), fromEmail: FROM_EMAIL };
 }
 
 export async function sendVerificationEmail(
   toEmail: string,
   verificationUrl: string
 ) {
-  const { client, fromEmail } = await getUncachableResendClient();
+  const { client, fromEmail } = await getResendClient();
 
   const html = `
 <!DOCTYPE html>
@@ -115,7 +113,7 @@ export async function sendVerificationEmail(
 </html>`;
 
   const result = await client.emails.send({
-    from: fromEmail || "Programming Lightning <noreply@programminglightning.com>",
+    from: fromEmail,
     to: toEmail,
     subject: "Verify your email - Programming Lightning",
     html,

@@ -544,6 +544,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       await storage.cancelPendingWithdrawalsForCheckpoint(user.id, checkpointId);
 
+      // Exercises get the full reward amount; regular checkpoints get the smaller amount
+      const isExercise = checkpointId.startsWith("exercise-");
+      const rewardSats = isExercise ? REWARD_AMOUNT_SATS : CHECKPOINT_REWARD_SATS;
+      const rewardMsats = rewardSats * 1000;
+
       try {
         const nodeRes = await fetch("http://localhost:5393/v2/node/node_info", {
           signal: AbortSignal.timeout(20000),
@@ -551,22 +556,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (nodeRes.ok) {
           const nodeInfo = await nodeRes.json() as Record<string, string>;
           const sendable = parseInt(nodeInfo.lightning_sendable_balance || "0", 10);
-          if (sendable < CHECKPOINT_REWARD_SATS) {
+          if (sendable < rewardSats) {
             return res.status(503).json({ error: "Reward pool temporarily empty. Please try again later." });
           }
         }
       } catch {}
 
       const k1 = generateK1();
-      await storage.createWithdrawal(k1, user.id, String(CHECKPOINT_REWARD_MSATS), checkpointId);
+      await storage.createWithdrawal(k1, user.id, String(rewardMsats), checkpointId);
 
       if (method !== "lnurl" && user.lightningAddress) {
-        const result = await autoPayLightningAddress(user.lightningAddress, CHECKPOINT_REWARD_MSATS);
+        const result = await autoPayLightningAddress(user.lightningAddress, rewardMsats);
         if (result.success) {
           await storage.markWithdrawalClaimed(k1, result.invoice || "");
           await storage.markWithdrawalPaid(k1, result.paymentIndex || "auto-pay");
           await storage.markCheckpointCompleted(user.id, checkpointId);
-          return res.json({ correct: true, autoPaid: true, amountSats: CHECKPOINT_REWARD_SATS });
+          return res.json({ correct: true, autoPaid: true, amountSats: rewardSats });
         }
         console.warn(`Auto-pay failed for ${user.lightningAddress}: ${result.error}, falling back to QR`);
       }
@@ -574,7 +579,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const withdrawUrl = `${getBaseUrl(req)}/api/lnurl/withdraw/${k1}`;
       const lnurl = encodeLnurl(withdrawUrl);
 
-      res.json({ k1, lnurl, amountSats: CHECKPOINT_REWARD_SATS, correct: true });
+      res.json({ k1, lnurl, amountSats: rewardSats, correct: true });
     } catch (err) {
       console.error("Checkpoint claim error:", err);
       res.status(500).json({ error: "Failed to process checkpoint" });

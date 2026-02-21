@@ -282,7 +282,10 @@ function ProfileDropdown({
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+      const target = e.target as HTMLElement;
+      // Ignore clicks on the profile toggle button (it handles its own toggle)
+      if (target.closest("[data-profile-toggle]")) return;
+      if (dropdownRef.current && !dropdownRef.current.contains(target)) {
         onClose();
       }
     };
@@ -305,8 +308,7 @@ function ProfileDropdown({
     try {
       const res = await fetch("/api/auth/resend-verification", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionToken }),
+        headers: { Authorization: `Bearer ${sessionToken}` },
       });
       const data = await res.json();
       if (res.ok) {
@@ -676,6 +678,7 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
               <button
                 type="button"
                 onClick={() => setShowProfileDropdown((v) => !v)}
+                data-profile-toggle
                 className={`p-2 transition-colors ${
                   theme === "dark"
                     ? "text-slate-300 hover:text-slate-100"
@@ -683,7 +686,7 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
                 }`}
                 title={auth.email || auth.pubkey ? `Logged in as ${auth.email || (auth.pubkey?.slice(0, 8) + "...")}` : "Logged in"}
                 data-testid="button-profile"
-                aria-label="Open profile menu"
+                aria-label="Toggle profile menu"
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
