@@ -173,8 +173,9 @@ export default function CodeExercise({
           border: dark ? "1px solid rgba(255,255,255,0.15)" : "1px solid rgba(0,0,0,0.15)",
           borderRadius: "8px",
           overflow: "hidden",
+          ...(expanded ? { display: "flex", flexDirection: "column", height: "100%" } : {}),
         },
-        ".cm-scroller": { overflow: "auto", maxHeight: expanded ? "600px" : "500px" },
+        ".cm-scroller": { overflow: "auto", maxHeight: expanded ? "none" : "500px", ...(expanded ? { flex: "1", minHeight: "0" } : {}) },
         ".cm-gutters": {
           backgroundColor: dark ? "#1e1e2e" : "#f5f0e8",
           borderRight: dark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.08)",
@@ -382,7 +383,7 @@ export default function CodeExercise({
   const greenText = dark ? "text-green-400" : "text-green-700";
 
   const exerciseContent = (
-    <div className={expanded ? "" : `my-4 border-2 ${completedDisplay ? goldBorder : cardBorder} ${cardBg} p-5`}>
+    <div className={expanded ? "flex flex-col flex-1 min-h-0" : `my-4 border-2 ${completedDisplay ? goldBorder : cardBorder} ${cardBg} p-5`}>
       {/* Description + Expand button */}
       <div className="flex items-start gap-3 mb-3">
         <div className={`text-lg md:text-[19px] ${textMuted} leading-relaxed flex-1`} style={sansFont}>
@@ -405,7 +406,7 @@ export default function CodeExercise({
       </div>
 
       {/* Code Editor */}
-      <div ref={editorRef} className="mb-3" />
+      <div ref={editorRef} className={`mb-3 ${expanded ? "flex-1 min-h-0" : ""}`} />
 
       {/* Action buttons */}
       <div className="flex items-center gap-2 mb-3 flex-wrap">
@@ -666,7 +667,7 @@ export default function CodeExercise({
         </div>
         <div className="fixed inset-0 z-[9999] flex items-start justify-center" onClick={(e) => { if (e.target === e.currentTarget) setExpanded(false); }}>
           <div className={`absolute inset-0 ${dark ? "bg-black/80" : "bg-black/50"} backdrop-blur-sm`} />
-          <div className={`relative w-full max-w-6xl mx-4 my-4 max-h-[calc(100vh-32px)] min-h-[80vh] overflow-y-auto border-2 ${completedDisplay ? goldBorder : cardBorder} ${cardBg} p-6`}>
+          <div className={`relative w-full max-w-6xl mx-4 my-4 h-[calc(100vh-32px)] overflow-y-auto border-2 flex flex-col ${completedDisplay ? goldBorder : cardBorder} ${cardBg} p-6`}>
             <button
               onClick={() => setExpanded(false)}
               className={`absolute top-3 right-3 font-pixel text-xs border-2 px-3 py-1.5 transition-all z-10 ${
