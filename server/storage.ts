@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type LnAuthChallenge, type Session, type LnurlWithdrawal, type InsertPageEvent, type PageEvent, type CheckpointCompletion, type Donation, users, lnAuthChallenges, sessions, lnurlWithdrawals, pageEvents, checkpointCompletions, donations } from "@shared/schema";
+import { type User, type InsertUser, type LnAuthChallenge, type Session, type LnurlWithdrawal, type InsertPageEvent, type PageEvent, type CheckpointCompletion, type Donation, type UserProgress, users, lnAuthChallenges, sessions, lnurlWithdrawals, pageEvents, checkpointCompletions, donations, userProgress } from "@shared/schema";
 import { eq, desc, inArray, and, sql, count } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
@@ -49,6 +49,8 @@ export interface IStorage {
   createDonation(paymentIndex: string, amountSats: number, donorName: string, message: string | null): Promise<Donation>;
   getRecentDonations(limit: number): Promise<Donation[]>;
   markDonationSpam(id: string): Promise<void>;
+  getUserProgress(userId: string): Promise<Record<string, string>>;
+  setUserProgress(userId: string, key: string, value: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -329,6 +331,24 @@ export class DatabaseStorage implements IStorage {
 
   async markDonationSpam(id: string): Promise<void> {
     await db.update(donations).set({ message: "\u26A1\u26A1\u26A1", donorName: "Anon" }).where(eq(donations.id, id));
+  }
+
+  async getUserProgress(userId: string): Promise<Record<string, string>> {
+    const rows = await db.select().from(userProgress).where(eq(userProgress.userId, userId));
+    const result: Record<string, string> = {};
+    for (const row of rows) {
+      result[row.key] = row.value;
+    }
+    return result;
+  }
+
+  async setUserProgress(userId: string, key: string, value: string): Promise<void> {
+    await db.insert(userProgress)
+      .values({ userId, key, value, updatedAt: new Date() })
+      .onConflictDoUpdate({
+        target: [userProgress.userId, userProgress.key],
+        set: { value, updatedAt: new Date() },
+      });
   }
 }
 
