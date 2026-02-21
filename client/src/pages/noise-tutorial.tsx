@@ -272,7 +272,7 @@ function ProfileDropdown({
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const [showAddressForm, setShowAddressForm] = useState(!!lightningAddress);
+  const [showAddressForm, setShowAddressForm] = useState(false);
   const [resending, setResending] = useState(false);
   const [resendMsg, setResendMsg] = useState<string | null>(null);
   const [showVerificationSection, setShowVerificationSection] = useState(false);
@@ -323,7 +323,7 @@ function ProfileDropdown({
     }
   };
 
-  const handleSave = async () => {
+  const handleSave = async (): Promise<boolean> => {
     setSaving(true);
     setSaveError(null);
     setSaveSuccess(false);
@@ -332,8 +332,10 @@ function ProfileDropdown({
       await onSetLightningAddress(trimmed || null);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 2000);
+      return true;
     } catch (err: any) {
       setSaveError(err?.message || "Failed to save");
+      return false;
     } finally {
       setSaving(false);
     }
@@ -410,11 +412,47 @@ function ProfileDropdown({
       )}
 
       <div className={`px-5 py-4 border-b-2 ${dark ? "border-[#1f2a44]" : "border-border"}`}>
-        {!showAddressForm ? (
+        <div className={`font-pixel text-xs mb-2 ${dark ? "text-[#FFD700]" : "text-[#9a7200]"}`}>
+          LIGHTNING ADDRESS
+        </div>
+        {lightningAddress ? (
+          <div>
+            <div className="flex items-center gap-3">
+              <div className={`text-base truncate flex-1 ${dark ? "text-slate-200" : "text-foreground"}`}>
+                {lightningAddress}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setAddressInput(lightningAddress || "");
+                  setSaveError(null);
+                  setSaveSuccess(false);
+                  setShowAddressForm(true);
+                }}
+                className={`font-pixel text-xs border-2 px-3 py-1.5 transition-all shrink-0 ${
+                  dark
+                    ? "border-[#FFD700] text-[#FFD700] bg-[#FFD700]/10 hover:bg-[#FFD700]/20"
+                    : "border-[#b8860b] text-[#9a7200] bg-[#FFD700]/10 hover:bg-[#FFD700]/20"
+                }`}
+                data-testid="button-edit-lightning-address"
+              >
+                EDIT
+              </button>
+            </div>
+            <p className={`mt-2 text-sm leading-relaxed ${dark ? "text-slate-400" : "text-foreground/60"}`}>
+              Rewards auto-send to this address.
+            </p>
+          </div>
+        ) : (
           <div>
             <button
               type="button"
-              onClick={() => setShowAddressForm(true)}
+              onClick={() => {
+                setAddressInput("");
+                setSaveError(null);
+                setSaveSuccess(false);
+                setShowAddressForm(true);
+              }}
               className={`w-full font-pixel text-sm border-2 px-4 py-3 transition-all ${
                 dark
                   ? "border-[#FFD700] text-[#FFD700] bg-[#FFD700]/10 hover:bg-[#FFD700]/20"
@@ -428,16 +466,21 @@ function ProfileDropdown({
               Adding a Lightning address makes for a much more seamless experience. Complete checkpoints and receive sats automatically without having to scan a QR code.
             </p>
           </div>
-        ) : (
-          <div>
-            <div className={`font-pixel text-xs mb-2 ${dark ? "text-[#FFD700]" : "text-[#9a7200]"}`}>
-              LIGHTNING ADDRESS
+        )}
+      </div>
+
+      {showAddressForm && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowAddressForm(false); }}
+        >
+          <div className="absolute inset-0 bg-black/60" />
+          <div className={`relative w-[90vw] max-w-[400px] border-4 p-5 ${
+            dark ? "border-[#2a3552] bg-[#0f1930]" : "border-border bg-card"
+          }`}>
+            <div className={`font-pixel text-xs mb-3 ${dark ? "text-[#FFD700]" : "text-[#9a7200]"}`}>
+              {lightningAddress ? "EDIT LIGHTNING ADDRESS" : "ADD LIGHTNING ADDRESS"}
             </div>
-            {lightningAddress && !saveSuccess && (
-              <div className={`text-sm mb-2 truncate ${dark ? "text-slate-300" : "text-foreground/70"}`}>
-                Current: {lightningAddress}
-              </div>
-            )}
             <input
               type="text"
               value={addressInput}
@@ -453,14 +496,19 @@ function ProfileDropdown({
                   : "border-border bg-background text-foreground placeholder:text-foreground/30 focus:border-[#b8860b]"
               }`}
               data-testid="input-lightning-address"
+              autoFocus
               onKeyDown={(e) => {
                 if (e.key === "Enter") handleSave();
+                if (e.key === "Escape") setShowAddressForm(false);
               }}
             />
             <div className="flex items-center gap-3 mt-3">
               <button
                 type="button"
-                onClick={handleSave}
+                onClick={async () => {
+                  const ok = await handleSave();
+                  if (ok) setShowAddressForm(false);
+                }}
                 disabled={saving}
                 className={`font-pixel text-xs border-2 px-4 py-2 transition-all border-[#FFD700] bg-[#FFD700] text-black hover:bg-[#FFC800] active:scale-95 ${
                   saving ? "opacity-60 cursor-wait" : ""
@@ -469,6 +517,17 @@ function ProfileDropdown({
               >
                 {saving ? "SAVING..." : "SAVE"}
               </button>
+              <button
+                type="button"
+                onClick={() => setShowAddressForm(false)}
+                className={`font-pixel text-xs border-2 px-4 py-2 transition-all ${
+                  dark
+                    ? "border-[#2a3552] text-slate-400 hover:text-slate-200"
+                    : "border-border text-foreground/60 hover:text-foreground"
+                }`}
+              >
+                CANCEL
+              </button>
               {saveSuccess && (
                 <span className="font-pixel text-xs text-green-400">SAVED!</span>
               )}
@@ -476,12 +535,12 @@ function ProfileDropdown({
                 <span className="font-pixel text-xs text-red-400">{saveError}</span>
               )}
             </div>
-            <p className={`mt-3 text-base leading-relaxed ${dark ? "text-slate-300" : "text-foreground/70"}`}>
+            <p className={`mt-3 text-sm leading-relaxed ${dark ? "text-slate-400" : "text-foreground/60"}`}>
               Rewards will auto-send to this address, so you can complete checkpoints and receive sats without scanning a QR code.
             </p>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       <div className="px-5 py-5">
         <button
