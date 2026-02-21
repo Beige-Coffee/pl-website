@@ -13,6 +13,11 @@ import { QRCodeSVG } from "qrcode.react";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
+export interface CodeBlock {
+  code: string;
+  explanation: string;
+}
+
 export interface CodeExerciseData {
   id: string;
   title: string;
@@ -24,6 +29,7 @@ export interface CodeExerciseData {
     conceptual: string;
     steps: string;
     code: string;
+    codeBlocks?: CodeBlock[];
   };
   rewardSats: number;
 }
