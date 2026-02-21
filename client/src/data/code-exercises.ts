@@ -389,8 +389,8 @@ def hkdf_two_keys(salt, input_key_material):
       codeBlocks: [
         { code: `import hmac, hashlib`, explanation: "Import HMAC for keyed hashing and hashlib for SHA-256 — the two primitives needed for HKDF." },
         { code: `def hkdf_two_keys(salt, input_key_material):\n    # Extract\n    temp_key = hmac.new(salt, input_key_material, hashlib.sha256).digest()`, explanation: "Extract phase: compress the input key material into a fixed-size pseudorandom key using HMAC-SHA256 with the salt (chaining key) as the HMAC key." },
-        { code: `    # Expand\n    output1 = hmac.new(temp_key, b'\\\\x01', hashlib.sha256).digest()`, explanation: "Expand phase (key 1): derive the first 32-byte output by HMAC-ing the byte 0x01 with the temp key." },
-        { code: `    output2 = hmac.new(temp_key, output1 + b'\\\\x02', hashlib.sha256).digest()\n    return (output1, output2)`, explanation: "Expand phase (key 2): derive the second output by HMAC-ing output1 concatenated with 0x02. This chaining ensures the two keys are cryptographically independent." },
+        { code: `    # Expand\n    output1 = hmac.new(temp_key, b'\\x01', hashlib.sha256).digest()`, explanation: "Expand phase (key 1): derive the first 32-byte output by HMAC-ing the byte 0x01 with the temp key." },
+        { code: `    output2 = hmac.new(temp_key, output1 + b'\\x02', hashlib.sha256).digest()\n    return (output1, output2)`, explanation: "Expand phase (key 2): derive the second output by HMAC-ing output1 concatenated with 0x02. This chaining ensures the two keys are cryptographically independent." },
       ],
     },
     rewardSats: 21,
@@ -1020,7 +1020,7 @@ print("Tag verified successfully!")
     h = hashlib.sha256(h + c).digest()
     return (re_pub, h, ck)`,
       codeBlocks: [
-        { code: `def act_one_responder(h, ck, s_priv, message):\n    version = message[0:1]\n    if version != b'\\\\x00':\n        raise ValueError("Bad version")\n    re_pub = message[1:34]  # 33-byte compressed secp256k1 key\n    c = message[34:]`, explanation: "Parse the 50-byte Act 1 message: extract the version byte, the initiator's 33-byte ephemeral public key, and the 16-byte authentication tag." },
+        { code: `def act_one_responder(h, ck, s_priv, message):\n    version = message[0:1]\n    if version != b'\\x00':\n        raise ValueError("Bad version")\n    re_pub = message[1:34]  # 33-byte compressed secp256k1 key\n    c = message[34:]`, explanation: "Parse the 50-byte Act 1 message: extract the version byte, the initiator's 33-byte ephemeral public key, and the 16-byte authentication tag." },
         { code: `    h = hashlib.sha256(h + re_pub).digest()`, explanation: "MixHash the received ephemeral public key — mirroring what the initiator did on their side." },
         { code: `    ss = ecdh(s_priv, re_pub)\n    ck, temp_k = hkdf_two_keys(ck, ss)`, explanation: "Perform ECDH using the responder's static private key and the initiator's ephemeral public key, then derive the temporary key via HKDF. ECDH commutativity ensures both sides get the same secret." },
         { code: `    cipher = ChaCha20Poly1305(temp_k)\n    nonce = (0).to_bytes(12, 'little')\n    cipher.decrypt(nonce, c, h)  # verify tag`, explanation: "Decrypt and verify the authentication tag. If the tag is invalid (wrong keys or tampered message), this raises an exception." },
@@ -1425,7 +1425,7 @@ print("  - Same temp_k (from ee ECDH)")
     h = hashlib.sha256(h + c).digest()
     return (re_pub, h, ck)`,
       codeBlocks: [
-        { code: `def act_two_initiator(h, ck, e_priv, message):\n    version = message[0:1]\n    if version != b'\\\\x00':\n        raise ValueError("Bad version")\n    re_pub = message[1:34]  # 33-byte compressed secp256k1 key\n    c = message[34:]`, explanation: "Parse the 50-byte Act 2 message: extract the version byte, the responder's 33-byte ephemeral public key, and the 16-byte auth tag." },
+        { code: `def act_two_initiator(h, ck, e_priv, message):\n    version = message[0:1]\n    if version != b'\\x00':\n        raise ValueError("Bad version")\n    re_pub = message[1:34]  # 33-byte compressed secp256k1 key\n    c = message[34:]`, explanation: "Parse the 50-byte Act 2 message: extract the version byte, the responder's 33-byte ephemeral public key, and the 16-byte auth tag." },
         { code: `    h = hashlib.sha256(h + re_pub).digest()`, explanation: "MixHash the responder's ephemeral public key — mirroring the responder's step." },
         { code: `    ss = ecdh(e_priv, re_pub)\n    ck, temp_k = hkdf_two_keys(ck, ss)`, explanation: "Perform the 'ee' ECDH using the initiator's ephemeral private key and the responder's ephemeral public key, then derive the temporary key via HKDF." },
         { code: `    ChaCha20Poly1305(temp_k).decrypt((0).to_bytes(12, 'little'), c, h)\n    h = hashlib.sha256(h + c).digest()\n    return (re_pub, h, ck)`, explanation: "Verify the authentication tag by decrypting, MixHash the ciphertext, and return the responder's ephemeral key with the updated state." },
