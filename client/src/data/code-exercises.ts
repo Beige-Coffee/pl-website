@@ -119,7 +119,9 @@ def ecdh(local_private_key_bytes, remote_public_key_bytes):
 
     Args:
         local_private_key_bytes:  32-byte private key (bytes)
+            e.g. b'\\x9a\\x1f...\\xc3' (32 random bytes)
         remote_public_key_bytes:  33-byte compressed public key (bytes)
+            e.g. b'\\x02\\xab\\xcd...\\xef' (0x02 or 0x03 prefix + 32-byte x-coordinate)
 
     Returns:
         bytes: 32-byte shared secret (SHA-256 hashed)
