@@ -418,7 +418,7 @@ function ProfileDropdown({
         {lightningAddress ? (
           <div>
             <div className="flex items-center gap-3">
-              <div className={`text-base truncate flex-1 ${dark ? "text-slate-200" : "text-foreground"}`}>
+              <div className={`text-base truncate flex-1 px-3 py-1 rounded-full ${dark ? "text-slate-200 bg-[#FFD700]/10" : "text-foreground bg-[#b8860b]/10"}`}>
                 {lightningAddress}
               </div>
               <button
