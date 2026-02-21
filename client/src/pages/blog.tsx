@@ -394,7 +394,7 @@ export default function Blog() {
                       localStorage.setItem("pl-tutorial-mode", "code");
                       setLocation(post.href);
                     }}
-                    className="bg-[#1a1a2e] text-[#ffd700] px-6 py-3 font-pixel text-base md:text-lg border-2 border-[#ffd700]/30 text-center hover:border-[#ffd700]/60 hover:bg-[#1a1a2e]/80 transition-all cursor-pointer"
+                    className="bg-[#1a1a2e] text-white px-6 py-3 font-pixel text-base md:text-lg border-2 border-white/30 text-center hover:border-white/60 hover:bg-[#1a1a2e]/80 transition-all cursor-pointer"
                     data-testid="badge-code"
                   >
                     CODE
