@@ -390,7 +390,7 @@ export default function CodeExercise({
         </div>
         <button
           onClick={() => setExpanded((v) => !v)}
-          className={`font-pixel text-[10px] border-2 px-2.5 py-1.5 transition-all shrink-0 mt-0.5 ${
+          className={`font-pixel text-base border-2 px-2.5 py-0.5 transition-all shrink-0 mt-0.5 leading-none ${
             dark
               ? "border-[#2a3552] bg-[#0f1930] text-slate-400 hover:text-slate-200 hover:bg-[#132043]"
               : "border-border bg-background text-foreground/60 hover:text-foreground hover:bg-secondary"
@@ -398,7 +398,7 @@ export default function CodeExercise({
           title={expanded ? "Exit full screen" : "Expand to full screen"}
           data-testid="button-expand-exercise"
         >
-          {expanded ? "⊟" : "⊞"}
+          {expanded ? "−" : "+"}
         </button>
       </div>
 
