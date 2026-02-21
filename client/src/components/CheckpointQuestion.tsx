@@ -265,11 +265,6 @@ export default function CheckpointQuestion({
         .animate-shake { animation: shake 0.4s ease-in-out; }
       `}</style>
 
-      <div className="flex items-center gap-3 mb-3">
-        <div className={`font-pixel text-xs ${goldText}`}>CHECKPOINT</div>
-        <div className={`font-pixel text-xs ${goldText}`}>EARN SATS</div>
-      </div>
-
       <div className={`text-[17px] md:text-[19px] font-semibold ${textColor} mb-4`}>{renderInlineCode(question, dark)}</div>
 
       <div className="space-y-2 mb-4">

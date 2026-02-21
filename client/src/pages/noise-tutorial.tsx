@@ -2565,7 +2565,7 @@ function ChapterContent({
             const isCompleted = completedCheckpoints.some(c => c.checkpointId === cpId);
             return (
               <CollapsibleItem
-                title={cpData.question}
+                title="Checkpoint Quiz"
                 completed={isCompleted}
                 theme={theme}
                 label="CHECKPOINT"
