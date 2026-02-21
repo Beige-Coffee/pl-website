@@ -404,7 +404,7 @@ function ProfileDropdown({
             {resending ? "SENDING..." : "RESEND VERIFICATION EMAIL"}
           </button>
           {resendMsg && (
-            <p className={`mt-2 text-sm ${resendMsg.includes("sent") ? (dark ? "text-green-400" : "text-green-700") : "text-red-400"}`}>
+            <p className={`mt-2 text-base font-bold ${resendMsg.includes("sent") ? (dark ? "text-green-400" : "text-green-800") : "text-red-400"}`}>
               {resendMsg}
             </p>
           )}
