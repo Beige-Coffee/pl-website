@@ -638,7 +638,7 @@ export default function CodeExercise({
               </div>
             )}
             {activeHint === "code" && data.hints.codeBlocks?.length ? (
-              <div className={`pr-6 border ${dark ? "border-slate-700/50 bg-[#0d1117]" : "border-foreground/10 bg-[#fafaf8]"} overflow-hidden overflow-x-auto`}>
+              <div className={`pr-6 overflow-x-auto`}>
                 {data.hints.codeBlocks.map((block, i) => (
                   <div
                     key={i}
