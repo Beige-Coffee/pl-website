@@ -56,6 +56,8 @@ export default function CodeExercise({
   const viewRef = useRef<EditorView | null>(null);
   const storageKey = `pl-exercise-${exerciseId}`;
 
+  const [expanded, setExpanded] = useState(false);
+
   // Hint state: null = closed, "conceptual" | "steps" | "code" = which is open
   const [activeHint, setActiveHint] = useState<"conceptual" | "steps" | "code" | null>(null);
   const hintCodeRef = useRef<HTMLDivElement>(null);
@@ -123,6 +125,20 @@ export default function CodeExercise({
   useEffect(() => {
     preloadWorker();
   }, []);
+
+  // Lock body scroll and handle Escape when expanded
+  useEffect(() => {
+    if (!expanded) return;
+    document.body.style.overflow = "hidden";
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setExpanded(false);
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", handleKey);
+    };
+  }, [expanded]);
 
   // ── CodeMirror setup ────────────────────────────────────────────────────
 
@@ -365,8 +381,8 @@ export default function CodeExercise({
   const goldBorder = dark ? "border-[#FFD700]" : "border-[#b8860b]";
   const greenText = dark ? "text-green-400" : "text-green-700";
 
-  return (
-    <div className={`my-8 border-2 ${completedDisplay ? goldBorder : cardBorder} ${cardBg} p-5`}>
+  const exerciseContent = (
+    <div className={expanded ? "" : `my-8 border-2 ${completedDisplay ? goldBorder : cardBorder} ${cardBg} p-5`}>
       {/* Description */}
       <div className={`text-lg md:text-[19px] ${textMuted} mb-4 leading-relaxed`} style={sansFont}>
         {data.description}
@@ -405,6 +421,19 @@ export default function CodeExercise({
           }`}
         >
           RESET
+        </button>
+
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className={`font-pixel text-xs border-2 px-5 py-2.5 transition-all ml-auto ${
+            dark
+              ? "border-[#2a3552] bg-[#0f1930] text-slate-400 hover:text-slate-200 hover:bg-[#132043]"
+              : "border-border bg-background text-foreground/60 hover:text-foreground hover:bg-secondary"
+          }`}
+          title={expanded ? "Exit full screen" : "Expand to full screen"}
+          data-testid="button-expand-exercise"
+        >
+          {expanded ? "COLLAPSE" : "EXPAND"}
         </button>
       </div>
 
@@ -470,7 +499,18 @@ export default function CodeExercise({
         </div>
 
         {activeHint && (
-          <div className={`mt-1.5 border ${goldBorder} px-3 py-2.5 ${dark ? "bg-[#0b1220]" : "bg-background"} hint-content`}>
+          <div className={`mt-1.5 border ${goldBorder} px-3 py-2.5 ${dark ? "bg-[#0b1220]" : "bg-background"} hint-content relative`}>
+            <button
+              type="button"
+              onClick={() => setActiveHint(null)}
+              className={`absolute top-1.5 right-2 text-lg leading-none px-1.5 py-0.5 transition-colors cursor-pointer ${
+                dark ? "text-slate-500 hover:text-slate-200" : "text-foreground/40 hover:text-foreground"
+              }`}
+              aria-label="Close hint"
+              data-testid="button-close-hint"
+            >
+              ✕
+            </button>
             <style>{`
               .hint-content p { margin: 0 0 0.4em 0; }
               .hint-content p:last-child { margin-bottom: 0; }
@@ -479,17 +519,17 @@ export default function CodeExercise({
               .hint-content code { font-size: 0.9em; padding: 0.15em 0.35em; border-radius: 3px; background: ${dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"}; }
             `}</style>
             {activeHint === "conceptual" && (
-              <div className={`text-[15px] ${textMuted} leading-relaxed`}>
+              <div className={`text-[15px] ${textMuted} leading-relaxed pr-6`}>
                 <div dangerouslySetInnerHTML={{ __html: data.hints.conceptual }} />
               </div>
             )}
             {activeHint === "steps" && (
-              <div className={`text-[15px] ${textMuted} leading-relaxed`}>
+              <div className={`text-[15px] ${textMuted} leading-relaxed pr-6`}>
                 <div dangerouslySetInnerHTML={{ __html: data.hints.steps }} />
               </div>
             )}
             {activeHint === "code" && (
-              <div ref={hintCodeRef} />
+              <div ref={hintCodeRef} className="pr-6" />
             )}
           </div>
         )}
@@ -599,7 +639,7 @@ export default function CodeExercise({
 
       {/* Already completed */}
       {completedDisplay && (
-        <div className={`mt-5 -mx-5 -mb-5 px-5 py-4 border-t-2 text-[17px] md:text-[19px] font-semibold text-black ${dark ? "bg-[#FFD700]/30 border-[#FFD700]/40" : "bg-[#b8860b]/20 border-[#b8860b]/30"}`} style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
+        <div className={`mt-5 ${expanded ? "" : "-mx-5 -mb-5"} px-5 py-4 border-t-2 text-[17px] md:text-[19px] font-semibold text-black ${dark ? "bg-[#FFD700]/30 border-[#FFD700]/40" : "bg-[#b8860b]/20 border-[#b8860b]/30"}`} style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
           {claimInfo ? (
             <>{claimInfo.amountSats} Sats Claimed on {new Date(claimInfo.paidAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} at {new Date(claimInfo.paidAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</>
           ) : autoPaid ? (
@@ -609,6 +649,45 @@ export default function CodeExercise({
           )}
         </div>
       )}
+    </div>
+  );
+
+  if (expanded) {
+    return (
+      <>
+        <div className={`my-8 border-2 ${completedDisplay ? goldBorder : cardBorder} ${cardBg} p-5`}>
+          <div className={`text-sm ${textMuted} text-center py-4`} style={sansFont}>
+            Exercise is open in expanded view.{" "}
+            <button onClick={() => setExpanded(false)} className={`${goldText} underline cursor-pointer`}>Close expanded view</button>
+          </div>
+        </div>
+        <div className="fixed inset-0 z-[9999] flex items-start justify-center" onClick={(e) => { if (e.target === e.currentTarget) setExpanded(false); }}>
+          <div className={`absolute inset-0 ${dark ? "bg-black/80" : "bg-black/50"} backdrop-blur-sm`} />
+          <div className={`relative w-full max-w-4xl mx-4 my-6 max-h-[calc(100vh-48px)] overflow-y-auto border-2 ${completedDisplay ? goldBorder : cardBorder} ${cardBg} p-6`}>
+            <button
+              onClick={() => setExpanded(false)}
+              className={`absolute top-3 right-3 font-pixel text-xs border-2 px-3 py-1.5 transition-all z-10 ${
+                dark
+                  ? "border-[#2a3552] bg-[#0f1930] text-slate-400 hover:text-slate-200 hover:bg-[#132043]"
+                  : "border-border bg-background text-foreground/60 hover:text-foreground hover:bg-secondary"
+              }`}
+              data-testid="button-close-expanded"
+            >
+              ✕ CLOSE
+            </button>
+            <div className={`font-pixel text-sm ${goldText} mb-4`}>
+              {data.title.toUpperCase()}
+            </div>
+            {exerciseContent}
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <div className={`my-8 border-2 ${completedDisplay ? goldBorder : cardBorder} ${cardBg} p-5`}>
+      {exerciseContent}
     </div>
   );
 }
