@@ -5,6 +5,12 @@ import LoginModal from "../components/LoginModal";
 
 const posts = [
   {
+    title: "Programming Lightning: Intro to Payment Channels",
+    href: "/lightning-tutorial",
+    description:
+      "Build a Lightning payment channel from scratch. By the end, your implementation will pass the official BOLT 3 test vectors.",
+  },
+  {
     title: "An Approachable Deep Dive Into Lightning's Noise Protocol",
     href: "/noise-tutorial",
     description:
