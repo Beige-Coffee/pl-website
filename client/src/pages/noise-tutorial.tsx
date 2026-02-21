@@ -490,7 +490,7 @@ function ProfileDropdown({
                 setSaveSuccess(false);
               }}
               placeholder="you@wallet.com"
-              className={`w-full px-3 py-2 text-base border-2 outline-none transition-colors ${
+              className={`w-full px-4 py-3 text-lg border-2 outline-none transition-colors ${
                 dark
                   ? "border-[#2a3552] bg-[#0b1220] text-slate-200 placeholder:text-slate-600 focus:border-[#FFD700]"
                   : "border-border bg-background text-foreground placeholder:text-foreground/30 focus:border-[#b8860b]"
@@ -535,7 +535,7 @@ function ProfileDropdown({
                 <span className="font-pixel text-xs text-red-400">{saveError}</span>
               )}
             </div>
-            <p className={`mt-3 text-sm leading-relaxed ${dark ? "text-slate-400" : "text-foreground/60"}`}>
+            <p className={`mt-3 text-base font-semibold leading-relaxed ${dark ? "text-slate-300" : "text-foreground/80"}`}>
               Rewards will auto-send to this address, so you can complete checkpoints and receive sats without scanning a QR code.
             </p>
           </div>
