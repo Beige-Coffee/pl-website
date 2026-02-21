@@ -37,14 +37,8 @@ export function useAuth() {
     loading: true,
   });
 
-  useEffect(() => {
-    const token = localStorage.getItem(STORAGE_KEY);
-    if (!token) {
-      setAuth((a) => ({ ...a, loading: false }));
-      return;
-    }
-
-    Promise.all([
+  const fetchAuthState = useCallback((token: string) => {
+    return Promise.all([
       fetch("/api/auth/verify", { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
       fetch("/api/checkpoint/status", { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()).catch(() => ({ completed: [] })),
     ])
@@ -84,6 +78,26 @@ export function useAuth() {
         setAuth((a) => ({ ...a, loading: false }));
       });
   }, []);
+
+  useEffect(() => {
+    const token = localStorage.getItem(STORAGE_KEY);
+    if (!token) {
+      setAuth((a) => ({ ...a, loading: false }));
+      return;
+    }
+    fetchAuthState(token);
+  }, [fetchAuthState]);
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        const token = localStorage.getItem(STORAGE_KEY);
+        if (token) fetchAuthState(token);
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [fetchAuthState]);
 
   const loginWithToken = useCallback((token: string, data: Partial<AuthState>) => {
     localStorage.setItem(STORAGE_KEY, token);
@@ -133,6 +147,32 @@ export function useAuth() {
     });
   }, []);
 
+  const refreshAuth = useCallback(async () => {
+    const token = localStorage.getItem(STORAGE_KEY);
+    if (!token) return;
+    try {
+      const [data, cpData] = await Promise.all([
+        fetch("/api/auth/verify", { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
+        fetch("/api/checkpoint/status", { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()).catch(() => ({ completed: [] })),
+      ]);
+      if (data.authenticated) {
+        setAuth({
+          authenticated: true,
+          userId: data.userId,
+          pubkey: data.pubkey || null,
+          email: data.email || null,
+          displayName: data.displayName || null,
+          rewardClaimed: data.rewardClaimed || false,
+          lightningAddress: data.lightningAddress || null,
+          emailVerified: data.emailVerified || !!data.pubkey,
+          completedCheckpoints: cpData.completed || [],
+          sessionToken: token,
+          loading: false,
+        });
+      }
+    } catch {}
+  }, []);
+
   const markRewardClaimed = useCallback(() => {
     setAuth((a) => ({ ...a, rewardClaimed: true }));
   }, []);
@@ -164,5 +204,5 @@ export function useAuth() {
     setAuth((a) => ({ ...a, lightningAddress: address }));
   }, []);
 
-  return { ...auth, loginWithToken, logout, markRewardClaimed, markCheckpointCompleted, setLightningAddress };
+  return { ...auth, loginWithToken, logout, refreshAuth, markRewardClaimed, markCheckpointCompleted, setLightningAddress };
 }
