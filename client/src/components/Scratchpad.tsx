@@ -362,15 +362,15 @@ export default function Scratchpad({ theme }: ScratchpadProps) {
         </button>
         {showToggleTooltip && (
           <div
-            className={`absolute top-full right-0 mt-2 w-56 px-3 py-2.5 text-xs z-50 border ${
+            className={`absolute top-full right-0 mt-2 w-72 px-4 py-3.5 text-sm z-50 border-2 ${
               dark
                 ? "bg-[#0f1930] border-[#2a3552] text-slate-300"
                 : "bg-white border-[#d4c9a8] text-black/70"
             } shadow-lg`}
             style={sansFont}
           >
-            <div className={`font-pixel text-[10px] mb-1 ${goldText}`}>PYTHON SANDBOX</div>
-            <div style={sansFont}>
+            <div className={`font-pixel text-xs mb-1.5 ${goldText}`}>PYTHON SANDBOX</div>
+            <div className="leading-relaxed" style={sansFont}>
               Experiment with Python code alongside the exercises. Use "Scratchpad" buttons in exercises to load sample inputs.
             </div>
             <div className={`absolute bottom-full right-4 w-0 h-0 border-l-[5px] border-r-[5px] border-b-[5px] border-l-transparent border-r-transparent ${
