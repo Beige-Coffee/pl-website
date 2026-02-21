@@ -5,6 +5,7 @@ import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import rehypeHighlight from "rehype-highlight";
 import { useAuth } from "../hooks/use-auth";
+import { useProgress } from "../hooks/use-progress";
 import LoginModal from "../components/LoginModal";
 import { QRCodeSVG } from "qrcode.react";
 import CheckpointQuestion from "../components/CheckpointQuestion";
@@ -568,6 +569,7 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const auth = useAuth();
   const { authenticated, loading: authLoading, logout, loginWithToken, setLightningAddress } = auth;
+  const progress = useProgress(auth.sessionToken);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
 
@@ -900,6 +902,8 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
                 emailVerified={auth.emailVerified}
                 pubkey={auth.pubkey}
                 onLoginRequest={() => setShowLoginModal(true)}
+                getProgress={progress.getProgress}
+                saveProgress={progress.saveProgress}
               />
             ) : (
               <ChapterContent
@@ -915,6 +919,8 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
                 onLoginRequest={() => setShowLoginModal(true)}
                 onCheckpointCompleted={auth.markCheckpointCompleted}
                 onOpenProfile={() => setShowProfileDropdown(true)}
+                getProgress={progress.getProgress}
+                saveProgress={progress.saveProgress}
               />
             )}
 
@@ -1938,6 +1944,8 @@ function InteractiveQuiz({
   emailVerified,
   pubkey,
   onLoginRequest,
+  getProgress,
+  saveProgress,
 }: {
   theme: "light" | "dark";
   authenticated: boolean;
@@ -1946,6 +1954,8 @@ function InteractiveQuiz({
   emailVerified: boolean;
   pubkey: string | null;
   onLoginRequest: () => void;
+  getProgress: (key: string) => string | null;
+  saveProgress: (key: string, value: string) => void;
 }) {
   const canClaimRewards = !!pubkey || emailVerified;
   const quizUserSuffix = sessionToken ? `-${sessionToken.slice(0, 8)}` : "";
@@ -1956,6 +1966,22 @@ function InteractiveQuiz({
       return saved ? JSON.parse(saved) : {};
     } catch { return {}; }
   });
+  const [hydratedFromServer, setHydratedFromServer] = useState(false);
+
+  useEffect(() => {
+    if (hydratedFromServer) return;
+    const serverData = getProgress("quiz-selections");
+    if (serverData) {
+      try {
+        const parsed = JSON.parse(serverData);
+        if (Object.keys(parsed).length > 0) {
+          setSelections(parsed);
+          setHydratedFromServer(true);
+        }
+      } catch {}
+    }
+  }, [getProgress, hydratedFromServer]);
+
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(0);
   const [showReward, setShowReward] = useState(false);
@@ -1978,7 +2004,9 @@ function InteractiveQuiz({
     if (submitted) return;
     setSelections((prev) => {
       const next = { ...prev, [qIndex]: optIndex };
-      try { localStorage.setItem(quizStorageKey, JSON.stringify(next)); } catch {}
+      const json = JSON.stringify(next);
+      try { localStorage.setItem(quizStorageKey, json); } catch {}
+      saveProgress("quiz-selections", json);
       return next;
     });
   };
@@ -2419,6 +2447,8 @@ function ChapterContent({
   onLoginRequest,
   onCheckpointCompleted,
   onOpenProfile,
+  getProgress,
+  saveProgress,
 }: {
   chapter: Chapter;
   theme: "light" | "dark";
@@ -2432,6 +2462,8 @@ function ChapterContent({
   onLoginRequest: () => void;
   onCheckpointCompleted: (id: string, amountSats?: number) => void;
   onOpenProfile: () => void;
+  getProgress: (key: string) => string | null;
+  saveProgress: (key: string, value: string) => void;
 }) {
   const [md, setMd] = useState<string>("Loading…");
   const [err, setErr] = useState<string | null>(null);
@@ -2594,6 +2626,8 @@ function ChapterContent({
                     claimInfo={completedCheckpoints.find(c => c.checkpointId === ex.id) || null}
                     onLoginRequest={onLoginRequest}
                     onCompleted={onCheckpointCompleted}
+                    getProgress={getProgress}
+                    saveProgress={saveProgress}
                   />
                 </CollapsibleItem>
               );
@@ -2631,6 +2665,8 @@ function ChapterContent({
                         claimInfo={completedCheckpoints.find(c => c.checkpointId === ex.id) || null}
                         onLoginRequest={onLoginRequest}
                         onCompleted={onCheckpointCompleted}
+                        getProgress={getProgress}
+                        saveProgress={saveProgress}
                       />
                     </CollapsibleItem>
                   );

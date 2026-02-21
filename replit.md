@@ -6,6 +6,7 @@ Free, open-source educational website teaching Bitcoin Lightning Network through
 Created by Austin (Spiral and HRF grantee), inspired by Programming Bitcoin.
 
 ## Recent Changes
+- 2026-02-21: Server-side progress sync for quiz selections and code exercises (userProgress table, useProgress hook)
 - 2026-02-18: Added "Pay It Forward" donation page (below Quiz in sidebar)
 - 2026-02-18: Donation invoices via Lexe sidecar (POST /api/donate/create-invoice, GET /api/donate/check-payment)
 - 2026-02-16: Added Plausible Analytics for traffic/referrer tracking
@@ -32,11 +33,12 @@ Created by Austin (Spiral and HRF grantee), inspired by Programming Bitcoin.
 - Reward: One-time claim per account, tracked by reward_claimed column in users table
 
 ## Key Files
-- shared/schema.ts — DB schema (users, sessions, lnAuthChallenges, lnurlWithdrawals, pageEvents)
+- shared/schema.ts — DB schema (users, sessions, lnAuthChallenges, lnurlWithdrawals, pageEvents, userProgress)
 - server/routes.ts — API routes (auth, lnauth, reward, tracking, admin analytics)
 - server/storage.ts — Storage interface and DB operations
 - client/src/hooks/use-auth.ts — Unified auth hook
 - client/src/hooks/use-lnauth.ts — LNURL-auth challenge polling (used by LoginModal)
+- client/src/hooks/use-progress.ts — Server-side progress sync (quiz selections, code exercises)
 - client/src/hooks/use-page-tracking.ts — Auto page view tracking with duration
 - client/src/components/LoginModal.tsx — Login modal with Email/Lightning tabs
 - client/src/pages/noise-tutorial.tsx — Tutorial + quiz page
@@ -51,3 +53,4 @@ Created by Austin (Spiral and HRF grantee), inspired by Programming Bitcoin.
 - Tracking sessionId is client-generated, stored in sessionStorage, used for duration update ownership
 - Admin analytics: GET /api/admin/analytics?password=<ADMIN_PASSWORD>
 - Lexe Sidecar auto-starts via spawn() in server/routes.ts registerRoutes()
+- Progress sync: quiz selections and code exercise code saved to userProgress table (debounced 1.5s), hydrated on login from server with localStorage fallback

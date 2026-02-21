@@ -36,6 +36,8 @@ interface CodeExerciseProps {
   claimInfo: { checkpointId: string; amountSats: number; paidAt: string } | null;
   onLoginRequest: () => void;
   onCompleted: (checkpointId: string, amountSats?: number) => void;
+  getProgress: (key: string) => string | null;
+  saveProgress: (key: string, value: string) => void;
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -51,6 +53,8 @@ export default function CodeExercise({
   claimInfo,
   onLoginRequest,
   onCompleted,
+  getProgress,
+  saveProgress,
 }: CodeExerciseProps) {
   const dark = theme === "dark";
   const editorRef = useRef<HTMLDivElement>(null);
@@ -58,6 +62,21 @@ export default function CodeExercise({
   const storageKey = `pl-exercise-${exerciseId}`;
 
   const [expanded, setExpanded] = useState(false);
+  const hydratedRef = useRef(false);
+
+  useEffect(() => {
+    if (hydratedRef.current) return;
+    const serverSaved = getProgress(`exercise-${exerciseId}`);
+    if (serverSaved && viewRef.current) {
+      const currentCode = viewRef.current.state.doc.toString();
+      if (currentCode !== serverSaved) {
+        viewRef.current.dispatch({
+          changes: { from: 0, to: currentCode.length, insert: serverSaved },
+        });
+      }
+      hydratedRef.current = true;
+    }
+  }, [getProgress, exerciseId]);
 
   // Hint state: null = closed, "conceptual" | "steps" | "code" = which is open
   const [activeHint, setActiveHint] = useState<"conceptual" | "steps" | "code" | null>(null);
@@ -166,6 +185,7 @@ export default function CodeExercise({
           try {
             localStorage.setItem(storageKey, code);
           } catch {}
+          saveProgress(`exercise-${exerciseId}`, code);
         }
       }),
       // Apply oneDark BEFORE custom overrides so syntax highlighting takes effect
