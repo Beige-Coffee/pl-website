@@ -23,7 +23,7 @@ const MAX_SPLIT = 0.85;
 
 const sansFont = { fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' } as const;
 
-const DEFAULT_CODE = `# Scratchpad — experiment freely here!
+const DEFAULT_CODE = `# Scratchpad - experiment freely here!
 # Common libraries are available:
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X25519PublicKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat, PrivateFormat, NoEncryption

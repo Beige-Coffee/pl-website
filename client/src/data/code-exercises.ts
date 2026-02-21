@@ -15,13 +15,13 @@ export interface CodeExerciseData {
 export const CODE_EXERCISES: Record<string, CodeExerciseData> = {
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 1 — Generate X25519 Keypair
+  // EXERCISE 1  -  Generate X25519 Keypair
   // ═══════════════════════════════════════════════════════════════════════════
   "exercise-generate-keypair": {
     id: "exercise-generate-keypair",
     title: "Exercise 1: Generate an X25519 Keypair",
     description:
-      "Implement X25519 keypair generation — the foundation of all Diffie-Hellman operations in the Noise Protocol. Return both the private and public key as raw 32-byte values.",
+      "Implement X25519 keypair generation  -  the foundation of all Diffie-Hellman operations in the Noise Protocol. Return both the private and public key as raw 32-byte values.",
     starterCode: `from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat, PrivateFormat, NoEncryption
 
@@ -85,7 +85,7 @@ def generate_keypair():
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 2 — ECDH Key Exchange
+  // EXERCISE 2  -  ECDH Key Exchange
   // ═══════════════════════════════════════════════════════════════════════════
   "exercise-ecdh": {
     id: "exercise-ecdh",
@@ -157,13 +157,13 @@ def test_different_keys_different_secrets():
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 3 — HKDF Key Derivation
+  // EXERCISE 3  -  HKDF Key Derivation
   // ═══════════════════════════════════════════════════════════════════════════
   "exercise-hkdf": {
     id: "exercise-hkdf",
     title: "Exercise 3: Implement HKDF (Key Derivation)",
     description:
-      "Implement the Noise Protocol's variant of HKDF-SHA256. Given a salt (chaining key) and input key material, produce two 32-byte derived keys. Use only the hmac and hashlib modules — no high-level HKDF wrappers.",
+      "Implement the Noise Protocol's variant of HKDF-SHA256. Given a salt (chaining key) and input key material, produce two 32-byte derived keys. Use only the hmac and hashlib modules  -  no high-level HKDF wrappers.",
     starterCode: `import hmac
 import hashlib
 
@@ -183,9 +183,9 @@ def hkdf_two_keys(salt, input_key_material):
     Returns:
         tuple: (key1, key2) - two 32-byte derived keys
     """
-    # TODO: Extract phase — derive temp_key using HMAC-SHA256
-    # TODO: Expand phase — derive output1 from temp_key and byte 0x01
-    # TODO: Expand phase — derive output2 from temp_key, output1, and byte 0x02
+    # TODO: Extract phase  -  derive temp_key using HMAC-SHA256
+    # TODO: Expand phase  -  derive output1 from temp_key and byte 0x01
+    # TODO: Expand phase  -  derive output2 from temp_key, output1, and byte 0x02
     # TODO: Return (output1, output2)
     pass
 `,
@@ -233,7 +233,7 @@ def test_different_inputs():
 `,
     hints: {
       conceptual:
-        "<p>HKDF is a two-phase key derivation function. The <strong>extract</strong> phase uses HMAC to remove any bias from the input material. The <strong>expand</strong> phase stretches the result into multiple independent keys. The Noise Protocol uses a simplified variant with no <code>info</code> parameter — it uses counter bytes (<code>0x01</code>, <code>0x02</code>) instead.</p>",
+        "<p>HKDF is a two-phase key derivation function. The <strong>extract</strong> phase uses HMAC to remove any bias from the input material. The <strong>expand</strong> phase stretches the result into multiple independent keys. The Noise Protocol uses a simplified variant with no <code>info</code> parameter  -  it uses counter bytes (<code>0x01</code>, <code>0x02</code>) instead.</p>",
       steps:
         "<ol><li>Extract: Compute <code>temp_key = HMAC-SHA256(key=salt, msg=input_key_material)</code></li><li>Expand output 1: Compute <code>output1 = HMAC-SHA256(key=temp_key, msg=b'\\x01')</code></li><li>Expand output 2: Compute <code>output2 = HMAC-SHA256(key=temp_key, msg=output1 + b'\\x02')</code></li><li>Return <code>(output1, output2)</code></li></ol>",
       code: `import hmac, hashlib
@@ -250,7 +250,7 @@ def hkdf_two_keys(salt, input_key_material):
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 4 — Initialize Symmetric State
+  // EXERCISE 4  -  Initialize Symmetric State
   // ═══════════════════════════════════════════════════════════════════════════
   "exercise-init-state": {
     id: "exercise-init-state",
@@ -271,12 +271,12 @@ def initialize_symmetric_state(responder_static_pubkey):
       5. Mix in responder's static public key: h = SHA256(h || rs_pub)
 
     Args:
-        responder_static_pubkey: bytes (32 bytes) — the responder's static public key
+        responder_static_pubkey: bytes (32 bytes)  -  the responder's static public key
 
     Returns:
         tuple: (h, ck)
-            h  — 32-byte handshake hash after mixing prologue and rs
-            ck — 32-byte chaining key (unchanged after step 3)
+            h   -  32-byte handshake hash after mixing prologue and rs
+            ck  -  32-byte chaining key (unchanged after step 3)
     """
     # TODO: Set protocol_name string
     # TODO: Compute h = SHA256(protocol_name) since it's > 32 bytes
@@ -341,11 +341,11 @@ def test_different_keys_different_h():
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 5 — Act 1: Initiator
+  // EXERCISE 5  -  Act 1: Initiator
   // ═══════════════════════════════════════════════════════════════════════════
   "exercise-act1-initiator": {
     id: "exercise-act1-initiator",
-    title: "Exercise 5: Act 1 — Initiator Side",
+    title: "Exercise 5: Act 1  -  Initiator Side",
     description:
       "Implement Act 1 of the XK handshake from Alice's (initiator) perspective. Mix the ephemeral public key into h, perform ECDH with the responder's static key (the 'es' token), derive a temporary key via HKDF, encrypt an empty payload, and produce the 50-byte Act 1 message.",
     starterCode: `import hashlib
@@ -354,14 +354,14 @@ from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 
 def hkdf_two_keys(salt, ikm):
-    """HKDF helper — you implemented this in Exercise 3."""
+    """HKDF helper  -  you implemented this in Exercise 3."""
     temp_key = hmac.new(salt, ikm, hashlib.sha256).digest()
     out1 = hmac.new(temp_key, b'\\x01', hashlib.sha256).digest()
     out2 = hmac.new(temp_key, out1 + b'\\x02', hashlib.sha256).digest()
     return (out1, out2)
 
 def ecdh(priv_bytes, pub_bytes):
-    """ECDH helper — you implemented this in Exercise 2."""
+    """ECDH helper  -  you implemented this in Exercise 2."""
     priv = X25519PrivateKey.from_private_bytes(priv_bytes)
     pub = X25519PublicKey.from_public_bytes(pub_bytes)
     return priv.exchange(pub)
@@ -389,15 +389,15 @@ def act_one_initiator(h, ck, e_priv, e_pub, rs_pub):
 
     Returns:
         tuple: (message, h, ck)
-            message — 50 bytes (1 + 33 ephemeral + 16 tag... actually 1 + 32 + 16 = 49? No: version(1) + e_pub(32) + encrypted_empty(16) = 49 bytes)
+            message  -  50 bytes (1 + 33 ephemeral + 16 tag... actually 1 + 32 + 16 = 49? No: version(1) + e_pub(32) + encrypted_empty(16) = 49 bytes)
     """
-    # TODO: Step 1 — MixHash the ephemeral public key
-    # TODO: Step 2 — Perform ECDH between ephemeral and responder's static key
-    # TODO: Step 3 — MixKey: derive new ck and temp_k using HKDF
-    # TODO: Step 4 — Encrypt empty payload with ChaCha20Poly1305
+    # TODO: Step 1  -  MixHash the ephemeral public key
+    # TODO: Step 2  -  Perform ECDH between ephemeral and responder's static key
+    # TODO: Step 3  -  MixKey: derive new ck and temp_k using HKDF
+    # TODO: Step 4  -  Encrypt empty payload with ChaCha20Poly1305
     #                 nonce = (0).to_bytes(12, 'little'), ad = h, plaintext = b""
-    # TODO: Step 5 — MixHash the ciphertext
-    # TODO: Step 6 — Assemble message: version byte (0x00) + e_pub + ciphertext
+    # TODO: Step 5  -  MixHash the ciphertext
+    # TODO: Step 6  -  Assemble message: version byte (0x00) + e_pub + ciphertext
     # TODO: Return (message, h, ck)
     pass
 `,
@@ -512,11 +512,11 @@ def test_verifiable_by_responder():
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 6 — Act 1: Responder
+  // EXERCISE 6  -  Act 1: Responder
   // ═══════════════════════════════════════════════════════════════════════════
   "exercise-act1-responder": {
     id: "exercise-act1-responder",
-    title: "Exercise 6: Act 1 — Responder Side",
+    title: "Exercise 6: Act 1  -  Responder Side",
     description:
       "Implement the responder's processing of Act 1. Parse the message, extract the initiator's ephemeral public key, perform the ECDH (using your static private key), derive the temporary key, and verify the authentication tag.",
     starterCode: `import hashlib
@@ -556,9 +556,9 @@ def act_one_responder(h, ck, s_priv, message):
 
     Returns:
         tuple: (re_pub, h, ck)
-            re_pub — 32-byte initiator's ephemeral public key
-            h      — updated handshake hash
-            ck     — updated chaining key
+            re_pub  -  32-byte initiator's ephemeral public key
+            h       -  updated handshake hash
+            ck      -  updated chaining key
 
     Raises:
         ValueError if version is wrong or tag verification fails.
@@ -656,9 +656,9 @@ def test_rejects_wrong_version():
 `,
     hints: {
       conceptual:
-        "<p>The responder mirrors the initiator's operations. Since both sides perform the same MixHash and MixKey steps on the same data, they arrive at the same cryptographic state. The responder uses their static <em>private</em> key (instead of the initiator's ephemeral) for the ECDH — this works because ECDH is commutative: <code>DH(e, S) == DH(s, E)</code>.</p>",
+        "<p>The responder mirrors the initiator's operations. Since both sides perform the same MixHash and MixKey steps on the same data, they arrive at the same cryptographic state. The responder uses their static <em>private</em> key (instead of the initiator's ephemeral) for the ECDH  -  this works because ECDH is commutative: <code>DH(e, S) == DH(s, E)</code>.</p>",
       steps:
-        '<ol><li>Parse: <code>version = message[0:1]</code>, <code>re_pub = message[1:33]</code>, <code>c = message[33:]</code></li><li>Verify <code>version == b"\\x00"</code>, raise <code>ValueError</code> if not</li><li>MixHash: <code>h = SHA256(h + re_pub)</code></li><li>ECDH: <code>ss = ecdh(s_priv, re_pub)</code></li><li>MixKey: <code>ck, temp_k = hkdf_two_keys(ck, ss)</code></li><li>Decrypt: <code>ChaCha20Poly1305(temp_k).decrypt(nonce=0, data=c, aad=h)</code> — raises on bad tag</li><li>MixHash: <code>h = SHA256(h + c)</code></li><li>Return <code>(re_pub, h, ck)</code></li></ol>',
+        '<ol><li>Parse: <code>version = message[0:1]</code>, <code>re_pub = message[1:33]</code>, <code>c = message[33:]</code></li><li>Verify <code>version == b"\\x00"</code>, raise <code>ValueError</code> if not</li><li>MixHash: <code>h = SHA256(h + re_pub)</code></li><li>ECDH: <code>ss = ecdh(s_priv, re_pub)</code></li><li>MixKey: <code>ck, temp_k = hkdf_two_keys(ck, ss)</code></li><li>Decrypt: <code>ChaCha20Poly1305(temp_k).decrypt(nonce=0, data=c, aad=h)</code>  -  raises on bad tag</li><li>MixHash: <code>h = SHA256(h + c)</code></li><li>Return <code>(re_pub, h, ck)</code></li></ol>',
       code: `def act_one_responder(h, ck, s_priv, message):
     version = message[0:1]
     if version != b'\\x00':
@@ -678,11 +678,11 @@ def test_rejects_wrong_version():
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 7 — Act 2: Responder
+  // EXERCISE 7  -  Act 2: Responder
   // ═══════════════════════════════════════════════════════════════════════════
   "exercise-act2-responder": {
     id: "exercise-act2-responder",
-    title: "Exercise 7: Act 2 — Responder Side",
+    title: "Exercise 7: Act 2  -  Responder Side",
     description:
       "Implement Act 2 from the responder's perspective. Generate and send the responder's ephemeral public key, perform the 'ee' ECDH (ephemeral-ephemeral), derive a new temporary key, and encrypt an empty payload. This introduces forward secrecy.",
     starterCode: `import hashlib
@@ -727,7 +727,7 @@ def act_two_responder(h, ck, e_priv, e_pub, re_pub):
     """
     # TODO: This follows the exact same structure as Act 1!
     # TODO: The only difference is which keys are used for ECDH.
-    # TODO: Here it's ECDH(responder_ephemeral, initiator_ephemeral) — the 'ee' DH.
+    # TODO: Here it's ECDH(responder_ephemeral, initiator_ephemeral)  -  the 'ee' DH.
     pass
 `,
     testCode: `
@@ -803,9 +803,9 @@ def test_verifiable_by_initiator():
 `,
     hints: {
       conceptual:
-        "<p>Act 2 has the same structure as Act 1 — the only difference is which keys are used for ECDH. Instead of <code>es</code> (ephemeral→static), Act 2 performs <code>ee</code> (ephemeral→ephemeral). This is what provides <strong>forward secrecy</strong>: even if static keys are compromised later, the ephemeral-ephemeral DH secret cannot be recovered.</p>",
+        "<p>Act 2 has the same structure as Act 1  -  the only difference is which keys are used for ECDH. Instead of <code>es</code> (ephemeral→static), Act 2 performs <code>ee</code> (ephemeral→ephemeral). This is what provides <strong>forward secrecy</strong>: even if static keys are compromised later, the ephemeral-ephemeral DH secret cannot be recovered.</p>",
       steps:
-        '<ol><li><strong>MixHash(e_pub)</strong>: <code>h = SHA256(h + e_pub)</code></li><li><strong>ECDH(e, re)</strong>: <code>ss = ecdh(e_priv, re_pub)</code> — note this is ephemeral-ephemeral!</li><li><strong>MixKey</strong>: <code>ck, temp_k = hkdf_two_keys(ck, ss)</code></li><li><strong>Encrypt</strong>: <code>ChaCha20Poly1305(temp_k).encrypt(nonce=0, plaintext=b"", aad=h)</code></li><li><strong>MixHash(c)</strong>: <code>h = SHA256(h + c)</code></li><li>Assemble: <code>b"\\x00" + e_pub + c</code></li></ol>',
+        '<ol><li><strong>MixHash(e_pub)</strong>: <code>h = SHA256(h + e_pub)</code></li><li><strong>ECDH(e, re)</strong>: <code>ss = ecdh(e_priv, re_pub)</code>  -  note this is ephemeral-ephemeral!</li><li><strong>MixKey</strong>: <code>ck, temp_k = hkdf_two_keys(ck, ss)</code></li><li><strong>Encrypt</strong>: <code>ChaCha20Poly1305(temp_k).encrypt(nonce=0, plaintext=b"", aad=h)</code></li><li><strong>MixHash(c)</strong>: <code>h = SHA256(h + c)</code></li><li>Assemble: <code>b"\\x00" + e_pub + c</code></li></ol>',
       code: `def act_two_responder(h, ck, e_priv, e_pub, re_pub):
     h = hashlib.sha256(h + e_pub).digest()
     ss = ecdh(e_priv, re_pub)  # ee DH
@@ -819,11 +819,11 @@ def test_verifiable_by_initiator():
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 8 — Act 2: Initiator
+  // EXERCISE 8  -  Act 2: Initiator
   // ═══════════════════════════════════════════════════════════════════════════
   "exercise-act2-initiator": {
     id: "exercise-act2-initiator",
-    title: "Exercise 8: Act 2 — Initiator Side",
+    title: "Exercise 8: Act 2  -  Initiator Side",
     description:
       "Implement the initiator's processing of Act 2. Parse the responder's message, extract their ephemeral public key, perform the 'ee' ECDH, derive the temporary key, and verify the tag.",
     starterCode: `import hashlib
@@ -952,7 +952,7 @@ def test_rejects_tampered():
 `,
     hints: {
       conceptual:
-        "<p>This is the mirror of Exercise 6 (Act 1 responder). The structure is identical — parse, MixHash, ECDH, MixKey, decrypt — but here you use the initiator's <em>ephemeral</em> private key for the ECDH instead of a static key. This is the <code>ee</code> DH that provides forward secrecy.</p>",
+        "<p>This is the mirror of Exercise 6 (Act 1 responder). The structure is identical  -  parse, MixHash, ECDH, MixKey, decrypt  -  but here you use the initiator's <em>ephemeral</em> private key for the ECDH instead of a static key. This is the <code>ee</code> DH that provides forward secrecy.</p>",
       steps:
         '<ol><li>Parse: <code>version = message[0:1]</code>, <code>re_pub = message[1:33]</code>, <code>c = message[33:]</code></li><li>Verify version is <code>b"\\x00"</code></li><li>MixHash: <code>h = SHA256(h + re_pub)</code></li><li>ECDH: <code>ss = ecdh(e_priv, re_pub)</code></li><li>MixKey: <code>ck, temp_k = hkdf_two_keys(ck, ss)</code></li><li>Decrypt: <code>ChaCha20Poly1305(temp_k).decrypt(nonce=0, data=c, aad=h)</code></li><li>MixHash: <code>h = SHA256(h + c)</code></li></ol>',
       code: `def act_two_initiator(h, ck, e_priv, message):
@@ -972,11 +972,11 @@ def test_rejects_tampered():
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 9 — Act 3: Initiator
+  // EXERCISE 9  -  Act 3: Initiator
   // ═══════════════════════════════════════════════════════════════════════════
   "exercise-act3-initiator": {
     id: "exercise-act3-initiator",
-    title: "Exercise 9: Act 3 — Identity Reveal & Key Split",
+    title: "Exercise 9: Act 3  -  Identity Reveal & Key Split",
     description:
       "Implement Act 3, where the initiator reveals their identity by sending their encrypted static public key, performs the final 'se' ECDH, and derives the transport encryption keys via Split().",
     starterCode: `import hashlib
@@ -1005,7 +1005,7 @@ def act_three_initiator(h, ck, s_priv, s_pub, re_pub):
       1. Encrypt static public key:
          c1 = ChaCha20Poly1305(temp_k2, nonce=1, ad=h, pt=s_pub)
          Note: temp_k2 is the current encryption key from the CipherState.
-         But wait — we need to derive it. After Act 2, the current temp_k
+         But wait  -  we need to derive it. After Act 2, the current temp_k
          was already used with nonce=0. So we use nonce=1 here.
          Actually, let's re-derive: ck, temp_k = HKDF(ck, b"")... no.
 
@@ -1016,12 +1016,12 @@ def act_three_initiator(h, ck, s_priv, s_pub, re_pub):
             temp_k as a parameter or re-derive.
 
          Actually, for BOLT 8 Act 3:
-         a. c1 = encryptWithAD(temp_k2, 1, h, s_pub)  — uses nonce=1
+         a. c1 = encryptWithAD(temp_k2, 1, h, s_pub)   -  uses nonce=1
             because nonce=0 was used in Act 2's empty encrypt.
             But we don't have temp_k2 here...
 
          Let me simplify: we'll derive a fresh temp_k for Act 3.
-         ck, temp_k = HKDF(ck, b"")  — this is wrong too.
+         ck, temp_k = HKDF(ck, b"")   -  this is wrong too.
 
          The real flow: After Act 2, the CipherState has temp_k2 with
          nonce counter at 1 (0 was used in Act 2). For Act 3:
@@ -1033,7 +1033,7 @@ def act_three_initiator(h, ck, s_priv, s_pub, re_pub):
          - MixHash(c2)
          - Split: send_key, recv_key = HKDF(ck, b"")
 
-    Simplified for this exercise — we pass temp_k2 as a parameter.
+    Simplified for this exercise  -  we pass temp_k2 as a parameter.
 
     Args:
         h:       32-byte handshake hash (after Act 2)
@@ -1044,9 +1044,9 @@ def act_three_initiator(h, ck, s_priv, s_pub, re_pub):
 
     Returns:
         tuple: (message, send_key, recv_key)
-            message  — version(1) + encrypted_s_pub(48) + auth_tag(16) = 66 bytes
-            send_key — 32-byte key for initiator -> responder messages
-            recv_key — 32-byte key for responder -> initiator messages
+            message   -  version(1) + encrypted_s_pub(48) + auth_tag(16) = 66 bytes
+            send_key  -  32-byte key for initiator -> responder messages
+            recv_key  -  32-byte key for responder -> initiator messages
     """
     # TODO: Encrypt static public key with current temp_k (from ck state)
     #       First derive temp_k: ck, temp_k = HKDF(ck, b"")
@@ -1182,7 +1182,7 @@ def test_responder_can_decrypt_static_key():
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 10 — Encrypt Transport Messages
+  // EXERCISE 10  -  Encrypt Transport Messages
   // ═══════════════════════════════════════════════════════════════════════════
   "exercise-encrypt": {
     id: "exercise-encrypt",
@@ -1207,8 +1207,8 @@ def encrypt_message(key, nonce, plaintext):
 
     Returns:
         tuple: (ciphertext_bytes, next_nonce)
-            ciphertext_bytes — encrypted_length + encrypted_body
-            next_nonce       — nonce + 2 (two nonces consumed)
+            ciphertext_bytes  -  encrypted_length + encrypted_body
+            next_nonce        -  nonce + 2 (two nonces consumed)
     """
     # TODO: Encode the length of plaintext as 2-byte big-endian
     # TODO: Encrypt the length bytes with ChaCha20Poly1305 using nonce
@@ -1273,13 +1273,13 @@ def test_encrypt_empty_message():
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 11 — Decrypt Transport Messages
+  // EXERCISE 11  -  Decrypt Transport Messages
   // ═══════════════════════════════════════════════════════════════════════════
   "exercise-decrypt": {
     id: "exercise-decrypt",
     title: "Exercise 11: Decrypt Transport Messages",
     description:
-      "Implement the Lightning transport decryption format. Given an encrypted message (18-byte encrypted length prefix + encrypted body), decrypt and return the original plaintext. Use ChaCha20-Poly1305 with incrementing nonces — mirroring the encryption process.",
+      "Implement the Lightning transport decryption format. Given an encrypted message (18-byte encrypted length prefix + encrypted body), decrypt and return the original plaintext. Use ChaCha20-Poly1305 with incrementing nonces  -  mirroring the encryption process.",
     starterCode: `import struct
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 
@@ -1298,8 +1298,8 @@ def decrypt_message(key, nonce, ciphertext):
 
     Returns:
         tuple: (plaintext, next_nonce)
-            plaintext  — the original message bytes
-            next_nonce — nonce + 2 (two nonces consumed)
+            plaintext   -  the original message bytes
+            next_nonce  -  nonce + 2 (two nonces consumed)
     """
     # TODO: Split ciphertext into encrypted_length (first 18 bytes) and encrypted_body
     # TODO: Decrypt the length field using nonce
@@ -1399,7 +1399,7 @@ def test_wrong_key_fails():
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 12 — Key Rotation
+  // EXERCISE 12  -  Key Rotation
   // ═══════════════════════════════════════════════════════════════════════════
   "exercise-key-rotation": {
     id: "exercise-key-rotation",
@@ -1414,7 +1414,7 @@ from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 ROTATION_THRESHOLD = 1000  # rotate after nonce reaches 1000
 
 def hkdf_two_keys(salt, ikm):
-    """HKDF helper — you implemented this in Exercise 3."""
+    """HKDF helper  -  you implemented this in Exercise 3."""
     temp_key = hmac.new(salt, ikm, hashlib.sha256).digest()
     out1 = hmac.new(temp_key, b'\\x01', hashlib.sha256).digest()
     out2 = hmac.new(temp_key, out1 + b'\\x02', hashlib.sha256).digest()
@@ -1566,7 +1566,7 @@ def test_rotation_keys_match():
     ck = os.urandom(32)
     sender = CipherState(key, ck)
     receiver = CipherState(key, ck)
-    # Send 501 messages — crosses rotation boundary
+    # Send 501 messages  -  crosses rotation boundary
     for i in range(501):
         ct = sender.encrypt_message(f"message {i}".encode())
         pt = receiver.decrypt_message(ct)
@@ -1581,7 +1581,7 @@ def test_tamper_after_rotation():
     for i in range(500):
         ct = sender.encrypt_message(b"x")
         receiver.decrypt_message(ct)
-    # Now both have rotated — tamper with next message
+    # Now both have rotated  -  tamper with next message
     ct = sender.encrypt_message(b"secret")
     tampered = ct[:-1] + bytes([(ct[-1] + 1) % 256])
     try:
