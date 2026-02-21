@@ -466,8 +466,45 @@ export default function CodeExercise({
         )}
       </div>
 
-      {/* Code Editor */}
-      <div ref={editorRef} className={`mb-3 ${expanded ? "flex-1 min-h-0" : ""}`} />
+      {/* Code Editor with Scratchpad overlay */}
+      <div className={`relative mb-3 ${expanded ? "flex-1 min-h-0" : ""}`}>
+        <div ref={editorRef} className="h-full" />
+
+        {/* Scratchpad overlay button — top-right of editor */}
+        <div className="absolute top-1.5 right-2 z-10 hidden lg:block">
+          <button
+            onClick={handleSendToScratchpad}
+            onMouseEnter={() => setShowScratchpadTooltip(true)}
+            onMouseLeave={() => setShowScratchpadTooltip(false)}
+            className={`font-pixel text-[9px] px-2.5 py-1.5 border transition-all cursor-pointer flex items-center gap-1.5 ${
+              scratchpadSent
+                ? `${goldBorder} ${dark ? "bg-[#FFD700]/20 text-[#FFD700]" : "bg-[#b8860b]/15 text-[#9a7200]"}`
+                : dark
+                  ? "border-[#2a3552]/80 bg-[#0f1930]/90 text-slate-500 hover:text-[#FFD700] hover:border-[#FFD700]/40 hover:bg-[#0f1930]"
+                  : "border-border/60 bg-white/90 text-foreground/40 hover:text-[#9a7200] hover:border-[#b8860b]/40 hover:bg-white"
+            } backdrop-blur-sm`}
+            data-testid="button-send-to-scratchpad"
+          >
+            <span style={{ fontFamily: "monospace", fontSize: "10px", lineHeight: 1 }}>{"{ }"}</span>
+            <span>{scratchpadSent ? "SENT!" : "SCRATCHPAD"}</span>
+          </button>
+          {showScratchpadTooltip && !scratchpadSent && (
+            <div
+              className={`absolute top-full right-0 mt-1.5 w-52 px-3 py-2 text-xs z-50 border ${
+                dark
+                  ? "bg-[#0f1930] border-[#2a3552] text-slate-300"
+                  : "bg-white border-border text-foreground/80"
+              } shadow-lg`}
+              style={sansFont}
+            >
+              Send sample inputs to the Scratchpad sandbox for experimentation
+              <div className={`absolute bottom-full right-3 w-0 h-0 border-l-[5px] border-r-[5px] border-b-[5px] border-l-transparent border-r-transparent ${
+                dark ? "border-b-[#2a3552]" : "border-b-border"
+              }`} />
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Action buttons */}
       <div className="flex items-center gap-2 mb-3 flex-wrap">
@@ -500,39 +537,6 @@ export default function CodeExercise({
         >
           RESET
         </button>
-
-        <div className="relative hidden lg:block">
-          <button
-            onClick={handleSendToScratchpad}
-            onMouseEnter={() => setShowScratchpadTooltip(true)}
-            onMouseLeave={() => setShowScratchpadTooltip(false)}
-            className={`font-pixel text-xs border-2 px-5 py-2.5 transition-all cursor-pointer ${
-              scratchpadSent
-                ? `${goldBorder} ${dark ? "bg-[#FFD700]/15 text-[#FFD700]" : "bg-[#b8860b]/10 text-[#9a7200]"}`
-                : dark
-                  ? "border-[#2a3552] bg-[#0f1930] text-slate-400 hover:text-[#FFD700] hover:border-[#FFD700]/40 hover:bg-[#132043]"
-                  : "border-border bg-background text-foreground/60 hover:text-[#9a7200] hover:border-[#b8860b]/40 hover:bg-secondary"
-            }`}
-            data-testid="button-send-to-scratchpad"
-          >
-            {scratchpadSent ? "SENT!" : "SCRATCHPAD"}
-          </button>
-          {showScratchpadTooltip && !scratchpadSent && (
-            <div
-              className={`absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 text-xs whitespace-nowrap z-50 border ${
-                dark
-                  ? "bg-[#0f1930] border-[#2a3552] text-slate-300"
-                  : "bg-white border-border text-foreground/80"
-              } shadow-lg`}
-              style={sansFont}
-            >
-              Send sample inputs to Scratchpad
-              <div className={`absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-[5px] border-r-[5px] border-t-[5px] border-l-transparent border-r-transparent ${
-                dark ? "border-t-[#2a3552]" : "border-t-border"
-              }`} />
-            </div>
-          )}
-        </div>
       </div>
 
       {/* Test Results */}
