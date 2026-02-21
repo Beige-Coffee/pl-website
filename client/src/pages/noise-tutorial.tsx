@@ -2549,6 +2549,8 @@ function ChapterContent({
                   authenticated={authenticated}
                   sessionToken={sessionToken}
                   lightningAddress={lightningAddress}
+                  emailVerified={emailVerified}
+                  pubkey={pubkey}
                   alreadyCompleted={isCompleted}
                   claimInfo={completedCheckpoints.find(c => c.checkpointId === cpId) || null}
                   onLoginRequest={onLoginRequest}
@@ -2673,6 +2675,8 @@ function ChapterContent({
                   authenticated={authenticated}
                   sessionToken={sessionToken}
                   lightningAddress={lightningAddress}
+                  emailVerified={emailVerified}
+                  pubkey={pubkey}
                   alreadyCompleted={isGroupCompleted}
                   claimInfo={completedCheckpoints.find(c => c.checkpointId === groupId) || null}
                   onLoginRequest={onLoginRequest}
