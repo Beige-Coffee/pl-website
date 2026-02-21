@@ -6,6 +6,7 @@ Free, open-source educational website teaching Bitcoin Lightning Network through
 Created by Austin (Spiral and HRF grantee), inspired by Programming Bitcoin.
 
 ## Recent Changes
+- 2026-02-21: "Send to Scratchpad" button on code exercises — dispatches sampleCode via CustomEvent, Scratchpad receives and loads it (with pendingCodeRef buffer for closed panel)
 - 2026-02-21: Server-side progress sync for quiz selections and code exercises (userProgress table, useProgress hook)
 - 2026-02-18: Added "Pay It Forward" donation page (below Quiz in sidebar)
 - 2026-02-18: Donation invoices via Lexe sidecar (POST /api/donate/create-invoice, GET /api/donate/check-payment)

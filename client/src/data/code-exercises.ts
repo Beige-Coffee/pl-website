@@ -4,6 +4,7 @@ export interface CodeExerciseData {
   description: string;
   starterCode: string;
   testCode: string;
+  sampleCode: string;
   hints: {
     conceptual: string;
     steps: string;
@@ -78,6 +79,25 @@ def test_randomness():
     priv2, pub2 = generate_keypair()
     assert priv1 != priv2, "Two calls should produce different private keys"
     assert pub1 != pub2, "Two calls should produce different public keys"
+`,
+    sampleCode: `# Exercise 1 - Explore secp256k1 keypair generation
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+
+# Generate a keypair
+private_key = ec.generate_private_key(ec.SECP256K1())
+public_key = private_key.public_key()
+
+# Serialize to raw bytes
+priv_bytes = private_key.private_numbers().private_value.to_bytes(32, 'big')
+pub_bytes = public_key.public_bytes(Encoding.X962, PublicFormat.CompressedPoint)
+
+print("Private key (hex):", priv_bytes.hex())
+print("Private key length:", len(priv_bytes), "bytes")
+print()
+print("Public key (hex):", pub_bytes.hex())
+print("Public key length:", len(pub_bytes), "bytes")
+print("Prefix byte:", hex(pub_bytes[0]), "(0x02=even y, 0x03=odd y)")
 `,
     hints: {
       conceptual:
@@ -183,6 +203,40 @@ def test_is_hashed():
     raw = sk.exchange(ec.ECDH(), pk)
     assert secret == hashlib.sha256(raw).digest(), "ECDH must return SHA-256 of raw shared secret"
 `,
+    sampleCode: `# Exercise 2 - Explore ECDH key exchange
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+import hashlib
+
+# Generate two keypairs (Alice and Bob)
+alice_sk = ec.generate_private_key(ec.SECP256K1())
+alice_priv = alice_sk.private_numbers().private_value.to_bytes(32, 'big')
+alice_pub = alice_sk.public_key().public_bytes(Encoding.X962, PublicFormat.CompressedPoint)
+
+bob_sk = ec.generate_private_key(ec.SECP256K1())
+bob_priv = bob_sk.private_numbers().private_value.to_bytes(32, 'big')
+bob_pub = bob_sk.public_key().public_bytes(Encoding.X962, PublicFormat.CompressedPoint)
+
+print("Alice pub:", alice_pub.hex())
+print("Bob pub:  ", bob_pub.hex())
+
+# Raw ECDH: Alice uses her private key + Bob's public key
+raw_secret_ab = alice_sk.exchange(ec.ECDH(),
+    ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256K1(), bob_pub))
+
+# BOLT 8 variant: SHA-256 of the raw shared point
+bolt8_secret_ab = hashlib.sha256(raw_secret_ab).digest()
+
+# Bob computes the same thing with his private key + Alice's public key
+raw_secret_ba = bob_sk.exchange(ec.ECDH(),
+    ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256K1(), alice_pub))
+bolt8_secret_ba = hashlib.sha256(raw_secret_ba).digest()
+
+print()
+print("BOLT 8 shared secret (Alice):", bolt8_secret_ab.hex())
+print("BOLT 8 shared secret (Bob):  ", bolt8_secret_ba.hex())
+print("Match:", bolt8_secret_ab == bolt8_secret_ba)
+`,
     hints: {
       conceptual:
         "<p>ECDH lets two parties compute a shared secret from their key pairs without transmitting private keys. BOLT 8 uses <strong>secp256k1</strong> and defines the ECDH output as the SHA-256 hash of the raw shared secret. Reconstruct the private key with <code>ec.derive_private_key()</code>, the public key with <code>EllipticCurvePublicKey.from_encoded_point()</code>, then call <code>.exchange(ec.ECDH(), ...)</code> and hash the result.</p>",
@@ -273,6 +327,31 @@ def test_different_inputs():
     k1b, k2b = hkdf_two_keys(salt, b'\\x02' * 32)
     assert k1a != k1b, "Different IKM must produce different key 1"
     assert k2a != k2b, "Different IKM must produce different key 2"
+`,
+    sampleCode: `# Exercise 3 - Explore HKDF key derivation
+import hmac
+import hashlib
+
+# Sample inputs
+salt = b"noise_chaining_key______________"  # 32 bytes (the chaining key)
+ikm = b"shared_secret___________________"  # 32 bytes (e.g. from ECDH)
+
+print("Salt (hex):", salt.hex())
+print("IKM  (hex):", ikm.hex())
+
+# Extract phase: compress input into a fixed-size key
+temp_key = hmac.new(salt, ikm, hashlib.sha256).digest()
+print()
+print("temp_key:", temp_key.hex())
+
+# Expand phase: derive two independent keys
+output1 = hmac.new(temp_key, b'\\x01', hashlib.sha256).digest()
+output2 = hmac.new(temp_key, output1 + b'\\x02', hashlib.sha256).digest()
+
+print()
+print("output1:", output1.hex())
+print("output2:", output2.hex())
+print("Both 32 bytes:", len(output1) == 32 and len(output2) == 32)
 `,
     hints: {
       conceptual:
@@ -375,6 +454,41 @@ def test_different_keys_different_h():
     h1, _ = initialize_symmetric_state(pub1)
     h2, _ = initialize_symmetric_state(pub2)
     assert h1 != h2, "Different responder keys must produce different h"
+`,
+    sampleCode: `# Exercise 4 - Explore handshake state initialization
+import hashlib
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+
+# Generate a sample responder key (Bob's static key)
+rs_sk = ec.generate_private_key(ec.SECP256K1())
+rs_pub = rs_sk.public_key().public_bytes(Encoding.X962, PublicFormat.CompressedPoint)
+
+protocol_name = b"Noise_XK_secp256k1_ChaChaPoly_SHA256"
+print("Protocol name:", protocol_name.decode())
+print("Length:", len(protocol_name), "bytes (> 32, so we hash it)")
+
+# Step 1-2: h = SHA256(protocol_name)
+h = hashlib.sha256(protocol_name).digest()
+print()
+print("h0 = SHA256(protocol_name):", h.hex())
+
+# Step 3: ck = h
+ck = h
+print("ck = h0:", ck.hex())
+
+# Step 4: MixHash prologue
+h = hashlib.sha256(h + b"lightning").digest()
+print()
+print("h1 = SHA256(h0 || 'lightning'):", h.hex())
+
+# Step 5: MixHash responder's static public key
+h = hashlib.sha256(h + rs_pub).digest()
+print("h2 = SHA256(h1 || rs_pub):    ", h.hex())
+
+print()
+print("Final h:", h.hex())
+print("Final ck:", ck.hex(), "(unchanged)")
 `,
     hints: {
       conceptual:
@@ -547,6 +661,65 @@ def test_verifiable_by_responder():
     except Exception as ex:
         assert False, f"Responder failed to decrypt Act 1 tag: {ex}"
     assert pt == b"", "Decrypted payload must be empty"
+`,
+    sampleCode: `# Exercise 5 - Explore Act 1 (Initiator side)
+import hashlib, hmac
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
+
+def _gen():
+    sk = ec.generate_private_key(ec.SECP256K1())
+    priv = sk.private_numbers().private_value.to_bytes(32, 'big')
+    pub = sk.public_key().public_bytes(Encoding.X962, PublicFormat.CompressedPoint)
+    return priv, pub
+
+def _ecdh(priv, pub):
+    sk = ec.derive_private_key(int.from_bytes(priv, 'big'), ec.SECP256K1())
+    pk = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256K1(), pub)
+    return hashlib.sha256(sk.exchange(ec.ECDH(), pk)).digest()
+
+def _hkdf(salt, ikm):
+    tk = hmac.new(salt, ikm, hashlib.sha256).digest()
+    o1 = hmac.new(tk, b'\\x01', hashlib.sha256).digest()
+    o2 = hmac.new(tk, o1 + b'\\x02', hashlib.sha256).digest()
+    return o1, o2
+
+# Setup: generate keys and initialize state
+rs_priv, rs_pub = _gen()  # responder's static key
+e_priv, e_pub = _gen()    # initiator's ephemeral key
+
+h = hashlib.sha256(b"Noise_XK_secp256k1_ChaChaPoly_SHA256").digest()
+ck = h
+h = hashlib.sha256(h + b"lightning").digest()
+h = hashlib.sha256(h + rs_pub).digest()
+
+print("=== Act 1: -> e, es ===")
+print("e_pub:", e_pub.hex())
+
+# Step 1: MixHash(e_pub)
+h = hashlib.sha256(h + e_pub).digest()
+print("h after MixHash(e_pub):", h.hex()[:32] + "...")
+
+# Step 2: ECDH(e, rs) - the 'es' token
+ss = _ecdh(e_priv, rs_pub)
+print("es shared secret:", ss.hex()[:32] + "...")
+
+# Step 3: MixKey
+ck, temp_k = _hkdf(ck, ss)
+
+# Step 4: Encrypt empty payload
+c = ChaCha20Poly1305(temp_k).encrypt((0).to_bytes(12, 'little'), b"", h)
+print("Auth tag (16 bytes):", c.hex())
+
+# Step 5: MixHash(c)
+h = hashlib.sha256(h + c).digest()
+
+# Step 6: Assemble message
+msg = b'\\x00' + e_pub + c
+print()
+print("Act 1 message:", msg.hex())
+print("Length:", len(msg), "bytes (1 + 33 + 16 = 50)")
 `,
     hints: {
       conceptual:
@@ -723,6 +896,72 @@ def test_rejects_wrong_version():
     except (ValueError, Exception):
         pass
 `,
+    sampleCode: `# Exercise 6 - Explore Act 1 (Responder side)
+# The responder mirrors the initiator's steps using their static private key.
+# Try parsing and verifying a real Act 1 message!
+
+import hashlib, hmac
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
+
+def _gen():
+    sk = ec.generate_private_key(ec.SECP256K1())
+    priv = sk.private_numbers().private_value.to_bytes(32, 'big')
+    pub = sk.public_key().public_bytes(Encoding.X962, PublicFormat.CompressedPoint)
+    return priv, pub
+
+def _ecdh(priv, pub):
+    sk = ec.derive_private_key(int.from_bytes(priv, 'big'), ec.SECP256K1())
+    pk = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256K1(), pub)
+    return hashlib.sha256(sk.exchange(ec.ECDH(), pk)).digest()
+
+def _hkdf(salt, ikm):
+    tk = hmac.new(salt, ikm, hashlib.sha256).digest()
+    o1 = hmac.new(tk, b'\\x01', hashlib.sha256).digest()
+    o2 = hmac.new(tk, o1 + b'\\x02', hashlib.sha256).digest()
+    return o1, o2
+
+# Setup keys
+rs_priv, rs_pub = _gen()
+e_priv, e_pub = _gen()
+
+# Initialize state
+h = hashlib.sha256(b"Noise_XK_secp256k1_ChaChaPoly_SHA256").digest()
+ck = h
+h = hashlib.sha256(h + b"lightning").digest()
+h = hashlib.sha256(h + rs_pub).digest()
+h_saved, ck_saved = h, ck
+
+# Build Act 1 (initiator)
+h = hashlib.sha256(h + e_pub).digest()
+ss = _ecdh(e_priv, rs_pub)
+ck, temp_k = _hkdf(ck, ss)
+c = ChaCha20Poly1305(temp_k).encrypt((0).to_bytes(12, 'little'), b"", h)
+h = hashlib.sha256(h + c).digest()
+msg = b'\\x00' + e_pub + c
+
+print("=== Act 1 Responder Processing ===")
+print("Message:", msg.hex())
+
+# Now process as responder
+h_r, ck_r = h_saved, ck_saved
+version = msg[0:1]
+re_pub = msg[1:34]
+tag = msg[34:]
+print("Version:", version.hex())
+print("Ephemeral key:", re_pub.hex())
+print("Tag:", tag.hex())
+
+h_r = hashlib.sha256(h_r + re_pub).digest()
+ss_r = _ecdh(rs_priv, re_pub)  # s, re (commutativity!)
+print()
+print("ECDH(s, re) == ECDH(e, rs)?", ss_r == ss)
+
+ck_r, temp_k_r = _hkdf(ck_r, ss_r)
+ChaCha20Poly1305(temp_k_r).decrypt((0).to_bytes(12, 'little'), tag, h_r)
+print("Tag verified successfully!")
+`,
     hints: {
       conceptual:
         "<p>The responder mirrors the initiator's operations. Since both sides perform the same MixHash and MixKey steps on the same data, they arrive at the same cryptographic state. The responder uses their static <em>private</em> key (instead of the initiator's ephemeral) for the ECDH  -  this works because ECDH is commutative: <code>DH(e, S) == DH(s, E)</code>.</p>",
@@ -875,6 +1114,65 @@ def test_verifiable_by_initiator():
     init_h = hashlib.sha256(init_h + c).digest()
     assert init_h == resp_h, "Initiator and responder h must match after Act 2"
     assert init_ck == resp_ck, "Initiator and responder ck must match after Act 2"
+`,
+    sampleCode: `# Exercise 7 - Explore Act 2 (Responder side)
+# Act 2 has the same structure as Act 1, but uses ephemeral-ephemeral ECDH.
+
+import hashlib, hmac
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
+
+def _gen():
+    sk = ec.generate_private_key(ec.SECP256K1())
+    priv = sk.private_numbers().private_value.to_bytes(32, 'big')
+    pub = sk.public_key().public_bytes(Encoding.X962, PublicFormat.CompressedPoint)
+    return priv, pub
+
+def _ecdh(priv, pub):
+    sk = ec.derive_private_key(int.from_bytes(priv, 'big'), ec.SECP256K1())
+    pk = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256K1(), pub)
+    return hashlib.sha256(sk.exchange(ec.ECDH(), pk)).digest()
+
+def _hkdf(salt, ikm):
+    tk = hmac.new(salt, ikm, hashlib.sha256).digest()
+    o1 = hmac.new(tk, b'\\x01', hashlib.sha256).digest()
+    o2 = hmac.new(tk, o1 + b'\\x02', hashlib.sha256).digest()
+    return o1, o2
+
+# Full setup through Act 1
+rs_priv, rs_pub = _gen()
+ie_priv, ie_pub = _gen()
+re_priv, re_pub = _gen()
+
+h = hashlib.sha256(b"Noise_XK_secp256k1_ChaChaPoly_SHA256").digest()
+ck = h
+h = hashlib.sha256(h + b"lightning").digest()
+h = hashlib.sha256(h + rs_pub).digest()
+
+# Act 1 (already done)
+h = hashlib.sha256(h + ie_pub).digest()
+ck, tk1 = _hkdf(ck, _ecdh(ie_priv, rs_pub))
+c1 = ChaCha20Poly1305(tk1).encrypt((0).to_bytes(12, 'little'), b"", h)
+h = hashlib.sha256(h + c1).digest()
+
+print("=== Act 2: <- e, ee ===")
+print("Responder ephemeral:", re_pub.hex())
+
+# Act 2: MixHash, ee ECDH, MixKey, Encrypt
+h = hashlib.sha256(h + re_pub).digest()
+ss_ee = _ecdh(re_priv, ie_pub)
+print("ee shared secret:", ss_ee.hex()[:32] + "...")
+print("(This is ephemeral-ephemeral = forward secrecy!)")
+
+ck, temp_k = _hkdf(ck, ss_ee)
+c = ChaCha20Poly1305(temp_k).encrypt((0).to_bytes(12, 'little'), b"", h)
+h = hashlib.sha256(h + c).digest()
+
+msg = b'\\x00' + re_pub + c
+print()
+print("Act 2 message:", msg.hex())
+print("Length:", len(msg), "bytes")
 `,
     hints: {
       conceptual:
@@ -1034,6 +1332,28 @@ def test_rejects_tampered():
         assert False, "Should reject tampered message"
     except (ValueError, Exception):
         pass
+`,
+    sampleCode: `# Exercise 8 - Explore Act 2 (Initiator side)
+# This mirrors Exercise 6 but uses ephemeral keys for ECDH (ee).
+
+print("=== Act 2 Initiator Processing ===")
+print("Structure is identical to Act 1 responder processing:")
+print("  1. Parse: version(1) || re_pub(33) || c(16)")
+print("  2. Check version == 0x00")
+print("  3. MixHash(re_pub)")
+print("  4. ECDH(e_priv, re_pub) -- ee DH (forward secrecy!)")
+print("  5. MixKey: ck, temp_k = HKDF(ck, ss)")
+print("  6. Decrypt & verify tag")
+print("  7. MixHash(c)")
+print()
+print("Key difference from Act 1 responder:")
+print("  Act 1: ECDH(s_priv, re_pub) -- static x ephemeral")
+print("  Act 2: ECDH(e_priv, re_pub) -- ephemeral x ephemeral")
+print()
+print("After Act 2, both sides share:")
+print("  - Same h (handshake hash)")
+print("  - Same ck (chaining key)")
+print("  - Same temp_k (from ee ECDH)")
 `,
     hints: {
       conceptual:
@@ -1223,6 +1543,77 @@ def test_responder_can_decrypt_static_key():
         assert False, f"Responder failed to decrypt initiator's static key: {ex}"
     assert decrypted_s_pub == s_pub, "Decrypted static key must match initiator's 33-byte compressed pubkey"
 `,
+    sampleCode: `# Exercise 9 - Explore Act 3 (Identity reveal & key split)
+import hashlib, hmac
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
+
+def _gen():
+    sk = ec.generate_private_key(ec.SECP256K1())
+    priv = sk.private_numbers().private_value.to_bytes(32, 'big')
+    pub = sk.public_key().public_bytes(Encoding.X962, PublicFormat.CompressedPoint)
+    return priv, pub
+
+def _ecdh(priv, pub):
+    sk = ec.derive_private_key(int.from_bytes(priv, 'big'), ec.SECP256K1())
+    pk = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256K1(), pub)
+    return hashlib.sha256(sk.exchange(ec.ECDH(), pk)).digest()
+
+def _hkdf(salt, ikm):
+    tk = hmac.new(salt, ikm, hashlib.sha256).digest()
+    o1 = hmac.new(tk, b'\\x01', hashlib.sha256).digest()
+    o2 = hmac.new(tk, o1 + b'\\x02', hashlib.sha256).digest()
+    return o1, o2
+
+# Full handshake setup through Act 2
+is_priv, is_pub = _gen()  # initiator's static
+rs_priv, rs_pub = _gen()  # responder's static
+ie_priv, ie_pub = _gen()  # initiator's ephemeral
+re_priv, re_pub = _gen()  # responder's ephemeral
+
+h = hashlib.sha256(b"Noise_XK_secp256k1_ChaChaPoly_SHA256").digest()
+ck = h
+h = hashlib.sha256(h + b"lightning").digest()
+h = hashlib.sha256(h + rs_pub).digest()
+
+# Act 1
+h = hashlib.sha256(h + ie_pub).digest()
+ck, tk1 = _hkdf(ck, _ecdh(ie_priv, rs_pub))
+c1 = ChaCha20Poly1305(tk1).encrypt((0).to_bytes(12, 'little'), b"", h)
+h = hashlib.sha256(h + c1).digest()
+
+# Act 2
+h = hashlib.sha256(h + re_pub).digest()
+ck, tk2 = _hkdf(ck, _ecdh(re_priv, ie_pub))
+c2 = ChaCha20Poly1305(tk2).encrypt((0).to_bytes(12, 'little'), b"", h)
+h = hashlib.sha256(h + c2).digest()
+
+print("=== Act 3: -> s, se ===")
+
+# Step 1: Encrypt static key with temp_k2 at nonce=1
+enc_s = ChaCha20Poly1305(tk2).encrypt((1).to_bytes(12, 'little'), is_pub, h)
+print("Encrypted static key:", enc_s.hex()[:32] + "...")
+print("Length:", len(enc_s), "bytes (33 + 16 MAC)")
+
+h = hashlib.sha256(h + enc_s).digest()
+
+# Step 3: se ECDH
+ss_se = _ecdh(is_priv, re_pub)
+ck, tk3 = _hkdf(ck, ss_se)
+
+# Step 5: Auth tag
+auth = ChaCha20Poly1305(tk3).encrypt((0).to_bytes(12, 'little'), b"", h)
+h = hashlib.sha256(h + auth).digest()
+
+# Step 7: Split -> transport keys!
+send_key, recv_key = _hkdf(ck, b"")
+print()
+print("send_key:", send_key.hex())
+print("recv_key:", recv_key.hex())
+print()
+print("Handshake complete! Ready for encrypted transport.")
+`,
     hints: {
       conceptual:
         "<p>Act 3 is the most complex message. The initiator encrypts their 33-byte static public key using <code>temp_k2</code> (from Act 2) at <strong>nonce=1</strong> (because nonce=0 was already used in Act 2). Then the <code>se</code> ECDH provides final mutual authentication, and <code>Split()</code> derives the transport keys. Since the static key is encrypted with keys from prior ECDH operations, an eavesdropper cannot learn the initiator's identity.</p>",
@@ -1324,6 +1715,41 @@ def test_encrypt_empty_message():
     ct, n = encrypt_message(key, 0, b"")
     assert len(ct) == 18 + 16, f"Empty message should produce 34 bytes, got {len(ct)}"
     assert n == 2, f"Nonce should be 2 after encrypting, got {n}"
+`,
+    sampleCode: `# Exercise 10 - Explore transport message encryption
+import struct, os
+from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
+
+key = os.urandom(32)
+print("Transport key:", key.hex()[:32] + "...")
+
+# Encrypt a message
+plaintext = b"Hello Lightning!"
+print("Plaintext:", plaintext)
+print("Length:", len(plaintext), "bytes")
+
+# Step 1: Encode length as 2-byte big-endian
+length_bytes = struct.pack(">H", len(plaintext))
+print()
+print("Length prefix:", length_bytes.hex(), f"({len(plaintext)} in big-endian)")
+
+# Step 2: Encrypt length with nonce=0
+cipher = ChaCha20Poly1305(key)
+nonce_0 = (0).to_bytes(12, 'little')
+enc_len = cipher.encrypt(nonce_0, length_bytes, b"")
+print("Encrypted length:", enc_len.hex(), f"({len(enc_len)} bytes = 2 + 16 MAC)")
+
+# Step 3: Encrypt body with nonce=1
+nonce_1 = (1).to_bytes(12, 'little')
+enc_body = cipher.encrypt(nonce_1, plaintext, b"")
+print("Encrypted body:", enc_body.hex()[:32] + "...")
+print(f"({len(enc_body)} bytes = {len(plaintext)} + 16 MAC)")
+
+# Full ciphertext
+ct = enc_len + enc_body
+print()
+print("Full ciphertext:", len(ct), "bytes")
+print("Next nonce: 2 (each message consumes 2 nonces)")
 `,
     hints: {
       conceptual:
@@ -1448,6 +1874,44 @@ def test_wrong_key_fails():
         assert False, "Should fail with wrong key"
     except Exception:
         pass
+`,
+    sampleCode: `# Exercise 11 - Explore transport message decryption
+import struct, os
+from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
+
+key = os.urandom(32)
+
+# First encrypt a message (so we have something to decrypt)
+plaintext = b"Decrypt me!"
+cipher = ChaCha20Poly1305(key)
+enc_len = cipher.encrypt((0).to_bytes(12, 'little'),
+    struct.pack(">H", len(plaintext)), b"")
+enc_body = cipher.encrypt((1).to_bytes(12, 'little'), plaintext, b"")
+ciphertext = enc_len + enc_body
+
+print("Ciphertext:", ciphertext.hex())
+print("Total length:", len(ciphertext), "bytes")
+print()
+
+# Now decrypt step by step
+print("=== Decryption ===")
+
+# Step 1: Split into length (18 bytes) and body
+ct_len = ciphertext[:18]
+ct_body = ciphertext[18:]
+print("Encrypted length:", ct_len.hex(), f"({len(ct_len)} bytes)")
+print("Encrypted body:  ", ct_body.hex(), f"({len(ct_body)} bytes)")
+
+# Step 2: Decrypt length with nonce=0
+length_bytes = cipher.decrypt((0).to_bytes(12, 'little'), ct_len, b"")
+msg_len = struct.unpack(">H", length_bytes)[0]
+print()
+print("Decrypted length:", msg_len, "bytes")
+
+# Step 3: Decrypt body with nonce=1
+recovered = cipher.decrypt((1).to_bytes(12, 'little'), ct_body, b"")
+print("Decrypted body:", recovered)
+print("Match:", recovered == plaintext)
 `,
     hints: {
       conceptual:
@@ -1657,6 +2121,49 @@ def test_tamper_after_rotation():
         assert False, "Should detect tampered ciphertext after key rotation"
     except Exception:
         pass
+`,
+    sampleCode: `# Exercise 12 - Explore key rotation
+import struct, hmac, hashlib, os
+from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
+
+ROTATION_THRESHOLD = 1000
+
+def _hkdf(salt, ikm):
+    tk = hmac.new(salt, ikm, hashlib.sha256).digest()
+    o1 = hmac.new(tk, b'\\x01', hashlib.sha256).digest()
+    o2 = hmac.new(tk, o1 + b'\\x02', hashlib.sha256).digest()
+    return o1, o2
+
+key = os.urandom(32)
+ck = os.urandom(32)
+nonce = 0
+
+print("=== Key Rotation Demo ===")
+print("Initial key:", key.hex()[:16] + "...")
+print("Rotation threshold:", ROTATION_THRESHOLD, "nonces")
+print()
+
+# Simulate sending 500 messages (each uses 2 nonces)
+for i in range(500):
+    # Encrypt (simulated)
+    cipher = ChaCha20Poly1305(key)
+    length_bytes = struct.pack(">H", 1)
+    cipher.encrypt(nonce.to_bytes(12, 'little'), length_bytes, b"")
+    cipher.encrypt((nonce + 1).to_bytes(12, 'little'), b"x", b"")
+    nonce += 2
+
+    if nonce >= ROTATION_THRESHOLD:
+        old_key = key
+        ck, key = _hkdf(ck, key)
+        nonce = 0
+        print(f"Rotation at message {i + 1}!")
+        print("  Old key:", old_key.hex()[:16] + "...")
+        print("  New key:", key.hex()[:16] + "...")
+        print("  Nonce reset to 0")
+
+print()
+print("After 500 messages, key was rotated once")
+print("(500 messages x 2 nonces = 1000 = threshold)")
 `,
     hints: {
       conceptual:

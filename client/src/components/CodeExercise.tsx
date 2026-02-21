@@ -19,6 +19,7 @@ export interface CodeExerciseData {
   description: string;
   starterCode: string;
   testCode: string;
+  sampleCode: string;
   hints: {
     conceptual: string;
     steps: string;
@@ -418,6 +419,19 @@ export default function CodeExercise({
     setAllPassed(false);
   }, [data.starterCode, storageKey]);
 
+  // ── Send to Scratchpad ──────────────────────────────────────────────────
+
+  const [showScratchpadTooltip, setShowScratchpadTooltip] = useState(false);
+  const [scratchpadSent, setScratchpadSent] = useState(false);
+
+  const handleSendToScratchpad = useCallback(() => {
+    window.dispatchEvent(
+      new CustomEvent("scratchpad-send-code", { detail: data.sampleCode })
+    );
+    setScratchpadSent(true);
+    setTimeout(() => setScratchpadSent(false), 2000);
+  }, [data.sampleCode]);
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   const sansFont = { fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' } as const;
@@ -486,6 +500,39 @@ export default function CodeExercise({
         >
           RESET
         </button>
+
+        <div className="relative hidden lg:block">
+          <button
+            onClick={handleSendToScratchpad}
+            onMouseEnter={() => setShowScratchpadTooltip(true)}
+            onMouseLeave={() => setShowScratchpadTooltip(false)}
+            className={`font-pixel text-xs border-2 px-5 py-2.5 transition-all cursor-pointer ${
+              scratchpadSent
+                ? `${goldBorder} ${dark ? "bg-[#FFD700]/15 text-[#FFD700]" : "bg-[#b8860b]/10 text-[#9a7200]"}`
+                : dark
+                  ? "border-[#2a3552] bg-[#0f1930] text-slate-400 hover:text-[#FFD700] hover:border-[#FFD700]/40 hover:bg-[#132043]"
+                  : "border-border bg-background text-foreground/60 hover:text-[#9a7200] hover:border-[#b8860b]/40 hover:bg-secondary"
+            }`}
+            data-testid="button-send-to-scratchpad"
+          >
+            {scratchpadSent ? "SENT!" : "SCRATCHPAD"}
+          </button>
+          {showScratchpadTooltip && !scratchpadSent && (
+            <div
+              className={`absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 text-xs whitespace-nowrap z-50 border ${
+                dark
+                  ? "bg-[#0f1930] border-[#2a3552] text-slate-300"
+                  : "bg-white border-border text-foreground/80"
+              } shadow-lg`}
+              style={sansFont}
+            >
+              Send sample inputs to Scratchpad
+              <div className={`absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-[5px] border-r-[5px] border-t-[5px] border-l-transparent border-r-transparent ${
+                dark ? "border-t-[#2a3552]" : "border-t-border"
+              }`} />
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Test Results */}

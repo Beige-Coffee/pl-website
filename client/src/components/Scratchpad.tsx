@@ -86,6 +86,7 @@ export default function Scratchpad({ theme }: ScratchpadProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const isDraggingWidth = useRef(false);
   const isDraggingSplit = useRef(false);
+  const pendingCodeRef = useRef<string | null>(null);
 
   // Persist open/close
   useEffect(() => {
@@ -111,6 +112,26 @@ export default function Scratchpad({ theme }: ScratchpadProps) {
   // Pre-warm Pyodide
   useEffect(() => {
     if (isOpen) preloadWorker();
+  }, [isOpen]);
+
+  // Listen for "send to scratchpad" events from exercises
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const code = (e as CustomEvent<string>).detail;
+      if (!code) return;
+      if (viewRef.current) {
+        viewRef.current.dispatch({
+          changes: { from: 0, to: viewRef.current.state.doc.length, insert: code },
+        });
+        try { localStorage.setItem(STORAGE_KEY_CODE, code); } catch {}
+      } else {
+        pendingCodeRef.current = code;
+        try { localStorage.setItem(STORAGE_KEY_CODE, code); } catch {}
+      }
+      if (!isOpen) setIsOpen(true);
+    };
+    window.addEventListener("scratchpad-send-code", handler);
+    return () => window.removeEventListener("scratchpad-send-code", handler);
   }, [isOpen]);
 
   // ── Horizontal drag (panel width) ──────────────────────────────────────
@@ -181,19 +202,30 @@ export default function Scratchpad({ theme }: ScratchpadProps) {
 
   // ── CodeMirror setup ────────────────────────────────────────────────────
 
-  const savedCode = useMemo(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_CODE);
-      if (saved) return saved;
-    } catch {}
-    return DEFAULT_CODE;
-  }, []);
-
   useEffect(() => {
     if (!editorRef.current || !isOpen) return;
 
     // Don't remount if already mounted
-    if (viewRef.current) return;
+    if (viewRef.current) {
+      if (pendingCodeRef.current) {
+        viewRef.current.dispatch({
+          changes: { from: 0, to: viewRef.current.state.doc.length, insert: pendingCodeRef.current },
+        });
+        pendingCodeRef.current = null;
+      }
+      return;
+    }
+
+    let initialCode = DEFAULT_CODE;
+    if (pendingCodeRef.current) {
+      initialCode = pendingCodeRef.current;
+      pendingCodeRef.current = null;
+    } else {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY_CODE);
+        if (saved) initialCode = saved;
+      } catch {}
+    }
 
     const extensions = [
       basicSetup,
@@ -232,7 +264,7 @@ export default function Scratchpad({ theme }: ScratchpadProps) {
     ];
 
     const state = EditorState.create({
-      doc: savedCode,
+      doc: initialCode,
       extensions,
     });
 
