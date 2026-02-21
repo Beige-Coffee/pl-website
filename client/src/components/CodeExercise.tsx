@@ -523,12 +523,12 @@ export default function CodeExercise({
               .hint-content code { font-size: 0.9em; padding: 0.15em 0.35em; border-radius: 3px; background: ${dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"}; }
             `}</style>
             {activeHint === "conceptual" && (
-              <div className={`text-[15px] ${textMuted} leading-relaxed pr-6`}>
+              <div className={`text-lg ${textMuted} leading-relaxed pr-6`}>
                 <div dangerouslySetInnerHTML={{ __html: data.hints.conceptual }} />
               </div>
             )}
             {activeHint === "steps" && (
-              <div className={`text-[15px] ${textMuted} leading-relaxed pr-6`}>
+              <div className={`text-lg ${textMuted} leading-relaxed pr-6`}>
                 <div dangerouslySetInnerHTML={{ __html: data.hints.steps }} />
               </div>
             )}
