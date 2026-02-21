@@ -2663,14 +2663,14 @@ function ChapterContent({
                 title="Checkpoint Quiz"
                 completed={isGroupCompleted}
                 theme={theme}
-                subtitleLabel={isGroupCompleted ? undefined : "EARN 210 SATS"}
+                subtitleLabel={isGroupCompleted ? undefined : "EARN 21 SATS"}
                 subtitle={isGroupCompleted ? undefined : `Answer all ${groupQuestions.length} questions correctly to claim your reward.`}
                 storageKey={`pl-collapse-cpg-${groupId}`}
               >
                 <CheckpointGroup
                   groupId={groupId}
                   questions={groupQuestions}
-                  rewardSats={210}
+                  rewardSats={21}
                   theme={theme}
                   authenticated={authenticated}
                   sessionToken={sessionToken}

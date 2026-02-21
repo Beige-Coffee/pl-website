@@ -429,14 +429,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "exercise-decrypt": 0,
     "exercise-key-rotation": 0,
   };
-  const CHECKPOINT_REWARD_SATS = parseInt(process.env.CHECKPOINT_REWARD_SATS || "5", 10);
+  const CHECKPOINT_REWARD_SATS = parseInt(process.env.CHECKPOINT_REWARD_SATS || "21", 10);
   const CHECKPOINT_REWARD_MSATS = CHECKPOINT_REWARD_SATS * 1000;
 
   // Grouped checkpoint config: all questions must be correct for a single larger reward
   const CHECKPOINT_GROUPS: Record<string, { questionIds: string[]; rewardSats: number }> = {
     "crypto-review": {
       questionIds: ["pubkey-compression", "hash-preimage", "ecdh-security", "hkdf-purpose", "nonce-reuse"],
-      rewardSats: 210,
+      rewardSats: 21,
     },
   };
 
