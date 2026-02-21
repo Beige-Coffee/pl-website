@@ -638,54 +638,36 @@ export default function CodeExercise({
               </div>
             )}
             {activeHint === "code" && data.hints.codeBlocks?.length ? (
-              <div className={`pr-6 border ${dark ? "border-slate-700/50 bg-[#0d1117]" : "border-foreground/10 bg-[#fafaf8]"} overflow-hidden`}>
+              <div className={`pr-6 border ${dark ? "border-slate-700/50 bg-[#0d1117]" : "border-foreground/10 bg-[#fafaf8]"} overflow-hidden overflow-x-auto`}>
                 {data.hints.codeBlocks.map((block, i) => (
                   <div
                     key={i}
-                    className={`relative transition-colors ${
-                      hoveredBlock === i
-                        ? (dark ? "bg-[#FFD700]/5" : "bg-[#b8860b]/5")
-                        : ""
-                    } ${i > 0 ? `border-t ${dark ? "border-slate-700/30" : "border-foreground/6"} border-dashed` : ""}`}
+                    className="relative"
                     data-testid={`code-block-${i}`}
+                    onMouseEnter={() => setHoveredBlock(i)}
+                    onMouseLeave={() => setHoveredBlock(null)}
                   >
                     <pre
-                      className={`text-sm font-mono whitespace-pre overflow-x-auto m-0 py-1.5 pl-3 pr-9 ${
+                      className={`text-sm font-mono whitespace-pre m-0 px-3 py-0 leading-snug cursor-default transition-colors ${
                         dark ? "text-slate-300" : "text-foreground/80"
+                      } ${
+                        hoveredBlock === i
+                          ? (dark ? "bg-[#FFD700]/8" : "bg-[#b8860b]/6")
+                          : ""
                       }`}
                     >{block.code}</pre>
-                    <div
-                      className="absolute top-1.5 right-2 flex-shrink-0 relative"
-                      onMouseEnter={() => setHoveredBlock(i)}
-                      onMouseLeave={() => setHoveredBlock(null)}
-                    >
-                      <svg
-                        width="18"
-                        height="18"
-                        viewBox="0 0 18 18"
-                        fill="none"
-                        className={`cursor-pointer transition-opacity ${
-                          hoveredBlock === i
-                            ? "opacity-100"
-                            : "opacity-40 hover:opacity-70"
+                    {hoveredBlock === i && (
+                      <div
+                        className={`absolute z-50 right-2 top-1 max-w-xs px-4 py-3 text-base font-sans leading-relaxed border ${
+                          dark
+                            ? "bg-[#1a2332] border-[#FFD700]/30 text-slate-200"
+                            : "bg-white border-[#b8860b]/30 text-foreground/80"
                         }`}
+                        style={{ boxShadow: dark ? "3px 3px 0 rgba(255,215,0,0.15)" : "3px 3px 0 rgba(0,0,0,0.08)" }}
                       >
-                        <circle cx="9" cy="9" r="7.5" stroke={dark ? "white" : "black"} strokeWidth="1.5" fill="none" />
-                        <text x="9" y="13" textAnchor="middle" fill={dark ? "white" : "black"} fontSize="11" fontFamily="monospace" fontWeight="bold">i</text>
-                      </svg>
-                      {hoveredBlock === i && (
-                        <div
-                          className={`absolute z-50 right-0 top-6 w-64 px-3 py-2 text-sm leading-snug border ${
-                            dark
-                              ? "bg-[#1a2332] border-[#FFD700]/30 text-slate-200"
-                              : "bg-white border-[#b8860b]/30 text-foreground/80"
-                          }`}
-                          style={{ boxShadow: dark ? "2px 2px 0 rgba(255,215,0,0.15)" : "2px 2px 0 rgba(0,0,0,0.1)" }}
-                        >
-                          {block.explanation}
-                        </div>
-                      )}
-                    </div>
+                        {block.explanation}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
