@@ -198,7 +198,7 @@ export default function CodeExercise({
       view.destroy();
       viewRef.current = null;
     };
-  }, [dark]); // recreate on theme change
+  }, [dark, expanded]);
 
   // ── Reward polling (same as CheckpointQuestion) ──────────────────────────
 
@@ -388,18 +388,20 @@ export default function CodeExercise({
         <div className={`text-lg md:text-[19px] ${textMuted} leading-relaxed flex-1`} style={sansFont}>
           {data.description}
         </div>
-        <button
-          onClick={() => setExpanded((v) => !v)}
-          className={`font-pixel text-base border-2 px-2.5 py-0.5 transition-all shrink-0 mt-0.5 leading-none ${
-            dark
-              ? "border-[#2a3552] bg-[#0f1930] text-slate-400 hover:text-slate-200 hover:bg-[#132043]"
-              : "border-border bg-background text-foreground/60 hover:text-foreground hover:bg-secondary"
-          }`}
-          title={expanded ? "Exit full screen" : "Expand to full screen"}
-          data-testid="button-expand-exercise"
-        >
-          {expanded ? "−" : "+"}
-        </button>
+        {!expanded && (
+          <button
+            onClick={() => setExpanded(true)}
+            className={`font-pixel text-base border-2 px-2.5 py-0.5 transition-all shrink-0 mt-0.5 leading-none ${
+              dark
+                ? "border-[#2a3552] bg-[#0f1930] text-slate-400 hover:text-slate-200 hover:bg-[#132043]"
+                : "border-border bg-background text-foreground/60 hover:text-foreground hover:bg-secondary"
+            }`}
+            title="Expand to full screen"
+            data-testid="button-expand-exercise"
+          >
+            +
+          </button>
+        )}
       </div>
 
       {/* Code Editor */}
