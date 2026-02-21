@@ -600,6 +600,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // --- User progress (sync quiz/code across devices) ---
+
+  app.get("/api/progress", async (req: Request, res: Response) => {
+    try {
+      const user = await getAuthUser(req);
+      if (!user) return res.status(401).json({ error: "Not authenticated" });
+      const progress = await storage.getUserProgress(user.id);
+      res.json({ progress });
+    } catch (err) {
+      console.error("Get progress error:", err);
+      res.status(500).json({ error: "Failed to get progress" });
+    }
+  });
+
+  app.post("/api/progress", async (req: Request, res: Response) => {
+    try {
+      const user = await getAuthUser(req);
+      if (!user) return res.status(401).json({ error: "Not authenticated" });
+      const { key, value } = req.body;
+      if (!key || typeof key !== "string" || typeof value !== "string") {
+        return res.status(400).json({ error: "Invalid key/value" });
+      }
+      if (value.length > 50000) {
+        return res.status(400).json({ error: "Value too large" });
+      }
+      await storage.setUserProgress(user.id, key, value);
+      res.json({ ok: true });
+    } catch (err) {
+      console.error("Set progress error:", err);
+      res.status(500).json({ error: "Failed to save progress" });
+    }
+  });
+
   // --- Grouped checkpoint rewards ---
 
   app.post("/api/checkpoint-group/claim", async (req: Request, res: Response) => {
