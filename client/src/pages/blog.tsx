@@ -185,7 +185,7 @@ function ProfileDropdown({
                 EDIT
               </button>
             </div>
-            <p className="mt-2 text-sm leading-relaxed text-foreground/60">
+            <p className="mt-2 text-base leading-relaxed text-foreground/60">
               Rewards auto-send to this address.
             </p>
           </div>
