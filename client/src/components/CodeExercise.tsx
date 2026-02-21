@@ -112,16 +112,15 @@ export default function CodeExercise({
   const [autoPaySending, setAutoPaySending] = useState(false);
   const [showClaimChoice, setShowClaimChoice] = useState(false);
 
-  // Read-only CodeMirror for code hint
+  // Read-only CodeMirror for code hint (fallback when no codeBlocks)
   useEffect(() => {
-    if (activeHint !== "code" || !hintCodeRef.current) {
+    if (activeHint !== "code" || !hintCodeRef.current || data.hints.codeBlocks?.length) {
       if (hintViewRef.current) {
         hintViewRef.current.destroy();
         hintViewRef.current = null;
       }
       return;
     }
-    // Already mounted
     if (hintViewRef.current) return;
 
     const hintExtensions = [
@@ -148,7 +147,9 @@ export default function CodeExercise({
       view.destroy();
       hintViewRef.current = null;
     };
-  }, [activeHint, dark, data.hints.code]);
+  }, [activeHint, dark, data.hints.code, data.hints.codeBlocks]);
+
+  const [hoveredBlock, setHoveredBlock] = useState<number | null>(null);
 
   // Pre-warm Pyodide on mount
   useEffect(() => {
@@ -636,9 +637,59 @@ export default function CodeExercise({
                 <div dangerouslySetInnerHTML={{ __html: data.hints.steps }} />
               </div>
             )}
-            {activeHint === "code" && (
+            {activeHint === "code" && data.hints.codeBlocks?.length ? (
+              <div className="pr-6 space-y-0">
+                {data.hints.codeBlocks.map((block, i) => (
+                  <div key={i} className="flex items-start gap-0 group/block relative" data-testid={`code-block-${i}`}>
+                    <div
+                      className="flex-shrink-0 w-6 pt-2 flex justify-center relative"
+                      onMouseEnter={() => setHoveredBlock(i)}
+                      onMouseLeave={() => setHoveredBlock(null)}
+                    >
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 14 14"
+                        fill="none"
+                        className={`cursor-pointer transition-colors ${
+                          hoveredBlock === i
+                            ? (dark ? "text-[#FFD700]" : "text-[#b8860b]")
+                            : (dark ? "text-slate-500" : "text-foreground/30")
+                        }`}
+                      >
+                        <rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.5" fill="none" />
+                        <text x="7" y="10.5" textAnchor="middle" fill="currentColor" fontSize="9" fontFamily="monospace" fontWeight="bold">i</text>
+                      </svg>
+                      {hoveredBlock === i && (
+                        <div
+                          className={`absolute z-50 left-7 top-0 w-64 px-3 py-2 text-sm leading-snug border ${
+                            dark
+                              ? "bg-[#1a2332] border-[#FFD700]/30 text-slate-200"
+                              : "bg-white border-[#b8860b]/30 text-foreground/80"
+                          }`}
+                          style={{ boxShadow: dark ? "2px 2px 0 rgba(255,215,0,0.15)" : "2px 2px 0 rgba(0,0,0,0.1)" }}
+                        >
+                          {block.explanation}
+                        </div>
+                      )}
+                    </div>
+                    <pre
+                      className={`flex-1 text-sm font-mono whitespace-pre overflow-x-auto px-3 ${
+                        i === 0 ? "pt-2" : "pt-0"
+                      } pb-0 m-0 ${
+                        dark ? "text-slate-300" : "text-foreground/80"
+                      } ${
+                        hoveredBlock === i
+                          ? (dark ? "bg-[#FFD700]/5" : "bg-[#b8860b]/5")
+                          : ""
+                      } transition-colors`}
+                    >{block.code}</pre>
+                  </div>
+                ))}
+              </div>
+            ) : activeHint === "code" ? (
               <div ref={hintCodeRef} className="pr-6" />
-            )}
+            ) : null}
           </div>
         )}
       </div>

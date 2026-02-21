@@ -119,6 +119,13 @@ def generate_keypair():
     priv_bytes = private_key.private_numbers().private_value.to_bytes(32, 'big')
     pub_bytes = public_key.public_bytes(Encoding.X962, PublicFormat.CompressedPoint)
     return (priv_bytes, pub_bytes)`,
+      codeBlocks: [
+        { code: `from cryptography.hazmat.primitives.asymmetric import ec\nfrom cryptography.hazmat.primitives.serialization import Encoding, PublicFormat`, explanation: "Import the elliptic curve module (ec) for key generation and serialization helpers for converting keys to bytes." },
+        { code: `def generate_keypair():\n    private_key = ec.generate_private_key(ec.SECP256K1())`, explanation: "Generate a random private key on the secp256k1 curve — the same curve Bitcoin and Lightning use." },
+        { code: `    public_key = private_key.public_key()`, explanation: "Derive the public key by multiplying the private scalar by the curve's generator point G." },
+        { code: `    priv_bytes = private_key.private_numbers().private_value.to_bytes(32, 'big')`, explanation: "Serialize the private key as a 32-byte big-endian integer." },
+        { code: `    pub_bytes = public_key.public_bytes(Encoding.X962, PublicFormat.CompressedPoint)\n    return (priv_bytes, pub_bytes)`, explanation: "Serialize the public key in compressed SEC1 format (33 bytes: 0x02/0x03 prefix + 32-byte x-coordinate) and return both keys." },
+      ],
     },
     rewardSats: 21,
   },
@@ -255,6 +262,12 @@ print("Match:", bolt8_secret_ab == bolt8_secret_ba)
         ec.SECP256K1(), remote_public_key_bytes)
     shared_key = private_key.exchange(ec.ECDH(), remote_public_key)
     return hashlib.sha256(shared_key).digest()`,
+      codeBlocks: [
+        { code: `def ecdh(local_private_key_bytes, remote_public_key_bytes):\n    priv_int = int.from_bytes(local_private_key_bytes, 'big')\n    private_key = ec.derive_private_key(priv_int, ec.SECP256K1())`, explanation: "Reconstruct the local private key object from raw 32-byte big-endian format back into a secp256k1 key." },
+        { code: `    remote_public_key = ec.EllipticCurvePublicKey.from_encoded_point(\n        ec.SECP256K1(), remote_public_key_bytes)`, explanation: "Reconstruct the remote public key from its 33-byte compressed SEC1 encoding." },
+        { code: `    shared_key = private_key.exchange(ec.ECDH(), remote_public_key)`, explanation: "Perform the ECDH exchange — multiply local private key by remote public key to compute the shared point." },
+        { code: `    return hashlib.sha256(shared_key).digest()`, explanation: "BOLT 8 requires SHA-256 hashing of the raw shared secret, producing the final 32-byte output." },
+      ],
     },
     rewardSats: 21,
   },
@@ -373,6 +386,12 @@ def hkdf_two_keys(salt, input_key_material):
     output1 = hmac.new(temp_key, b'\\x01', hashlib.sha256).digest()
     output2 = hmac.new(temp_key, output1 + b'\\x02', hashlib.sha256).digest()
     return (output1, output2)`,
+      codeBlocks: [
+        { code: `import hmac, hashlib`, explanation: "Import HMAC for keyed hashing and hashlib for SHA-256 — the two primitives needed for HKDF." },
+        { code: `def hkdf_two_keys(salt, input_key_material):\n    # Extract\n    temp_key = hmac.new(salt, input_key_material, hashlib.sha256).digest()`, explanation: "Extract phase: compress the input key material into a fixed-size pseudorandom key using HMAC-SHA256 with the salt (chaining key) as the HMAC key." },
+        { code: `    # Expand\n    output1 = hmac.new(temp_key, b'\\\\x01', hashlib.sha256).digest()`, explanation: "Expand phase (key 1): derive the first 32-byte output by HMAC-ing the byte 0x01 with the temp key." },
+        { code: `    output2 = hmac.new(temp_key, output1 + b'\\\\x02', hashlib.sha256).digest()\n    return (output1, output2)`, explanation: "Expand phase (key 2): derive the second output by HMAC-ing output1 concatenated with 0x02. This chaining ensures the two keys are cryptographically independent." },
+      ],
     },
     rewardSats: 21,
   },
@@ -510,6 +529,12 @@ print("Final ck:", ck.hex(), "(unchanged)")
     # MixHash responder's static public key
     h = hashlib.sha256(h + responder_static_pubkey).digest()
     return (h, ck)`,
+      codeBlocks: [
+        { code: `def initialize_symmetric_state(responder_static_pubkey):\n    protocol_name = b"Noise_XK_secp256k1_ChaChaPoly_SHA256"\n    h = hashlib.sha256(protocol_name).digest()`, explanation: "Hash the protocol name to create the initial handshake hash (h). Since the name is longer than 32 bytes, we SHA-256 hash it." },
+        { code: `    ck = h  # chaining key starts as copy of h`, explanation: "Set the chaining key (ck) equal to h. The ck will be updated by MixKey operations during the handshake, while h tracks the transcript." },
+        { code: `    # MixHash prologue\n    h = hashlib.sha256(h + b"lightning").digest()`, explanation: "MixHash the prologue string 'lightning' — this binds the Lightning protocol identity into the handshake hash." },
+        { code: `    # MixHash responder's static public key\n    h = hashlib.sha256(h + responder_static_pubkey).digest()\n    return (h, ck)`, explanation: "MixHash the responder's 33-byte static public key. In the XK pattern, the initiator already knows this key, so it's mixed in before any messages." },
+      ],
     },
     rewardSats: 21,
   },
@@ -747,6 +772,13 @@ print("Length:", len(msg), "bytes (1 + 33 + 16 = 50)")
     h = hashlib.sha256(h + c).digest()
     # 6. Assemble: version(1) + e_pub(33) + tag(16) = 50 bytes
     return (b'\\x00' + e_pub + c, h, ck)`,
+      codeBlocks: [
+        { code: `def act_one_initiator(h, ck, e_priv, e_pub, rs_pub):\n    # 1. MixHash ephemeral (33-byte compressed secp256k1 key)\n    h = hashlib.sha256(h + e_pub).digest()`, explanation: "MixHash the initiator's ephemeral public key into the handshake hash — this commits the 'e' token to the transcript." },
+        { code: `    # 2. ECDH(e, rs)\n    ss = ecdh(e_priv, rs_pub)`, explanation: "Perform the 'es' ECDH: combine the initiator's ephemeral private key with the responder's static public key to prove knowledge of the responder's identity." },
+        { code: `    # 3. MixKey\n    ck, temp_k = hkdf_two_keys(ck, ss)`, explanation: "MixKey: derive a new chaining key and a temporary encryption key from the ECDH shared secret using HKDF." },
+        { code: `    # 4. Encrypt empty payload\n    cipher = ChaCha20Poly1305(temp_k)\n    nonce = (0).to_bytes(12, 'little')\n    c = cipher.encrypt(nonce, b"", h)`, explanation: "Encrypt an empty payload with ChaCha20-Poly1305 using the handshake hash as associated data. The 16-byte authentication tag proves key agreement." },
+        { code: `    # 5. MixHash ciphertext\n    h = hashlib.sha256(h + c).digest()\n    # 6. Assemble: version(1) + e_pub(33) + tag(16) = 50 bytes\n    return (b'\\x00' + e_pub + c, h, ck)`, explanation: "MixHash the ciphertext into h, then assemble the 50-byte Act 1 message: version byte (0x00) + ephemeral public key + auth tag." },
+      ],
     },
     rewardSats: 21,
   },
@@ -987,6 +1019,13 @@ print("Tag verified successfully!")
     cipher.decrypt(nonce, c, h)  # verify tag
     h = hashlib.sha256(h + c).digest()
     return (re_pub, h, ck)`,
+      codeBlocks: [
+        { code: `def act_one_responder(h, ck, s_priv, message):\n    version = message[0:1]\n    if version != b'\\\\x00':\n        raise ValueError("Bad version")\n    re_pub = message[1:34]  # 33-byte compressed secp256k1 key\n    c = message[34:]`, explanation: "Parse the 50-byte Act 1 message: extract the version byte, the initiator's 33-byte ephemeral public key, and the 16-byte authentication tag." },
+        { code: `    h = hashlib.sha256(h + re_pub).digest()`, explanation: "MixHash the received ephemeral public key — mirroring what the initiator did on their side." },
+        { code: `    ss = ecdh(s_priv, re_pub)\n    ck, temp_k = hkdf_two_keys(ck, ss)`, explanation: "Perform ECDH using the responder's static private key and the initiator's ephemeral public key, then derive the temporary key via HKDF. ECDH commutativity ensures both sides get the same secret." },
+        { code: `    cipher = ChaCha20Poly1305(temp_k)\n    nonce = (0).to_bytes(12, 'little')\n    cipher.decrypt(nonce, c, h)  # verify tag`, explanation: "Decrypt and verify the authentication tag. If the tag is invalid (wrong keys or tampered message), this raises an exception." },
+        { code: `    h = hashlib.sha256(h + c).digest()\n    return (re_pub, h, ck)`, explanation: "MixHash the ciphertext and return the extracted ephemeral public key along with the updated handshake state." },
+      ],
     },
     rewardSats: 21,
   },
@@ -1197,6 +1236,13 @@ print("Length:", len(msg), "bytes")
     h = hashlib.sha256(h + c).digest()
     # version(1) + e_pub(33) + tag(16) = 50 bytes
     return (b'\\x00' + e_pub + c, h, ck)`,
+      codeBlocks: [
+        { code: `def act_two_responder(h, ck, e_priv, e_pub, re_pub):\n    # 1. MixHash ephemeral (33-byte compressed secp256k1)\n    h = hashlib.sha256(h + e_pub).digest()`, explanation: "MixHash the responder's ephemeral public key into the handshake hash — committing the 'e' token." },
+        { code: `    # 2. ee DH\n    ss = ecdh(e_priv, re_pub)`, explanation: "Perform the 'ee' ECDH: ephemeral-ephemeral key exchange. This provides forward secrecy — even if static keys leak later, this secret can't be recovered." },
+        { code: `    # 3. MixKey\n    ck, temp_k = hkdf_two_keys(ck, ss)`, explanation: "MixKey: derive new chaining key and temporary encryption key from the ee shared secret." },
+        { code: `    cipher = ChaCha20Poly1305(temp_k)\n    c = cipher.encrypt((0).to_bytes(12, 'little'), b"", h)\n    h = hashlib.sha256(h + c).digest()`, explanation: "Encrypt an empty payload to create the authentication tag, then MixHash the ciphertext into the transcript." },
+        { code: `    # version(1) + e_pub(33) + tag(16) = 50 bytes\n    return (b'\\x00' + e_pub + c, h, ck)`, explanation: "Assemble the 50-byte Act 2 message: version byte + responder's ephemeral public key + auth tag." },
+      ],
     },
     rewardSats: 21,
   },
@@ -1378,6 +1424,12 @@ print("  - Same temp_k (from ee ECDH)")
     ChaCha20Poly1305(temp_k).decrypt((0).to_bytes(12, 'little'), c, h)
     h = hashlib.sha256(h + c).digest()
     return (re_pub, h, ck)`,
+      codeBlocks: [
+        { code: `def act_two_initiator(h, ck, e_priv, message):\n    version = message[0:1]\n    if version != b'\\\\x00':\n        raise ValueError("Bad version")\n    re_pub = message[1:34]  # 33-byte compressed secp256k1 key\n    c = message[34:]`, explanation: "Parse the 50-byte Act 2 message: extract the version byte, the responder's 33-byte ephemeral public key, and the 16-byte auth tag." },
+        { code: `    h = hashlib.sha256(h + re_pub).digest()`, explanation: "MixHash the responder's ephemeral public key — mirroring the responder's step." },
+        { code: `    ss = ecdh(e_priv, re_pub)\n    ck, temp_k = hkdf_two_keys(ck, ss)`, explanation: "Perform the 'ee' ECDH using the initiator's ephemeral private key and the responder's ephemeral public key, then derive the temporary key via HKDF." },
+        { code: `    ChaCha20Poly1305(temp_k).decrypt((0).to_bytes(12, 'little'), c, h)\n    h = hashlib.sha256(h + c).digest()\n    return (re_pub, h, ck)`, explanation: "Verify the authentication tag by decrypting, MixHash the ciphertext, and return the responder's ephemeral key with the updated state." },
+      ],
     },
     rewardSats: 21,
   },
@@ -1642,6 +1694,13 @@ print("Handshake complete! Ready for encrypted transport.")
     send_key, recv_key = hkdf_two_keys(ck, b"")
     # version(1) + c1(49) + c2(16) = 66 bytes
     return (b'\\x00' + c1 + c2, send_key, recv_key)`,
+      codeBlocks: [
+        { code: `def act_three_initiator(h, ck, temp_k2, s_priv, s_pub, re_pub):\n    # Encrypt static key with temp_k2 at nonce=1\n    # (nonce=0 was used in Act 2's empty payload encryption)\n    c1 = ChaCha20Poly1305(temp_k2).encrypt(\n        (1).to_bytes(12, 'little'), s_pub, h)\n    h = hashlib.sha256(h + c1).digest()`, explanation: "Encrypt the initiator's 33-byte static public key using temp_k2 at nonce=1 (nonce=0 was consumed in Act 2). This hides the initiator's identity from eavesdroppers. Then MixHash the ciphertext." },
+        { code: `    # se ECDH\n    ss = ecdh(s_priv, re_pub)\n    ck, temp_k3 = hkdf_two_keys(ck, ss)`, explanation: "Perform the 'se' ECDH: combine the initiator's static private key with the responder's ephemeral public key. This provides mutual authentication. Derive temp_k3 via HKDF." },
+        { code: `    # Auth tag with temp_k3 at nonce=0\n    c2 = ChaCha20Poly1305(temp_k3).encrypt(\n        (0).to_bytes(12, 'little'), b"", h)\n    h = hashlib.sha256(h + c2).digest()`, explanation: "Encrypt an empty payload with temp_k3 to create a final authentication tag, confirming the 'se' ECDH succeeded. MixHash the result." },
+        { code: `    # Split into transport keys\n    send_key, recv_key = hkdf_two_keys(ck, b"")`, explanation: "Split() derives the two transport encryption keys from the final chaining key. The send key encrypts outgoing messages, the receive key decrypts incoming ones." },
+        { code: `    # version(1) + c1(49) + c2(16) = 66 bytes\n    return (b'\\x00' + c1 + c2, send_key, recv_key)`, explanation: "Assemble the 66-byte Act 3 message: version + encrypted static key (49 bytes) + auth tag (16 bytes). Return it along with the transport keys." },
+      ],
     },
     rewardSats: 21,
   },
@@ -1768,6 +1827,12 @@ print("Next nonce: 2 (each message consumes 2 nonces)")
     enc_len = cipher.encrypt(nonce.to_bytes(12, 'little'), length_bytes, b"")
     enc_body = cipher.encrypt((nonce + 1).to_bytes(12, 'little'), plaintext, b"")
     return (enc_len + enc_body, nonce + 2)`,
+      codeBlocks: [
+        { code: `def encrypt_message(key, nonce, plaintext):\n    length_bytes = struct.pack(">H", len(plaintext))`, explanation: "Encode the plaintext length as a 2-byte big-endian unsigned integer. This length prefix lets the receiver know how much data to expect." },
+        { code: `    cipher = ChaCha20Poly1305(key)\n    enc_len = cipher.encrypt(nonce.to_bytes(12, 'little'), length_bytes, b"")`, explanation: "Encrypt the 2-byte length prefix using the current nonce. This hides the message size from observers — a key privacy feature of Lightning's transport." },
+        { code: `    enc_body = cipher.encrypt((nonce + 1).to_bytes(12, 'little'), plaintext, b"")`, explanation: "Encrypt the actual message body using the next nonce (nonce + 1). Each message consumes two nonces." },
+        { code: `    return (enc_len + enc_body, nonce + 2)`, explanation: "Return the concatenated ciphertext (18-byte encrypted length + encrypted body) and the next available nonce (advanced by 2)." },
+      ],
     },
     rewardSats: 21,
   },
@@ -1932,6 +1997,12 @@ print("Match:", recovered == plaintext)
     enc_body = ciphertext[18:]
     plaintext = cipher.decrypt((nonce + 1).to_bytes(12, 'little'), enc_body, b"")
     return (plaintext, nonce + 2)`,
+      codeBlocks: [
+        { code: `def decrypt_message(key, nonce, ciphertext):\n    cipher = ChaCha20Poly1305(key)\n    enc_len = ciphertext[:18]`, explanation: "Split off the first 18 bytes — this is the encrypted length prefix (2 bytes + 16-byte MAC)." },
+        { code: `    length_bytes = cipher.decrypt(nonce.to_bytes(12, 'little'), enc_len, b"")\n    msg_len = struct.unpack(">H", length_bytes)[0]`, explanation: "Decrypt the length prefix to learn the original message size. Parse the 2-byte big-endian value into an integer." },
+        { code: `    enc_body = ciphertext[18:]\n    plaintext = cipher.decrypt((nonce + 1).to_bytes(12, 'little'), enc_body, b"")`, explanation: "Decrypt the message body using the next nonce (nonce + 1), mirroring the encryption process." },
+        { code: `    return (plaintext, nonce + 2)`, explanation: "Return the decrypted plaintext and advance the nonce by 2 (matching the two nonces consumed per message)." },
+      ],
     },
     rewardSats: 21,
   },
@@ -2211,6 +2282,12 @@ print("(500 messages x 2 nonces = 1000 = threshold)")
             (self.nonce + 1).to_bytes(12, 'little'), enc_body, b"")
         self.nonce += 2
         return plaintext`,
+      codeBlocks: [
+        { code: `class CipherState:\n    def __init__(self, key, chaining_key):\n        self.key = key\n        self.chaining_key = chaining_key\n        self.nonce = 0`, explanation: "Initialize the CipherState with the transport key, chaining key (for future rotations), and a nonce starting at 0." },
+        { code: `    def _maybe_rotate(self):\n        if self.nonce >= ROTATION_THRESHOLD:\n            new_ck, new_key = hkdf_two_keys(self.chaining_key, self.key)\n            self.chaining_key = new_ck\n            self.key = new_key\n            self.nonce = 0`, explanation: "Key rotation: when the nonce reaches 1000, derive a fresh key and chaining key using HKDF, then reset the nonce. This limits how many messages any single key encrypts." },
+        { code: `    def encrypt_message(self, plaintext):\n        self._maybe_rotate()\n        length_bytes = struct.pack(">H", len(plaintext))\n        cipher = ChaCha20Poly1305(self.key)\n        enc_len = cipher.encrypt(\n            self.nonce.to_bytes(12, 'little'), length_bytes, b"")\n        enc_body = cipher.encrypt(\n            (self.nonce + 1).to_bytes(12, 'little'), plaintext, b"")\n        self.nonce += 2\n        return enc_len + enc_body`, explanation: "Encrypt a message: check for rotation, encrypt the 2-byte length prefix and message body with sequential nonces, advance the nonce by 2." },
+        { code: `    def decrypt_message(self, ciphertext):\n        self._maybe_rotate()\n        cipher = ChaCha20Poly1305(self.key)\n        enc_len = ciphertext[:18]\n        length_bytes = cipher.decrypt(\n            self.nonce.to_bytes(12, 'little'), enc_len, b"")\n        enc_body = ciphertext[18:]\n        plaintext = cipher.decrypt(\n            (self.nonce + 1).to_bytes(12, 'little'), enc_body, b"")\n        self.nonce += 2\n        return plaintext`, explanation: "Decrypt a message: check for rotation, decrypt the length prefix and body with matching nonces, advance the nonce by 2." },
+      ],
     },
     rewardSats: 21,
   },
