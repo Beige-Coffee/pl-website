@@ -32,7 +32,7 @@ const WORKER_SRC = [
   "    pyodide = await loadPyodide();",
   '    await pyodide.loadPackage("micropip");',
   '    const micropip = pyodide.pyimport("micropip");',
-  '    await micropip.install("cryptography");',
+  '    await micropip.install(["cryptography", "ecdsa", "python-bitcoinlib"]);',
   "  })();",
   "  return readyPromise;",
   "}",
