@@ -325,9 +325,25 @@ export default function CodeExercise({
     return `${m}:${sec.toString().padStart(2, "0")}`;
   };
 
-  // ── Auto-pay when tests pass ────────────────────────────────────────────
+  // ── Save completion when tests pass ────────────────────────────────────
   const completedDisplay = alreadyCompleted || autoPaid;
 
+  useEffect(() => {
+    if (allPassed && sessionToken) {
+      // Save completion server-side (independent of reward claim)
+      fetch("/api/checkpoint/complete", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${sessionToken}`,
+        },
+        body: JSON.stringify({ checkpointId: exerciseId, answer: 0 }),
+      }).catch(() => {});
+      onCompleted(exerciseId);
+    }
+  }, [allPassed]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Auto-pay when tests pass ────────────────────────────────────────────
   useEffect(() => {
     if (
       allPassed &&
@@ -342,7 +358,7 @@ export default function CodeExercise({
     ) {
       handleClaimReward("address");
     }
-  }, [allPassed]);
+  }, [allPassed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Run tests ────────────────────────────────────────────────────────────
 
@@ -836,13 +852,95 @@ export default function CodeExercise({
 
       {/* Already completed */}
       {completedDisplay && (
-        <div className={`mt-5 ${expanded ? "" : "-mx-5 -mb-5"} px-5 py-4 border-t-2 text-[17px] md:text-[19px] font-semibold text-black ${dark ? "bg-[#FFD700]/30 border-[#FFD700]/40" : "bg-[#b8860b]/20 border-[#b8860b]/30"}`} style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
-          {claimInfo ? (
-            <>{claimInfo.amountSats} Sats Claimed on {new Date(claimInfo.paidAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} at {new Date(claimInfo.paidAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</>
-          ) : autoPaid ? (
-            <>{rewardAmountSats} Sats Sent</>
-          ) : (
-            <>Exercise Completed</>
+        <div className={`mt-5 ${expanded ? "" : "-mx-5 -mb-5"}`}>
+          <div className={`px-5 py-4 border-t-2 text-[17px] md:text-[19px] font-semibold text-black ${dark ? "bg-[#FFD700]/30 border-[#FFD700]/40" : "bg-[#b8860b]/20 border-[#b8860b]/30"}`} style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
+            {claimInfo && claimInfo.amountSats > 0 ? (
+              <>{claimInfo.amountSats} Sats Claimed on {new Date(claimInfo.paidAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} at {new Date(claimInfo.paidAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</>
+            ) : autoPaid ? (
+              <>{rewardAmountSats} Sats Sent</>
+            ) : (
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <span>Exercise Completed</span>
+                {authenticated && !showClaimChoice && !claiming && !rewardK1 && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setShowClaimChoice(true); }}
+                    className="font-pixel text-sm border-2 px-4 py-2 border-black bg-[#FFD700] text-black hover:bg-[#FFC800] active:scale-95"
+                  >
+                    CLAIM {rewardAmountSats} SATS
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+          {/* Claim choice UI for completed-but-unclaimed exercises */}
+          {showClaimChoice && !claiming && !autoPaid && !rewardLnurl && (
+            <div className={`px-5 py-4 ${dark ? "bg-[#0b1220]" : "bg-background"}`}>
+              <div className={`font-pixel text-xs mb-4 ${goldText}`}>HOW WOULD YOU LIKE TO RECEIVE?</div>
+              <div className="flex flex-col sm:flex-row gap-3">
+                {lightningAddress ? (
+                  <button
+                    type="button"
+                    onClick={() => handleClaimReward("address")}
+                    className={`font-pixel text-sm border-2 px-5 py-3 transition-all ${goldBorder} bg-[#FFD700] hover:bg-[#FFC800] active:scale-95 flex-1`}
+                    style={{ color: "#000" }}
+                  >
+                    LIGHTNING ADDRESS
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className={`flex-1 border-2 px-5 py-3 cursor-pointer hover:opacity-70 transition-opacity ${dark ? "border-[#2a3552]" : "border-border"} opacity-60 bg-transparent`}
+                  >
+                    <div className="font-pixel text-sm text-center mb-1" style={{ color: dark ? "#94a3b8" : undefined }}>LIGHTNING ADDRESS</div>
+                    <div className={`text-sm text-center font-bold ${textMuted}`}>Set address in profile first</div>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => handleClaimReward("lnurl")}
+                  className={`font-pixel text-sm border-2 px-5 py-3 transition-all ${goldBorder} hover:bg-[#FFC800] active:scale-95 flex-1 bg-transparent`}
+                  style={{ color: dark ? "#FFD700" : "#b8860b" }}
+                >
+                  LNURL WITHDRAWAL
+                </button>
+              </div>
+              {claimError && (
+                <div className="mt-3 font-pixel text-xs text-red-400">{claimError}</div>
+              )}
+            </div>
+          )}
+          {claiming && (
+            <div className={`px-5 py-4 font-pixel text-sm ${goldText}`}>
+              {autoPaySending ? `SENDING ${rewardAmountSats} SATS...` : "GENERATING QR..."}
+            </div>
+          )}
+          {rewardLnurl && withdrawalStatus !== "paid" && (
+            <div className="px-5 py-4 text-center">
+              {withdrawalStatus === "expired" ? (
+                <div>
+                  <div className="font-pixel text-sm mb-2 text-red-400">QR EXPIRED</div>
+                  <button
+                    onClick={() => { setRewardK1(null); setRewardLnurl(null); setWithdrawalStatus("pending"); handleClaimReward("lnurl"); }}
+                    className={`font-pixel text-sm border-2 px-4 py-2 ${goldBorder} bg-[#FFD700] text-black hover:bg-[#FFC800]`}
+                  >
+                    GENERATE NEW QR
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <div className={`font-pixel text-sm mb-3 ${goldText}`}>
+                    SCAN TO CLAIM {rewardAmountSats} SATS
+                  </div>
+                  <div className={`inline-block border-4 ${dark ? "border-[#2a3552]" : "border-border"} ${dark ? "bg-[#0b1220]" : "bg-background"} p-4`}>
+                    <QRCodeSVG value={rewardLnurl} size={200} level="M" bgColor="#ffffff" fgColor="#000000" />
+                  </div>
+                  <div className={`mt-3 font-mono text-sm ${countdown <= 60 ? "text-red-400" : textMuted}`}>
+                    Expires in {formatCountdown(countdown)}
+                  </div>
+                </div>
+              )}
+            </div>
           )}
         </div>
       )}

@@ -947,12 +947,12 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
                         >
                           <div className="flex items-center gap-2">
                             {showIcon && (
-                              <span className={`w-4 h-4 shrink-0 rounded-full border-2 flex items-center justify-center text-[8px] leading-none ${
+                              <span className={`w-7 h-7 shrink-0 rounded-full flex items-center justify-center text-base font-extrabold leading-none ${
                                 isComplete
                                   ? theme === "dark"
-                                    ? "border-green-500 bg-green-500/20 text-green-400"
-                                    : "border-green-600 bg-green-500/20 text-green-600"
-                                  : theme === "dark" ? "border-[#2a3552]" : "border-border"
+                                    ? "bg-green-500 text-white"
+                                    : "bg-green-600 text-white"
+                                  : theme === "dark" ? "border-2 border-[#2a3552]" : "border-2 border-border"
                               }`}>
                                 {isComplete && "\u2713"}
                               </span>
@@ -2039,7 +2039,7 @@ function InteractiveQuiz({
   pubkey: string | null;
   onLoginRequest: () => void;
   getProgress: (key: string) => string | null;
-  saveProgress: (key: string, value: string) => void;
+  saveProgress: (key: string, value: string, immediate?: boolean) => void;
 }) {
   const canClaimRewards = !!pubkey || emailVerified;
   const quizUserSuffix = sessionToken ? `-${sessionToken.slice(0, 8)}` : "";
@@ -2548,7 +2548,7 @@ function ChapterContent({
   onCheckpointCompleted: (id: string, amountSats?: number) => void;
   onOpenProfile: () => void;
   getProgress: (key: string) => string | null;
-  saveProgress: (key: string, value: string) => void;
+  saveProgress: (key: string, value: string, immediate?: boolean) => void;
 }) {
   const [md, setMd] = useState<string>("Loading…");
   const [err, setErr] = useState<string | null>(null);
@@ -2846,7 +2846,7 @@ function ChapterContent({
         return (
           <button
             onClick={() => {
-              saveProgress(`noise-chapter-read:${chapter.id}`, "1");
+              saveProgress(`noise-chapter-read:${chapter.id}`, "1", true);
               onCheckpointCompleted(`noise-chapter-read:${chapter.id}`);
             }}
             className={`mt-8 w-full border-2 px-4 py-3 font-pixel text-sm tracking-wide transition-colors cursor-pointer ${

@@ -10,6 +10,7 @@ import LoginModal from "../components/LoginModal";
 import { QRCodeSVG } from "qrcode.react";
 import CheckpointQuestion from "../components/CheckpointQuestion";
 import CheckpointGroup from "../components/CheckpointGroup";
+import DragDropExercise from "../components/DragDropExercise";
 import CodeExercise from "../components/CodeExercise";
 import Scratchpad from "../components/Scratchpad";
 import NodeTerminal from "../components/NodeTerminal";
@@ -215,6 +216,12 @@ const CHECKPOINT_QUESTIONS: Record<string, {
     answer: 1,
     explanation: "In an asymmetric commitment scheme, Alice's version makes HER output delayed and revocable, while Bob's output is immediately spendable (and vice versa for Bob's version). This means the party who broadcasts takes on the risk: they must wait through the CSV delay (during which they can be punished if the state was revoked), while the other party gets their funds immediately. This asymmetry is fundamental to the Lightning penalty mechanism.",
   },
+  "course-tools-match": {
+    question: "Match each tool or feature to its description.",
+    options: [],
+    answer: 0,
+    explanation: "",
+  },
 };
 
 type Chapter = {
@@ -234,7 +241,7 @@ const chapters: Chapter[] = [
   },
   {
     id: "bitcoin-cli",
-    title: "Bitcoin CLI Reference",
+    title: "Course Guide",
     section: "Introduction",
     kind: "md",
     file: "/lightning_tutorial/3.4-bitcoin-cli.md",
@@ -481,7 +488,7 @@ const CHAPTER_REQUIREMENTS: Record<string, {
   exercises: string[];
 }> = {
   "intro": { checkpoints: [], exercises: [] },
-  "bitcoin-cli": { checkpoints: [], exercises: [] },
+  "bitcoin-cli": { checkpoints: ["course-tools-match"], exercises: [] },
   "protocols-fairness": { checkpoints: ["channel-fairness"], exercises: [] },
   "keys-manager": { checkpoints: [], exercises: ["ln-exercise-keys-manager"] },
   "bip32-derivation": { checkpoints: ["bip32-derivation"], exercises: ["ln-exercise-derive-key"] },
@@ -559,23 +566,16 @@ function idxOf(id: string) {
 function introMarkdown() {
   return `# Programming Lightning: Intro to Payment Channels
 
-Welcome to **Programming Lightning**, a comprehensive course that teaches you how to program a Lightning payment channel from scratch! By the end of this course, your implementations will pass the major [BOLT 3 Test Vectors](https://github.com/lightning/bolts/blob/master/03-transactions.md#appendix-b-funding-transaction-test-vectors), pre-defined inputs and expected outputs that verify your code correctly implements the protocol.
+Welcome to **Programming Lightning**, a comprehensive course that teaches you how to program a Lightning payment channel from scratch! By the end of this course, your implementation will pass some of the major [BOLT 3 Test Vectors](https://github.com/lightning/bolts/blob/master/03-transactions.md#appendix-b-funding-transaction-test-vectors). Test Vectors are pre-defined inputs and expected outputs that verify your code correctly implements the protocol. Passing these tests means your implementation is on its way to being interoperable with production Lightning implementations like LND, LDK, Eclair, and Core Lightning.
 
-In this course, we'll build payment channels from the ground up. We'll start with key management and derivation, then construct funding transactions, build commitment transactions with their revocation mechanisms, and finally implement HTLCs (Hashed Time-Locked Contracts) that enable multi-hop payments across the Lightning Network.
-
-## What You'll Build
-
-- **Key Management**: BIP32 hierarchical key derivation for Lightning channels
-- **Funding Transactions**: 2-of-2 multisig scripts that lock funds into a channel
-- **Commitment Transactions**: Asymmetric transactions with revocation and CSV delays
-- **HTLC Scripts**: Offered and received HTLC scripts with timeout and success paths
-- **BOLT 3 Compliance**: Every exercise validates against official BOLT 3 test vectors
+In this course, we'll build payment channels from the ground up, starting with our Lightning wallet. Once we have that foundation, we'll explore the simplest possible payment channel and examine its limitations. Then, step by step, we'll address each weakness and build toward a full, BOLT-compliant Lightning channel in all its glory.
 
 ## Prerequisites
 
-This course assumes familiarity with Bitcoin transactions and script. If you need a refresher:
+This course assumes you have already read or understand the information contained in **Mastering Bitcoin** and/or **Programming Bitcoin**. To get the most out of this course, you should have a working understanding of Bitcoin transactions and script. If you'd like to brush up beforehand, here are a few excellent resources:
 - [Learn Me a Bitcoin: Script](https://learnmeabitcoin.com/technical/script/)
 - [Learn Me a Bitcoin: Transactions](https://learnmeabitcoin.com/technical/transaction/)
+- [Base58: Bitcoin Transactions](https://www.udemy.com/course/base58-bitcoin-transactions-one/)
 
 > ### ⚡ Earn sats as you learn! ⚡
 >
@@ -1257,12 +1257,12 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
                         >
                           <div className="flex items-center gap-2">
                             {showIcon && (
-                              <span className={`w-4 h-4 shrink-0 rounded-full border-2 flex items-center justify-center text-[8px] leading-none ${
+                              <span className={`w-7 h-7 shrink-0 rounded-full flex items-center justify-center text-base font-extrabold leading-none ${
                                 isComplete
                                   ? theme === "dark"
-                                    ? "border-green-500 bg-green-500/20 text-green-400"
-                                    : "border-green-600 bg-green-500/20 text-green-600"
-                                  : theme === "dark" ? "border-[#2a3552]" : "border-border"
+                                    ? "bg-[#FFD700] text-white"
+                                    : "bg-[#b8860b] text-white"
+                                  : theme === "dark" ? "border-2 border-[#2a3552]" : "border-2 border-border"
                               }`}>
                                 {isComplete && "\u2713"}
                               </span>
@@ -3014,6 +3014,27 @@ function ChapterContent({
               </CollapsibleItem>
             );
           },
+          "drag-drop": ({ id }: any) => {
+            const ddId = String(id || "");
+            if (!ddId) return null;
+            const isCompleted = completedCheckpoints.some(c => c.checkpointId === ddId);
+            return (
+              <DragDropExercise
+                checkpointId={ddId}
+                theme={theme}
+                authenticated={authenticated}
+                sessionToken={sessionToken}
+                lightningAddress={lightningAddress}
+                emailVerified={emailVerified}
+                pubkey={pubkey}
+                alreadyCompleted={isCompleted}
+                claimInfo={completedCheckpoints.find(c => c.checkpointId === ddId) || null}
+                onLoginRequest={onLoginRequest}
+                onCompleted={onCheckpointCompleted}
+                onOpenProfile={onOpenProfile}
+              />
+            );
+          },
           "code-intro": ({ heading, description, exercises: exerciseIds }: any) => {
             if (tutorialMode !== "code") return null;
             const ids = String(exerciseIds || "").split(",").map((s: string) => s.trim()).filter(Boolean);
@@ -3202,7 +3223,7 @@ function ChapterContent({
         return (
           <button
             onClick={() => {
-              progress.saveProgress(`chapter-read:${chapter.id}`, "1");
+              progress.saveProgress(`chapter-read:${chapter.id}`, "1", true);
               onCheckpointCompleted(`chapter-read:${chapter.id}`);
             }}
             className={`mt-8 w-full border-2 px-4 py-3 font-pixel text-sm tracking-wide transition-colors cursor-pointer ${

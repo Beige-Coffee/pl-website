@@ -429,6 +429,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "exercise-encrypt": 0,
     "exercise-decrypt": 0,
     "exercise-key-rotation": 0,
+    // Lightning tutorial drag-drop exercise (client validates matches, always sends 0)
+    "course-tools-match": 0,
+    // Checkpoint group IDs (answer 0 = all questions correct)
+    "crypto-review": 0,
   };
   const CHECKPOINT_REWARD_SATS = parseInt(process.env.CHECKPOINT_REWARD_SATS || "21", 10);
   const CHECKPOINT_REWARD_MSATS = CHECKPOINT_REWARD_SATS * 1000;
@@ -503,6 +507,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err) {
       console.error("Quiz claim error:", err);
       res.status(500).json({ error: "Failed to generate reward" });
+    }
+  });
+
+  // --- Checkpoint completions (save on correct answer, no withdrawal) ---
+
+  app.post("/api/checkpoint/complete", async (req: Request, res: Response) => {
+    try {
+      const user = await getAuthUser(req);
+      if (!user) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      const { checkpointId, answer } = req.body;
+      if (!checkpointId || typeof checkpointId !== "string" || typeof answer !== "number") {
+        return res.status(400).json({ error: "Invalid request" });
+      }
+
+      const correctAnswer = CHECKPOINT_ANSWER_KEY[checkpointId];
+      if (correctAnswer === undefined) {
+        return res.status(400).json({ error: "Unknown checkpoint" });
+      }
+
+      if (answer !== correctAnswer) {
+        return res.json({ correct: false });
+      }
+
+      await storage.markCheckpointCompleted(user.id, checkpointId);
+      return res.json({ correct: true });
+    } catch (err) {
+      console.error("Checkpoint complete error:", err);
+      res.status(500).json({ error: "Failed to save completion" });
     }
   });
 

@@ -77,6 +77,7 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
   const [nodeReady, setNodeReady] = useState(false);
   const [history, setHistory] = useState<string[]>([]);
   const [historyIdx, setHistoryIdx] = useState(-1);
+  const [showHelp, setShowHelp] = useState(false);
 
   const [panelWidth, setPanelWidth] = useState(() => {
     try {
@@ -369,13 +370,24 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
           Bitcoin Node
           {provisioning && <span className="inline-block w-3 h-3 border-2 border-[#FFD700]/30 border-t-[#FFD700] rounded-full animate-spin" />}
         </div>
-        <button
-          onClick={() => setIsOpen(false)}
-          className={`font-pixel text-[10px] px-2 py-1 border transition-all cursor-pointer
-            ${dark ? "border-[#2a3552] text-slate-400 hover:text-slate-200 hover:bg-[#132043]" : "border-[#d4c9a8] text-black/50 hover:text-black hover:bg-[#e8dcc8]"}`}
-        >
-          CLOSE
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowHelp((v) => !v)}
+            className={`font-pixel text-[10px] px-2 py-1 border transition-all cursor-pointer
+              ${dark ? "border-[#2a3552] text-slate-400 hover:text-slate-200 hover:bg-[#132043]" : "border-[#d4c9a8] text-black/50 hover:text-black hover:bg-[#e8dcc8]"}
+              ${showHelp ? (dark ? "bg-[#132043] text-slate-200" : "bg-[#e8dcc8] text-black") : ""}`}
+            title="Command reference"
+          >
+            ?
+          </button>
+          <button
+            onClick={() => setIsOpen(false)}
+            className={`font-pixel text-[10px] px-2 py-1 border transition-all cursor-pointer
+              ${dark ? "border-[#2a3552] text-slate-400 hover:text-slate-200 hover:bg-[#132043]" : "border-[#d4c9a8] text-black/50 hover:text-black hover:bg-[#e8dcc8]"}`}
+          >
+            CLOSE
+          </button>
+        </div>
       </div>
 
       {/* Not authenticated */}
@@ -384,6 +396,54 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
           <div className={`text-center ${textMuted}`} style={sansFont}>
             <div className={`font-pixel text-xs mb-3 ${goldText}`}>LOGIN REQUIRED</div>
             <div className="text-sm">Sign in to use the Bitcoin node terminal.</div>
+          </div>
+        </div>
+      )}
+
+      {/* Help overlay */}
+      {showHelp && (
+        <div
+          className="absolute inset-0 top-[44px] z-10 overflow-auto px-4 py-4"
+          style={{
+            ...sansFont,
+            backgroundColor: dark ? "#0a0f1acc" : "#1a1a2eee",
+            backdropFilter: "blur(4px)",
+          }}
+        >
+          <div className="text-slate-200 text-sm space-y-4">
+            <div>
+              <span className="text-[#FFD700] font-bold">sendrawtransaction</span>
+              <span className="text-slate-400"> &lt;raw tx hex&gt;</span>
+              <div className="text-slate-400 text-xs mt-0.5">Broadcast a raw transaction to the network.</div>
+            </div>
+            <div>
+              <span className="text-[#FFD700] font-bold">decoderawtransaction</span>
+              <span className="text-slate-400"> &lt;raw tx hex&gt;</span>
+              <div className="text-slate-400 text-xs mt-0.5">Decode a raw transaction to inspect its inputs, outputs, and other details.</div>
+            </div>
+            <div>
+              <span className="text-[#FFD700] font-bold">gettransaction</span>
+              <span className="text-slate-400"> &lt;txid&gt;</span>
+              <div className="text-slate-400 text-xs mt-0.5">Retrieve info about a broadcast transaction, including confirmation count.</div>
+            </div>
+            <div>
+              <span className="text-[#FFD700] font-bold">gettxout</span>
+              <span className="text-slate-400"> &lt;txid&gt; &lt;output index&gt;</span>
+              <div className="text-slate-400 text-xs mt-0.5">Look up a UTXO. Returns nothing if it has been spent or never existed.</div>
+            </div>
+            <div>
+              <span className="text-[#FFD700] font-bold">mine</span>
+              <span className="text-slate-400"> &lt;number of blocks&gt;</span>
+              <div className="text-slate-400 text-xs mt-0.5">Mine blocks on the regtest network. Transactions in the mempool will be included.</div>
+            </div>
+            <div>
+              <span className="text-[#FFD700] font-bold">help</span>
+              <div className="text-slate-400 text-xs mt-0.5">List all available commands.</div>
+            </div>
+            <div>
+              <span className="text-[#FFD700] font-bold">clear</span>
+              <div className="text-slate-400 text-xs mt-0.5">Clear the terminal output.</div>
+            </div>
           </div>
         </div>
       )}

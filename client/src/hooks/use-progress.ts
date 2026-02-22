@@ -32,7 +32,7 @@ export function useProgress(sessionToken: string | null) {
   }, [sessionToken]);
 
   const saveProgress = useCallback(
-    (key: string, value: string) => {
+    (key: string, value: string, immediate?: boolean) => {
       if (!sessionToken) return;
 
       // Optimistic local update so getProgress reflects the new value immediately
@@ -41,7 +41,7 @@ export function useProgress(sessionToken: string | null) {
       const existing = pendingSaves.current.get(key);
       if (existing) clearTimeout(existing);
 
-      const timeout = setTimeout(async () => {
+      const doSave = async () => {
         pendingSaves.current.delete(key);
         try {
           await fetch("/api/progress", {
@@ -53,9 +53,14 @@ export function useProgress(sessionToken: string | null) {
             body: JSON.stringify({ key, value }),
           });
         } catch {}
-      }, DEBOUNCE_MS);
+      };
 
-      pendingSaves.current.set(key, timeout);
+      if (immediate) {
+        doSave();
+      } else {
+        const timeout = setTimeout(doSave, DEBOUNCE_MS);
+        pendingSaves.current.set(key, timeout);
+      }
     },
     [sessionToken]
   );

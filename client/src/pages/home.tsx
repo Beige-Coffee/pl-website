@@ -5,6 +5,7 @@ import xkLogo from "/xk-logo.png";
 import discordLogo from "@assets/discord_1769114568630.png";
 import LoginModal from "../components/LoginModal";
 import { useAuth } from "../hooks/use-auth";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
 export default function Home() {
   const [showMobileWarning, setShowMobileWarning] = useState(false);
@@ -191,19 +192,33 @@ export default function Home() {
                   </div>
                 </div>
                 <div className="flex flex-row md:flex-col gap-2 shrink-0">
-                  <Link
-                    href="/lightning-tutorial"
-                    onClick={handleReadClick}
-                    className="bg-primary text-foreground px-6 py-2.5 font-pixel text-sm border-2 border-border hover:bg-primary/80 transition-colors pixel-shadow active:translate-x-[2px] active:translate-y-[2px] active:shadow-none text-center flex-1 md:flex-none"
-                  >
-                    READ
-                  </Link>
-                  <button
-                    onClick={handleCodeClick}
-                    className="bg-foreground text-background px-6 py-2.5 font-pixel text-sm border-2 border-border hover:bg-foreground/80 transition-colors pixel-shadow active:translate-x-[2px] active:translate-y-[2px] active:shadow-none flex-1 md:flex-none"
-                  >
-                    CODE
-                  </button>
+                  <Tooltip delayDuration={0}>
+                    <TooltipTrigger asChild>
+                      <Link
+                        href="/lightning-tutorial"
+                        onClick={handleReadClick}
+                        className="bg-primary text-foreground px-6 py-2.5 font-pixel text-sm border-2 border-border hover:bg-primary/80 transition-colors pixel-shadow active:translate-x-[2px] active:translate-y-[2px] active:shadow-none text-center flex-1 md:flex-none"
+                      >
+                        READ
+                      </Link>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="bg-card text-foreground border-4 border-border text-base px-3 py-2 pixel-shadow max-w-xs rounded-none">
+                      Deep dive into how Lightning works with checkpoint quizzes. No programming required.
+                    </TooltipContent>
+                  </Tooltip>
+                  <Tooltip delayDuration={0}>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={handleCodeClick}
+                        className="bg-foreground text-background px-6 py-2.5 font-pixel text-sm border-2 border-border hover:bg-foreground/80 transition-colors pixel-shadow active:translate-x-[2px] active:translate-y-[2px] active:shadow-none flex-1 md:flex-none"
+                      >
+                        CODE
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="bg-card text-foreground border-4 border-border text-base px-3 py-2 pixel-shadow max-w-xs rounded-none">
+                      Same content plus hands-on coding exercises where you build key parts of the protocol.
+                    </TooltipContent>
+                  </Tooltip>
                 </div>
               </div>
             </div>
@@ -249,20 +264,34 @@ export default function Home() {
                   </div>
                 </div>
                 <div className="flex flex-row md:flex-col gap-2 shrink-0">
-                  <Link
-                    href="/noise-tutorial"
-                    onClick={handleNoiseClick}
-                    className="bg-primary text-foreground px-6 py-2.5 font-pixel text-sm border-2 border-border hover:bg-primary/80 transition-colors pixel-shadow active:translate-x-[2px] active:translate-y-[2px] active:shadow-none text-center flex-1 md:flex-none"
-                  >
-                    READ
-                  </Link>
-                  <Link
-                    href="/noise-tutorial"
-                    onClick={handleNoiseClick}
-                    className="bg-foreground text-background px-6 py-2.5 font-pixel text-sm border-2 border-border hover:bg-foreground/80 transition-colors pixel-shadow active:translate-x-[2px] active:translate-y-[2px] active:shadow-none text-center flex-1 md:flex-none"
-                  >
-                    CODE
-                  </Link>
+                  <Tooltip delayDuration={0}>
+                    <TooltipTrigger asChild>
+                      <Link
+                        href="/noise-tutorial"
+                        onClick={handleNoiseClick}
+                        className="bg-primary text-foreground px-6 py-2.5 font-pixel text-sm border-2 border-border hover:bg-primary/80 transition-colors pixel-shadow active:translate-x-[2px] active:translate-y-[2px] active:shadow-none text-center flex-1 md:flex-none"
+                      >
+                        READ
+                      </Link>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="bg-card text-foreground border-4 border-border text-base px-3 py-2 pixel-shadow max-w-xs rounded-none">
+                      Deep dive into how Lightning works with checkpoint quizzes. No programming required.
+                    </TooltipContent>
+                  </Tooltip>
+                  <Tooltip delayDuration={0}>
+                    <TooltipTrigger asChild>
+                      <Link
+                        href="/noise-tutorial"
+                        onClick={handleNoiseClick}
+                        className="bg-foreground text-background px-6 py-2.5 font-pixel text-sm border-2 border-border hover:bg-foreground/80 transition-colors pixel-shadow active:translate-x-[2px] active:translate-y-[2px] active:shadow-none text-center flex-1 md:flex-none"
+                      >
+                        CODE
+                      </Link>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="bg-card text-foreground border-4 border-border text-base px-3 py-2 pixel-shadow max-w-xs rounded-none">
+                      Same content plus hands-on coding exercises where you build key parts of the protocol.
+                    </TooltipContent>
+                  </Tooltip>
                 </div>
               </div>
             </div>

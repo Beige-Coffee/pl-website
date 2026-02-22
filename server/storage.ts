@@ -209,14 +209,22 @@ export class DatabaseStorage implements IStorage {
   }
 
   async markCheckpointCompleted(userId: string, checkpointId: string): Promise<void> {
-    // Check first to avoid duplicates (no unique constraint on userId+checkpointId pair)
-    const existing = await this.hasCompletedCheckpoint(userId, checkpointId);
-    if (existing) return;
-    await db.insert(checkpointCompletions).values({ userId, checkpointId });
+    await db.insert(checkpointCompletions)
+      .values({ userId, checkpointId })
+      .onConflictDoNothing({ target: [checkpointCompletions.userId, checkpointCompletions.checkpointId] });
   }
 
   async getCompletedCheckpoints(userId: string): Promise<{ checkpointId: string; amountSats: number; paidAt: string }[]> {
-    const rows = await db.select({
+    // Get all completions from the checkpointCompletions table
+    const completions = await db.select({
+      checkpointId: checkpointCompletions.checkpointId,
+      createdAt: checkpointCompletions.createdAt,
+    })
+      .from(checkpointCompletions)
+      .where(eq(checkpointCompletions.userId, userId));
+
+    // Get paid withdrawals for reward info
+    const withdrawals = await db.select({
       checkpointId: lnurlWithdrawals.checkpointId,
       amountMsats: lnurlWithdrawals.amountMsats,
       paidAt: lnurlWithdrawals.paidAt,
@@ -229,13 +237,45 @@ export class DatabaseStorage implements IStorage {
           sql`${lnurlWithdrawals.checkpointId} IS NOT NULL`
         )
       );
-    return rows
-      .filter((r): r is typeof r & { checkpointId: string; paidAt: Date } => r.checkpointId !== null && r.paidAt !== null)
-      .map(r => ({
-        checkpointId: r.checkpointId,
-        amountSats: Math.round(parseInt(r.amountMsats, 10) / 1000),
-        paidAt: r.paidAt.toISOString(),
-      }));
+
+    // Build a map of paid withdrawals by checkpointId
+    const paidMap = new Map<string, { amountSats: number; paidAt: string }>();
+    for (const w of withdrawals) {
+      if (w.checkpointId && w.paidAt) {
+        paidMap.set(w.checkpointId, {
+          amountSats: Math.round(parseInt(w.amountMsats, 10) / 1000),
+          paidAt: w.paidAt.toISOString(),
+        });
+      }
+    }
+
+    // Merge: completions table is the source of truth for "completed",
+    // withdrawals table provides amountSats/paidAt when claimed
+    const seen = new Set<string>();
+    const results: { checkpointId: string; amountSats: number; paidAt: string }[] = [];
+
+    for (const c of completions) {
+      seen.add(c.checkpointId);
+      const paid = paidMap.get(c.checkpointId);
+      results.push({
+        checkpointId: c.checkpointId,
+        amountSats: paid?.amountSats ?? 0,
+        paidAt: paid?.paidAt ?? c.createdAt.toISOString(),
+      });
+    }
+
+    // Include any paid withdrawals not yet in completions table (legacy data)
+    for (const [cpId, paid] of paidMap) {
+      if (!seen.has(cpId)) {
+        results.push({
+          checkpointId: cpId,
+          amountSats: paid.amountSats,
+          paidAt: paid.paidAt,
+        });
+      }
+    }
+
+    return results;
   }
 
   async getPaidWithdrawalForCheckpoint(userId: string, checkpointId: string): Promise<LnurlWithdrawal | undefined> {

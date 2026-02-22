@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, boolean, integer, serial } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, boolean, integer, serial, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -50,7 +50,9 @@ export const checkpointCompletions = pgTable("checkpoint_completions", {
   userId: varchar("user_id").notNull(),
   checkpointId: text("checkpoint_id").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => [
+  unique("checkpoint_completions_user_checkpoint").on(table.userId, table.checkpointId),
+]);
 
 export const donations = pgTable("donations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -67,7 +69,9 @@ export const userProgress = pgTable("user_progress", {
   key: text("key").notNull(),
   value: text("value").notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => [
+  unique("user_progress_user_key").on(table.userId, table.key),
+]);
 
 export const pageEvents = pgTable("page_events", {
   id: serial("id").primaryKey(),

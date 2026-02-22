@@ -113,7 +113,7 @@ export default function CheckpointGroup({
   const allAnswered = questions.every((q) => selections[q.id] !== undefined && selections[q.id] !== null);
   const allCorrect = questions.every((q) => selections[q.id] === q.answer);
 
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useCallback(async () => {
     if (!allAnswered) return;
 
     if (!authenticated) {
@@ -137,7 +137,35 @@ export default function CheckpointGroup({
     // All correct!
     setSubmitted(true);
     setWrongIds(new Set());
-  }, [allAnswered, authenticated, onLoginRequest, questions, selections]);
+
+    // Save completions server-side for each question (independent of reward claim)
+    if (sessionToken) {
+      for (const q of questions) {
+        try {
+          await fetch("/api/checkpoint/complete", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${sessionToken}`,
+            },
+            body: JSON.stringify({ checkpointId: q.id, answer: selections[q.id] }),
+          });
+        } catch {}
+      }
+      // Also mark the group itself as completed
+      try {
+        await fetch("/api/checkpoint/complete", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${sessionToken}`,
+          },
+          body: JSON.stringify({ checkpointId: groupId, answer: 0 }),
+        });
+      } catch {}
+    }
+    onCompleted(groupId);
+  }, [allAnswered, authenticated, onLoginRequest, questions, selections, sessionToken, groupId, onCompleted]);
 
   const handleClaimReward = useCallback(async (claimMethod?: "address" | "lnurl") => {
     if (!sessionToken) return;
@@ -224,8 +252,21 @@ export default function CheckpointGroup({
   const goldBg = "bg-[#FFD700]";
   const greenText = dark ? "text-green-400" : "text-green-700";
 
-  // Already completed state
-  if (alreadyCompleted && !rewardLnurl) {
+  const completedButUnclaimed = alreadyCompleted && (!claimInfo || claimInfo.amountSats === 0);
+
+  // If completed but sats not yet claimed, auto-set submitted state so claim UI shows
+  useEffect(() => {
+    if (completedButUnclaimed && !submitted) {
+      // Set all selections to correct answers
+      const correctSelections: Record<string, number | null> = {};
+      questions.forEach((q) => { correctSelections[q.id] = q.answer; });
+      setSelections(correctSelections);
+      setSubmitted(true);
+    }
+  }, [completedButUnclaimed]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Already completed and claimed state
+  if (alreadyCompleted && !rewardLnurl && !completedButUnclaimed) {
     return (
       <div className={`my-8 border-2 ${goldBorder} ${cardBg} p-5`}>
         <div className="flex items-center gap-3 mb-4">
@@ -242,7 +283,7 @@ export default function CheckpointGroup({
           </div>
         ))}
         <div className={`mt-5 -mx-5 -mb-5 px-5 py-4 border-t-2 text-[17px] md:text-[19px] font-semibold text-black ${dark ? "bg-[#FFD700]/30 border-[#FFD700]/40" : "bg-[#b8860b]/20 border-[#b8860b]/30"}`} style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
-          {claimInfo ? (
+          {claimInfo && claimInfo.amountSats > 0 ? (
             <>{claimInfo.amountSats} Sats Claimed on {new Date(claimInfo.paidAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} at {new Date(claimInfo.paidAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</>
           ) : (
             <>Reward Claimed</>
@@ -407,7 +448,7 @@ export default function CheckpointGroup({
             </div>
           )}
 
-          {!rewardLnurl && !alreadyCompleted && !autoPaid && !autoPaySending && !claiming && !showClaimChoice && (
+          {!rewardLnurl && (!alreadyCompleted || completedButUnclaimed) && !autoPaid && !autoPaySending && !claiming && !showClaimChoice && (
             <div>
               {authenticated && !canClaimRewards && (
                 <div className={`border-2 ${dark ? "border-[#2a3552] bg-[#0b1220]" : "border-border bg-background"} p-3 mb-3`}>
