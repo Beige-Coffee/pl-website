@@ -31,12 +31,6 @@ export default function About() {
               Inspired by <a href="https://github.com/jimmysong/programmingbitcoin" target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">Programming Bitcoin</a>, Programming Lightning is a free and open source educational resource that teaches developers and technically-inclined individuals how Lightning works by coding important pieces of the protocol from scratch.
             </p>
             <p className="mb-6">
-              The first module, Intro to Payment Channels, guides students through building a simple off-chain wallet and Lightning payment channel from the ground up. By the end of the course, your implementation will pass some of the major <a href="https://github.com/lightning/bolts/blob/master/03-transactions.md#appendix-b-funding-transaction-test-vectors" target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">BOLT 3</a> test vectors, meaning you'll have successfully implemented functionality such as key derivation, obscured commitment numbers, and HTLC second-stage transactions (success and timeout). In other words, you’ll be a Lightning Zen Master!
-            </p>
-            <p className="mb-6">
-              While exercises can be completed by forking the GitHub repo and running tests locally, the course is optimized for Replit. Each Repl comes with Bitcoin Core running in the background, allowing you to easily generate Lightning transactions and simulate operations such as broadcasting transactions, opening channels, and decoding raw transactions.
-            </p>
-            <p className="mb-6">
               This project is in active development. Additional modules focusing on Lightning payments, invoices, and newer protocol advancements are coming soon!
             </p>
             <p>

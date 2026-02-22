@@ -225,6 +225,60 @@ const sectionOrder: Chapter["section"][] = [
   "Pay It Forward",
 ];
 
+const CHAPTER_REQUIREMENTS: Record<string, {
+  checkpoints: string[];
+  exercises: string[];
+}> = {
+  "intro": { checkpoints: [], exercises: [] },
+  "crypto-primitives": { checkpoints: ["pubkey-compression", "hash-preimage", "ecdh-security", "hkdf-purpose", "nonce-reuse"], exercises: ["exercise-generate-keypair", "exercise-ecdh", "exercise-hkdf"] },
+  "noise-framework": { checkpoints: [], exercises: [] },
+  "handshake-setup": { checkpoints: ["setup-wrong-key"], exercises: ["exercise-init-state"] },
+  "act-1": { checkpoints: [], exercises: ["exercise-act1-initiator", "exercise-act1-responder"] },
+  "act-2": { checkpoints: ["act2-both-ephemeral"], exercises: ["exercise-act2-responder", "exercise-act2-initiator"] },
+  "act-3": { checkpoints: ["act3-nonce-one"], exercises: ["exercise-act3-initiator"] },
+  "sending-messages": { checkpoints: ["message-length-limit"], exercises: ["exercise-encrypt"] },
+  "receiving-messages": { checkpoints: [], exercises: ["exercise-decrypt"] },
+  "key-rotation": { checkpoints: [], exercises: ["exercise-key-rotation"] },
+  "quiz": { checkpoints: [], exercises: [] },
+  "pay-it-forward": { checkpoints: [], exercises: [] },
+};
+
+function useChapterCompletion(
+  completedCheckpoints: { checkpointId: string }[],
+  getProgress: (key: string) => string | null,
+  tutorialMode: "read" | "code",
+  rewardClaimed: boolean,
+): Record<string, "complete" | "incomplete"> {
+  return useMemo(() => {
+    const result: Record<string, "complete" | "incomplete"> = {};
+    const completedIds = new Set(completedCheckpoints.map(c => c.checkpointId));
+
+    for (const chapter of chapters) {
+      const reqs = CHAPTER_REQUIREMENTS[chapter.id];
+      if (!reqs) { result[chapter.id] = "incomplete"; continue; }
+
+      const checkpoints = reqs.checkpoints;
+      const exercises = tutorialMode === "code" ? reqs.exercises : [];
+      const isReadOnly = checkpoints.length === 0 && exercises.length === 0;
+
+      if (chapter.id === "quiz") {
+        result[chapter.id] = rewardClaimed ? "complete" : "incomplete";
+      } else if (chapter.id === "pay-it-forward") {
+        result[chapter.id] = "incomplete";
+      } else if (isReadOnly) {
+        result[chapter.id] = getProgress(`noise-chapter-read:${chapter.id}`) === "1"
+          ? "complete" : "incomplete";
+      } else {
+        const allCheckpointsDone = checkpoints.every(id => completedIds.has(id));
+        const allExercisesDone = exercises.every(id => completedIds.has(id));
+        result[chapter.id] = (allCheckpointsDone && allExercisesDone)
+          ? "complete" : "incomplete";
+      }
+    }
+    return result;
+  }, [completedCheckpoints, getProgress, tutorialMode, rewardClaimed]);
+}
+
 function idxOf(id: string) {
   return Math.max(0, chapters.findIndex((c) => c.id === id));
 }
@@ -588,6 +642,13 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
     return "read";
   });
 
+  const chapterCompletion = useChapterCompletion(
+    auth.completedCheckpoints,
+    progress.getProgress,
+    tutorialMode,
+    auth.rewardClaimed,
+  );
+
   const activeIndex = idxOf(activeId);
   const active = chapters[activeIndex] ?? chapters[0];
   const prev = chapters[activeIndex - 1];
@@ -679,17 +740,17 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
             MENU
           </button>
           <Link
-            href="/learn"
+            href="/"
             className="hidden md:inline font-pixel text-xs md:text-sm hover:text-primary transition-colors"
-            data-testid="link-back-blog"
+            data-testid="link-back-home"
           >
-            &lt; BACK TO LEARN
+            &lt; BACK TO HOME
           </Link>
           <Link
-            href="/learn"
+            href="/"
             className={`md:hidden p-1 transition-colors ${theme === "dark" ? "text-slate-300 hover:text-slate-100" : "text-foreground/70 hover:text-foreground"}`}
-            data-testid="link-back-blog-mobile"
-            aria-label="Back to Learn"
+            data-testid="link-back-home-mobile"
+            aria-label="Back to Home"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5" />
@@ -850,13 +911,21 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
             {sectionOrder.map((section) => {
               const items = grouped.get(section) ?? [];
               if (!items.length) return null;
+              const trackableItems = items.filter(c => c.id !== "pay-it-forward");
+              const completedInSection = trackableItems.filter(c => chapterCompletion[c.id] === "complete").length;
+              const totalInSection = trackableItems.length;
               return (
                 <div key={section} className="mb-4">
                   <div
-                    className={`font-pixel text-[14px] tracking-wide mb-2 ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`}
+                    className={`font-pixel text-[14px] tracking-wide mb-2 flex items-center gap-2 ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`}
                     data-testid={`text-section-${section.replace(/\s+/g, "-").toLowerCase()}`}
                   >
                     {section.toUpperCase()}
+                    {totalInSection > 0 && (
+                      <span className={`text-[11px] font-pixel ${completedInSection === totalInSection ? (theme === "dark" ? "text-green-400" : "text-green-600") : "opacity-50"}`}>
+                        {completedInSection}/{totalInSection}
+                      </span>
+                    )}
                   </div>
                   <div className={`h-[2px] ${theme === "dark" ? "bg-[#1f2a44]" : "bg-border"} mb-2`} />
 
@@ -864,6 +933,8 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
                     {items.map((c) => {
                       const href = c.id === "intro" ? "/noise-tutorial" : `/noise-tutorial/${c.id}`;
                       const isActive = c.id === activeId;
+                      const isComplete = chapterCompletion[c.id] === "complete";
+                      const showIcon = c.id !== "pay-it-forward";
                       return (
                         <button
                           key={c.id}
@@ -874,7 +945,20 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
                           } w-full text-left border-2 px-3 py-1.5 transition-colors`}
                           data-testid={`button-chapter-${c.id}`}
                         >
-                          <div className="text-[16px] leading-snug" style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>{c.title}</div>
+                          <div className="flex items-center gap-2">
+                            {showIcon && (
+                              <span className={`w-4 h-4 shrink-0 rounded-full border-2 flex items-center justify-center text-[8px] leading-none ${
+                                isComplete
+                                  ? theme === "dark"
+                                    ? "border-green-500 bg-green-500/20 text-green-400"
+                                    : "border-green-600 bg-green-500/20 text-green-600"
+                                  : theme === "dark" ? "border-[#2a3552]" : "border-border"
+                              }`}>
+                                {isComplete && "\u2713"}
+                              </span>
+                            )}
+                            <div className="text-[16px] leading-snug" style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>{c.title}</div>
+                          </div>
                         </button>
                       );
                     })}
@@ -2299,7 +2383,7 @@ function InteractiveQuiz({
                   </div>
                 )}
               </div>
-              <div className={`text-[19px] md:text-[22px] font-semibold mb-4 leading-snug ${textColor}`} data-testid={`text-quiz-question-${qIndex}`}>
+              <div className={`text-[19px] md:text-[22px] font-semibold mb-4 leading-snug ${textColor}`} style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }} data-testid={`text-quiz-question-${qIndex}`}>
                 {q.question}
               </div>
 
@@ -2346,6 +2430,7 @@ function InteractiveQuiz({
                       className={`w-full text-left border px-3 py-2.5 flex items-start gap-2.5 transition-colors ${optionStyle} ${
                         submitted ? "" : "active:scale-[0.99]"
                       }`}
+                      style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}
                       data-testid={`button-quiz-option-${qIndex}-${optIndex}`}
                     >
                       <span
@@ -2363,7 +2448,7 @@ function InteractiveQuiz({
                             : "border-border text-foreground/60"
                         }`}
                       >
-                        {submitted && isSelected && isAnswer ? "✓" : submitted && passed && isAnswer ? "✓" : submitted && isSelected && !isAnswer ? "✗" : letter}
+                        {submitted && isSelected && isAnswer ? "\u2713" : submitted && passed && isAnswer ? "\u2713" : submitted && isSelected && !isAnswer ? "\u2717" : letter}
                       </span>
                       <span className={`text-[18px] md:text-[20px] leading-snug ${!submitted ? (dark ? "text-slate-200" : "text-foreground") : ""}`}>
                         {opt}
@@ -2725,6 +2810,55 @@ function ChapterContent({
       >
         {rewriteTutorialImagePaths(md)}
       </ReactMarkdown>
+
+      {(() => {
+        const reqs = CHAPTER_REQUIREMENTS[chapter.id];
+        const isReadOnly = reqs && reqs.checkpoints.length === 0 &&
+          (tutorialMode === "read" || reqs.exercises.length === 0);
+        if (!isReadOnly || chapter.id === "quiz" || chapter.id === "pay-it-forward") return null;
+        const isMarkedRead = getProgress(`noise-chapter-read:${chapter.id}`) === "1";
+
+        if (!authenticated) {
+          return (
+            <button
+              onClick={onLoginRequest}
+              className={`mt-8 w-full border-2 px-4 py-3 font-pixel text-sm tracking-wide transition-colors cursor-pointer ${
+                theme === "dark"
+                  ? "border-[#2a3552] text-[#ffd700] hover:bg-[#132043]"
+                  : "border-border text-foreground hover:bg-secondary"
+              }`}
+            >
+              LOG IN TO TRACK PROGRESS
+            </button>
+          );
+        }
+
+        if (isMarkedRead) {
+          return (
+            <div className={`mt-8 text-center font-pixel text-sm ${
+              theme === "dark" ? "text-green-400" : "text-green-600"
+            }`}>
+              &#10003; COMPLETED
+            </div>
+          );
+        }
+
+        return (
+          <button
+            onClick={() => {
+              saveProgress(`noise-chapter-read:${chapter.id}`, "1");
+              onCheckpointCompleted(`noise-chapter-read:${chapter.id}`);
+            }}
+            className={`mt-8 w-full border-2 px-4 py-3 font-pixel text-sm tracking-wide transition-colors cursor-pointer ${
+              theme === "dark"
+                ? "border-[#2a3552] text-[#ffd700] hover:bg-[#132043]"
+                : "border-border text-foreground hover:bg-secondary"
+            }`}
+          >
+            MARK AS READ
+          </button>
+        );
+      })()}
 
     </div>
   );

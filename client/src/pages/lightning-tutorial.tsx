@@ -12,9 +12,14 @@ import CheckpointQuestion from "../components/CheckpointQuestion";
 import CheckpointGroup from "../components/CheckpointGroup";
 import CodeExercise from "../components/CodeExercise";
 import Scratchpad from "../components/Scratchpad";
+import NodeTerminal from "../components/NodeTerminal";
+import ExerciseFileBrowser from "../components/ExerciseFileBrowser";
+import TxNotebook from "../components/TxNotebook";
 import { CollapsibleItem, CollapsibleGroup } from "../components/CollapsibleSection";
 import { LIGHTNING_EXERCISES } from "../data/lightning-exercises";
 import { getExerciseGroupContext } from "../lib/exercise-groups";
+import TxGenerator from "../components/TxGenerator";
+import { TX_GENERATORS } from "../data/tx-generators";
 
 // --- Checkpoint questions embedded inline in tutorial chapters ---
 const CHECKPOINT_QUESTIONS: Record<string, {
@@ -215,7 +220,7 @@ const CHECKPOINT_QUESTIONS: Record<string, {
 type Chapter = {
   id: string;
   title: string;
-  section: "Introduction" | "Keys & Derivation" | "Payment Channels" | "Commitment Keys" | "Commitment Transactions" | "HTLCs" | "Quiz" | "Pay It Forward";
+  section: "Introduction" | "Keys & Derivation" | "Payment Channels" | "Commitment Keys" | "Commitment Transactions" | "HTLCs" | "Closing Channels" | "Quiz" | "Pay It Forward";
   kind: "intro" | "md";
   file?: string;
 };
@@ -226,6 +231,13 @@ const chapters: Chapter[] = [
     title: "Intro to Payment Channels",
     section: "Introduction",
     kind: "intro",
+  },
+  {
+    id: "bitcoin-cli",
+    title: "Bitcoin CLI Reference",
+    section: "Introduction",
+    kind: "md",
+    file: "/lightning_tutorial/3.4-bitcoin-cli.md",
   },
   {
     id: "protocols-fairness",
@@ -298,6 +310,13 @@ const chapters: Chapter[] = [
     file: "/lightning_tutorial/3.3-signing.md",
   },
   {
+    id: "open-channel",
+    title: "Channel Open",
+    section: "Payment Channels",
+    kind: "md",
+    file: "/lightning_tutorial/3.5-open-channel.md",
+  },
+  {
     id: "revocation-keys",
     title: "Revocation Keys",
     section: "Commitment Keys",
@@ -347,11 +366,67 @@ const chapters: Chapter[] = [
     file: "/lightning_tutorial/5.4-commitment-finalization.md",
   },
   {
+    id: "get-commitment-tx",
+    title: "Inspect Commitment Transaction",
+    section: "Commitment Transactions",
+    kind: "md",
+    file: "/lightning_tutorial/5.5-get-commitment-tx.md",
+  },
+  {
+    id: "routing-payments",
+    title: "Routing Payments",
+    section: "HTLCs",
+    kind: "md",
+    file: "/lightning_tutorial/6.1-routing-payments.md",
+  },
+  {
+    id: "htlc-introduction",
+    title: "Introduction to HTLCs",
+    section: "HTLCs",
+    kind: "md",
+    file: "/lightning_tutorial/6.2-htlc-introduction.md",
+  },
+  {
+    id: "simple-htlc",
+    title: "Simple HTLC Example",
+    section: "HTLCs",
+    kind: "md",
+    file: "/lightning_tutorial/6.3-simple-htlc.md",
+  },
+  {
+    id: "htlcs-on-lightning",
+    title: "HTLCs on Lightning",
+    section: "HTLCs",
+    kind: "md",
+    file: "/lightning_tutorial/6.4-htlcs-on-lightning.md",
+  },
+  {
+    id: "channel-state-updates",
+    title: "Channel State Updates",
+    section: "HTLCs",
+    kind: "md",
+    file: "/lightning_tutorial/6.5-channel-state-updates.md",
+  },
+  {
     id: "offered-htlcs",
     title: "Offered HTLCs",
     section: "HTLCs",
     kind: "md",
-    file: "/lightning_tutorial/6.1-offered-htlcs.md",
+    file: "/lightning_tutorial/6.6-offered-htlcs.md",
+  },
+  {
+    id: "get-htlc-commitment",
+    title: "Inspect HTLC Commitment",
+    section: "HTLCs",
+    kind: "md",
+    file: "/lightning_tutorial/6.7-get-htlc-commitment.md",
+  },
+  {
+    id: "get-htlc-timeout",
+    title: "Inspect HTLC Timeout",
+    section: "HTLCs",
+    kind: "md",
+    file: "/lightning_tutorial/6.8-get-htlc-timeout.md",
   },
   {
     id: "received-htlcs",
@@ -368,11 +443,18 @@ const chapters: Chapter[] = [
     file: "/lightning_tutorial/6.3-htlc-fees-dust.md",
   },
   {
+    id: "closing-channels",
+    title: "Closing Channels",
+    section: "Closing Channels",
+    kind: "md",
+    file: "/lightning_tutorial/7.1-closing-channels.md",
+  },
+  {
     id: "quiz",
     title: "Test Your Knowledge",
     section: "Quiz",
     kind: "md",
-    file: "/lightning_tutorial/7.1-quiz.md",
+    file: "/lightning_tutorial/8.1-quiz.md",
   },
   {
     id: "pay-it-forward",
@@ -389,9 +471,86 @@ const sectionOrder: Chapter["section"][] = [
   "Commitment Keys",
   "Commitment Transactions",
   "HTLCs",
+  "Closing Channels",
   "Quiz",
   "Pay It Forward",
 ];
+
+const CHAPTER_REQUIREMENTS: Record<string, {
+  checkpoints: string[];
+  exercises: string[];
+}> = {
+  "intro": { checkpoints: [], exercises: [] },
+  "bitcoin-cli": { checkpoints: [], exercises: [] },
+  "protocols-fairness": { checkpoints: ["channel-fairness"], exercises: [] },
+  "keys-manager": { checkpoints: [], exercises: ["ln-exercise-keys-manager"] },
+  "bip32-derivation": { checkpoints: ["bip32-derivation"], exercises: ["ln-exercise-derive-key"] },
+  "channel-keys": { checkpoints: [], exercises: ["ln-exercise-channel-keys"] },
+  "payment-channels-overview": { checkpoints: ["payment-channels-scaling"], exercises: [] },
+  "funding-script": { checkpoints: ["funding-multisig", "pubkey-sorting"], exercises: ["ln-exercise-funding-script"] },
+  "funding-transaction": { checkpoints: [], exercises: ["ln-exercise-funding-tx"] },
+  "refund-transactions": { checkpoints: [], exercises: [] },
+  "revocable-transactions": { checkpoints: ["asymmetric-commits"], exercises: [] },
+  "signing": { checkpoints: [], exercises: ["ln-exercise-sign-input"] },
+  "open-channel": { checkpoints: [], exercises: [] },
+  "revocation-keys": { checkpoints: ["revocation-purpose"], exercises: ["ln-exercise-revocation-pubkey", "ln-exercise-revocation-privkey"] },
+  "commitment-secrets": { checkpoints: ["commitment-secret-algorithm"], exercises: ["ln-exercise-commitment-secret", "ln-exercise-per-commitment-point"] },
+  "key-derivation": { checkpoints: [], exercises: ["ln-exercise-derive-pubkey", "ln-exercise-derive-privkey"] },
+  "commitment-scripts": { checkpoints: [], exercises: ["ln-exercise-to-remote-script", "ln-exercise-to-local-script"] },
+  "obscured-commitment": { checkpoints: [], exercises: ["ln-exercise-obscure-factor", "ln-exercise-obscured-commitment"] },
+  "commitment-assembly": { checkpoints: [], exercises: ["ln-exercise-commitment-outputs", "ln-exercise-sort-outputs", "ln-exercise-commitment-tx"] },
+  "commitment-finalization": { checkpoints: [], exercises: ["ln-exercise-finalize-commitment"] },
+  "get-commitment-tx": { checkpoints: [], exercises: [] },
+  "routing-payments": { checkpoints: [], exercises: [] },
+  "htlc-introduction": { checkpoints: ["offered-vs-received"], exercises: [] },
+  "simple-htlc": { checkpoints: [], exercises: [] },
+  "htlcs-on-lightning": { checkpoints: [], exercises: [] },
+  "channel-state-updates": { checkpoints: [], exercises: [] },
+  "offered-htlcs": { checkpoints: ["offered-vs-received"], exercises: ["ln-exercise-offered-htlc-script", "ln-exercise-htlc-timeout-tx", "ln-exercise-finalize-htlc-timeout"] },
+  "get-htlc-commitment": { checkpoints: [], exercises: [] },
+  "get-htlc-timeout": { checkpoints: [], exercises: [] },
+  "received-htlcs": { checkpoints: ["htlc-timeout-vs-success"], exercises: ["ln-exercise-received-htlc-script", "ln-exercise-htlc-success-tx", "ln-exercise-finalize-htlc-success"] },
+  "htlc-fees-dust": { checkpoints: ["htlc-dust", "p2wsh-wrapping"], exercises: [] },
+  "closing-channels": { checkpoints: [], exercises: [] },
+  "quiz": { checkpoints: [], exercises: [] },
+  "pay-it-forward": { checkpoints: [], exercises: [] },
+};
+
+function useChapterCompletion(
+  completedCheckpoints: { checkpointId: string }[],
+  getProgress: (key: string) => string | null,
+  tutorialMode: "read" | "code",
+  rewardClaimed: boolean,
+): Record<string, "complete" | "incomplete"> {
+  return useMemo(() => {
+    const result: Record<string, "complete" | "incomplete"> = {};
+    const completedIds = new Set(completedCheckpoints.map(c => c.checkpointId));
+
+    for (const chapter of chapters) {
+      const reqs = CHAPTER_REQUIREMENTS[chapter.id];
+      if (!reqs) { result[chapter.id] = "incomplete"; continue; }
+
+      const checkpoints = reqs.checkpoints;
+      const exercises = tutorialMode === "code" ? reqs.exercises : [];
+      const isReadOnly = checkpoints.length === 0 && exercises.length === 0;
+
+      if (chapter.id === "quiz") {
+        result[chapter.id] = rewardClaimed ? "complete" : "incomplete";
+      } else if (chapter.id === "pay-it-forward") {
+        result[chapter.id] = "incomplete";
+      } else if (isReadOnly) {
+        result[chapter.id] = getProgress(`chapter-read:${chapter.id}`) === "1"
+          ? "complete" : "incomplete";
+      } else {
+        const allCheckpointsDone = checkpoints.every(id => completedIds.has(id));
+        const allExercisesDone = exercises.every(id => completedIds.has(id));
+        result[chapter.id] = (allCheckpointsDone && allExercisesDone)
+          ? "complete" : "incomplete";
+      }
+    }
+    return result;
+  }, [completedCheckpoints, getProgress, tutorialMode, rewardClaimed]);
+}
 
 function idxOf(id: string) {
   return Math.max(0, chapters.findIndex((c) => c.id === id));
@@ -763,6 +922,18 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
     return "read";
   });
 
+  const progress = useProgress(auth.sessionToken);
+  const chapterCompletion = useChapterCompletion(
+    auth.completedCheckpoints,
+    progress.getProgress,
+    tutorialMode,
+    auth.rewardClaimed,
+  );
+
+  const [fileBrowserOpen, setFileBrowserOpen] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const toolsRef = useRef<HTMLDivElement>(null);
+
   const activeIndex = idxOf(activeId);
   const active = chapters[activeIndex] ?? chapters[0];
   const prev = chapters[activeIndex - 1];
@@ -793,6 +964,18 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
       // ignore
     }
   }, [theme]);
+
+  // Close tools dropdown on click outside
+  useEffect(() => {
+    if (!toolsOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (toolsRef.current && !toolsRef.current.contains(e.target as Node)) {
+        setToolsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [toolsOpen]);
 
   const t = theme === "dark"
     ? {
@@ -827,6 +1010,7 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
       };
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const storedCollapsed = typeof window !== "undefined" ? localStorage.getItem("pl-sidebar-collapsed") : null;
@@ -854,17 +1038,17 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
             MENU
           </button>
           <Link
-            href="/learn"
+            href="/"
             className="hidden md:inline font-pixel text-xs md:text-sm hover:text-primary transition-colors"
-            data-testid="link-back-blog"
+            data-testid="link-back-home"
           >
-            &lt; BACK TO LEARN
+            &lt; BACK TO HOME
           </Link>
           <Link
-            href="/learn"
+            href="/"
             className={`md:hidden p-1 transition-colors ${theme === "dark" ? "text-slate-300 hover:text-slate-100" : "text-foreground/70 hover:text-foreground"}`}
-            data-testid="link-back-blog-mobile"
-            aria-label="Back to Learn"
+            data-testid="link-back-home-mobile"
+            aria-label="Back to Home"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 12H5" />
@@ -875,7 +1059,7 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
 
         <div className="hidden md:flex items-center gap-3">
           <div className={`font-pixel text-xs md:text-sm ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`} data-testid="text-tutorial-breadcrumb">
-            Noise Tutorial
+            Payment Channels Tutorial
           </div>
           <div className={`h-4 w-[2px] ${theme === "dark" ? "bg-[#2a3552]" : "bg-border"}`} />
           <div className={`font-mono text-lg md:text-xl ${t.crumbText}`} data-testid="text-chapter-title">
@@ -975,7 +1159,7 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
         <aside
           className={`${
             mobileNavOpen ? "fixed inset-y-0 left-0 w-[300px] z-50 overflow-y-auto shadow-xl" : "hidden"
-          } md:relative md:block md:sticky md:top-[68px] md:w-auto md:z-auto md:shadow-none md:h-fit ${theme === "dark" ? "bg-[#0b1220]" : "bg-card"}`}
+          } md:relative md:block md:sticky md:top-[68px] md:w-auto md:z-auto md:shadow-none md:max-h-[calc(100vh-68px)] md:overflow-y-auto ${theme === "dark" ? "bg-[#0b1220]" : "bg-card"}`}
         >
           <div className="md:hidden flex items-center justify-between px-4 pt-4 pb-2">
             <div className={`font-pixel text-sm ${theme === "dark" ? "text-slate-200" : "text-foreground"}`}>
@@ -1025,20 +1209,42 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
             {sectionOrder.map((section) => {
               const items = grouped.get(section) ?? [];
               if (!items.length) return null;
+              const isSectionCollapsed = collapsedSections.has(section);
+              const trackableItems = items.filter(c => c.id !== "pay-it-forward");
+              const completedInSection = trackableItems.filter(c => chapterCompletion[c.id] === "complete").length;
+              const totalInSection = trackableItems.length;
               return (
                 <div key={section} className="mb-4">
-                  <div
-                    className={`font-pixel text-[14px] tracking-wide mb-2 ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`}
+                  <button
+                    type="button"
+                    onClick={() => setCollapsedSections((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(section)) next.delete(section);
+                      else next.add(section);
+                      return next;
+                    })}
+                    className={`flex items-center justify-between w-full font-pixel text-[14px] tracking-wide mb-2 cursor-pointer ${theme === "dark" ? "text-slate-300 hover:text-slate-100" : "text-foreground/70 hover:text-foreground"}`}
                     data-testid={`text-section-${section.replace(/\s+/g, "-").toLowerCase()}`}
                   >
-                    {section.toUpperCase()}
-                  </div>
+                    <span className="flex items-center gap-2">
+                      {section.toUpperCase()}
+                      {totalInSection > 0 && (
+                        <span className={`text-[11px] font-pixel ${completedInSection === totalInSection ? (theme === "dark" ? "text-green-400" : "text-green-600") : "opacity-50"}`}>
+                          {completedInSection}/{totalInSection}
+                        </span>
+                      )}
+                    </span>
+                    <span className={`text-[10px] transition-transform ${isSectionCollapsed ? "-rotate-90" : ""}`}>&#9660;</span>
+                  </button>
                   <div className={`h-[2px] ${theme === "dark" ? "bg-[#1f2a44]" : "bg-border"} mb-2`} />
 
+                  {!isSectionCollapsed && (
                   <nav className="grid gap-1">
                     {items.map((c) => {
                       const href = c.id === "intro" ? "/lightning-tutorial" : `/lightning-tutorial/${c.id}`;
                       const isActive = c.id === activeId;
+                      const isComplete = chapterCompletion[c.id] === "complete";
+                      const showIcon = c.id !== "pay-it-forward";
                       return (
                         <button
                           key={c.id}
@@ -1049,11 +1255,25 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
                           } w-full text-left border-2 px-3 py-1.5 transition-colors`}
                           data-testid={`button-chapter-${c.id}`}
                         >
-                          <div className="text-[16px] leading-snug" style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>{c.title}</div>
+                          <div className="flex items-center gap-2">
+                            {showIcon && (
+                              <span className={`w-4 h-4 shrink-0 rounded-full border-2 flex items-center justify-center text-[8px] leading-none ${
+                                isComplete
+                                  ? theme === "dark"
+                                    ? "border-green-500 bg-green-500/20 text-green-400"
+                                    : "border-green-600 bg-green-500/20 text-green-600"
+                                  : theme === "dark" ? "border-[#2a3552]" : "border-border"
+                              }`}>
+                                {isComplete && "\u2713"}
+                              </span>
+                            )}
+                            <div className="text-[16px] leading-snug" style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>{c.title}</div>
+                          </div>
                         </button>
                       );
                     })}
                   </nav>
+                  )}
                 </div>
               );
             })}
@@ -1092,6 +1312,7 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
                 onLoginRequest={() => setShowLoginModal(true)}
                 onCheckpointCompleted={auth.markCheckpointCompleted}
                 onOpenProfile={() => setShowProfileDropdown(true)}
+                progress={progress}
               />
             )}
 
@@ -1128,7 +1349,63 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
       </div>
 
       {tutorialMode === "code" && (
-        <Scratchpad theme={theme} />
+        <>
+          {/* Tools dropdown */}
+          <div ref={toolsRef} className="fixed top-[78px] right-4 z-40 hidden lg:block">
+            <button
+              onClick={() => setToolsOpen((o) => !o)}
+              className={`flex items-center gap-2 font-pixel text-[14px] tracking-wide mb-2 cursor-pointer ${
+                theme === "dark"
+                  ? "text-slate-300 hover:text-slate-100"
+                  : "text-foreground/70 hover:text-foreground"
+              }`}
+            >
+              <span>TOOLS</span>
+              <span className={`text-[10px] transition-transform ${toolsOpen ? "" : "-rotate-90"}`}>&#9660;</span>
+            </button>
+            <div className={`h-[2px] ${theme === "dark" ? "bg-[#1f2a44]" : "bg-border"}`} />
+            {toolsOpen && (
+              <div className="grid gap-1 mt-2">
+                {[
+                  { label: "Scratchpad", event: "scratchpad-open" },
+                  { label: "Bitcoin Node", event: "node-terminal-open" },
+                  { label: "Files", event: null },
+                  { label: "Transactions", event: "tx-notebook-open" },
+                ].map((item) => (
+                  <button
+                    key={item.label}
+                    onClick={() => {
+                      if (item.event) {
+                        window.dispatchEvent(new CustomEvent(item.event));
+                      } else {
+                        setFileBrowserOpen(true);
+                      }
+                      setToolsOpen(false);
+                    }}
+                    className={`w-full text-left border-2 px-3 py-1.5 transition-colors cursor-pointer ${
+                      theme === "dark"
+                        ? "bg-[#0f1930] border-[#2a3552] text-slate-100 hover:bg-[#132043]"
+                        : "bg-card border-border text-foreground hover:bg-secondary"
+                    }`}
+                  >
+                    <div className="text-[16px] leading-snug" style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>{item.label}</div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <Scratchpad theme={theme} />
+          <NodeTerminal theme={theme} sessionToken={auth.sessionToken} authenticated={authenticated} />
+          {fileBrowserOpen && (
+            <ExerciseFileBrowser
+              currentExerciseId=""
+              theme={theme}
+              onClose={() => setFileBrowserOpen(false)}
+            />
+          )}
+          <TxNotebook theme={theme} />
+        </>
       )}
 
       {showLoginModal && (
@@ -2448,7 +2725,7 @@ function InteractiveQuiz({
                   </div>
                 )}
               </div>
-              <div className={`text-[19px] md:text-[22px] font-semibold mb-4 leading-snug ${textColor}`} data-testid={`text-quiz-question-${qIndex}`}>
+              <div className={`text-[19px] md:text-[22px] font-semibold mb-4 leading-snug ${textColor}`} style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }} data-testid={`text-quiz-question-${qIndex}`}>
                 {q.question}
               </div>
 
@@ -2495,6 +2772,7 @@ function InteractiveQuiz({
                       className={`w-full text-left border px-3 py-2.5 flex items-start gap-2.5 transition-colors ${optionStyle} ${
                         submitted ? "" : "active:scale-[0.99]"
                       }`}
+                      style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}
                       data-testid={`button-quiz-option-${qIndex}-${optIndex}`}
                     >
                       <span
@@ -2512,7 +2790,7 @@ function InteractiveQuiz({
                             : "border-border text-foreground/60"
                         }`}
                       >
-                        {submitted && isSelected && isAnswer ? "✓" : submitted && passed && isAnswer ? "✓" : submitted && isSelected && !isAnswer ? "✗" : letter}
+                        {submitted && isSelected && isAnswer ? "\u2713" : submitted && passed && isAnswer ? "\u2713" : submitted && isSelected && !isAnswer ? "\u2717" : letter}
                       </span>
                       <span className={`text-[18px] md:text-[20px] leading-snug ${!submitted ? (dark ? "text-slate-200" : "text-foreground") : ""}`}>
                         {opt}
@@ -2596,6 +2874,7 @@ function ChapterContent({
   onLoginRequest,
   onCheckpointCompleted,
   onOpenProfile,
+  progress,
 }: {
   chapter: Chapter;
   theme: "light" | "dark";
@@ -2609,10 +2888,10 @@ function ChapterContent({
   onLoginRequest: () => void;
   onCheckpointCompleted: (id: string, amountSats?: number) => void;
   onOpenProfile: () => void;
+  progress: ReturnType<typeof useProgress>;
 }) {
   const [md, setMd] = useState<string>("Loading…");
   const [err, setErr] = useState<string | null>(null);
-  const progress = useProgress(sessionToken);
 
   useEffect(() => {
     let cancelled = false;
@@ -2832,6 +3111,12 @@ function ChapterContent({
               </CollapsibleGroup>
             );
           },
+          "tx-generator": ({ id }: any) => {
+            const genId = String(id || "");
+            const genConfig = TX_GENERATORS[genId];
+            if (!genConfig) return null;
+            return <TxGenerator config={genConfig} theme={theme} />;
+          },
           "code-outro": ({ text }: any) => {
             if (tutorialMode !== "code") return null;
             return <p className="mt-4 opacity-80">{text}</p>;
@@ -2881,6 +3166,55 @@ function ChapterContent({
       >
         {rewriteTutorialImagePaths(md)}
       </ReactMarkdown>
+
+      {(() => {
+        const reqs = CHAPTER_REQUIREMENTS[chapter.id];
+        const isReadOnly = reqs && reqs.checkpoints.length === 0 &&
+          (tutorialMode === "read" || reqs.exercises.length === 0);
+        if (!isReadOnly || chapter.id === "quiz" || chapter.id === "pay-it-forward") return null;
+        const isMarkedRead = progress.getProgress(`chapter-read:${chapter.id}`) === "1";
+
+        if (!authenticated) {
+          return (
+            <button
+              onClick={onLoginRequest}
+              className={`mt-8 w-full border-2 px-4 py-3 font-pixel text-sm tracking-wide transition-colors cursor-pointer ${
+                theme === "dark"
+                  ? "border-[#2a3552] text-[#ffd700] hover:bg-[#132043]"
+                  : "border-border text-foreground hover:bg-secondary"
+              }`}
+            >
+              LOG IN TO TRACK PROGRESS
+            </button>
+          );
+        }
+
+        if (isMarkedRead) {
+          return (
+            <div className={`mt-8 text-center font-pixel text-sm ${
+              theme === "dark" ? "text-green-400" : "text-green-600"
+            }`}>
+              &#10003; COMPLETED
+            </div>
+          );
+        }
+
+        return (
+          <button
+            onClick={() => {
+              progress.saveProgress(`chapter-read:${chapter.id}`, "1");
+              onCheckpointCompleted(`chapter-read:${chapter.id}`);
+            }}
+            className={`mt-8 w-full border-2 px-4 py-3 font-pixel text-sm tracking-wide transition-colors cursor-pointer ${
+              theme === "dark"
+                ? "border-[#2a3552] text-[#ffd700] hover:bg-[#132043]"
+                : "border-border text-foreground hover:bg-secondary"
+            }`}
+          >
+            MARK AS READ
+          </button>
+        );
+      })()}
 
     </div>
   );
