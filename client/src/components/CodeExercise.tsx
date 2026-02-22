@@ -35,6 +35,10 @@ interface CodeExerciseProps {
   claimInfo: { checkpointId: string; amountSats: number; paidAt: string } | null;
   onLoginRequest: () => void;
   onCompleted: (checkpointId: string, amountSats?: number) => void;
+  // Group context for "accumulating file" model
+  fileLabel?: string;
+  preamble?: string;
+  priorExercises?: Array<{ id: string; solutionCode: string }>;
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -50,6 +54,9 @@ export default function CodeExercise({
   claimInfo,
   onLoginRequest,
   onCompleted,
+  fileLabel,
+  preamble,
+  priorExercises,
 }: CodeExerciseProps) {
   const dark = theme === "dark";
   const editorRef = useRef<HTMLDivElement>(null);
@@ -57,6 +64,11 @@ export default function CodeExercise({
   const storageKey = `pl-exercise-${exerciseId}`;
 
   const [expanded, setExpanded] = useState(false);
+
+  // Prior code panel (collapsible)
+  const [priorCodeOpen, setPriorCodeOpen] = useState(false);
+  const priorCodeRef = useRef<HTMLDivElement>(null);
+  const priorViewRef = useRef<EditorView | null>(null);
 
   // Hint state: null = closed, "conceptual" | "steps" | "code" = which is open
   const [activeHint, setActiveHint] = useState<"conceptual" | "steps" | "code" | null>(null);
@@ -120,6 +132,61 @@ export default function CodeExercise({
       hintViewRef.current = null;
     };
   }, [activeHint, dark, data.hints.code]);
+
+  // Assemble preamble + prior exercise solutions into a single context string.
+  // Called at test-run time so it picks up any changes the student made earlier
+  // in the same session.
+  const assembleContext = useCallback((): string => {
+    const parts: string[] = [];
+    if (preamble) parts.push(preamble);
+    for (const pe of priorExercises ?? []) {
+      try {
+        const saved = localStorage.getItem(`pl-exercise-${pe.id}`);
+        parts.push(saved ?? pe.solutionCode);
+      } catch {
+        parts.push(pe.solutionCode);
+      }
+    }
+    return parts.filter(Boolean).join("\n\n");
+  }, [preamble, priorExercises]);
+
+  // Read-only CodeMirror for prior code panel
+  useEffect(() => {
+    const hasPriorContent = (preamble && preamble.trim()) || (priorExercises && priorExercises.length > 0);
+    if (!priorCodeOpen || !hasPriorContent || !priorCodeRef.current) {
+      if (priorViewRef.current) {
+        priorViewRef.current.destroy();
+        priorViewRef.current = null;
+      }
+      return;
+    }
+    if (priorViewRef.current) return;
+
+    const priorExtensions = [
+      python(),
+      EditorView.editable.of(false),
+      EditorState.readOnly.of(true),
+      ...(dark ? [oneDark] : []),
+      EditorView.theme({
+        "&": { fontSize: "13px", borderRadius: "4px", overflow: "hidden" },
+        ".cm-scroller": { overflow: "auto", maxHeight: "300px" },
+        ".cm-gutters": { display: "none" },
+        ".cm-content": { padding: "8px 12px" },
+        "&.cm-focused": { outline: "none" },
+      }),
+    ];
+
+    const view = new EditorView({
+      state: EditorState.create({ doc: assembleContext().trim(), extensions: priorExtensions }),
+      parent: priorCodeRef.current,
+    });
+    priorViewRef.current = view;
+
+    return () => {
+      view.destroy();
+      priorViewRef.current = null;
+    };
+  }, [priorCodeOpen, dark, preamble, priorExercises, assembleContext]);
 
   // Pre-warm Pyodide on mount
   useEffect(() => {
@@ -271,7 +338,9 @@ export default function CodeExercise({
 
     try {
       const studentCode = viewRef.current?.state.doc.toString() || "";
-      const testResults = await runPythonTests(studentCode, data.testCode);
+      const context = assembleContext();
+      const fullCode = [context, studentCode].filter(Boolean).join("\n\n");
+      const testResults = await runPythonTests(fullCode, data.testCode);
       setResults(testResults);
       const passed = testResults.length > 0 && testResults.every((r) => r.passed);
       setAllPassed(passed);
@@ -401,6 +470,40 @@ export default function CodeExercise({
           {expanded ? "−" : "+"}
         </button>
       </div>
+
+      {/* Prior code panel (shown when group context is available) */}
+      {(fileLabel || (priorExercises && priorExercises.length > 0) || preamble) && (
+        <div className="mb-3">
+          {/* File badge + toggle button */}
+          <button
+            type="button"
+            onClick={() => setPriorCodeOpen((v) => !v)}
+            className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-all border ${
+              dark
+                ? "border-[#2a3552] bg-[#0b1220] text-slate-400 hover:text-slate-200 hover:bg-[#0f1930]"
+                : "border-border bg-secondary/50 text-foreground/60 hover:text-foreground hover:bg-secondary"
+            }`}
+          >
+            <span className="font-mono text-xs opacity-70">{priorCodeOpen ? "▼" : "▶"}</span>
+            <span className="font-mono text-xs">
+              {fileLabel ?? "prior code"}
+            </span>
+            <span className={`ml-auto text-xs opacity-50`} style={sansFont}>
+              {priorCodeOpen ? "hide prior code" : "show prior code"}
+            </span>
+          </button>
+          {priorCodeOpen && (
+            <div ref={priorCodeRef} className={`border border-t-0 ${dark ? "border-[#2a3552]" : "border-border"}`} />
+          )}
+        </div>
+      )}
+
+      {/* Current file section label */}
+      {fileLabel && (
+        <div className={`mb-1 font-mono text-xs ${dark ? "text-slate-500" : "text-foreground/40"}`}>
+          {fileLabel} — your code below:
+        </div>
+      )}
 
       {/* Code Editor */}
       <div ref={editorRef} className="mb-3" />

@@ -13,6 +13,7 @@ import CodeExercise from "../components/CodeExercise";
 import Scratchpad from "../components/Scratchpad";
 import { CollapsibleItem, CollapsibleGroup } from "../components/CollapsibleSection";
 import { LIGHTNING_EXERCISES } from "../data/lightning-exercises";
+import { getExerciseGroupContext } from "../lib/exercise-groups";
 
 // --- Checkpoint questions embedded inline in tutorial chapters ---
 const CHECKPOINT_QUESTIONS: Record<string, {
@@ -213,7 +214,7 @@ const CHECKPOINT_QUESTIONS: Record<string, {
 type Chapter = {
   id: string;
   title: string;
-  section: "Introduction" | "Keys & Derivation" | "Funding" | "Commitment Keys" | "Commitment Transactions" | "HTLCs" | "Quiz" | "Pay It Forward";
+  section: "Introduction" | "Keys & Derivation" | "Payment Channels" | "Commitment Keys" | "Commitment Transactions" | "HTLCs" | "Quiz" | "Pay It Forward";
   kind: "intro" | "md";
   file?: string;
 };
@@ -231,13 +232,6 @@ const chapters: Chapter[] = [
     section: "Introduction",
     kind: "md",
     file: "/lightning_tutorial/1.1-protocols-fairness.md",
-  },
-  {
-    id: "payment-channels-overview",
-    title: "Payment Channels Overview",
-    section: "Introduction",
-    kind: "md",
-    file: "/lightning_tutorial/1.2-payment-channels.md",
   },
   {
     id: "keys-manager",
@@ -261,23 +255,44 @@ const chapters: Chapter[] = [
     file: "/lightning_tutorial/2.3-channel-keys.md",
   },
   {
+    id: "payment-channels-overview",
+    title: "Off-Chain Scaling",
+    section: "Payment Channels",
+    kind: "md",
+    file: "/lightning_tutorial/1.2-payment-channels.md",
+  },
+  {
     id: "funding-script",
     title: "Funding Script",
-    section: "Funding",
+    section: "Payment Channels",
     kind: "md",
     file: "/lightning_tutorial/3.1-funding-script.md",
   },
   {
     id: "funding-transaction",
     title: "Funding Transaction",
-    section: "Funding",
+    section: "Payment Channels",
     kind: "md",
     file: "/lightning_tutorial/3.2-funding-transaction.md",
   },
   {
+    id: "refund-transactions",
+    title: "Refund & Timelocks",
+    section: "Payment Channels",
+    kind: "md",
+    file: "/lightning_tutorial/1.3-refund-transactions.md",
+  },
+  {
+    id: "revocable-transactions",
+    title: "Revocable Transactions",
+    section: "Payment Channels",
+    kind: "md",
+    file: "/lightning_tutorial/1.4-revocable-transactions.md",
+  },
+  {
     id: "signing",
     title: "Transaction Signing",
-    section: "Funding",
+    section: "Payment Channels",
     kind: "md",
     file: "/lightning_tutorial/3.3-signing.md",
   },
@@ -369,7 +384,7 @@ const chapters: Chapter[] = [
 const sectionOrder: Chapter["section"][] = [
   "Introduction",
   "Keys & Derivation",
-  "Funding",
+  "Payment Channels",
   "Commitment Keys",
   "Commitment Transactions",
   "HTLCs",
@@ -2734,6 +2749,7 @@ function ChapterContent({
             if (exerciseList.length === 1) {
               const ex = exerciseList[0];
               const isCompleted = completedCheckpoints.some(c => c.checkpointId === ex.id);
+              const ctx = getExerciseGroupContext(ex.id);
               return (
                 <CollapsibleItem
                   title={ex.data.title}
@@ -2753,6 +2769,12 @@ function ChapterContent({
                     claimInfo={completedCheckpoints.find(c => c.checkpointId === ex.id) || null}
                     onLoginRequest={onLoginRequest}
                     onCompleted={onCheckpointCompleted}
+                    fileLabel={ctx?.fileLabel}
+                    preamble={ctx?.preamble}
+                    priorExercises={ctx?.priorExercises.map(pe => ({
+                      id: pe.id,
+                      solutionCode: LIGHTNING_EXERCISES[pe.id]?.hints.code ?? "",
+                    }))}
                   />
                 </CollapsibleItem>
               );
@@ -2770,6 +2792,7 @@ function ChapterContent({
               >
                 {exerciseList.map((ex: any) => {
                   const isCompleted = completedCheckpoints.some(c => c.checkpointId === ex.id);
+                  const ctx = getExerciseGroupContext(ex.id);
                   return (
                     <CollapsibleItem
                       key={ex.id}
@@ -2790,6 +2813,12 @@ function ChapterContent({
                         claimInfo={completedCheckpoints.find(c => c.checkpointId === ex.id) || null}
                         onLoginRequest={onLoginRequest}
                         onCompleted={onCheckpointCompleted}
+                        fileLabel={ctx?.fileLabel}
+                        preamble={ctx?.preamble}
+                        priorExercises={ctx?.priorExercises.map(pe => ({
+                          id: pe.id,
+                          solutionCode: LIGHTNING_EXERCISES[pe.id]?.hints.code ?? "",
+                        }))}
                       />
                     </CollapsibleItem>
                   );

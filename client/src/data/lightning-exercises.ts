@@ -10,6 +10,8 @@ export interface CodeExerciseData {
     code: string;
   };
   rewardSats: number;
+  group: string;       // e.g. "keys/derivation"
+  groupOrder: number;  // 1-based position within the group
 }
 
 export const LIGHTNING_EXERCISES: Record<string, CodeExerciseData> = {
@@ -95,6 +97,8 @@ def create_keys_manager(seed: bytes) -> dict:
     }`,
     },
     rewardSats: 21,
+    group: "keys/derivation",
+    groupOrder: 1,
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -105,25 +109,7 @@ def create_keys_manager(seed: bytes) -> dict:
     title: "Exercise 2: Derive a BIP32 Key",
     description:
       "Implement BIP32 child key derivation and use it to derive a key at path m/1017h/0h/{family}h/0/{index}. This is the LN key derivation path (BOLT 3). Support both hardened (h) and normal child derivation.",
-    starterCode: `import hmac
-import hashlib
-import struct
-from ecdsa import SECP256k1, SigningKey
-
-ORDER = SECP256k1.order
-
-def privkey_to_pubkey(secret: bytes) -> bytes:
-    sk = SigningKey.from_string(secret, curve=SECP256k1)
-    vk = sk.get_verifying_key()
-    point = vk.pubkey.point
-    prefix = b'\\x02' if point.y() % 2 == 0 else b'\\x03'
-    return prefix + point.x().to_bytes(32, 'big')
-
-def bip32_from_seed(seed: bytes):
-    I = hmac.new(b"Bitcoin seed", seed, hashlib.sha512).digest()
-    return I[:32], I[32:]
-
-def bip32_ckd_priv(key: bytes, chaincode: bytes, index: int):
+    starterCode: `def bip32_ckd_priv(key: bytes, chaincode: bytes, index: int):
     """
     Derive a child private key from a parent key and chaincode.
 
@@ -141,6 +127,8 @@ def bip32_ckd_priv(key: bytes, chaincode: bytes, index: int):
 def derive_ln_key(seed: bytes, family: int, index: int) -> bytes:
     """
     Derive a Lightning key at path m/1017h/0h/{family}h/0/{index}.
+
+    Hint: use create_keys_manager(seed) to get the master_key and chain_code.
 
     Args:
         seed: 32-byte seed
@@ -229,25 +217,7 @@ def test_derive_all_families():
         "<p>BIP32 child key derivation (CKD) uses HMAC-SHA512 to derive child keys from parent keys. For <strong>hardened</strong> derivation (index >= 0x80000000), the HMAC input is <code>0x00 || parent_key || index</code>. For <strong>normal</strong> derivation, it is <code>parent_pubkey || index</code>. The child key is computed as <code>(parse256(IL) + parent_key) mod n</code>. The Lightning path is <code>m/1017h/0h/{family}h/0/{index}</code>.</p>",
       steps:
         '<ol><li>In <code>bip32_ckd_priv</code>: if hardened, set <code>data = b"\\x00" + key + struct.pack(">I", index)</code></li><li>If normal, set <code>data = privkey_to_pubkey(key) + struct.pack(">I", index)</code></li><li>Compute <code>I = hmac.new(chaincode, data, hashlib.sha512).digest()</code></li><li>Child key = <code>(int.from_bytes(I[:32]) + int.from_bytes(key)) % ORDER</code></li><li>In <code>derive_ln_key</code>: derive from seed, then walk path m/1017h/0h/{family}h/0/{index}</li></ol>',
-      code: `import hmac
-import hashlib
-import struct
-from ecdsa import SECP256k1, SigningKey
-
-ORDER = SECP256k1.order
-
-def privkey_to_pubkey(secret: bytes) -> bytes:
-    sk = SigningKey.from_string(secret, curve=SECP256k1)
-    vk = sk.get_verifying_key()
-    point = vk.pubkey.point
-    prefix = b'\\x02' if point.y() % 2 == 0 else b'\\x03'
-    return prefix + point.x().to_bytes(32, 'big')
-
-def bip32_from_seed(seed: bytes):
-    I = hmac.new(b"Bitcoin seed", seed, hashlib.sha512).digest()
-    return I[:32], I[32:]
-
-def bip32_ckd_priv(key: bytes, chaincode: bytes, index: int):
+      code: `def bip32_ckd_priv(key: bytes, chaincode: bytes, index: int):
     if index >= 0x80000000:
         data = b'\\x00' + key + struct.pack('>I', index)
     else:
@@ -259,12 +229,15 @@ def bip32_ckd_priv(key: bytes, chaincode: bytes, index: int):
     return child_key, I[32:]
 
 def derive_ln_key(seed: bytes, family: int, index: int) -> bytes:
-    key, cc = bip32_from_seed(seed)
+    km = create_keys_manager(seed)
+    key, cc = km['master_key'], km['chain_code']
     for idx in [1017 + 0x80000000, 0 + 0x80000000, family + 0x80000000, 0, index]:
         key, cc = bip32_ckd_priv(key, cc, idx)
     return key`,
     },
     rewardSats: 21,
+    group: "keys/derivation",
+    groupOrder: 2,
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -275,50 +248,7 @@ def derive_ln_key(seed: bytes, family: int, index: int) -> bytes:
     title: "Exercise 3: Derive All Channel Keys",
     description:
       "Derive all 6 Lightning channel key families and their corresponding public keys. The key families are: funding (0), revocation_base (1), htlc_base (2), payment_base (3), delayed_payment_base (4), and per_commitment (5).",
-    starterCode: `import hmac
-import hashlib
-import struct
-from ecdsa import SECP256k1, SigningKey
-
-ORDER = SECP256k1.order
-
-def privkey_to_pubkey(secret: bytes) -> bytes:
-    sk = SigningKey.from_string(secret, curve=SECP256k1)
-    vk = sk.get_verifying_key()
-    point = vk.pubkey.point
-    prefix = b'\\x02' if point.y() % 2 == 0 else b'\\x03'
-    return prefix + point.x().to_bytes(32, 'big')
-
-def bip32_from_seed(seed: bytes):
-    I = hmac.new(b"Bitcoin seed", seed, hashlib.sha512).digest()
-    return I[:32], I[32:]
-
-def bip32_ckd_priv(key: bytes, chaincode: bytes, index: int):
-    if index >= 0x80000000:
-        data = b'\\x00' + key + struct.pack('>I', index)
-    else:
-        pubkey = privkey_to_pubkey(key)
-        data = pubkey + struct.pack('>I', index)
-    I = hmac.new(chaincode, data, hashlib.sha512).digest()
-    child_key_int = (int.from_bytes(I[:32], 'big') + int.from_bytes(key, 'big')) % ORDER
-    return child_key_int.to_bytes(32, 'big'), I[32:]
-
-def derive_ln_key(seed: bytes, family: int, index: int) -> bytes:
-    key, cc = bip32_from_seed(seed)
-    for idx in [1017 + 0x80000000, 0 + 0x80000000, family + 0x80000000, 0, index]:
-        key, cc = bip32_ckd_priv(key, cc, idx)
-    return key
-
-KEY_FAMILIES = {
-    'funding': 0,
-    'revocation_base': 1,
-    'htlc_base': 2,
-    'payment_base': 3,
-    'delayed_payment_base': 4,
-    'per_commitment': 5,
-}
-
-def derive_channel_keys(seed: bytes, index: int = 0) -> dict:
+    starterCode: `def derive_channel_keys(seed: bytes, index: int = 0) -> dict:
     """
     Derive all 6 channel key pairs (private + public) for a given channel index.
 
@@ -403,6 +333,8 @@ def test_different_families_different_keys():
     return result`,
     },
     rewardSats: 21,
+    group: "keys/derivation",
+    groupOrder: 3,
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -476,6 +408,8 @@ def test_script_structure():
     )`,
     },
     rewardSats: 21,
+    group: "scripts/funding",
+    groupOrder: 1,
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -486,14 +420,7 @@ def test_script_structure():
     title: "Exercise 5: Create Funding Transaction",
     description:
       "Build a funding transaction that spends from a given UTXO and creates a P2WSH output using the 2-of-2 multisig funding script. The output script is OP_0 <32-byte SHA256 of funding script>.",
-    starterCode: `import hashlib
-import struct
-
-def create_funding_script(pubkey1: bytes, pubkey2: bytes) -> bytes:
-    keys = sorted([pubkey1, pubkey2])
-    return b'\\x52' + b'\\x21' + keys[0] + b'\\x21' + keys[1] + b'\\x52' + b'\\xae'
-
-def create_funding_tx(input_txid_hex: str, input_vout: int,
+    starterCode: `def create_funding_tx(input_txid_hex: str, input_vout: int,
                       funding_amount: int,
                       pubkey1: bytes, pubkey2: bytes) -> str:
     """
@@ -561,14 +488,7 @@ def test_p2wsh_output():
         "<p>A funding transaction is a standard Bitcoin transaction with one input (the UTXO being spent) and one P2WSH output. The P2WSH output script is <code>OP_0 PUSH32 SHA256(funding_script)</code>. Note that the txid must be reversed from display order (big-endian hex) to internal byte order (little-endian) when building the transaction.</p>",
       steps:
         '<ol><li>Build version: <code>struct.pack("&lt;I", 2)</code></li><li>Build input: reversed txid bytes + vout(LE) + empty scriptSig + sequence 0xffffffff</li><li>Build funding script, hash with SHA256 to get witness program</li><li>Build output: value(8 bytes LE) + scriptPubKey (<code>0x00 0x20</code> + 32-byte hash)</li><li>Append locktime (4 zero bytes)</li></ol>',
-      code: `import hashlib
-import struct
-
-def create_funding_script(pubkey1: bytes, pubkey2: bytes) -> bytes:
-    keys = sorted([pubkey1, pubkey2])
-    return b'\\x52' + b'\\x21' + keys[0] + b'\\x21' + keys[1] + b'\\x52' + b'\\xae'
-
-def create_funding_tx(input_txid_hex: str, input_vout: int,
+      code: `def create_funding_tx(input_txid_hex: str, input_vout: int,
                       funding_amount: int,
                       pubkey1: bytes, pubkey2: bytes) -> str:
     tx = b''
@@ -595,6 +515,8 @@ def create_funding_tx(input_txid_hex: str, input_vout: int,
     return tx.hex()`,
     },
     rewardSats: 21,
+    group: "transactions/funding",
+    groupOrder: 1,
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -605,16 +527,7 @@ def create_funding_tx(input_txid_hex: str, input_vout: int,
     title: "Exercise 6: Sign a Transaction Input",
     description:
       "Sign a transaction input using BIP143 (segwit v0) signature hashing and ECDSA. Compute the sighash for a P2WSH input and produce a DER-encoded signature with SIGHASH_ALL appended.",
-    starterCode: `import hashlib
-import struct
-from ecdsa import SECP256k1, SigningKey
-from ecdsa.util import sigencode_der
-
-def create_funding_script(pubkey1: bytes, pubkey2: bytes) -> bytes:
-    keys = sorted([pubkey1, pubkey2])
-    return b'\\x52' + b'\\x21' + keys[0] + b'\\x21' + keys[1] + b'\\x52' + b'\\xae'
-
-def bip143_sighash(tx_bytes: bytes, input_index: int,
+    starterCode: `def bip143_sighash(tx_bytes: bytes, input_index: int,
                    script_code: bytes, value: int,
                    sighash_type: int = 1) -> bytes:
     """
@@ -743,12 +656,7 @@ def test_sighash_computation():
         "<p>BIP143 defines the sighash algorithm for segwit inputs. Instead of serializing the entire transaction for each input (as in legacy signing), BIP143 uses a commitment structure with hashed prevouts, sequences, and outputs. This is more efficient and prevents quadratic hashing attacks. The sighash preimage is double-SHA256'd to produce the 32-byte digest that gets signed with ECDSA.</p>",
       steps:
         '<ol><li>Parse the raw transaction to extract version, inputs, outputs, locktime</li><li>Compute hashPrevouts = dSHA256(all outpoints concatenated)</li><li>Compute hashSequence = dSHA256(all sequences concatenated)</li><li>Compute hashOutputs = dSHA256(all outputs concatenated)</li><li>Build preimage: version + hashPrevouts + hashSequence + outpoint + scriptCode + value + sequence + hashOutputs + locktime + sighash_type</li><li>Return dSHA256(preimage)</li><li>For signing: compute sighash, sign with ECDSA using sigencode_der, append 0x01</li></ol>',
-      code: `import hashlib
-import struct
-from ecdsa import SECP256k1, SigningKey
-from ecdsa.util import sigencode_der
-
-def bip143_sighash(tx_bytes, input_index, script_code, value, sighash_type=1):
+      code: `def bip143_sighash(tx_bytes, input_index, script_code, value, sighash_type=1):
     def dsha256(d):
         return hashlib.sha256(hashlib.sha256(d).digest()).digest()
     version = tx_bytes[0:4]
@@ -774,6 +682,8 @@ def sign_funding_input(tx_hex, input_index, funding_script, value, privkey):
     return sig + b'\\x01'`,
     },
     rewardSats: 21,
+    group: "transactions/funding",
+    groupOrder: 2,
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -784,31 +694,7 @@ def sign_funding_input(tx_hex, input_index, funding_script, value, privkey):
     title: "Exercise 7: Derive Revocation Public Key",
     description:
       "Derive a revocation public key from a revocation basepoint and a per-commitment point. The formula is: revocation_pubkey = revocation_basepoint * SHA256(revocation_basepoint || per_commitment_point) + per_commitment_point * SHA256(per_commitment_point || revocation_basepoint).",
-    starterCode: `import hashlib
-from ecdsa import SECP256k1, VerifyingKey
-from ecdsa.ellipticcurve import Point
-
-CURVE = SECP256k1.curve
-G = SECP256k1.generator
-ORDER = SECP256k1.order
-
-def decompress_pubkey(compressed: bytes) -> Point:
-    """Decompress a 33-byte compressed public key to an EC point."""
-    prefix = compressed[0]
-    x = int.from_bytes(compressed[1:], 'big')
-    p = CURVE.p()
-    y_sq = (pow(x, 3, p) + CURVE.a() * x + CURVE.b()) % p
-    y = pow(y_sq, (p + 1) // 4, p)
-    if (y % 2 == 0) != (prefix == 0x02):
-        y = p - y
-    return Point(CURVE, x, y)
-
-def compress_point(point: Point) -> bytes:
-    """Compress an EC point to 33-byte compressed format."""
-    prefix = b'\\x02' if point.y() % 2 == 0 else b'\\x03'
-    return prefix + point.x().to_bytes(32, 'big')
-
-def derive_revocation_pubkey(revocation_basepoint: bytes, per_commitment_point: bytes) -> bytes:
+    starterCode: `def derive_revocation_pubkey(revocation_basepoint: bytes, per_commitment_point: bytes) -> bytes:
     """
     Derive revocation public key per BOLT 3.
 
@@ -874,28 +760,7 @@ def test_order_matters():
         "<p>The revocation public key is derived using a two-party computation. Each party contributes a scalar multiplier derived from hashing both points in a specific order. The formula ensures that the revocation key can only be computed when both the revocation basepoint secret and the per-commitment secret are known.</p>",
       steps:
         '<ol><li>Compute <code>factor_1 = SHA256(revocation_basepoint || per_commitment_point)</code></li><li>Compute <code>factor_2 = SHA256(per_commitment_point || revocation_basepoint)</code></li><li>Decompress both input points</li><li>Compute <code>result = revocation_basepoint_point * factor_1 + per_commitment_point_point * factor_2</code></li><li>Compress and return the result</li></ol>',
-      code: `import hashlib
-from ecdsa import SECP256k1
-from ecdsa.ellipticcurve import Point
-
-CURVE = SECP256k1.curve
-ORDER = SECP256k1.order
-
-def decompress_pubkey(compressed):
-    prefix = compressed[0]
-    x = int.from_bytes(compressed[1:], 'big')
-    p = CURVE.p()
-    y_sq = (pow(x, 3, p) + CURVE.a() * x + CURVE.b()) % p
-    y = pow(y_sq, (p + 1) // 4, p)
-    if (y % 2 == 0) != (prefix == 0x02):
-        y = p - y
-    return Point(CURVE, x, y)
-
-def compress_point(point):
-    prefix = b'\\x02' if point.y() % 2 == 0 else b'\\x03'
-    return prefix + point.x().to_bytes(32, 'big')
-
-def derive_revocation_pubkey(revocation_basepoint, per_commitment_point):
+      code: `def derive_revocation_pubkey(revocation_basepoint, per_commitment_point):
     f1 = int.from_bytes(hashlib.sha256(revocation_basepoint + per_commitment_point).digest(), 'big') % ORDER
     f2 = int.from_bytes(hashlib.sha256(per_commitment_point + revocation_basepoint).digest(), 'big') % ORDER
     R = decompress_pubkey(revocation_basepoint)
@@ -904,6 +769,8 @@ def derive_revocation_pubkey(revocation_basepoint, per_commitment_point):
     return compress_point(result)`,
     },
     rewardSats: 21,
+    group: "keys/commitment",
+    groupOrder: 1,
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -914,19 +781,7 @@ def derive_revocation_pubkey(revocation_basepoint, per_commitment_point):
     title: "Exercise 8: Derive Revocation Private Key",
     description:
       "Derive the revocation private key from the revocation basepoint secret and the per-commitment secret. The formula mirrors the public key derivation: revocation_privkey = revocation_basepoint_secret * SHA256(revocation_basepoint || per_commitment_point) + per_commitment_secret * SHA256(per_commitment_point || revocation_basepoint), all mod n.",
-    starterCode: `import hashlib
-from ecdsa import SECP256k1, SigningKey
-
-ORDER = SECP256k1.order
-
-def privkey_to_pubkey(secret: bytes) -> bytes:
-    sk = SigningKey.from_string(secret, curve=SECP256k1)
-    vk = sk.get_verifying_key()
-    point = vk.pubkey.point
-    prefix = b'\\x02' if point.y() % 2 == 0 else b'\\x03'
-    return prefix + point.x().to_bytes(32, 'big')
-
-def derive_revocation_privkey(revocation_basepoint_secret: bytes,
+    starterCode: `def derive_revocation_privkey(revocation_basepoint_secret: bytes,
                                per_commitment_secret: bytes) -> bytes:
     """
     Derive revocation private key per BOLT 3.
@@ -984,19 +839,7 @@ def test_pubkey_consistency():
         "<p>The revocation private key derivation mirrors the public key version but works with scalars instead of points. You compute the same SHA256 factors, multiply them by the respective private keys, and add the results modulo the curve order n.</p>",
       steps:
         '<ol><li>Compute revocation_basepoint and per_commitment_point public keys from the secrets</li><li>Compute <code>f1 = SHA256(revocation_basepoint || per_commitment_point)</code></li><li>Compute <code>f2 = SHA256(per_commitment_point || revocation_basepoint)</code></li><li>Result = <code>(rev_secret_int * f1_int + per_secret_int * f2_int) % ORDER</code></li><li>Return as 32 bytes big-endian</li></ol>',
-      code: `import hashlib
-from ecdsa import SECP256k1, SigningKey
-
-ORDER = SECP256k1.order
-
-def privkey_to_pubkey(secret):
-    sk = SigningKey.from_string(secret, curve=SECP256k1)
-    vk = sk.get_verifying_key()
-    pt = vk.pubkey.point
-    prefix = b'\\x02' if pt.y() % 2 == 0 else b'\\x03'
-    return prefix + pt.x().to_bytes(32, 'big')
-
-def derive_revocation_privkey(revocation_basepoint_secret, per_commitment_secret):
+      code: `def derive_revocation_privkey(revocation_basepoint_secret, per_commitment_secret):
     rev_pub = privkey_to_pubkey(revocation_basepoint_secret)
     per_pub = privkey_to_pubkey(per_commitment_secret)
     f1 = int.from_bytes(hashlib.sha256(rev_pub + per_pub).digest(), 'big') % ORDER
@@ -1007,6 +850,8 @@ def derive_revocation_privkey(revocation_basepoint_secret, per_commitment_secret
     return result.to_bytes(32, 'big')`,
     },
     rewardSats: 21,
+    group: "keys/commitment",
+    groupOrder: 2,
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1083,6 +928,8 @@ def build_commitment_secret(seed: bytes, index: int) -> bytes:
     return bytes(value)`,
     },
     rewardSats: 21,
+    group: "keys/channel_keys",
+    groupOrder: 1,
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1093,18 +940,7 @@ def build_commitment_secret(seed: bytes, index: int) -> bytes:
     title: "Exercise 10: Derive Per-Commitment Point",
     description:
       "Derive a per-commitment point from a commitment seed and commitment number. The per-commitment point is the public key corresponding to the per-commitment secret.",
-    starterCode: `import hashlib
-from ecdsa import SECP256k1, SigningKey
-
-def build_commitment_secret(seed: bytes, index: int) -> bytes:
-    value = bytearray(seed)
-    for i in range(47, -1, -1):
-        if (index >> i) & 1:
-            value[i // 8] ^= (1 << (i % 8))
-            value = bytearray(hashlib.sha256(value).digest())
-    return bytes(value)
-
-def derive_per_commitment_point(seed: bytes, commitment_number: int) -> bytes:
+    starterCode: `def derive_per_commitment_point(seed: bytes, commitment_number: int) -> bytes:
     """
     Derive the per-commitment point for a given commitment number.
 
@@ -1165,18 +1001,7 @@ def test_different_commitments():
         "<p>The per-commitment point is simply the public key derived from the per-commitment secret. First compute the secret using the shachain algorithm, then derive the compressed public key from that secret.</p>",
       steps:
         '<ol><li>Compute the secret: <code>secret = build_commitment_secret(seed, commitment_number)</code></li><li>Create a signing key from the secret</li><li>Get the verifying (public) key and compress it</li></ol>',
-      code: `import hashlib
-from ecdsa import SECP256k1, SigningKey
-
-def build_commitment_secret(seed, index):
-    value = bytearray(seed)
-    for i in range(47, -1, -1):
-        if (index >> i) & 1:
-            value[i // 8] ^= (1 << (i % 8))
-            value = bytearray(hashlib.sha256(value).digest())
-    return bytes(value)
-
-def derive_per_commitment_point(seed, commitment_number):
+      code: `def derive_per_commitment_point(seed, commitment_number):
     secret = build_commitment_secret(seed, commitment_number)
     sk = SigningKey.from_string(secret, curve=SECP256k1)
     vk = sk.get_verifying_key()
@@ -1185,6 +1010,8 @@ def derive_per_commitment_point(seed, commitment_number):
     return prefix + pt.x().to_bytes(32, 'big')`,
     },
     rewardSats: 21,
+    group: "keys/channel_keys",
+    groupOrder: 2,
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1195,29 +1022,7 @@ def derive_per_commitment_point(seed, commitment_number):
     title: "Exercise 11: Derive Public Key from Basepoint",
     description:
       "Derive a public key from a basepoint and per-commitment point. The formula is: derived_key = basepoint + G * SHA256(per_commitment_point || basepoint). This is used to derive per-commitment versions of htlc_pubkey and delayed_payment_pubkey.",
-    starterCode: `import hashlib
-from ecdsa import SECP256k1
-from ecdsa.ellipticcurve import Point
-
-CURVE = SECP256k1.curve
-G = SECP256k1.generator
-ORDER = SECP256k1.order
-
-def decompress_pubkey(compressed: bytes) -> Point:
-    prefix = compressed[0]
-    x = int.from_bytes(compressed[1:], 'big')
-    p = CURVE.p()
-    y_sq = (pow(x, 3, p) + CURVE.a() * x + CURVE.b()) % p
-    y = pow(y_sq, (p + 1) // 4, p)
-    if (y % 2 == 0) != (prefix == 0x02):
-        y = p - y
-    return Point(CURVE, x, y)
-
-def compress_point(point: Point) -> bytes:
-    prefix = b'\\x02' if point.y() % 2 == 0 else b'\\x03'
-    return prefix + point.x().to_bytes(32, 'big')
-
-def derive_pubkey(basepoint: bytes, per_commitment_point: bytes) -> bytes:
+    starterCode: `def derive_pubkey(basepoint: bytes, per_commitment_point: bytes) -> bytes:
     """
     Derive a public key per BOLT 3.
 
@@ -1262,35 +1067,15 @@ def test_returns_compressed():
         "<p>This key derivation adds a tweak to the basepoint: the tweak is <code>G * SHA256(per_commitment_point || basepoint)</code>. The SHA256 hash of the concatenated points creates a unique scalar, which when multiplied by the generator G produces a tweak point. Adding this to the basepoint gives the derived key.</p>",
       steps:
         '<ol><li>Compute <code>tweak = SHA256(per_commitment_point || basepoint)</code></li><li>Convert tweak to integer mod ORDER</li><li>Decompress basepoint to a point B</li><li>Compute <code>result = B + G * tweak_int</code></li><li>Compress and return</li></ol>',
-      code: `import hashlib
-from ecdsa import SECP256k1
-from ecdsa.ellipticcurve import Point
-
-CURVE = SECP256k1.curve
-G = SECP256k1.generator
-ORDER = SECP256k1.order
-
-def decompress_pubkey(compressed):
-    prefix = compressed[0]
-    x = int.from_bytes(compressed[1:], 'big')
-    p = CURVE.p()
-    y_sq = (pow(x, 3, p) + CURVE.a() * x + CURVE.b()) % p
-    y = pow(y_sq, (p + 1) // 4, p)
-    if (y % 2 == 0) != (prefix == 0x02):
-        y = p - y
-    return Point(CURVE, x, y)
-
-def compress_point(point):
-    prefix = b'\\x02' if point.y() % 2 == 0 else b'\\x03'
-    return prefix + point.x().to_bytes(32, 'big')
-
-def derive_pubkey(basepoint, per_commitment_point):
+      code: `def derive_pubkey(basepoint, per_commitment_point):
     tweak = int.from_bytes(hashlib.sha256(per_commitment_point + basepoint).digest(), 'big') % ORDER
     B = decompress_pubkey(basepoint)
     result = B + G * tweak
     return compress_point(result)`,
     },
     rewardSats: 21,
+    group: "keys/commitment",
+    groupOrder: 3,
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1301,19 +1086,7 @@ def derive_pubkey(basepoint, per_commitment_point):
     title: "Exercise 12: Derive Private Key",
     description:
       "Derive a private key from a basepoint secret and per-commitment point. The formula is: derived_privkey = basepoint_secret + SHA256(per_commitment_point || basepoint) mod n.",
-    starterCode: `import hashlib
-from ecdsa import SECP256k1, SigningKey
-
-ORDER = SECP256k1.order
-
-def privkey_to_pubkey(secret: bytes) -> bytes:
-    sk = SigningKey.from_string(secret, curve=SECP256k1)
-    vk = sk.get_verifying_key()
-    point = vk.pubkey.point
-    prefix = b'\\x02' if point.y() % 2 == 0 else b'\\x03'
-    return prefix + point.x().to_bytes(32, 'big')
-
-def derive_privkey(basepoint_secret: bytes, per_commitment_point: bytes) -> bytes:
+    starterCode: `def derive_privkey(basepoint_secret: bytes, per_commitment_point: bytes) -> bytes:
     """
     Derive a private key per BOLT 3.
 
@@ -1361,19 +1134,7 @@ def test_returns_32_bytes():
         "<p>The private key derivation is the scalar version of the public key derivation. Instead of adding points, you add scalars: the basepoint secret plus the SHA256 tweak, all modulo the curve order n.</p>",
       steps:
         '<ol><li>Compute the basepoint (public key) from the secret</li><li>Compute <code>tweak = SHA256(per_commitment_point || basepoint)</code></li><li>Result = <code>(basepoint_secret_int + tweak_int) % ORDER</code></li><li>Return as 32 bytes big-endian</li></ol>',
-      code: `import hashlib
-from ecdsa import SECP256k1, SigningKey
-
-ORDER = SECP256k1.order
-
-def privkey_to_pubkey(secret):
-    sk = SigningKey.from_string(secret, curve=SECP256k1)
-    vk = sk.get_verifying_key()
-    pt = vk.pubkey.point
-    prefix = b'\\x02' if pt.y() % 2 == 0 else b'\\x03'
-    return prefix + pt.x().to_bytes(32, 'big')
-
-def derive_privkey(basepoint_secret, per_commitment_point):
+      code: `def derive_privkey(basepoint_secret, per_commitment_point):
     basepoint = privkey_to_pubkey(basepoint_secret)
     tweak = int.from_bytes(hashlib.sha256(per_commitment_point + basepoint).digest(), 'big') % ORDER
     secret_int = int.from_bytes(basepoint_secret, 'big')
@@ -1381,6 +1142,8 @@ def derive_privkey(basepoint_secret, per_commitment_point):
     return result.to_bytes(32, 'big')`,
     },
     rewardSats: 21,
+    group: "keys/commitment",
+    groupOrder: 4,
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1391,13 +1154,7 @@ def derive_privkey(basepoint_secret, per_commitment_point):
     title: "Exercise 13: Create to_remote Script",
     description:
       "Create the to_remote output script for a commitment transaction. This is a standard P2WPKH script: OP_0 <20-byte HASH160 of remote pubkey>.",
-    starterCode: `import hashlib
-
-def hash160(data: bytes) -> bytes:
-    """RIPEMD160(SHA256(data))"""
-    return hashlib.new('ripemd160', hashlib.sha256(data).digest()).digest()
-
-def create_to_remote_script(remote_pubkey: bytes) -> bytes:
+    starterCode: `def create_to_remote_script(remote_pubkey: bytes) -> bytes:
     """
     Create the to_remote output script (P2WPKH).
 
@@ -1440,15 +1197,12 @@ def test_uses_hash160():
         "<p>The to_remote output pays to the remote party's pubkey using P2WPKH (Pay to Witness Public Key Hash). P2WPKH scripts are simply <code>OP_0 PUSH20 HASH160(pubkey)</code>, where HASH160 is RIPEMD160(SHA256(pubkey)).</p>",
       steps:
         '<ol><li>Compute HASH160 of the remote pubkey: <code>RIPEMD160(SHA256(pubkey))</code></li><li>Build script: <code>b"\\x00\\x14" + hash160_result</code></li></ol>',
-      code: `import hashlib
-
-def hash160(data):
-    return hashlib.new('ripemd160', hashlib.sha256(data).digest()).digest()
-
-def create_to_remote_script(remote_pubkey):
+      code: `def create_to_remote_script(remote_pubkey):
     return b'\\x00\\x14' + hash160(remote_pubkey)`,
     },
     rewardSats: 21,
+    group: "scripts/commitment",
+    groupOrder: 1,
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1531,6 +1285,8 @@ def test_script_structure():
     return script`,
     },
     rewardSats: 21,
+    group: "scripts/commitment",
+    groupOrder: 2,
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1595,6 +1351,8 @@ def get_obscure_factor(opener_payment_basepoint, accepter_payment_basepoint):
     return int.from_bytes(h[26:32], 'big')`,
     },
     rewardSats: 21,
+    group: "transactions/commitment",
+    groupOrder: 1,
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1605,14 +1363,7 @@ def get_obscure_factor(opener_payment_basepoint, accepter_payment_basepoint):
     title: "Exercise 16: Set Obscured Commitment Number",
     description:
       "Given a commitment number and the obscure factor, set the obscured commitment number in a transaction's locktime and input sequence fields. The lower 24 bits go in locktime (with upper byte 0x20), the upper 24 bits go in input[0].sequence (with upper byte 0x80).",
-    starterCode: `import hashlib
-import struct
-
-def get_obscure_factor(opener_bp: bytes, accepter_bp: bytes) -> int:
-    h = hashlib.sha256(opener_bp + accepter_bp).digest()
-    return int.from_bytes(h[26:32], 'big')
-
-def set_obscured_commitment_number(tx_bytes: bytearray,
+    starterCode: `def set_obscured_commitment_number(tx_bytes: bytearray,
                                     commitment_number: int,
                                     opener_bp: bytes,
                                     accepter_bp: bytes) -> bytearray:
@@ -1676,14 +1427,7 @@ def test_sequence_upper_byte():
         "<p>Commitment transactions encode the commitment number in an obscured form across two fields: the locktime and the first input's sequence number. XOR the commitment number with the obscure factor, then split the 48-bit result: lower 24 bits go to locktime (with 0x20 as upper byte), upper 24 bits go to sequence (with 0x80 as upper byte).</p>",
       steps:
         '<ol><li>Compute <code>obscured = commitment_number ^ get_obscure_factor(...)</code></li><li>Locktime = <code>(0x20 << 24) | (obscured & 0xFFFFFF)</code></li><li>Sequence = <code>(0x80 << 24) | ((obscured >> 24) & 0xFFFFFF)</code></li><li>Write locktime to last 4 bytes, sequence to bytes [42:46]</li></ol>',
-      code: `import hashlib
-import struct
-
-def get_obscure_factor(opener_bp, accepter_bp):
-    h = hashlib.sha256(opener_bp + accepter_bp).digest()
-    return int.from_bytes(h[26:32], 'big')
-
-def set_obscured_commitment_number(tx_bytes, commitment_number, opener_bp, accepter_bp):
+      code: `def set_obscured_commitment_number(tx_bytes, commitment_number, opener_bp, accepter_bp):
     obscured = commitment_number ^ get_obscure_factor(opener_bp, accepter_bp)
     locktime = (0x20 << 24) | (obscured & 0xFFFFFF)
     sequence = (0x80 << 24) | ((obscured >> 24) & 0xFFFFFF)
@@ -1692,6 +1436,8 @@ def set_obscured_commitment_number(tx_bytes, commitment_number, opener_bp, accep
     return tx_bytes`,
     },
     rewardSats: 21,
+    group: "transactions/commitment",
+    groupOrder: 2,
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1702,24 +1448,7 @@ def set_obscured_commitment_number(tx_bytes, commitment_number, opener_bp, accep
     title: "Exercise 17: Create Commitment TX Outputs",
     description:
       "Create the commitment transaction outputs (to_local and to_remote), applying dust limit filtering and fee deduction from the to_local output. Sort outputs by value then by script bytes (BIP69-like).",
-    starterCode: `import hashlib
-
-def hash160(data: bytes) -> bytes:
-    return hashlib.new('ripemd160', hashlib.sha256(data).digest()).digest()
-
-def create_to_remote_script(remote_pubkey: bytes) -> bytes:
-    return b'\\x00\\x14' + hash160(remote_pubkey)
-
-def create_to_local_script(revocation_pubkey, local_delayed_pubkey, to_self_delay):
-    if to_self_delay <= 0x7f:
-        delay = bytes([to_self_delay])
-    else:
-        delay = to_self_delay.to_bytes(2, 'little')
-    script = b'\\x63\\x21' + revocation_pubkey + b'\\x67'
-    script += bytes([len(delay)]) + delay + b'\\xb2\\x75\\x21' + local_delayed_pubkey + b'\\x68\\xac'
-    return script
-
-def create_commitment_outputs(to_local_sat: int, to_remote_sat: int,
+    starterCode: `def create_commitment_outputs(to_local_sat: int, to_remote_sat: int,
                                revocation_pubkey: bytes, local_delayed_pubkey: bytes,
                                remote_payment_pubkey: bytes,
                                to_self_delay: int, dust_limit: int,
@@ -1789,9 +1518,7 @@ def test_sorted_by_value():
         "<p>Commitment transactions have two main outputs: to_local (P2WSH of the conditional revocation/delay script) and to_remote (P2WPKH). The fee is deducted from the local party's balance. Any output below the dust limit is omitted entirely. Outputs are sorted by value, then by script bytes.</p>",
       steps:
         '<ol><li>Compute to_local_value = to_local_sat - fee</li><li>Build to_local witness script, then P2WSH: <code>b"\\x00\\x20" + SHA256(witness_script)</code></li><li>Build to_remote P2WPKH script</li><li>Add outputs where value >= dust_limit</li><li>Sort by (value, script)</li></ol>',
-      code: `import hashlib
-
-def create_commitment_outputs(to_local_sat, to_remote_sat, revocation_pubkey, local_delayed_pubkey, remote_payment_pubkey, to_self_delay, dust_limit, fee):
+      code: `def create_commitment_outputs(to_local_sat, to_remote_sat, revocation_pubkey, local_delayed_pubkey, remote_payment_pubkey, to_self_delay, dust_limit, fee):
     outputs = []
     to_local_value = to_local_sat - fee
     if to_local_value >= dust_limit:
@@ -1805,6 +1532,8 @@ def create_commitment_outputs(to_local_sat, to_remote_sat, revocation_pubkey, lo
     return outputs`,
     },
     rewardSats: 21,
+    group: "transactions/commitment",
+    groupOrder: 3,
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1815,29 +1544,7 @@ def create_commitment_outputs(to_local_sat, to_remote_sat, revocation_pubkey, lo
     title: "Exercise 18: Create Commitment Transaction",
     description:
       "Assemble a complete unsigned commitment transaction with the funding input, obscured commitment number, and sorted outputs. This combines all the previous building blocks.",
-    starterCode: `import hashlib
-import struct
-
-def hash160(data):
-    return hashlib.new('ripemd160', hashlib.sha256(data).digest()).digest()
-
-def create_to_remote_script(remote_pubkey):
-    return b'\\x00\\x14' + hash160(remote_pubkey)
-
-def create_to_local_script(revocation_pubkey, local_delayed_pubkey, to_self_delay):
-    if to_self_delay <= 0x7f:
-        delay = bytes([to_self_delay])
-    else:
-        delay = to_self_delay.to_bytes(2, 'little')
-    script = b'\\x63\\x21' + revocation_pubkey + b'\\x67'
-    script += bytes([len(delay)]) + delay + b'\\xb2\\x75\\x21' + local_delayed_pubkey + b'\\x68\\xac'
-    return script
-
-def get_obscure_factor(opener_bp, accepter_bp):
-    h = hashlib.sha256(opener_bp + accepter_bp).digest()
-    return int.from_bytes(h[26:32], 'big')
-
-def create_commitment_tx(funding_txid_hex: str, funding_vout: int,
+    starterCode: `def create_commitment_tx(funding_txid_hex: str, funding_vout: int,
                           to_local_sat: int, to_remote_sat: int,
                           revocation_pubkey: bytes, local_delayed_pubkey: bytes,
                           remote_payment_pubkey: bytes,
@@ -1899,10 +1606,7 @@ def test_returns_string():
         "<p>The commitment transaction ties everything together: a single input spending the funding output, obscured commitment number encoded in locktime/sequence, and sorted to_local/to_remote outputs. The input's sequence and locktime carry the obscured commitment number.</p>",
       steps:
         '<ol><li>Compute fee: <code>724 * feerate_per_kw // 1000</code></li><li>Build outputs list (to_local with fee deducted, to_remote), filter dust, sort</li><li>Build version(2) + input(reversed txid, vout, empty scriptSig, sequence) + outputs + locktime</li><li>Set obscured commitment number in sequence and locktime fields</li><li>Return hex string</li></ol>',
-      code: `import hashlib
-import struct
-
-def create_commitment_tx(funding_txid_hex, funding_vout, to_local_sat, to_remote_sat,
+      code: `def create_commitment_tx(funding_txid_hex, funding_vout, to_local_sat, to_remote_sat,
                           revocation_pubkey, local_delayed_pubkey, remote_payment_pubkey,
                           opener_bp, accepter_bp, commitment_number, to_self_delay,
                           dust_limit, feerate_per_kw):
@@ -1936,6 +1640,8 @@ def create_commitment_tx(funding_txid_hex, funding_vout, to_local_sat, to_remote
     return tx.hex()`,
     },
     rewardSats: 42,
+    group: "transactions/commitment",
+    groupOrder: 4,
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1946,12 +1652,7 @@ def create_commitment_tx(funding_txid_hex, funding_vout, to_local_sat, to_remote
     title: "Exercise 19: Finalize Commitment Transaction",
     description:
       "Add the witness (signatures + funding script) to a commitment transaction to produce the final signed transaction. The witness stack is: [empty, local_sig, remote_sig, funding_script].",
-    starterCode: `import hashlib
-import struct
-from ecdsa import SECP256k1, SigningKey
-from ecdsa.util import sigencode_der
-
-def finalize_commitment_tx(unsigned_tx_hex: str,
+    starterCode: `def finalize_commitment_tx(unsigned_tx_hex: str,
                             funding_script: bytes,
                             funding_amount: int,
                             local_funding_privkey: bytes,
@@ -1998,12 +1699,7 @@ def test_returns_string():
         "<p>Finalizing a commitment transaction means adding the segwit witness. The witness for a 2-of-2 multisig P2WSH input is: [empty (OP_0 dummy for CHECKMULTISIG bug), signature_1, signature_2, witness_script]. The transaction format changes to include the segwit marker (0x00, 0x01) after the version and the witness data before the locktime.</p>",
       steps:
         '<ol><li>Parse the unsigned tx to extract components</li><li>Compute BIP143 sighash using the funding_script and funding_amount</li><li>Sign with local key: <code>sk.sign_digest(sighash, sigencode=sigencode_der) + b"\\x01"</code></li><li>Order sigs: if local_sig_first, local then remote; else remote then local</li><li>Build segwit tx: version + marker(00 01) + inputs + outputs + witness(4 items) + locktime</li></ol>',
-      code: `import hashlib
-import struct
-from ecdsa import SECP256k1, SigningKey
-from ecdsa.util import sigencode_der
-
-def finalize_commitment_tx(unsigned_tx_hex, funding_script, funding_amount,
+      code: `def finalize_commitment_tx(unsigned_tx_hex, funding_script, funding_amount,
                             local_funding_privkey, remote_signature, local_sig_first):
     tx = bytes.fromhex(unsigned_tx_hex)
     def dsha256(d): return hashlib.sha256(hashlib.sha256(d).digest()).digest()
@@ -2048,6 +1744,8 @@ def finalize_commitment_tx(unsigned_tx_hex, funding_script, funding_amount,
     return result.hex()`,
     },
     rewardSats: 42,
+    group: "transactions/commitment",
+    groupOrder: 5,
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -2058,12 +1756,7 @@ def finalize_commitment_tx(unsigned_tx_hex, funding_script, funding_amount,
     title: "Exercise 20: Create Offered HTLC Script",
     description:
       "Create an offered HTLC output script per BOLT 3. This script allows the remote party to claim with the payment preimage, or the local party to claim after timeout.",
-    starterCode: `import hashlib
-
-def hash160(data: bytes) -> bytes:
-    return hashlib.new('ripemd160', hashlib.sha256(data).digest()).digest()
-
-def create_offered_htlc_script(revocation_pubkey: bytes,
+    starterCode: `def create_offered_htlc_script(revocation_pubkey: bytes,
                                 local_htlc_pubkey: bytes,
                                 remote_htlc_pubkey: bytes,
                                 payment_hash: bytes) -> bytes:
@@ -2123,12 +1816,7 @@ def test_script_length():
         "<p>The offered HTLC script has three spending paths: (1) revocation key holder spends immediately, (2) remote party presents the payment preimage (RIPEMD160 of payment_hash must match), (3) local party reclaims after timeout. The script uses OP_DUP OP_HASH160 to check for the revocation key.</p>",
       steps:
         '<ol><li>Compute HASH160 of revocation_pubkey and RIPEMD160 of payment_hash</li><li>Build the script byte-by-byte using opcodes: OP_DUP(0x76), OP_HASH160(0xa9), OP_EQUAL(0x87), OP_IF(0x63), OP_CHECKSIG(0xac), OP_ELSE(0x67), OP_SWAP(0x7c), OP_SIZE(0x82), OP_EQUALVERIFY(0x88), OP_CHECKMULTISIG(0xae), OP_DROP(0x75), OP_ENDIF(0x68)</li></ol>',
-      code: `import hashlib
-
-def hash160(data):
-    return hashlib.new('ripemd160', hashlib.sha256(data).digest()).digest()
-
-def create_offered_htlc_script(revocation_pubkey, local_htlc_pubkey, remote_htlc_pubkey, payment_hash):
+      code: `def create_offered_htlc_script(revocation_pubkey, local_htlc_pubkey, remote_htlc_pubkey, payment_hash):
     rev_hash = hash160(revocation_pubkey)
     payment_ripemd = hashlib.new('ripemd160', payment_hash).digest()
     s = b''
@@ -2163,6 +1851,8 @@ def create_offered_htlc_script(revocation_pubkey, local_htlc_pubkey, remote_htlc
     return s`,
     },
     rewardSats: 21,
+    group: "scripts/htlc",
+    groupOrder: 1,
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -2173,12 +1863,7 @@ def create_offered_htlc_script(revocation_pubkey, local_htlc_pubkey, remote_htlc
     title: "Exercise 21: Create Received HTLC Script",
     description:
       "Create a received HTLC output script per BOLT 3. Similar to offered HTLC but with a CLTV expiry for the timeout path instead of the preimage path.",
-    starterCode: `import hashlib
-
-def hash160(data: bytes) -> bytes:
-    return hashlib.new('ripemd160', hashlib.sha256(data).digest()).digest()
-
-def create_received_htlc_script(revocation_pubkey: bytes,
+    starterCode: `def create_received_htlc_script(revocation_pubkey: bytes,
                                  local_htlc_pubkey: bytes,
                                  remote_htlc_pubkey: bytes,
                                  payment_hash: bytes,
@@ -2229,12 +1914,7 @@ def test_script_returns_bytes():
         "<p>The received HTLC script is similar to the offered HTLC but with key differences: the preimage branch requires providing the actual preimage (checked via OP_HASH160 and RIPEMD160), and the timeout branch uses OP_CHECKLOCKTIMEVERIFY to enforce a CLTV expiry.</p>",
       steps:
         '<ol><li>Build the revocation check: OP_DUP OP_HASH160 HASH160(revocation_pubkey) OP_EQUAL OP_IF OP_CHECKSIG</li><li>OP_ELSE: push remote_htlc_pubkey, OP_SWAP OP_SIZE 32 OP_EQUAL</li><li>OP_IF (preimage path): OP_HASH160 RIPEMD160(payment_hash) OP_EQUALVERIFY 2 OP_SWAP local_htlc_pubkey 2 OP_CHECKMULTISIG</li><li>OP_ELSE (timeout path): OP_DROP cltv_expiry OP_CHECKLOCKTIMEVERIFY OP_DROP OP_CHECKSIG</li></ol>',
-      code: `import hashlib
-
-def hash160(data):
-    return hashlib.new('ripemd160', hashlib.sha256(data).digest()).digest()
-
-def create_received_htlc_script(revocation_pubkey, local_htlc_pubkey, remote_htlc_pubkey, payment_hash, cltv_expiry):
+      code: `def create_received_htlc_script(revocation_pubkey, local_htlc_pubkey, remote_htlc_pubkey, payment_hash, cltv_expiry):
     rev_hash = hash160(revocation_pubkey)
     payment_ripemd = hashlib.new('ripemd160', payment_hash).digest()
     # Encode CLTV expiry as minimal script integer
@@ -2260,6 +1940,8 @@ def create_received_htlc_script(revocation_pubkey, local_htlc_pubkey, remote_htl
     return s`,
     },
     rewardSats: 21,
+    group: "scripts/htlc",
+    groupOrder: 2,
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -2270,19 +1952,7 @@ def create_received_htlc_script(revocation_pubkey, local_htlc_pubkey, remote_htl
     title: "Exercise 22: Create HTLC Timeout Transaction",
     description:
       "Create an unsigned HTLC timeout transaction that spends an offered HTLC output from a commitment transaction. The output is a P2WSH of the to_local script (with revocation key and CSV delay).",
-    starterCode: `import hashlib
-import struct
-
-def create_to_local_script(revocation_pubkey, local_delayed_pubkey, to_self_delay):
-    if to_self_delay <= 0x7f:
-        delay = bytes([to_self_delay])
-    else:
-        delay = to_self_delay.to_bytes(2, 'little')
-    script = b'\\x63\\x21' + revocation_pubkey + b'\\x67'
-    script += bytes([len(delay)]) + delay + b'\\xb2\\x75\\x21' + local_delayed_pubkey + b'\\x68\\xac'
-    return script
-
-def create_htlc_timeout_tx(commitment_txid_hex: str, htlc_output_index: int,
+    starterCode: `def create_htlc_timeout_tx(commitment_txid_hex: str, htlc_output_index: int,
                             htlc_amount_sat: int, cltv_expiry: int,
                             revocation_pubkey: bytes, local_delayed_pubkey: bytes,
                             to_self_delay: int, feerate_per_kw: int) -> str:
@@ -2338,10 +2008,7 @@ def test_output_value_no_fee():
         "<p>An HTLC timeout transaction allows the local party to reclaim an offered HTLC after the CLTV expiry. It spends the HTLC output from the commitment transaction and creates a new output locked to the to_local script (with revocation and CSV delay). The locktime is set to the CLTV expiry.</p>",
       steps:
         '<ol><li>Compute fee: <code>663 * feerate_per_kw // 1000</code></li><li>Build to_local witness script, then P2WSH output</li><li>Build tx: version(2) + input(txid, vout, empty scriptSig, sequence=0) + output(htlc_amount - fee, P2WSH) + locktime(cltv_expiry)</li></ol>',
-      code: `import hashlib
-import struct
-
-def create_htlc_timeout_tx(commitment_txid_hex, htlc_output_index, htlc_amount_sat,
+      code: `def create_htlc_timeout_tx(commitment_txid_hex, htlc_output_index, htlc_amount_sat,
                             cltv_expiry, revocation_pubkey, local_delayed_pubkey,
                             to_self_delay, feerate_per_kw):
     fee = 663 * feerate_per_kw // 1000
@@ -2361,6 +2028,8 @@ def create_htlc_timeout_tx(commitment_txid_hex, htlc_output_index, htlc_amount_s
     return tx.hex()`,
     },
     rewardSats: 21,
+    group: "transactions/htlc",
+    groupOrder: 1,
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -2371,19 +2040,7 @@ def create_htlc_timeout_tx(commitment_txid_hex, htlc_output_index, htlc_amount_s
     title: "Exercise 23: Create HTLC Success Transaction",
     description:
       "Create an unsigned HTLC success transaction that spends a received HTLC output. The output is a P2WSH of the to_local script. Locktime is 0 and sequence is 0.",
-    starterCode: `import hashlib
-import struct
-
-def create_to_local_script(revocation_pubkey, local_delayed_pubkey, to_self_delay):
-    if to_self_delay <= 0x7f:
-        delay = bytes([to_self_delay])
-    else:
-        delay = to_self_delay.to_bytes(2, 'little')
-    script = b'\\x63\\x21' + revocation_pubkey + b'\\x67'
-    script += bytes([len(delay)]) + delay + b'\\xb2\\x75\\x21' + local_delayed_pubkey + b'\\x68\\xac'
-    return script
-
-def create_htlc_success_tx(commitment_txid_hex: str, htlc_output_index: int,
+    starterCode: `def create_htlc_success_tx(commitment_txid_hex: str, htlc_output_index: int,
                             htlc_amount_sat: int,
                             revocation_pubkey: bytes, local_delayed_pubkey: bytes,
                             to_self_delay: int, feerate_per_kw: int) -> str:
@@ -2445,10 +2102,7 @@ def test_p2wsh_output():
         "<p>The HTLC success transaction is nearly identical to the HTLC timeout transaction, except: locktime = 0 (not CLTV expiry), and the fee weight is 703 instead of 663. It spends a received HTLC output when the local party knows the payment preimage.</p>",
       steps:
         '<ol><li>Compute fee: <code>703 * feerate_per_kw // 1000</code></li><li>Build output P2WSH of to_local_script</li><li>Build tx: version(2) + input(txid, vout, empty scriptSig, sequence=0) + output + locktime(0)</li></ol>',
-      code: `import hashlib
-import struct
-
-def create_htlc_success_tx(commitment_txid_hex, htlc_output_index, htlc_amount_sat,
+      code: `def create_htlc_success_tx(commitment_txid_hex, htlc_output_index, htlc_amount_sat,
                             revocation_pubkey, local_delayed_pubkey,
                             to_self_delay, feerate_per_kw):
     fee = 703 * feerate_per_kw // 1000
@@ -2468,6 +2122,8 @@ def create_htlc_success_tx(commitment_txid_hex, htlc_output_index, htlc_amount_s
     return tx.hex()`,
     },
     rewardSats: 21,
+    group: "transactions/htlc",
+    groupOrder: 2,
   },
 
 };
