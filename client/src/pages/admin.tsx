@@ -108,6 +108,8 @@ export default function AdminPage() {
   const [spamming, setSpamming] = useState<Set<string>>(new Set());
   const [revealedMessages, setRevealedMessages] = useState<Set<string>>(new Set());
   const [selectedCheckpointUser, setSelectedCheckpointUser] = useState<string | null>(null);
+  const [selectedTutorial, setSelectedTutorial] = useState<"noise" | "lightning">("noise");
+  const [checkpointSubTab, setCheckpointSubTab] = useState<"funnel" | "pages" | "matrix">("funnel");
 
   const fetchDashboard = useCallback(async (pw: string) => {
     if (!pw) return;
@@ -412,32 +414,120 @@ export default function AdminPage() {
 
         {/* Checkpoints Tab */}
         {activeTab === "checkpoints" && (() => {
-          const CHECKPOINT_ORDER = [
-            { id: "crypto-review", label: "Crypto Review", chapter: "Cryptographic Primitives" },
-            { id: "setup-wrong-key", label: "Setup", chapter: "Handshake Setup" },
-            { id: "act2-both-ephemeral", label: "Act 2", chapter: "Act 2: Ephemeral Key Exchange" },
-            { id: "act3-nonce-one", label: "Act 3", chapter: "Act 3: Identity Reveal" },
-            { id: "message-length-limit", label: "Messaging", chapter: "Sending Encrypted Messages" },
-          ];
-
-          const TUTORIAL_PAGES = [
-            { page: "/noise-tutorial", label: "Intro" },
-            { page: "/noise-tutorial/crypto-primitives", label: "Crypto Primitives" },
-            { page: "/noise-tutorial/noise-framework", label: "Noise Framework" },
-            { page: "/noise-tutorial/handshake-setup", label: "Handshake Setup" },
-            { page: "/noise-tutorial/act-1", label: "Act 1" },
-            { page: "/noise-tutorial/act-2", label: "Act 2" },
-            { page: "/noise-tutorial/act-3", label: "Act 3" },
-            { page: "/noise-tutorial/sending-messages", label: "Sending Msgs" },
-            { page: "/noise-tutorial/receiving-messages", label: "Receiving Msgs" },
-            { page: "/noise-tutorial/key-rotation", label: "Key Rotation" },
-            { page: "/noise-tutorial/quiz", label: "Quiz" },
-          ];
+          const TUTORIAL_CONFIGS = {
+            noise: {
+              checkpoints: [
+                { id: "crypto-review", label: "Crypto Review", chapter: "Cryptographic Primitives" },
+                { id: "setup-wrong-key", label: "Setup", chapter: "Handshake Setup" },
+                { id: "act2-both-ephemeral", label: "Act 2", chapter: "Act 2: Ephemeral Key Exchange" },
+                { id: "act3-nonce-one", label: "Act 3", chapter: "Act 3: Identity Reveal" },
+                { id: "message-length-limit", label: "Messaging", chapter: "Sending Encrypted Messages" },
+              ],
+              pages: [
+                { page: "/noise-tutorial", label: "Intro" },
+                { page: "/noise-tutorial/crypto-primitives", label: "Crypto Primitives" },
+                { page: "/noise-tutorial/noise-framework", label: "Noise Framework" },
+                { page: "/noise-tutorial/handshake-setup", label: "Handshake Setup" },
+                { page: "/noise-tutorial/act-1", label: "Act 1" },
+                { page: "/noise-tutorial/act-2", label: "Act 2" },
+                { page: "/noise-tutorial/act-3", label: "Act 3" },
+                { page: "/noise-tutorial/sending-messages", label: "Sending Msgs" },
+                { page: "/noise-tutorial/receiving-messages", label: "Receiving Msgs" },
+                { page: "/noise-tutorial/key-rotation", label: "Key Rotation" },
+                { page: "/noise-tutorial/quiz", label: "Quiz" },
+              ],
+              urlPrefix: "/noise-tutorial",
+            },
+            lightning: {
+              checkpoints: [
+                { id: "channel-fairness", label: "Fairness", chapter: "Protocols & Fairness" },
+                { id: "ln-exercise-keys-manager", label: "Keys Manager", chapter: "Key Management" },
+                { id: "bip32-derivation", label: "BIP32 Quiz", chapter: "BIP32 Key Derivation" },
+                { id: "ln-exercise-derive-key", label: "Derive Key", chapter: "BIP32 Key Derivation" },
+                { id: "ln-exercise-channel-keys", label: "Channel Keys", chapter: "Channel Keys" },
+                { id: "payment-channels-scaling", label: "Scaling Quiz", chapter: "Off-Chain Scaling" },
+                { id: "funding-multisig", label: "Multisig Quiz", chapter: "Funding Script" },
+                { id: "pubkey-sorting", label: "Sorting Quiz", chapter: "Funding Script" },
+                { id: "ln-exercise-funding-script", label: "Fund Script", chapter: "Funding Script" },
+                { id: "ln-exercise-funding-tx", label: "Fund Tx", chapter: "Funding Transaction" },
+                { id: "asymmetric-commits", label: "Asymmetric", chapter: "Revocable Transactions" },
+                { id: "ln-exercise-sign-input", label: "Sign Input", chapter: "Transaction Signing" },
+                { id: "revocation-purpose", label: "Revocation Quiz", chapter: "Revocation Keys" },
+                { id: "ln-exercise-revocation-pubkey", label: "Rev Pubkey", chapter: "Revocation Keys" },
+                { id: "ln-exercise-revocation-privkey", label: "Rev Privkey", chapter: "Revocation Keys" },
+                { id: "commitment-secret-algorithm", label: "Secrets Quiz", chapter: "Commitment Secrets" },
+                { id: "ln-exercise-commitment-secret", label: "Commit Secret", chapter: "Commitment Secrets" },
+                { id: "ln-exercise-per-commitment-point", label: "Commit Point", chapter: "Commitment Secrets" },
+                { id: "ln-exercise-derive-pubkey", label: "Derive Pub", chapter: "Key Derivation" },
+                { id: "ln-exercise-derive-privkey", label: "Derive Priv", chapter: "Key Derivation" },
+                { id: "ln-exercise-to-remote-script", label: "To Remote", chapter: "Commitment Scripts" },
+                { id: "ln-exercise-to-local-script", label: "To Local", chapter: "Commitment Scripts" },
+                { id: "ln-exercise-obscure-factor", label: "Obscure Factor", chapter: "Obscured Commitment" },
+                { id: "ln-exercise-obscured-commitment", label: "Obscured Num", chapter: "Obscured Commitment" },
+                { id: "ln-exercise-commitment-outputs", label: "Commit Outputs", chapter: "Commitment Assembly" },
+                { id: "ln-exercise-sort-outputs", label: "Sort Outputs", chapter: "Commitment Assembly" },
+                { id: "ln-exercise-commitment-tx", label: "Commit Tx", chapter: "Commitment Assembly" },
+                { id: "ln-exercise-finalize-commitment", label: "Finalize", chapter: "Commitment Finalization" },
+                { id: "offered-vs-received", label: "HTLC Types", chapter: "Introduction to HTLCs" },
+                { id: "ln-exercise-offered-htlc-script", label: "Offered Script", chapter: "Offered HTLCs" },
+                { id: "ln-exercise-htlc-timeout-tx", label: "Timeout Tx", chapter: "Offered HTLCs" },
+                { id: "ln-exercise-finalize-htlc-timeout", label: "Timeout Final", chapter: "Offered HTLCs" },
+                { id: "htlc-timeout-vs-success", label: "Timeout v Succ", chapter: "Received HTLCs" },
+                { id: "ln-exercise-received-htlc-script", label: "Received Script", chapter: "Received HTLCs" },
+                { id: "ln-exercise-htlc-success-tx", label: "Success Tx", chapter: "Received HTLCs" },
+                { id: "ln-exercise-finalize-htlc-success", label: "Success Final", chapter: "Received HTLCs" },
+                { id: "htlc-dust", label: "Dust Quiz", chapter: "HTLC Fees & Dust" },
+                { id: "p2wsh-wrapping", label: "P2WSH Quiz", chapter: "HTLC Fees & Dust" },
+              ],
+              pages: [
+                { page: "/lightning-tutorial", label: "Intro" },
+                { page: "/lightning-tutorial/bitcoin-cli", label: "Bitcoin CLI" },
+                { page: "/lightning-tutorial/protocols-fairness", label: "Protocols" },
+                { page: "/lightning-tutorial/keys-manager", label: "Keys Manager" },
+                { page: "/lightning-tutorial/bip32-derivation", label: "BIP32" },
+                { page: "/lightning-tutorial/channel-keys", label: "Channel Keys" },
+                { page: "/lightning-tutorial/payment-channels-overview", label: "Off-Chain" },
+                { page: "/lightning-tutorial/funding-script", label: "Fund Script" },
+                { page: "/lightning-tutorial/funding-transaction", label: "Fund Tx" },
+                { page: "/lightning-tutorial/refund-transactions", label: "Refund" },
+                { page: "/lightning-tutorial/revocable-transactions", label: "Revocable Tx" },
+                { page: "/lightning-tutorial/signing", label: "Signing" },
+                { page: "/lightning-tutorial/open-channel", label: "Open Channel" },
+                { page: "/lightning-tutorial/revocation-keys", label: "Rev Keys" },
+                { page: "/lightning-tutorial/commitment-secrets", label: "Commit Secrets" },
+                { page: "/lightning-tutorial/key-derivation", label: "Key Derivation" },
+                { page: "/lightning-tutorial/commitment-scripts", label: "Commit Scripts" },
+                { page: "/lightning-tutorial/obscured-commitment", label: "Obscured" },
+                { page: "/lightning-tutorial/commitment-assembly", label: "Assembly" },
+                { page: "/lightning-tutorial/commitment-finalization", label: "Finalization" },
+                { page: "/lightning-tutorial/get-commitment-tx", label: "Inspect Commit" },
+                { page: "/lightning-tutorial/routing-payments", label: "Routing" },
+                { page: "/lightning-tutorial/htlc-introduction", label: "HTLC Intro" },
+                { page: "/lightning-tutorial/simple-htlc", label: "Simple HTLC" },
+                { page: "/lightning-tutorial/htlcs-on-lightning", label: "HTLCs on LN" },
+                { page: "/lightning-tutorial/channel-state-updates", label: "State Updates" },
+                { page: "/lightning-tutorial/offered-htlcs", label: "Offered HTLCs" },
+                { page: "/lightning-tutorial/get-htlc-commitment", label: "HTLC Commit" },
+                { page: "/lightning-tutorial/get-htlc-timeout", label: "HTLC Timeout" },
+                { page: "/lightning-tutorial/received-htlcs", label: "Received HTLCs" },
+                { page: "/lightning-tutorial/htlc-fees-dust", label: "Fees & Dust" },
+                { page: "/lightning-tutorial/closing-channels", label: "Closing" },
+                { page: "/lightning-tutorial/quiz", label: "Quiz" },
+                { page: "/lightning-tutorial/pay-it-forward", label: "Pay Forward" },
+              ],
+              urlPrefix: "/lightning-tutorial",
+            },
+          };
+          const config = TUTORIAL_CONFIGS[selectedTutorial];
+          const CHECKPOINT_ORDER = config.checkpoints;
+          const TUTORIAL_PAGES = config.pages;
+          const checkpointIdSet = new Set(CHECKPOINT_ORDER.map(cp => cp.id));
 
           // Build user maps
           const userCheckpoints: Record<string, Set<string>> = {};
           const userCheckpointDates: Record<string, Record<string, string>> = {};
-          for (const c of data.checkpointCompletions) {
+          const filteredCompletions = data.checkpointCompletions.filter(c => checkpointIdSet.has(c.checkpointId));
+          for (const c of filteredCompletions) {
             if (!userCheckpoints[c.userId]) {
               userCheckpoints[c.userId] = new Set();
               userCheckpointDates[c.userId] = {};
@@ -464,6 +554,7 @@ export default function AdminPage() {
           const userPageEvents: Record<string, Record<string, { visits: number; totalDuration: number }>> = {};
           for (const e of data.recentEvents) {
             if (!e.userId) continue;
+            if (!e.page.startsWith(config.urlPrefix)) continue;
             if (!userPageEvents[e.userId]) userPageEvents[e.userId] = {};
             if (!userPageEvents[e.userId][e.page]) userPageEvents[e.userId][e.page] = { visits: 0, totalDuration: 0 };
             userPageEvents[e.userId][e.page].visits++;
@@ -519,6 +610,30 @@ export default function AdminPage() {
             }`;
 
           return (
+            <div className="space-y-4">
+              {/* Tutorial toggle */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setSelectedTutorial("noise"); setSelectedCheckpointUser(null); }}
+                  className={`font-pixel text-[11px] px-4 py-2 border-2 border-border transition-all ${
+                    selectedTutorial === "noise"
+                      ? "bg-primary/20 border-[#FFD700] text-foreground font-semibold"
+                      : "hover:bg-primary/5 text-foreground/60"
+                  }`}
+                >
+                  NOISE
+                </button>
+                <button
+                  onClick={() => { setSelectedTutorial("lightning"); setSelectedCheckpointUser(null); }}
+                  className={`font-pixel text-[11px] px-4 py-2 border-2 border-border transition-all ${
+                    selectedTutorial === "lightning"
+                      ? "bg-primary/20 border-[#FFD700] text-foreground font-semibold"
+                      : "hover:bg-primary/5 text-foreground/60"
+                  }`}
+                >
+                  LIGHTNING
+                </button>
+              </div>
             <div className="flex gap-4" style={{ minHeight: 500 }}>
               {/* Left sidebar */}
               <div className="w-48 shrink-0 border-2 border-border bg-card overflow-y-auto" style={{ maxHeight: "calc(100vh - 200px)" }}>
@@ -559,36 +674,6 @@ export default function AdminPage() {
                   <>
                     {/* ALL USERS VIEW */}
 
-                    {/* Page Time Stats */}
-                    <div className={cardClass}>
-                      <div className="font-pixel text-[10px] mb-2">TIME SPENT PER PAGE</div>
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-left text-xs" style={{ fontFamily: sansFont }}>
-                          <thead>
-                            <tr>
-                              <th className="font-pixel text-[10px] p-2 border-b-2 border-border bg-primary/20">PAGE</th>
-                              <th className="font-pixel text-[10px] p-2 border-b-2 border-border bg-primary/20">VIEWS</th>
-                              <th className="font-pixel text-[10px] p-2 border-b-2 border-border bg-primary/20">AVG TIME</th>
-                              <th className="font-pixel text-[10px] p-2 border-b-2 border-border bg-primary/20">TOTAL TIME</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {TUTORIAL_PAGES.map(tp => {
-                              const stats = pageStatsMap[tp.page];
-                              return (
-                                <tr key={tp.page} className="hover:bg-primary/5">
-                                  <td className="p-2 border-b border-border/30 text-sm">{tp.label}</td>
-                                  <td className="p-2 border-b border-border/30 text-sm">{stats?.views ?? 0}</td>
-                                  <td className="p-2 border-b border-border/30 text-sm">{stats ? formatTime(stats.avgDuration) : "-"}</td>
-                                  <td className="p-2 border-b border-border/30 text-sm">{stats ? formatTime(stats.totalDuration) : "-"}</td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-
                     {/* Metrics row */}
                     <div className="grid grid-cols-4 gap-3">
                       <div className={cardClass}>
@@ -601,110 +686,162 @@ export default function AdminPage() {
                         <div className="text-[11px] text-foreground/40" style={{ fontFamily: sansFont }}>{totalUsers > 0 ? `${Math.round(usersWithAny / totalUsers * 100)}%` : "-"}</div>
                       </div>
                       <div className={cardClass}>
-                        <div className="font-pixel text-[9px] text-foreground/60 mb-1">ALL 5</div>
+                        <div className="font-pixel text-[9px] text-foreground/60 mb-1">ALL {CHECKPOINT_ORDER.length}</div>
                         <div className="font-pixel text-base">{usersCompletedAll}</div>
                         <div className="text-[11px] text-foreground/40" style={{ fontFamily: sansFont }}>{usersWithAny > 0 ? `${Math.round(usersCompletedAll / usersWithAny * 100)}%` : "-"} of starters</div>
                       </div>
                       <div className={cardClass}>
                         <div className="font-pixel text-[9px] text-foreground/60 mb-1">COMPLETIONS</div>
-                        <div className="font-pixel text-base">{data.checkpointCompletions.length}</div>
+                        <div className="font-pixel text-base">{filteredCompletions.length}</div>
                       </div>
                     </div>
 
-                    {/* Funnel + Where stopped side by side */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div className={cardClass}>
-                        <div className="font-pixel text-[10px] mb-2">COMPLETION FUNNEL</div>
-                        <div className="space-y-1.5" style={{ fontFamily: sansFont }}>
-                          {CHECKPOINT_ORDER.map((cp, i) => {
-                            const count = completionCounts[i];
-                            const pct = usersWithAny > 0 ? Math.round(count / usersWithAny * 100) : 0;
-                            return (
-                              <div key={cp.id} className="flex items-center gap-2">
-                                <div className="w-20 text-xs text-foreground/60 shrink-0">{cp.label}</div>
-                                <div className="flex-1 h-5 bg-border/20 relative overflow-hidden border border-border/30">
-                                  <div className="h-full bg-[#FFD700]/60" style={{ width: `${pct}%` }} />
-                                  <div className="absolute inset-0 flex items-center px-2 text-[11px] font-semibold">{count} ({pct}%)</div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                      <div className={cardClass}>
-                        <div className="font-pixel text-[10px] mb-2">WHERE USERS STOPPED</div>
-                        <div className="space-y-1.5" style={{ fontFamily: sansFont }}>
-                          {CHECKPOINT_ORDER.map((cp, i) => {
-                            const count = farthestDistribution[i];
-                            const pct = usersWithAny > 0 ? Math.round(count / usersWithAny * 100) : 0;
-                            return (
-                              <div key={cp.id} className="flex items-center gap-2">
-                                <div className="w-20 text-xs text-foreground/60 shrink-0">{cp.label}</div>
-                                <div className="flex-1 h-5 bg-border/20 relative overflow-hidden border border-border/30">
-                                  <div className="h-full bg-red-400/50" style={{ width: `${Math.max(pct, 3)}%` }} />
-                                  <div className="absolute inset-0 flex items-center px-2 text-[11px] font-semibold">{count} ({pct}%)</div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
+                    {/* Sub-tabs */}
+                    <div className="flex gap-1 border-b-2 border-border">
+                      {(["funnel", "pages", "matrix"] as const).map(tab => (
+                        <button
+                          key={tab}
+                          onClick={() => setCheckpointSubTab(tab)}
+                          className={`font-pixel text-[10px] px-3 py-2 transition-all ${
+                            checkpointSubTab === tab
+                              ? "bg-primary/20 border-b-2 border-b-[#FFD700] text-foreground font-semibold -mb-[2px]"
+                              : "hover:bg-primary/5 text-foreground/60"
+                          }`}
+                        >
+                          {tab === "funnel" ? "FUNNEL" : tab === "pages" ? "PAGE TIMES" : "USER MATRIX"}
+                        </button>
+                      ))}
                     </div>
 
-                    {/* User matrix */}
-                    <div className={cardClass}>
-                      <div className="font-pixel text-[10px] mb-2">USER PROGRESS ({activeUserIds.length})</div>
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-left text-xs" style={{ fontFamily: sansFont }}>
-                          <thead>
-                            <tr>
-                              <th className="font-pixel text-[10px] p-2 border-b-2 border-border bg-primary/20">USER</th>
-                              {CHECKPOINT_ORDER.map(cp => (
-                                <th key={cp.id} className="font-pixel text-[10px] p-2 border-b-2 border-border bg-primary/20 text-center" title={cp.chapter}>{cp.label}</th>
-                              ))}
-                              <th className="font-pixel text-[10px] p-2 border-b-2 border-border bg-primary/20 text-center">TOTAL</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {activeUserIds.map(uid => {
-                              const info = userMap[uid];
-                              const completed = userCheckpoints[uid];
-                              const total = CHECKPOINT_ORDER.filter(cp => completed.has(cp.id)).length;
-                              const allDone = total === CHECKPOINT_ORDER.length;
+                    {/* Funnel sub-tab */}
+                    {checkpointSubTab === "funnel" && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className={cardClass}>
+                          <div className="font-pixel text-[10px] mb-2">COMPLETION FUNNEL</div>
+                          <div className="space-y-1.5" style={{ fontFamily: sansFont }}>
+                            {CHECKPOINT_ORDER.map((cp, i) => {
+                              const count = completionCounts[i];
+                              const pct = usersWithAny > 0 ? Math.round(count / usersWithAny * 100) : 0;
                               return (
-                                <tr
-                                  key={uid}
-                                  className={`hover:bg-primary/10 cursor-pointer ${allDone ? "bg-green-500/5" : ""}`}
-                                  onClick={() => setSelectedCheckpointUser(uid)}
-                                >
-                                  <td className="p-2 border-b border-border/30 text-sm">
-                                    {info?.name || truncate(uid, 8)}
-                                  </td>
-                                  {CHECKPOINT_ORDER.map(cp => {
-                                    const done = completed.has(cp.id);
-                                    return (
-                                      <td key={cp.id} className="p-2 border-b border-border/30 text-center">
-                                        {done ? (
-                                          <span className="text-green-600 font-bold">✓</span>
-                                        ) : (
-                                          <span className="text-foreground/20">—</span>
-                                        )}
-                                      </td>
-                                    );
-                                  })}
-                                  <td className={`p-2 border-b border-border/30 text-center font-semibold ${allDone ? "text-green-600" : ""}`}>
-                                    {total}/{CHECKPOINT_ORDER.length}
-                                  </td>
-                                </tr>
+                                <div key={cp.id} className="flex items-center gap-2">
+                                  <div className="w-20 text-xs text-foreground/60 shrink-0">{cp.label}</div>
+                                  <div className="flex-1 h-5 bg-border/20 relative overflow-hidden border border-border/30">
+                                    <div className="h-full bg-[#FFD700]/60" style={{ width: `${pct}%` }} />
+                                    <div className="absolute inset-0 flex items-center px-2 text-[11px] font-semibold">{count} ({pct}%)</div>
+                                  </div>
+                                </div>
                               );
                             })}
-                            {activeUserIds.length === 0 && (
-                              <tr><td colSpan={CHECKPOINT_ORDER.length + 2} className="p-2 border-b border-border/30 text-center text-foreground/40">No completions yet</td></tr>
-                            )}
-                          </tbody>
-                        </table>
+                          </div>
+                        </div>
+                        <div className={cardClass}>
+                          <div className="font-pixel text-[10px] mb-2">WHERE USERS STOPPED</div>
+                          <div className="space-y-1.5" style={{ fontFamily: sansFont }}>
+                            {CHECKPOINT_ORDER.map((cp, i) => {
+                              const count = farthestDistribution[i];
+                              const pct = usersWithAny > 0 ? Math.round(count / usersWithAny * 100) : 0;
+                              return (
+                                <div key={cp.id} className="flex items-center gap-2">
+                                  <div className="w-20 text-xs text-foreground/60 shrink-0">{cp.label}</div>
+                                  <div className="flex-1 h-5 bg-border/20 relative overflow-hidden border border-border/30">
+                                    <div className="h-full bg-red-400/50" style={{ width: `${Math.max(pct, 3)}%` }} />
+                                    <div className="absolute inset-0 flex items-center px-2 text-[11px] font-semibold">{count} ({pct}%)</div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    )}
+
+                    {/* Page Times sub-tab */}
+                    {checkpointSubTab === "pages" && (
+                      <div className={cardClass}>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-xs" style={{ fontFamily: sansFont }}>
+                            <thead>
+                              <tr>
+                                <th className="font-pixel text-[10px] p-2 border-b-2 border-border bg-primary/20">PAGE</th>
+                                <th className="font-pixel text-[10px] p-2 border-b-2 border-border bg-primary/20">VIEWS</th>
+                                <th className="font-pixel text-[10px] p-2 border-b-2 border-border bg-primary/20">AVG TIME</th>
+                                <th className="font-pixel text-[10px] p-2 border-b-2 border-border bg-primary/20">TOTAL TIME</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {TUTORIAL_PAGES.map(tp => {
+                                const stats = pageStatsMap[tp.page];
+                                return (
+                                  <tr key={tp.page} className="hover:bg-primary/5">
+                                    <td className="p-2 border-b border-border/30 text-sm">{tp.label}</td>
+                                    <td className="p-2 border-b border-border/30 text-sm">{stats?.views ?? 0}</td>
+                                    <td className="p-2 border-b border-border/30 text-sm">{stats ? formatTime(stats.avgDuration) : "-"}</td>
+                                    <td className="p-2 border-b border-border/30 text-sm">{stats ? formatTime(stats.totalDuration) : "-"}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* User Matrix sub-tab */}
+                    {checkpointSubTab === "matrix" && (
+                      <div className={cardClass}>
+                        <div className="font-pixel text-[10px] mb-2">USER PROGRESS ({activeUserIds.length})</div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-xs" style={{ fontFamily: sansFont }}>
+                            <thead>
+                              <tr>
+                                <th className="font-pixel text-[10px] p-2 border-b-2 border-border bg-primary/20">USER</th>
+                                {CHECKPOINT_ORDER.map(cp => (
+                                  <th key={cp.id} className="font-pixel text-[10px] p-2 border-b-2 border-border bg-primary/20 text-center" title={cp.chapter}>{cp.label}</th>
+                                ))}
+                                <th className="font-pixel text-[10px] p-2 border-b-2 border-border bg-primary/20 text-center">TOTAL</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {activeUserIds.map(uid => {
+                                const info = userMap[uid];
+                                const completed = userCheckpoints[uid];
+                                const total = CHECKPOINT_ORDER.filter(cp => completed.has(cp.id)).length;
+                                const allDone = total === CHECKPOINT_ORDER.length;
+                                return (
+                                  <tr
+                                    key={uid}
+                                    className={`hover:bg-primary/10 cursor-pointer ${allDone ? "bg-green-500/5" : ""}`}
+                                    onClick={() => setSelectedCheckpointUser(uid)}
+                                  >
+                                    <td className="p-2 border-b border-border/30 text-sm">
+                                      {info?.name || truncate(uid, 8)}
+                                    </td>
+                                    {CHECKPOINT_ORDER.map(cp => {
+                                      const done = completed.has(cp.id);
+                                      return (
+                                        <td key={cp.id} className="p-2 border-b border-border/30 text-center">
+                                          {done ? (
+                                            <span className="text-green-600 font-bold">✓</span>
+                                          ) : (
+                                            <span className="text-foreground/20">--</span>
+                                          )}
+                                        </td>
+                                      );
+                                    })}
+                                    <td className={`p-2 border-b border-border/30 text-center font-semibold ${allDone ? "text-green-600" : ""}`}>
+                                      {total}/{CHECKPOINT_ORDER.length}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                              {activeUserIds.length === 0 && (
+                                <tr><td colSpan={CHECKPOINT_ORDER.length + 2} className="p-2 border-b border-border/30 text-center text-foreground/40">No completions yet</td></tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
                   </>
                 ) : (
                   <>
@@ -830,63 +967,151 @@ export default function AdminPage() {
                 )}
               </div>
             </div>
+            </div>
           );
         })()}
 
         {/* Analytics Tab */}
-        {activeTab === "analytics" && (
-          <div className="space-y-6">
-            {/* Page stats */}
-            <div className={`${cardClass} overflow-x-auto`}>
-              <div className="font-pixel text-xs mb-3">PAGE VIEWS</div>
-              <table className={tableClass} style={{ fontFamily: sansFont }}>
-                <thead>
-                  <tr>
-                    <th className={thClass}>PAGE</th>
-                    <th className={thClass}>VIEWS</th>
-                    <th className={thClass}>AVG DURATION</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.pageStats.map((p) => (
-                    <tr key={p.page} className="hover:bg-primary/5">
-                      <td className={tdClass}>{p.page}</td>
-                      <td className={tdClass}>{p.views}</td>
-                      <td className={tdClass}>{p.avgDuration}s</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+        {activeTab === "analytics" && (() => {
+          const fmtTime = (s: number) => {
+            if (s < 60) return `${s}s`;
+            const m = Math.floor(s / 60);
+            if (m < 60) return `${m}m ${s % 60}s`;
+            return `${Math.floor(m / 60)}h ${m % 60}m`;
+          };
 
-            {/* Recent events */}
-            <div className={`${cardClass} overflow-x-auto`}>
-              <div className="font-pixel text-xs mb-3">RECENT EVENTS</div>
-              <table className={tableClass} style={{ fontFamily: sansFont }}>
-                <thead>
-                  <tr>
-                    <th className={thClass}>PAGE</th>
-                    <th className={thClass}>USER</th>
-                    <th className={thClass}>DURATION</th>
-                    <th className={thClass}>REFERRER</th>
-                    <th className={thClass}>TIME</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.recentEvents.map((e) => (
-                    <tr key={e.id} className="hover:bg-primary/5">
-                      <td className={tdClass}>{e.page}</td>
-                      <td className={tdClass}>{truncate(e.userId, 8)}</td>
-                      <td className={tdClass}>{e.duration != null ? `${e.duration}s` : "-"}</td>
-                      <td className={tdClass}>{truncate(e.referrer, 20)}</td>
-                      <td className={tdClass}>{formatDate(e.createdAt)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          const totalViews = data.pageStats.reduce((s, p) => s + p.views, 0);
+          const uniqueUsers = new Set(data.recentEvents.filter(e => e.userId).map(e => e.userId)).size;
+          const uniqueSessions = new Set(data.recentEvents.filter(e => e.sessionId).map(e => e.sessionId)).size;
+          const durEvents = data.recentEvents.filter(e => e.duration != null && e.duration > 0);
+          const avgDuration = durEvents.length > 0 ? Math.round(durEvents.reduce((s, e) => s + (e.duration || 0), 0) / durEvents.length) : 0;
+
+          // Group by section
+          const sections: { label: string; prefix: string }[] = [
+            { label: "Lightning Tutorial", prefix: "/lightning-tutorial" },
+            { label: "Noise Tutorial", prefix: "/noise-tutorial" },
+            { label: "Other Pages", prefix: "" },
+          ];
+          const sectionStats = sections.map(sec => {
+            const pages = sec.prefix
+              ? data.pageStats.filter(p => p.page.startsWith(sec.prefix))
+              : data.pageStats.filter(p => !p.page.startsWith("/lightning-tutorial") && !p.page.startsWith("/noise-tutorial"));
+            const views = pages.reduce((s, p) => s + p.views, 0);
+            const totalDur = pages.reduce((s, p) => s + p.avgDuration * p.views, 0);
+            const avgDur = views > 0 ? Math.round(totalDur / views) : 0;
+            return { ...sec, views, avgDur, pageCount: pages.length };
+          });
+
+          // Top referrers
+          const refCounts: Record<string, number> = {};
+          for (const e of data.recentEvents) {
+            const ref = e.referrer || "(direct)";
+            refCounts[ref] = (refCounts[ref] || 0) + 1;
+          }
+          const topReferrers = Object.entries(refCounts)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10);
+
+          // Top pages
+          const topPages = [...data.pageStats]
+            .sort((a, b) => b.views - a.views)
+            .slice(0, 10);
+
+          // Longest avg time pages
+          const longestPages = [...data.pageStats]
+            .filter(p => p.views >= 2)
+            .sort((a, b) => b.avgDuration - a.avgDuration)
+            .slice(0, 10);
+
+          return (
+            <div className="space-y-4">
+              {/* Summary metrics */}
+              <div className="grid grid-cols-4 gap-3">
+                <div className={cardClass}>
+                  <div className="font-pixel text-[9px] text-foreground/60 mb-1">TOTAL VIEWS</div>
+                  <div className="font-pixel text-base">{totalViews.toLocaleString()}</div>
+                </div>
+                <div className={cardClass}>
+                  <div className="font-pixel text-[9px] text-foreground/60 mb-1">UNIQUE USERS</div>
+                  <div className="font-pixel text-base">{uniqueUsers}</div>
+                </div>
+                <div className={cardClass}>
+                  <div className="font-pixel text-[9px] text-foreground/60 mb-1">SESSIONS</div>
+                  <div className="font-pixel text-base">{uniqueSessions}</div>
+                </div>
+                <div className={cardClass}>
+                  <div className="font-pixel text-[9px] text-foreground/60 mb-1">AVG TIME/PAGE</div>
+                  <div className="font-pixel text-base">{fmtTime(avgDuration)}</div>
+                </div>
+              </div>
+
+              {/* Traffic by section */}
+              <div className={cardClass}>
+                <div className="font-pixel text-[10px] mb-2">TRAFFIC BY SECTION</div>
+                <div className="space-y-1.5" style={{ fontFamily: sansFont }}>
+                  {sectionStats.map(sec => {
+                    const pct = totalViews > 0 ? Math.round(sec.views / totalViews * 100) : 0;
+                    return (
+                      <div key={sec.label} className="flex items-center gap-2">
+                        <div className="w-36 text-xs text-foreground/60 shrink-0">{sec.label}</div>
+                        <div className="flex-1 h-5 bg-border/20 relative overflow-hidden border border-border/30">
+                          <div className="h-full bg-[#FFD700]/60" style={{ width: `${pct}%` }} />
+                          <div className="absolute inset-0 flex items-center px-2 text-[11px] font-semibold">{sec.views} views ({pct}%)</div>
+                        </div>
+                        <div className="w-20 text-xs text-foreground/40 text-right shrink-0">avg {fmtTime(sec.avgDur)}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {/* Top pages */}
+                <div className={cardClass}>
+                  <div className="font-pixel text-[10px] mb-2">TOP PAGES</div>
+                  <div className="space-y-1" style={{ fontFamily: sansFont }}>
+                    {topPages.map((p, i) => (
+                      <div key={p.page} className="flex items-center gap-2 text-xs">
+                        <span className="text-foreground/30 w-4 shrink-0">{i + 1}.</span>
+                        <span className="flex-1 truncate">{p.page}</span>
+                        <span className="text-foreground/60 shrink-0">{p.views}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Longest pages */}
+                <div className={cardClass}>
+                  <div className="font-pixel text-[10px] mb-2">LONGEST AVG TIME</div>
+                  <div className="space-y-1" style={{ fontFamily: sansFont }}>
+                    {longestPages.map((p, i) => (
+                      <div key={p.page} className="flex items-center gap-2 text-xs">
+                        <span className="text-foreground/30 w-4 shrink-0">{i + 1}.</span>
+                        <span className="flex-1 truncate">{p.page}</span>
+                        <span className="text-foreground/60 shrink-0">{fmtTime(p.avgDuration)}</span>
+                      </div>
+                    ))}
+                    {longestPages.length === 0 && <div className="text-xs text-foreground/40">Not enough data</div>}
+                  </div>
+                </div>
+
+                {/* Top referrers */}
+                <div className={cardClass}>
+                  <div className="font-pixel text-[10px] mb-2">TOP REFERRERS</div>
+                  <div className="space-y-1" style={{ fontFamily: sansFont }}>
+                    {topReferrers.map(([ref, count], i) => (
+                      <div key={ref} className="flex items-center gap-2 text-xs">
+                        <span className="text-foreground/30 w-4 shrink-0">{i + 1}.</span>
+                        <span className="flex-1 truncate">{ref}</span>
+                        <span className="text-foreground/60 shrink-0">{count}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Donations Tab */}
         {activeTab === "donations" && (
