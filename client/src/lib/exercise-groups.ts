@@ -254,8 +254,11 @@ export const EXERCISE_GROUPS: Record<string, ExerciseGroup> = {
     exerciseIds: [
       "ln-exercise-htlc-timeout-tx",
       "ln-exercise-htlc-success-tx",
+      "ln-exercise-finalize-htlc-timeout",
+      "ln-exercise-finalize-htlc-success",
     ],
     crossGroupDependencies: [
+      "ln-exercise-sign-input",
       "ln-exercise-to-local-script",
       "ln-exercise-offered-htlc-script",
       "ln-exercise-received-htlc-script",

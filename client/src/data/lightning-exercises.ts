@@ -2126,4 +2126,226 @@ def test_p2wsh_output():
     groupOrder: 2,
   },
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // EXERCISE 24 - Finalize HTLC Timeout Transaction
+  // ═══════════════════════════════════════════════════════════════════════════
+  "ln-exercise-finalize-htlc-timeout": {
+    id: "ln-exercise-finalize-htlc-timeout",
+    title: "Exercise 24: Finalize HTLC Timeout Transaction",
+    description:
+      "Sign and finalize an HTLC timeout transaction. Generate the local HTLC signature and build the witness: [empty, remote_sig, local_sig, empty (timeout path), htlc_script].",
+    starterCode: `def finalize_htlc_timeout(unsigned_tx_hex: str,
+                          htlc_script: bytes,
+                          htlc_amount: int,
+                          local_htlc_privkey: bytes,
+                          remote_htlc_signature: bytes) -> str:
+    """
+    Sign and finalize an HTLC timeout transaction.
+
+    Steps:
+    1. Compute BIP143 sighash over the HTLC script
+    2. Sign with local HTLC key (DER + SIGHASH_ALL)
+    3. Build witness: [empty, remote_sig, local_sig, empty, htlc_script]
+       - First empty: OP_0 dummy for CHECKMULTISIG bug
+       - Second empty: selects the timeout path (OP_IF evaluates false)
+
+    Args:
+        unsigned_tx_hex: hex of unsigned HTLC timeout tx
+        htlc_script: the offered HTLC witness script
+        htlc_amount: satoshi value of the HTLC output
+        local_htlc_privkey: 32-byte derived HTLC private key
+        remote_htlc_signature: counterparty's DER sig + SIGHASH_ALL
+
+    Returns:
+        str: hex of signed segwit HTLC timeout transaction
+    """
+    # === YOUR CODE HERE ===
+    pass
+`,
+    testCode: `
+def test_returns_string():
+    # Build a minimal unsigned HTLC timeout tx
+    unsigned_tx = "0200000001bef67e4e2fb9ddeeb3461973cd4c62abb35050b1add772995b820b584a48848901000000000000000001d0070000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80ef6010000"
+    htlc_script = bytes.fromhex("76a91414011f7254d96b819c76986c277d115efce6f7b58763ac6702c800b175210214ccb63e0b1bcf27ca2c6c73e16f3d6a036a33a2b81e62ba5d78f66b4a19fc2fac68")
+    privkey = bytes.fromhex("30ff4956bbdd3222d44cc5e8a1261dab1e07957bdac5ae88fe3261ef321f3749")
+    remote_sig = bytes.fromhex("3045022100c3127b33dcc741dd6b05b1e63cbd1a9a7d816f37af9b6756fa2376b056f032370220408b96279808fe57eb7e463710804cdf4f108388bc5cf722d8c848d2c7f9f3b001")
+    result = finalize_htlc_timeout(unsigned_tx, htlc_script, 2000, privkey, remote_sig)
+    assert isinstance(result, str), "Must return hex string"
+    signed = bytes.fromhex(result)
+    # Check segwit marker
+    assert signed[4:6] == b'\\x00\\x01', "Must include segwit marker (0x00, 0x01)"
+
+def test_witness_items():
+    unsigned_tx = "0200000001bef67e4e2fb9ddeeb3461973cd4c62abb35050b1add772995b820b584a48848901000000000000000001d0070000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80ef6010000"
+    htlc_script = bytes.fromhex("76a91414011f7254d96b819c76986c277d115efce6f7b58763ac6702c800b175210214ccb63e0b1bcf27ca2c6c73e16f3d6a036a33a2b81e62ba5d78f66b4a19fc2fac68")
+    privkey = bytes.fromhex("30ff4956bbdd3222d44cc5e8a1261dab1e07957bdac5ae88fe3261ef321f3749")
+    remote_sig = bytes.fromhex("3045022100c3127b33dcc741dd6b05b1e63cbd1a9a7d816f37af9b6756fa2376b056f032370220408b96279808fe57eb7e463710804cdf4f108388bc5cf722d8c848d2c7f9f3b001")
+    result = finalize_htlc_timeout(unsigned_tx, htlc_script, 2000, privkey, remote_sig)
+    signed = bytes.fromhex(result)
+    # Witness should have 5 items: empty, remote_sig, local_sig, empty, htlc_script
+    # Find witness count byte after outputs
+    # The witness count is 0x05
+    assert b'\\x05' in signed, "Witness must have 5 items"
+`,
+    hints: {
+      conceptual:
+        "<p>Finalizing an HTLC timeout transaction is very similar to finalizing a commitment transaction. You compute the BIP143 sighash over the HTLC script (not the funding script), sign with the derived HTLC private key, and build a 5-item witness. The key difference is the witness structure: instead of [empty, sig1, sig2, script], it's [empty, remote_sig, local_sig, empty, htlc_script]. The second empty bytes element selects the timeout path (evaluates to false in the OP_IF check).</p>",
+      steps:
+        '<ol><li>Parse the unsigned tx to extract version, inputs, outputs, locktime</li><li>Compute BIP143 sighash with the htlc_script and htlc_amount</li><li>Sign: <code>sk.sign_digest(sighash, sigencode=sigencode_der) + b"\\x01"</code></li><li>Build witness: [b"", remote_sig, local_sig, b"", htlc_script]</li><li>Build segwit tx: version + marker(00 01) + inputs + outputs + witness(5 items) + locktime</li></ol>',
+      code: `def finalize_htlc_timeout(unsigned_tx_hex, htlc_script, htlc_amount,
+                          local_htlc_privkey, remote_htlc_signature):
+    tx = bytes.fromhex(unsigned_tx_hex)
+    def dsha256(d): return hashlib.sha256(hashlib.sha256(d).digest()).digest()
+
+    version = tx[0:4]
+    prevhash = tx[5:37]
+    previndex = tx[37:41]
+    sequence = tx[42:46]
+    out_start = 47
+    locktime = tx[-4:]
+    outputs = tx[out_start:-4]
+
+    hp = dsha256(prevhash + previndex)
+    hs = dsha256(sequence)
+    ho = dsha256(outputs[1:])
+    sc = bytes([len(htlc_script)]) + htlc_script
+    preimage = (version + hp + hs + prevhash + previndex + sc
+                + struct.pack('<q', htlc_amount) + sequence + ho
+                + locktime + struct.pack('<I', 1))
+    sighash = dsha256(preimage)
+
+    sk = SigningKey.from_string(local_htlc_privkey, curve=SECP256k1)
+    local_sig = sk.sign_digest(sighash, sigencode=sigencode_der) + b'\\x01'
+
+    result = version
+    result += b'\\x00\\x01'
+    result += tx[4:out_start]
+    result += outputs
+    # Witness: 5 items
+    result += b'\\x05'
+    result += b'\\x00'  # empty (CHECKMULTISIG dummy)
+    result += bytes([len(remote_htlc_signature)]) + remote_htlc_signature
+    result += bytes([len(local_sig)]) + local_sig
+    result += b'\\x00'  # empty (timeout path selector)
+    result += bytes([len(htlc_script)]) + htlc_script
+    result += locktime
+    return result.hex()`,
+    },
+    rewardSats: 42,
+    group: "transactions/htlc",
+    groupOrder: 3,
+  },
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // EXERCISE 25 - Finalize HTLC Success Transaction
+  // ═══════════════════════════════════════════════════════════════════════════
+  "ln-exercise-finalize-htlc-success": {
+    id: "ln-exercise-finalize-htlc-success",
+    title: "Exercise 25: Finalize HTLC Success Transaction",
+    description:
+      "Sign and finalize an HTLC success transaction. Generate the local HTLC signature and build the witness: [empty, remote_sig, local_sig, preimage, htlc_script].",
+    starterCode: `def finalize_htlc_success(unsigned_tx_hex: str,
+                          htlc_script: bytes,
+                          htlc_amount: int,
+                          local_htlc_privkey: bytes,
+                          remote_htlc_signature: bytes,
+                          payment_preimage: bytes) -> str:
+    """
+    Sign and finalize an HTLC success transaction.
+
+    Steps:
+    1. Compute BIP143 sighash over the HTLC script
+    2. Sign with local HTLC key (DER + SIGHASH_ALL)
+    3. Build witness: [empty, remote_sig, local_sig, preimage, htlc_script]
+       - empty: OP_0 dummy for CHECKMULTISIG bug
+       - preimage: 32-byte payment preimage (selects success path)
+
+    Args:
+        unsigned_tx_hex: hex of unsigned HTLC success tx
+        htlc_script: the received HTLC witness script
+        htlc_amount: satoshi value of the HTLC output
+        local_htlc_privkey: 32-byte derived HTLC private key
+        remote_htlc_signature: counterparty's DER sig + SIGHASH_ALL
+        payment_preimage: 32-byte preimage that hashes to payment_hash
+
+    Returns:
+        str: hex of signed segwit HTLC success transaction
+    """
+    # === YOUR CODE HERE ===
+    pass
+`,
+    testCode: `
+def test_returns_string():
+    unsigned_tx = "0200000001bef67e4e2fb9ddeeb3461973cd4c62abb35050b1add772995b820b584a48848901000000000000000001d0070000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e00000000"
+    htlc_script = bytes.fromhex("76a91414011f7254d96b819c76986c277d115efce6f7b58763ac6702c800b175210214ccb63e0b1bcf27ca2c6c73e16f3d6a036a33a2b81e62ba5d78f66b4a19fc2fac68")
+    privkey = bytes.fromhex("30ff4956bbdd3222d44cc5e8a1261dab1e07957bdac5ae88fe3261ef321f3749")
+    remote_sig = bytes.fromhex("3045022100c3127b33dcc741dd6b05b1e63cbd1a9a7d816f37af9b6756fa2376b056f032370220408b96279808fe57eb7e463710804cdf4f108388bc5cf722d8c848d2c7f9f3b001")
+    preimage = bytes(32)  # dummy 32-byte preimage
+    result = finalize_htlc_success(unsigned_tx, htlc_script, 2000, privkey, remote_sig, preimage)
+    assert isinstance(result, str), "Must return hex string"
+    signed = bytes.fromhex(result)
+    assert signed[4:6] == b'\\x00\\x01', "Must include segwit marker"
+
+def test_witness_contains_preimage():
+    unsigned_tx = "0200000001bef67e4e2fb9ddeeb3461973cd4c62abb35050b1add772995b820b584a48848901000000000000000001d0070000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e00000000"
+    htlc_script = bytes.fromhex("76a91414011f7254d96b819c76986c277d115efce6f7b58763ac6702c800b175210214ccb63e0b1bcf27ca2c6c73e16f3d6a036a33a2b81e62ba5d78f66b4a19fc2fac68")
+    privkey = bytes.fromhex("30ff4956bbdd3222d44cc5e8a1261dab1e07957bdac5ae88fe3261ef321f3749")
+    remote_sig = bytes.fromhex("3045022100c3127b33dcc741dd6b05b1e63cbd1a9a7d816f37af9b6756fa2376b056f032370220408b96279808fe57eb7e463710804cdf4f108388bc5cf722d8c848d2c7f9f3b001")
+    preimage = bytes.fromhex("0102030405060708091011121314151617181920212223242526272829303132")
+    result = finalize_htlc_success(unsigned_tx, htlc_script, 2000, privkey, remote_sig, preimage)
+    signed = bytes.fromhex(result)
+    # Witness should have 5 items and contain the preimage
+    assert b'\\x05' in signed, "Witness must have 5 items"
+    assert preimage in signed, "Witness must contain the payment preimage"
+`,
+    hints: {
+      conceptual:
+        "<p>Finalizing an HTLC success transaction is nearly identical to the HTLC timeout finalization. The only difference is the witness: instead of an empty bytes element for the path selector, you provide the 32-byte payment preimage. Since the preimage is exactly 32 bytes, the script interpreter evaluates the OP_SIZE check as true and takes the success path, which verifies the preimage hash and requires the 2-of-2 multisig.</p>",
+      steps:
+        '<ol><li>Parse the unsigned tx to extract version, inputs, outputs, locktime</li><li>Compute BIP143 sighash with the htlc_script and htlc_amount</li><li>Sign: <code>sk.sign_digest(sighash, sigencode=sigencode_der) + b"\\x01"</code></li><li>Build witness: [b"", remote_sig, local_sig, preimage, htlc_script]</li><li>Build segwit tx: version + marker(00 01) + inputs + outputs + witness(5 items) + locktime</li></ol>',
+      code: `def finalize_htlc_success(unsigned_tx_hex, htlc_script, htlc_amount,
+                          local_htlc_privkey, remote_htlc_signature,
+                          payment_preimage):
+    tx = bytes.fromhex(unsigned_tx_hex)
+    def dsha256(d): return hashlib.sha256(hashlib.sha256(d).digest()).digest()
+
+    version = tx[0:4]
+    prevhash = tx[5:37]
+    previndex = tx[37:41]
+    sequence = tx[42:46]
+    out_start = 47
+    locktime = tx[-4:]
+    outputs = tx[out_start:-4]
+
+    hp = dsha256(prevhash + previndex)
+    hs = dsha256(sequence)
+    ho = dsha256(outputs[1:])
+    sc = bytes([len(htlc_script)]) + htlc_script
+    preimage_data = (version + hp + hs + prevhash + previndex + sc
+                + struct.pack('<q', htlc_amount) + sequence + ho
+                + locktime + struct.pack('<I', 1))
+    sighash = dsha256(preimage_data)
+
+    sk = SigningKey.from_string(local_htlc_privkey, curve=SECP256k1)
+    local_sig = sk.sign_digest(sighash, sigencode=sigencode_der) + b'\\x01'
+
+    result = version
+    result += b'\\x00\\x01'
+    result += tx[4:out_start]
+    result += outputs
+    # Witness: 5 items
+    result += b'\\x05'
+    result += b'\\x00'  # empty (CHECKMULTISIG dummy)
+    result += bytes([len(remote_htlc_signature)]) + remote_htlc_signature
+    result += bytes([len(local_sig)]) + local_sig
+    result += bytes([len(payment_preimage)]) + payment_preimage  # 32-byte preimage
+    result += bytes([len(htlc_script)]) + htlc_script
+    result += locktime
+    return result.hex()`,
+    },
+    rewardSats: 42,
+    group: "transactions/htlc",
+    groupOrder: 4,
+  },
+
 };

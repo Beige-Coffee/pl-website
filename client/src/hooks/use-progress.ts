@@ -35,6 +35,9 @@ export function useProgress(sessionToken: string | null) {
     (key: string, value: string) => {
       if (!sessionToken) return;
 
+      // Optimistic local update so getProgress reflects the new value immediately
+      setServerProgress(prev => prev ? { ...prev, [key]: value } : { [key]: value });
+
       const existing = pendingSaves.current.get(key);
       if (existing) clearTimeout(existing);
 

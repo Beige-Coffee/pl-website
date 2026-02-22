@@ -11,6 +11,7 @@ import { decode as decodeBolt11 } from "light-bolt11-decoder";
 import { emailAuthSchema, insertPageEventSchema } from "@shared/schema";
 import { existsSync } from "fs";
 import { sendVerificationEmail } from "./email";
+import { nodeManager } from "./bitcoin-node";
 
 class RateLimiter {
   private attempts: Map<string, number[]> = new Map();
@@ -1377,6 +1378,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("[donate] Error fetching donation wall:", err.message);
       return res.status(500).json({ error: "Failed to load donations" });
     }
+  });
+
+  // --- Bitcoin Node Terminal ---
+
+  const nodeLimiter = new RateLimiter(30, 10_000);
+
+  app.get("/api/node/status", async (req: Request, res: Response) => {
+    try {
+      const user = await getAuthUser(req);
+      if (!user) return res.status(401).json({ error: "Not authenticated" });
+
+      const provision = req.query.provision === "true";
+      if (provision) {
+        try {
+          await nodeManager.getOrCreate(user.id);
+          return res.json({ running: true });
+        } catch (err: any) {
+          const status = err.message?.includes("busy") ? 503 : 500;
+          return res.status(status).json({ error: err.message });
+        }
+      }
+
+      const status = nodeManager.getStatus(user.id);
+      return res.json(status);
+    } catch (err: any) {
+      console.error("[node] Status error:", err.message);
+      return res.status(500).json({ error: "Failed to get node status" });
+    }
+  });
+
+  app.post("/api/node/exec", async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    if (!nodeLimiter.check(ip)) {
+      return res.status(429).json({ error: "Too many requests" });
+    }
+
+    try {
+      const user = await getAuthUser(req);
+      if (!user) return res.status(401).json({ error: "Not authenticated" });
+
+      const { command } = req.body;
+      if (!command || typeof command !== "string" || command.length > 2000) {
+        return res.status(400).json({ error: "Invalid command" });
+      }
+
+      const result = await nodeManager.exec(user.id, command);
+      return res.json(result);
+    } catch (err: any) {
+      const status = err.message?.includes("busy") ? 503 : 500;
+      return res.status(status).json({ error: err.message });
+    }
+  });
+
+  // Start node cleanup and pre-download binary
+  nodeManager.startCleanup();
+  nodeManager.ensureBitcoindBinary().catch((err) => {
+    console.log("[node] Binary pre-download deferred:", err.message);
   });
 
   const httpServer = createServer(app);

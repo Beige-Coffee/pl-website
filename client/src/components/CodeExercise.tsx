@@ -10,6 +10,7 @@ import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
 import { lintKeymap } from "@codemirror/lint";
 import { runPythonTests, preloadWorker, type TestResult } from "../lib/pyodide-runner";
 import { QRCodeSVG } from "qrcode.react";
+import ExerciseFileBrowser from "./ExerciseFileBrowser";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -94,10 +95,8 @@ export default function CodeExercise({
     }
   }, [getProgress, exerciseId]);
 
-  // Prior code panel (collapsible)
-  const [priorCodeOpen, setPriorCodeOpen] = useState(false);
-  const priorCodeRef = useRef<HTMLDivElement>(null);
-  const priorViewRef = useRef<EditorView | null>(null);
+  // File browser state
+  const [fileBrowserOpen, setFileBrowserOpen] = useState(false);
 
   // Hint state: null = closed, "conceptual" | "steps" | "code" = which is open
   const [activeHint, setActiveHint] = useState<"conceptual" | "steps" | "code" | null>(null);
@@ -180,43 +179,6 @@ export default function CodeExercise({
     return parts.filter(Boolean).join("\n\n");
   }, [preamble, priorExercises]);
 
-  // Read-only CodeMirror for prior code panel
-  useEffect(() => {
-    const hasPriorContent = (preamble && preamble.trim()) || (priorExercises && priorExercises.length > 0);
-    if (!priorCodeOpen || !hasPriorContent || !priorCodeRef.current) {
-      if (priorViewRef.current) {
-        priorViewRef.current.destroy();
-        priorViewRef.current = null;
-      }
-      return;
-    }
-    if (priorViewRef.current) return;
-
-    const priorExtensions = [
-      python(),
-      EditorView.editable.of(false),
-      EditorState.readOnly.of(true),
-      ...(dark ? [oneDark] : []),
-      EditorView.theme({
-        "&": { fontSize: "13px", borderRadius: "4px", overflow: "hidden" },
-        ".cm-scroller": { overflow: "auto", maxHeight: "300px" },
-        ".cm-gutters": { display: "none" },
-        ".cm-content": { padding: "8px 12px" },
-        "&.cm-focused": { outline: "none" },
-      }),
-    ];
-
-    const view = new EditorView({
-      state: EditorState.create({ doc: assembleContext().trim(), extensions: priorExtensions }),
-      parent: priorCodeRef.current,
-    });
-    priorViewRef.current = view;
-
-    return () => {
-      view.destroy();
-      priorViewRef.current = null;
-    };
-  }, [priorCodeOpen, dark, preamble, priorExercises, assembleContext]);
 
   // Pre-warm Pyodide on mount
   useEffect(() => {
@@ -542,37 +504,26 @@ export default function CodeExercise({
         )}
       </div>
 
-      {/* Prior code panel (shown when group context is available) */}
+      {/* File browser button (shown when group context is available) */}
       {(fileLabel || (priorExercises && priorExercises.length > 0) || preamble) && (
-        <div className="mb-3">
-          {/* File badge + toggle button */}
+        <div className="mb-2">
           <button
             type="button"
-            onClick={() => setPriorCodeOpen((v) => !v)}
-            className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-all border ${
+            onClick={() => setFileBrowserOpen(true)}
+            className={`flex items-center gap-2 px-3 py-2 text-left transition-all border cursor-pointer ${
               dark
-                ? "border-[#2a3552] bg-[#0b1220] text-slate-400 hover:text-slate-200 hover:bg-[#0f1930]"
-                : "border-border bg-secondary/50 text-foreground/60 hover:text-foreground hover:bg-secondary"
+                ? "border-[#2a3552] bg-[#0b1220] text-slate-400 hover:text-[#FFD700] hover:border-[#FFD700]/40 hover:bg-[#0f1930]"
+                : "border-border bg-secondary/50 text-foreground/60 hover:text-[#9a7200] hover:border-[#b8860b]/40 hover:bg-secondary"
             }`}
           >
-            <span className="font-mono text-xs opacity-70">{priorCodeOpen ? "▼" : "▶"}</span>
-            <span className="font-mono text-xs">
-              {fileLabel ?? "prior code"}
+            <span className="text-sm opacity-70">📁</span>
+            <span className="text-sm" style={sansFont}>
+              {fileLabel ?? "exercise files"}
             </span>
-            <span className={`ml-auto text-xs opacity-50`} style={sansFont}>
-              {priorCodeOpen ? "hide prior code" : "show prior code"}
+            <span className={`ml-auto text-sm opacity-50`} style={sansFont}>
+              browse all files
             </span>
           </button>
-          {priorCodeOpen && (
-            <div ref={priorCodeRef} className={`border border-t-0 ${dark ? "border-[#2a3552]" : "border-border"}`} />
-          )}
-        </div>
-      )}
-
-      {/* Current file section label */}
-      {fileLabel && (
-        <div className={`mb-1 font-mono text-xs ${dark ? "text-slate-500" : "text-foreground/40"}`}>
-          {fileLabel} — your code below:
         </div>
       )}
 
@@ -898,6 +849,14 @@ export default function CodeExercise({
     </div>
   );
 
+  const fileBrowserModal = fileBrowserOpen ? (
+    <ExerciseFileBrowser
+      currentExerciseId={exerciseId}
+      theme={theme}
+      onClose={() => setFileBrowserOpen(false)}
+    />
+  ) : null;
+
   if (expanded) {
     return (
       <>
@@ -927,9 +886,15 @@ export default function CodeExercise({
             {exerciseContent}
           </div>
         </div>
+        {fileBrowserModal}
       </>
     );
   }
 
-  return exerciseContent;
+  return (
+    <>
+      {exerciseContent}
+      {fileBrowserModal}
+    </>
+  );
 }

@@ -128,7 +128,10 @@ export default function Scratchpad({ theme }: ScratchpadProps) {
         pendingCodeRef.current = code;
         try { localStorage.setItem(STORAGE_KEY_CODE, code); } catch {}
       }
-      if (!isOpen) setIsOpen(true);
+      if (!isOpen) {
+        window.dispatchEvent(new CustomEvent("scratchpad-open"));
+        setIsOpen(true);
+      }
     };
     window.addEventListener("scratchpad-send-code", handler);
     return () => window.removeEventListener("scratchpad-send-code", handler);
@@ -341,45 +344,26 @@ export default function Scratchpad({ theme }: ScratchpadProps) {
   const textMuted = dark ? "text-slate-400" : "text-black/60";
   const dragHandleColor = dark ? "bg-[#2a3552] hover:bg-[#FFD700]/40" : "bg-[#d4c9a8] hover:bg-[#b8860b]/30";
 
-  // ── Toggle button (when closed) ─────────────────────────────────────────
+  // Mutual exclusion: close when NodeTerminal or TxNotebook opens
+  useEffect(() => {
+    const handler = () => { if (isOpen) setIsOpen(false); };
+    window.addEventListener("node-terminal-open", handler);
+    window.addEventListener("tx-notebook-open", handler);
+    return () => {
+      window.removeEventListener("node-terminal-open", handler);
+      window.removeEventListener("tx-notebook-open", handler);
+    };
+  }, [isOpen]);
 
-  const [showToggleTooltip, setShowToggleTooltip] = useState(false);
+  // Listen for open event from Tools menu
+  useEffect(() => {
+    const handler = () => setIsOpen(true);
+    window.addEventListener("scratchpad-open", handler);
+    return () => window.removeEventListener("scratchpad-open", handler);
+  }, []);
 
   if (!isOpen) {
-    return (
-      <div className="fixed top-[78px] right-4 z-40 hidden lg:block">
-        <button
-          onClick={() => setIsOpen(true)}
-          onMouseEnter={() => setShowToggleTooltip(true)}
-          onMouseLeave={() => setShowToggleTooltip(false)}
-          className={`flex items-center gap-2
-            font-pixel text-[10px] px-3 py-2 border-2 transition-all cursor-pointer
-            ${goldBorder} ${dark ? "bg-[#0f1930] text-[#FFD700] hover:bg-[#132043]" : "bg-[#f0e8d8] text-[#9a7200] hover:bg-[#e8dcc8]"}
-            shadow-lg hover:shadow-xl active:scale-95`}
-        >
-          <span className="text-sm leading-none" style={{ fontFamily: "monospace" }}>{"{ }"}</span>
-          <span>SCRATCHPAD</span>
-        </button>
-        {showToggleTooltip && (
-          <div
-            className={`absolute top-full right-0 mt-2 w-72 px-4 py-3.5 text-sm z-50 border-2 ${
-              dark
-                ? "bg-[#0f1930] border-[#2a3552] text-slate-300"
-                : "bg-white border-[#d4c9a8] text-black/70"
-            } shadow-lg`}
-            style={sansFont}
-          >
-            <div className={`font-pixel text-xs mb-1.5 ${goldText}`}>PYTHON SANDBOX</div>
-            <div className="leading-relaxed" style={sansFont}>
-              Experiment with Python code alongside the exercises. Use "Scratchpad" buttons in exercises to load sample inputs.
-            </div>
-            <div className={`absolute bottom-full right-4 w-0 h-0 border-l-[5px] border-r-[5px] border-b-[5px] border-l-transparent border-r-transparent ${
-              dark ? "border-b-[#2a3552]" : "border-b-[#d4c9a8]"
-            }`} />
-          </div>
-        )}
-      </div>
-    );
+    return null;
   }
 
   // ── Panel (when open) ───────────────────────────────────────────────────

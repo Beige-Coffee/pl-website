@@ -304,9 +304,21 @@ export default function CheckpointQuestion({
               }`}
             >
               <div className="flex items-start gap-3">
-                <div className={`font-pixel text-xs mt-1 shrink-0 ${isSelected ? goldText : textMuted}`}>
-                  {String.fromCharCode(65 + i)})
-                </div>
+                <span
+                  className={`font-pixel text-xs mt-0.5 shrink-0 w-6 h-6 flex items-center justify-center border ${
+                    isCorrectReveal
+                      ? "border-green-500 text-green-400"
+                      : isWrongSelection
+                      ? "border-red-500 text-red-400"
+                      : isSelected
+                      ? `${goldBorder} ${goldText}`
+                      : dark
+                      ? "border-[#2a3552] text-slate-400"
+                      : "border-border text-foreground/60"
+                  }`}
+                >
+                  {isCorrectReveal ? "\u2713" : isWrongSelection ? "\u2717" : String.fromCharCode(65 + i)}
+                </span>
                 <div className={`text-[15px] md:text-[17px] ${optText} leading-relaxed`}>{renderInlineCode(opt, dark)}</div>
               </div>
             </button>
