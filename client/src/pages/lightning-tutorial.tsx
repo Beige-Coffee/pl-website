@@ -184,15 +184,15 @@ const CHECKPOINT_QUESTIONS: Record<string, {
     explanation: "Before `option_static_remotekey`, the to_remote output used a per-commitment derived key. This meant that if the remote party lost their channel state data, they couldn't spend their output because they wouldn't know which per-commitment point was used. With static remotekey (now mandatory in the spec), the to_remote output uses the payment_basepoint directly. This means the remote party can always recover their funds using their base private key alone, even without channel state. It's a major reliability improvement.",
   },
   "channel-fairness": {
-    question: "In the Lightning fairness protocol, what happens if Alice broadcasts an old (revoked) commitment transaction?",
+    question: "In the \"cut and choose\" fairness protocol, why is the cutter incentivized to split the cake evenly?",
     options: [
-      "The transaction is automatically rejected by the Bitcoin network because it has been revoked",
-      "Bob has a limited time window (the CSV delay) to use the revocation key to claim ALL of Alice's funds as a penalty",
-      "Alice's output is permanently locked and can never be spent by anyone",
-      "Both parties' outputs are burned (sent to an unspendable address) as punishment",
+      "Because Mom is watching and will punish them if they cheat",
+      "Because the chooser picks first, so an uneven cut lets the chooser take the larger piece",
+      "Because the protocol randomly assigns pieces after cutting",
+      "Because both pieces are weighed on a scale and must be equal",
     ],
     answer: 1,
-    explanation: "Bitcoin doesn't know about Lightning revocation. An old commitment transaction is perfectly valid on-chain. However, when Alice revoked the old state, she shared her per-commitment secret with Bob. Bob can derive the revocation private key from this secret. If Alice broadcasts the old commitment, her to_local output has a CSV delay before she can spend it. During this delay, Bob can use the revocation key to sweep Alice's entire balance. This penalty mechanism makes cheating economically irrational.",
+    explanation: "In \"cut and choose,\" the cutter's best strategy is to split evenly because the chooser gets to pick first. If the cutter makes one piece bigger, the chooser simply takes the larger piece, leaving the cutter with less. This is a fairness protocol: the rules themselves make cheating a losing strategy, with no need for a trusted third party to enforce fairness.",
   },
   "payment-channels-scaling": {
     question: "How do payment channels help Bitcoin scale?",
@@ -930,6 +930,45 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
     auth.rewardClaimed,
   );
 
+  // On mount: sync localStorage DragDrop completions to server + local state
+  // so sidebar checkmarks appear immediately without navigating to each page
+  const localSyncDone = useRef(false);
+  useEffect(() => {
+    if (!auth.sessionToken || auth.loading || localSyncDone.current) return;
+    localSyncDone.current = true;
+
+    const userSuffix = `-${auth.sessionToken.slice(0, 8)}`;
+    const completedSet = new Set(auth.completedCheckpoints.map(c => c.checkpointId));
+
+    // Collect all checkpoint IDs across chapters
+    const allCheckpointIds = new Set<string>();
+    for (const reqs of Object.values(CHAPTER_REQUIREMENTS)) {
+      for (const cpId of reqs.checkpoints) allCheckpointIds.add(cpId);
+    }
+
+    for (const cpId of allCheckpointIds) {
+      if (completedSet.has(cpId)) continue;
+      try {
+        const raw = localStorage.getItem(`pl-dragdrop-${cpId}${userSuffix}`);
+        if (!raw) continue;
+        const state = JSON.parse(raw);
+        if (!state.submitted || !state.correct) continue;
+
+        // Update local state so sidebar shows checkmark immediately
+        auth.markCheckpointCompleted(cpId);
+        // Persist to server
+        fetch("/api/checkpoint/complete", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${auth.sessionToken}`,
+          },
+          body: JSON.stringify({ checkpointId: cpId, answer: 0 }),
+        }).catch(() => {});
+      } catch {}
+    }
+  }, [auth.sessionToken, auth.loading]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const [fileBrowserOpen, setFileBrowserOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
   const toolsRef = useRef<HTMLDivElement>(null);
@@ -1488,7 +1527,7 @@ function ImageBlock({
       // Fit INSIDE, leaving some breathing room.
       const pad = 16;
       const fit = Math.min((availableW - pad) / naturalW, (availableH - pad) / naturalH);
-      const clamped = Math.min(2.5, Math.max(0.5, fit));
+      const clamped = Math.min(2.5, Math.max(0.1, fit));
 
       setZoom(Number(clamped.toFixed(2)));
       bodyEl.scrollTop = 0;
@@ -1629,9 +1668,9 @@ function ImageBlock({
                 </span>
                 <input
                   type="range"
-                  min={0.5}
+                  min={0.1}
                   max={2.5}
-                  step={0.25}
+                  step={0.05}
                   value={zoom}
                   onChange={(e) => {
                     setHasManualZoom(true);
@@ -2930,6 +2969,21 @@ function ChapterContent({
       .replaceAll("src='./tutorial_images/", "src='/lightning_tutorial/tutorial_images/");
   };
 
+  // Move exercise intro text (last ⚡ heading + prose immediately before <code-intro>) into the card.
+  // Uses a callback to find the last ⚡ heading before each <code-intro>, capturing only
+  // the content from that final heading to the tag (not earlier ⚡ headings).
+  const extractExerciseIntros = (raw: string) => {
+    return raw.replace(
+      /(#{2,3}\s+⚡️?\s+[^\n]*\n)((?:(?!#{2,3}\s+⚡️?)[\s\S])*?)(<code-intro\s)/g,
+      (_match, _heading, content, tag) => {
+        const trimmed = content.trim();
+        if (!trimmed) return tag;
+        const encoded = btoa(unescape(encodeURIComponent(trimmed)));
+        return `${tag}intro-md="${encoded}" `;
+      }
+    );
+  };
+
   if (err) {
     return (
       <div
@@ -3035,7 +3089,7 @@ function ChapterContent({
               />
             );
           },
-          "code-intro": ({ heading, description, exercises: exerciseIds }: any) => {
+          "code-intro": ({ heading, description, exercises: exerciseIds, "intro-md": introMdEncoded }: any) => {
             if (tutorialMode !== "code") return null;
             const ids = String(exerciseIds || "").split(",").map((s: string) => s.trim()).filter(Boolean);
             const exerciseList = ids
@@ -3046,9 +3100,21 @@ function ChapterContent({
             const completedCount = exerciseList.filter((e: any) =>
               completedCheckpoints.some(c => c.checkpointId === e.id)
             ).length;
+            const allDone = completedCount === exerciseList.length;
 
-            // Single exercise: render as a single CollapsibleItem (no nesting)
-            if (exerciseList.length === 1) {
+            const isDark = theme === "dark";
+            const cardBorder = isDark
+              ? (allDone ? "border-green-500/60" : "border-[#FFD700]/60")
+              : (allDone ? "border-green-600/50" : "border-[#b8860b]/50");
+            const cardBg = isDark ? "bg-[#0b1220]/50" : "bg-[#fffdf5]";
+            const accentBg = allDone
+              ? (isDark ? "bg-green-500" : "bg-green-600")
+              : (isDark ? "bg-[#FFD700]" : "bg-[#b8860b]");
+            const headerText = isDark
+              ? (allDone ? "text-green-400" : "text-[#FFD700]")
+              : (allDone ? "text-green-700" : "text-[#9a7200]");
+
+            const exerciseContent = exerciseList.length === 1 ? (() => {
               const ex = exerciseList[0];
               const isCompleted = completedCheckpoints.some(c => c.checkpointId === ex.id);
               const ctx = getExerciseGroupContext(ex.id);
@@ -3082,10 +3148,7 @@ function ChapterContent({
                   />
                 </CollapsibleItem>
               );
-            }
-
-            // Multiple exercises: render as CollapsibleGroup with nested CollapsibleItems
-            return (
+            })() : (
               <CollapsibleGroup
                 heading={heading}
                 description={description}
@@ -3130,6 +3193,47 @@ function ChapterContent({
                   );
                 })}
               </CollapsibleGroup>
+            );
+
+            return (
+              <div className={`my-8 border-2 ${cardBorder} ${cardBg} relative overflow-hidden`}>
+                {/* Gold/green left accent bar */}
+                <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${accentBg}`} />
+
+                {/* Header */}
+                <div className={`flex items-center gap-2 px-5 pl-6 py-3 border-b ${
+                  isDark ? "border-[#2a3552]/50" : "border-[#e8dcc8]"
+                }`}>
+                  <span className="text-base">&#9889;</span>
+                  <span className={`font-pixel text-xs tracking-wide ${headerText}`}>
+                    CODING EXERCISE{exerciseList.length > 1 ? "S" : ""}
+                  </span>
+                  {allDone && (
+                    <span className={`font-pixel text-xs ${isDark ? "text-green-400" : "text-green-700"}`}>
+                      COMPLETE
+                    </span>
+                  )}
+                </div>
+
+                {/* Intro prose (moved from above the card) */}
+                {introMdEncoded && (() => {
+                  try {
+                    const introMd = decodeURIComponent(escape(atob(introMdEncoded)));
+                    return (
+                      <div className={`px-5 pl-6 pt-4 pb-2 noise-md noise-md-${theme}`}>
+                        <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+                          {rewriteTutorialImagePaths(introMd)}
+                        </ReactMarkdown>
+                      </div>
+                    );
+                  } catch { return null; }
+                })()}
+
+                {/* Exercise content */}
+                <div className="px-4 pl-5 py-4">
+                  {exerciseContent}
+                </div>
+              </div>
             );
           },
           "tx-generator": ({ id }: any) => {
@@ -3185,7 +3289,7 @@ function ChapterContent({
           },
         } as any}
       >
-        {rewriteTutorialImagePaths(md)}
+        {extractExerciseIntros(rewriteTutorialImagePaths(md))}
       </ReactMarkdown>
 
       {(() => {

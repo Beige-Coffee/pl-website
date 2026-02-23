@@ -21,30 +21,80 @@ interface AuthState {
 }
 
 const STORAGE_KEY = "pl-session-token";
+const AUTH_CACHE_KEY = "pl-auth-cache";
+
+// Server data is authoritative — with exercise IDs registered server-side,
+// all completions are persisted and returned by /api/checkpoint/status
+function mergeCheckpoints(server: CheckpointClaim[], _cached: CheckpointClaim[]): CheckpointClaim[] {
+  return server;
+}
+
+function loadCache(): Partial<AuthState> | null {
+  try {
+    const raw = localStorage.getItem(AUTH_CACHE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return null;
+}
+
+function saveCache(state: AuthState) {
+  try {
+    // Cache everything except loading and sessionToken (token has its own key)
+    const { loading: _, sessionToken: __, ...rest } = state;
+    localStorage.setItem(AUTH_CACHE_KEY, JSON.stringify(rest));
+  } catch {}
+}
 
 export function useAuth() {
-  const [auth, setAuth] = useState<AuthState>({
-    authenticated: false,
-    userId: null,
-    pubkey: null,
-    email: null,
-    displayName: null,
-    rewardClaimed: false,
-    lightningAddress: null,
-    emailVerified: false,
-    completedCheckpoints: [],
-    sessionToken: null,
-    loading: true,
+  const [auth, setAuth] = useState<AuthState>(() => {
+    const token = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
+    const cached = token ? loadCache() : null;
+    if (token && cached) {
+      return {
+        authenticated: cached.authenticated ?? false,
+        userId: cached.userId ?? null,
+        pubkey: cached.pubkey ?? null,
+        email: cached.email ?? null,
+        displayName: cached.displayName ?? null,
+        rewardClaimed: cached.rewardClaimed ?? false,
+        lightningAddress: cached.lightningAddress ?? null,
+        emailVerified: cached.emailVerified ?? false,
+        completedCheckpoints: cached.completedCheckpoints ?? [],
+        sessionToken: token,
+        loading: true,
+      };
+    }
+    return {
+      authenticated: false,
+      userId: null,
+      pubkey: null,
+      email: null,
+      displayName: null,
+      rewardClaimed: false,
+      lightningAddress: null,
+      emailVerified: false,
+      completedCheckpoints: [],
+      sessionToken: token,
+      loading: true,
+    };
   });
+
+  // Cache auth state whenever it changes (after loading completes)
+  useEffect(() => {
+    if (auth.sessionToken && !auth.loading) {
+      saveCache(auth);
+    }
+  }, [auth]);
 
   const fetchAuthState = useCallback((token: string) => {
     return Promise.all([
       fetch("/api/auth/verify", { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
-      fetch("/api/checkpoint/status", { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()).catch(() => ({ completed: [] })),
+      fetch("/api/checkpoint/status", { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()).catch(err => { console.warn("Checkpoint status fetch failed:", err); return { completed: [] }; }),
     ])
       .then(([data, cpData]) => {
         if (data.authenticated) {
-          setAuth({
+          const serverCheckpoints: CheckpointClaim[] = cpData.completed || [];
+          setAuth((prev) => ({
             authenticated: true,
             userId: data.userId,
             pubkey: data.pubkey || null,
@@ -53,12 +103,13 @@ export function useAuth() {
             rewardClaimed: data.rewardClaimed || false,
             lightningAddress: data.lightningAddress || null,
             emailVerified: data.emailVerified || !!data.pubkey,
-            completedCheckpoints: cpData.completed || [],
+            completedCheckpoints: mergeCheckpoints(serverCheckpoints, prev.completedCheckpoints),
             sessionToken: token,
             loading: false,
-          });
+          }));
         } else {
           localStorage.removeItem(STORAGE_KEY);
+          localStorage.removeItem(AUTH_CACHE_KEY);
           setAuth({
             authenticated: false,
             userId: null,
@@ -103,7 +154,7 @@ export function useAuth() {
     localStorage.setItem(STORAGE_KEY, token);
     fetch("/api/checkpoint/status", { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => r.json())
-      .catch(() => ({ completed: [] }))
+      .catch(err => { console.warn("Checkpoint status fetch failed:", err); return { completed: [] }; })
       .then((cpData) => {
         setAuth({
           authenticated: true,
@@ -132,6 +183,7 @@ export function useAuth() {
       } catch {}
     }
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(AUTH_CACHE_KEY);
     setAuth({
       authenticated: false,
       userId: null,
@@ -153,10 +205,11 @@ export function useAuth() {
     try {
       const [data, cpData] = await Promise.all([
         fetch("/api/auth/verify", { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()),
-        fetch("/api/checkpoint/status", { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()).catch(() => ({ completed: [] })),
+        fetch("/api/checkpoint/status", { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()).catch(err => { console.warn("Checkpoint status fetch failed:", err); return { completed: [] }; }),
       ]);
       if (data.authenticated) {
-        setAuth({
+        const serverCheckpoints: CheckpointClaim[] = cpData.completed || [];
+        setAuth((prev) => ({
           authenticated: true,
           userId: data.userId,
           pubkey: data.pubkey || null,
@@ -165,10 +218,10 @@ export function useAuth() {
           rewardClaimed: data.rewardClaimed || false,
           lightningAddress: data.lightningAddress || null,
           emailVerified: data.emailVerified || !!data.pubkey,
-          completedCheckpoints: cpData.completed || [],
+          completedCheckpoints: mergeCheckpoints(serverCheckpoints, prev.completedCheckpoints),
           sessionToken: token,
           loading: false,
-        });
+        }));
       }
     } catch {}
   }, []);

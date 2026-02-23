@@ -142,7 +142,7 @@ export default function CheckpointGroup({
     if (sessionToken) {
       for (const q of questions) {
         try {
-          await fetch("/api/checkpoint/complete", {
+          const res = await fetch("/api/checkpoint/complete", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -150,11 +150,15 @@ export default function CheckpointGroup({
             },
             body: JSON.stringify({ checkpointId: q.id, answer: selections[q.id] }),
           });
-        } catch {}
+          if (!res.ok) {
+            const d = await res.json().catch(() => ({}));
+            console.warn(`Checkpoint save failed for ${q.id}:`, d);
+          }
+        } catch (err) { console.warn(`Checkpoint save error for ${q.id}:`, err); }
       }
       // Also mark the group itself as completed
       try {
-        await fetch("/api/checkpoint/complete", {
+        const res = await fetch("/api/checkpoint/complete", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -162,7 +166,11 @@ export default function CheckpointGroup({
           },
           body: JSON.stringify({ checkpointId: groupId, answer: 0 }),
         });
-      } catch {}
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({}));
+          console.warn(`Checkpoint save failed for ${groupId}:`, d);
+        }
+      } catch (err) { console.warn(`Checkpoint save error for ${groupId}:`, err); }
     }
     onCompleted(groupId);
   }, [allAnswered, authenticated, onLoginRequest, questions, selections, sessionToken, groupId, onCompleted]);

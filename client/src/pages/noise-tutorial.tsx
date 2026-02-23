@@ -1124,7 +1124,7 @@ function ImageBlock({
       // Fit INSIDE, leaving some breathing room.
       const pad = 16;
       const fit = Math.min((availableW - pad) / naturalW, (availableH - pad) / naturalH);
-      const clamped = Math.min(2.5, Math.max(0.5, fit));
+      const clamped = Math.min(2.5, Math.max(0.1, fit));
 
       setZoom(Number(clamped.toFixed(2)));
       bodyEl.scrollTop = 0;
@@ -1265,9 +1265,9 @@ function ImageBlock({
                 </span>
                 <input
                   type="range"
-                  min={0.5}
+                  min={0.1}
                   max={2.5}
-                  step={0.25}
+                  step={0.05}
                   value={zoom}
                   onChange={(e) => {
                     setHasManualZoom(true);

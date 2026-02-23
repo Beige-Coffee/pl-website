@@ -148,7 +148,7 @@ export default function CheckpointQuestion({
     // Save completion server-side (independent of reward claim)
     if (sessionToken) {
       try {
-        await fetch("/api/checkpoint/complete", {
+        const res = await fetch("/api/checkpoint/complete", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -156,7 +156,11 @@ export default function CheckpointQuestion({
           },
           body: JSON.stringify({ checkpointId, answer: selected }),
         });
-      } catch {}
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({}));
+          console.warn(`Checkpoint save failed for ${checkpointId}:`, d);
+        }
+      } catch (err) { console.warn(`Checkpoint save error for ${checkpointId}:`, err); }
     }
     onCompleted(checkpointId);
   }, [selected, answer, authenticated, onLoginRequest, sessionToken, checkpointId, onCompleted]);

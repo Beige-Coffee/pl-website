@@ -1,15 +1,24 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 
 const DEBOUNCE_MS = 1500;
+const PROGRESS_CACHE_KEY = "pl-progress-cache";
 
 export function useProgress(sessionToken: string | null) {
-  const [serverProgress, setServerProgress] = useState<Record<string, string> | null>(null);
+  const [serverProgress, setServerProgress] = useState<Record<string, string> | null>(() => {
+    if (!sessionToken) return null;
+    try {
+      const raw = localStorage.getItem(PROGRESS_CACHE_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return null;
+  });
   const [loaded, setLoaded] = useState(false);
   const pendingSaves = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   useEffect(() => {
     if (!sessionToken) {
       setServerProgress(null);
+      try { localStorage.removeItem(PROGRESS_CACHE_KEY); } catch {}
       setLoaded(true);
       return;
     }
@@ -22,7 +31,9 @@ export function useProgress(sessionToken: string | null) {
         });
         if (res.ok && !cancelled) {
           const data = await res.json();
-          setServerProgress(data.progress || {});
+          const progress = data.progress || {};
+          setServerProgress(progress);
+          try { localStorage.setItem(PROGRESS_CACHE_KEY, JSON.stringify(progress)); } catch {}
         }
       } catch {}
       if (!cancelled) setLoaded(true);
@@ -36,7 +47,11 @@ export function useProgress(sessionToken: string | null) {
       if (!sessionToken) return;
 
       // Optimistic local update so getProgress reflects the new value immediately
-      setServerProgress(prev => prev ? { ...prev, [key]: value } : { [key]: value });
+      setServerProgress(prev => {
+        const next = prev ? { ...prev, [key]: value } : { [key]: value };
+        try { localStorage.setItem(PROGRESS_CACHE_KEY, JSON.stringify(next)); } catch {}
+        return next;
+      });
 
       const existing = pendingSaves.current.get(key);
       if (existing) clearTimeout(existing);

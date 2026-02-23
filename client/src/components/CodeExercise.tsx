@@ -338,7 +338,9 @@ export default function CodeExercise({
           Authorization: `Bearer ${sessionToken}`,
         },
         body: JSON.stringify({ checkpointId: exerciseId, answer: 0 }),
-      }).catch(() => {});
+      }).then(res => {
+        if (!res.ok) res.json().then(d => console.warn(`Checkpoint save failed for ${exerciseId}:`, d)).catch(() => {});
+      }).catch(err => console.warn(`Checkpoint save error for ${exerciseId}:`, err));
       onCompleted(exerciseId);
     }
   }, [allPassed]); // eslint-disable-line react-hooks/exhaustive-deps

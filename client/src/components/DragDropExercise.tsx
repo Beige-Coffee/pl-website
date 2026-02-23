@@ -330,7 +330,7 @@ export default function DragDropExercise({
     // Save completion server-side (independent of reward claim)
     if (sessionToken) {
       try {
-        await fetch("/api/checkpoint/complete", {
+        const res = await fetch("/api/checkpoint/complete", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -338,7 +338,11 @@ export default function DragDropExercise({
           },
           body: JSON.stringify({ checkpointId, answer: 0 }),
         });
-      } catch {}
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({}));
+          console.warn(`Checkpoint save failed for ${checkpointId}:`, d);
+        }
+      } catch (err) { console.warn(`Checkpoint save error for ${checkpointId}:`, err); }
     }
     onCompleted(checkpointId);
   }, [assignments, shuffledDefs, authenticated, onLoginRequest, onCompleted, checkpointId, sessionToken]);
