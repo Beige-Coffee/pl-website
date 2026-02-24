@@ -15,6 +15,17 @@ export function useProgress(sessionToken: string | null) {
   const [loaded, setLoaded] = useState(false);
   const pendingSaves = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
+  // Mirror of serverProgress kept in a ref so saveProgress can update it
+  // without triggering a React re-render on every keystroke. Components that
+  // need the latest value (like CodeExercise's hydration effect) read from
+  // getProgress, which checks the ref first.
+  const progressRef = useRef<Record<string, string> | null>(serverProgress);
+
+  // Keep ref in sync when state changes (initial load, server fetch)
+  useEffect(() => {
+    progressRef.current = serverProgress;
+  }, [serverProgress]);
+
   useEffect(() => {
     if (!sessionToken) {
       setServerProgress(null);
@@ -46,12 +57,11 @@ export function useProgress(sessionToken: string | null) {
     (key: string, value: string, immediate?: boolean) => {
       if (!sessionToken) return;
 
-      // Optimistic local update so getProgress reflects the new value immediately
-      setServerProgress(prev => {
-        const next = prev ? { ...prev, [key]: value } : { [key]: value };
-        try { localStorage.setItem(PROGRESS_CACHE_KEY, JSON.stringify(next)); } catch {}
-        return next;
-      });
+      // Update ref (no re-render) + localStorage so the value is available
+      // immediately via getProgress without triggering a page-wide re-render.
+      const next = progressRef.current ? { ...progressRef.current, [key]: value } : { [key]: value };
+      progressRef.current = next;
+      try { localStorage.setItem(PROGRESS_CACHE_KEY, JSON.stringify(next)); } catch {}
 
       const existing = pendingSaves.current.get(key);
       if (existing) clearTimeout(existing);
@@ -82,8 +92,10 @@ export function useProgress(sessionToken: string | null) {
 
   const getProgress = useCallback(
     (key: string): string | null => {
-      if (!serverProgress) return null;
-      return serverProgress[key] ?? null;
+      // Check ref first (has latest saves), fall back to state
+      const source = progressRef.current ?? serverProgress;
+      if (!source) return null;
+      return source[key] ?? null;
     },
     [serverProgress]
   );

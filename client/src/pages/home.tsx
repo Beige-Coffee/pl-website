@@ -173,206 +173,249 @@ export default function Home() {
 
         <div className="w-full max-w-6xl space-y-4 md:space-y-5">
           {/* Course 1: Intro to Payment Channels */}
-          <div className="flex items-stretch gap-0">
-            <div className="bg-card border-4 border-border p-4 pixel-shadow flex-1 min-w-0">
-              <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
-                <div className="flex items-start md:items-center gap-3 md:gap-4 flex-1 min-w-0">
-                  <img
-                    src={lightningBolt}
-                    alt="Lightning Bolt"
-                    className="w-14 h-14 md:w-28 md:h-28 shrink-0 drop-shadow-[2px_2px_0px_rgba(0,0,0,0.6)]"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <h2 className="text-base md:text-xl font-pixel leading-relaxed">
-                      Intro to Payment Channels
-                    </h2>
-                    <p className="hidden md:block text-base text-foreground/70 mt-2" style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
-                      Build a Lightning payment channel from scratch. By the end, your implementation will pass many of the official BOLT 3 test vectors.
-                    </p>
+          <div>
+            <div className="flex items-stretch gap-0">
+              <div className="bg-card border-4 border-border p-4 pixel-shadow flex-1 min-w-0">
+                <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
+                  <div className="flex items-start md:items-center gap-3 md:gap-4 flex-1 min-w-0">
+                    <img
+                      src={lightningBolt}
+                      alt="Lightning Bolt"
+                      className="w-14 h-14 md:w-28 md:h-28 shrink-0 drop-shadow-[2px_2px_0px_rgba(0,0,0,0.6)]"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <h2 className="text-base md:text-xl font-pixel leading-relaxed">
+                        Intro to Payment Channels
+                      </h2>
+                      <p className="hidden md:block text-base text-foreground/70 mt-2" style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
+                        Build a Lightning payment channel from scratch. By the end, your implementation will pass many of the official BOLT 3 test vectors.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-row md:flex-col gap-2 shrink-0">
+                    <Tooltip delayDuration={0}>
+                      <TooltipTrigger asChild>
+                        <Link
+                          href="/lightning-tutorial"
+                          onClick={handleReadClick}
+                          className="bg-primary text-foreground px-6 py-2.5 font-pixel text-sm border-2 border-border hover:bg-primary/80 transition-colors pixel-shadow active:translate-x-[2px] active:translate-y-[2px] active:shadow-none text-center flex-1 md:flex-none"
+                        >
+                          READ
+                        </Link>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="bg-card text-foreground border-4 border-border text-base px-3 py-2 pixel-shadow max-w-xs rounded-none">
+                        Deep dive into how Lightning works with checkpoint quizzes. No programming required.
+                      </TooltipContent>
+                    </Tooltip>
+                    <Tooltip delayDuration={0}>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={handleCodeClick}
+                          className="bg-foreground text-background px-6 py-2.5 font-pixel text-sm border-2 border-border hover:bg-foreground/80 transition-colors pixel-shadow active:translate-x-[2px] active:translate-y-[2px] active:shadow-none flex-1 md:flex-none"
+                        >
+                          CODE
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="bg-card text-foreground border-4 border-border text-base px-3 py-2 pixel-shadow max-w-xs rounded-none">
+                        Same content plus hands-on coding exercises where you build key parts of the protocol.
+                      </TooltipContent>
+                    </Tooltip>
                   </div>
                 </div>
-                <div className="flex flex-row md:flex-col gap-2 shrink-0">
-                  <Tooltip delayDuration={0}>
-                    <TooltipTrigger asChild>
-                      <Link
-                        href="/lightning-tutorial"
-                        onClick={handleReadClick}
-                        className="bg-primary text-foreground px-6 py-2.5 font-pixel text-sm border-2 border-border hover:bg-primary/80 transition-colors pixel-shadow active:translate-x-[2px] active:translate-y-[2px] active:shadow-none text-center flex-1 md:flex-none"
-                      >
-                        READ
-                      </Link>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" className="bg-card text-foreground border-4 border-border text-base px-3 py-2 pixel-shadow max-w-xs rounded-none">
-                      Deep dive into how Lightning works with checkpoint quizzes. No programming required.
-                    </TooltipContent>
-                  </Tooltip>
-                  <Tooltip delayDuration={0}>
-                    <TooltipTrigger asChild>
-                      <button
-                        onClick={handleCodeClick}
-                        className="bg-foreground text-background px-6 py-2.5 font-pixel text-sm border-2 border-border hover:bg-foreground/80 transition-colors pixel-shadow active:translate-x-[2px] active:translate-y-[2px] active:shadow-none flex-1 md:flex-none"
-                      >
-                        CODE
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" className="bg-card text-foreground border-4 border-border text-base px-3 py-2 pixel-shadow max-w-xs rounded-none">
-                      Same content plus hands-on coding exercises where you build key parts of the protocol.
-                    </TooltipContent>
-                  </Tooltip>
+              </div>
+              {/* Bracket annotation — large screens */}
+              <div className="hidden lg:flex items-center shrink-0">
+                <svg width="24" viewBox="0 0 24 100" preserveAspectRatio="none" className="h-full text-foreground/70" style={{ minHeight: 80 }}>
+                  <defs>
+                    <filter id="sketch1" x="-20%" y="-20%" width="140%" height="140%" filterUnits="objectBoundingBox" primitiveUnits="userSpaceOnUse">
+                      <feTurbulence type="turbulence" baseFrequency="0.03 0.01" numOctaves="3" seed="2" result="noise" />
+                      <feDisplacementMap in="SourceGraphic" in2="noise" scale="4" xChannelSelector="R" yChannelSelector="G" />
+                    </filter>
+                  </defs>
+                  <path d="M 2,2 L 14,2 L 14,46 L 22,50 L 14,54 L 14,98 L 2,98" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" filter="url(#sketch1)" />
+                </svg>
+                <div className="pl-3 w-64" style={{ fontFamily: 'Caveat, cursive' }}>
+                  <div className="text-3xl text-foreground/90 leading-snug font-bold">Peer-to-peer layer</div>
+                  <div className="text-2xl text-foreground/70 leading-snug">
+                    BOLT 2 &mdash; channel management<br />
+                    BOLT 3 &mdash; transactions<br />
+                    BOLT 5 &mdash; on-chain
+                  </div>
                 </div>
               </div>
             </div>
-            {/* Bracket annotation */}
-            <div className="hidden lg:flex items-center shrink-0">
-              <svg width="24" viewBox="0 0 24 100" preserveAspectRatio="none" className="h-full text-foreground/70" style={{ minHeight: 80 }}>
-                <defs>
-                  <filter id="sketch1" x="-20%" y="-20%" width="140%" height="140%" filterUnits="objectBoundingBox" primitiveUnits="userSpaceOnUse">
-                    <feTurbulence type="turbulence" baseFrequency="0.03 0.01" numOctaves="3" seed="2" result="noise" />
-                    <feDisplacementMap in="SourceGraphic" in2="noise" scale="4" xChannelSelector="R" yChannelSelector="G" />
-                  </filter>
-                </defs>
-                <path d="M 2,2 L 14,2 L 14,46 L 22,50 L 14,54 L 14,98 L 2,98" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" filter="url(#sketch1)" />
-              </svg>
-              <div className="pl-3 w-64" style={{ fontFamily: 'Caveat, cursive' }}>
-                <div className="text-3xl text-foreground/90 leading-snug font-bold">Peer-to-peer layer</div>
-                <div className="text-2xl text-foreground/70 leading-snug">
-                  BOLT 2 &mdash; channels<br />
-                  BOLT 3 &mdash; transactions<br />
-                  BOLT 5 &mdash; on-chain
-                </div>
-              </div>
+            {/* Annotation below card — small screens */}
+            <div className="lg:hidden pl-6 mt-2" style={{ fontFamily: 'Caveat, cursive' }}>
+              <div className="text-2xl text-foreground/90 leading-snug font-bold underline decoration-foreground/30 underline-offset-4">Peer-to-peer layer</div>
+              <ul className="text-xl text-foreground/70 leading-snug list-disc pl-6 mt-0.5">
+                <li>BOLT 2 &mdash; channel management</li>
+                <li>BOLT 3 &mdash; transactions</li>
+                <li>BOLT 5 &mdash; on-chain</li>
+              </ul>
             </div>
           </div>
 
           {/* Course 2: Noise Protocol */}
-          <div className="flex items-stretch gap-0">
-            <div className="bg-card border-4 border-border p-4 pixel-shadow flex-1 min-w-0">
-              <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
-                <div className="flex items-start md:items-center gap-3 md:gap-4 flex-1 min-w-0">
-                  <img
-                    src={xkLogo}
-                    alt="XK Noise Protocol"
-                    className="w-14 h-14 md:w-28 md:h-28 shrink-0 object-contain"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <h2 className="text-base md:text-xl font-pixel leading-relaxed">
-                      Secure Communication & Lightning's Noise Protocol
-                    </h2>
-                    <p className="hidden md:block text-base text-foreground/70 mt-2" style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
-                      An interactive tutorial covering cryptographic foundations, the three-act handshake, and encrypted messaging in Lightning transport.
-                    </p>
+          <div>
+            <div className="flex items-stretch gap-0">
+              <div className="bg-card border-4 border-border p-4 pixel-shadow flex-1 min-w-0">
+                <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
+                  <div className="flex items-start md:items-center gap-3 md:gap-4 flex-1 min-w-0">
+                    <img
+                      src={xkLogo}
+                      alt="XK Noise Protocol"
+                      className="w-14 h-14 md:w-28 md:h-28 shrink-0 object-contain"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <h2 className="text-base md:text-xl font-pixel leading-relaxed">
+                        Secure Communication & Lightning's Noise Protocol
+                      </h2>
+                      <p className="hidden md:block text-base text-foreground/70 mt-2" style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
+                        An interactive tutorial covering cryptographic foundations, the three-act handshake, and encrypted messaging in Lightning transport.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-row md:flex-col gap-2 shrink-0">
+                    <Tooltip delayDuration={0}>
+                      <TooltipTrigger asChild>
+                        <Link
+                          href="/noise-tutorial"
+                          onClick={handleNoiseClick}
+                          className="bg-primary text-foreground px-6 py-2.5 font-pixel text-sm border-2 border-border hover:bg-primary/80 transition-colors pixel-shadow active:translate-x-[2px] active:translate-y-[2px] active:shadow-none text-center flex-1 md:flex-none"
+                        >
+                          READ
+                        </Link>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="bg-card text-foreground border-4 border-border text-base px-3 py-2 pixel-shadow max-w-xs rounded-none">
+                        Deep dive into how Lightning works with checkpoint quizzes. No programming required.
+                      </TooltipContent>
+                    </Tooltip>
+                    <Tooltip delayDuration={0}>
+                      <TooltipTrigger asChild>
+                        <Link
+                          href="/noise-tutorial"
+                          onClick={handleNoiseClick}
+                          className="bg-foreground text-background px-6 py-2.5 font-pixel text-sm border-2 border-border hover:bg-foreground/80 transition-colors pixel-shadow active:translate-x-[2px] active:translate-y-[2px] active:shadow-none text-center flex-1 md:flex-none"
+                        >
+                          CODE
+                        </Link>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="bg-card text-foreground border-4 border-border text-base px-3 py-2 pixel-shadow max-w-xs rounded-none">
+                        Same content plus hands-on coding exercises where you build key parts of the protocol.
+                      </TooltipContent>
+                    </Tooltip>
                   </div>
                 </div>
-                <div className="flex flex-row md:flex-col gap-2 shrink-0">
-                  <Tooltip delayDuration={0}>
-                    <TooltipTrigger asChild>
-                      <Link
-                        href="/noise-tutorial"
-                        onClick={handleNoiseClick}
-                        className="bg-primary text-foreground px-6 py-2.5 font-pixel text-sm border-2 border-border hover:bg-primary/80 transition-colors pixel-shadow active:translate-x-[2px] active:translate-y-[2px] active:shadow-none text-center flex-1 md:flex-none"
-                      >
-                        READ
-                      </Link>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" className="bg-card text-foreground border-4 border-border text-base px-3 py-2 pixel-shadow max-w-xs rounded-none">
-                      Deep dive into how Lightning works with checkpoint quizzes. No programming required.
-                    </TooltipContent>
-                  </Tooltip>
-                  <Tooltip delayDuration={0}>
-                    <TooltipTrigger asChild>
-                      <Link
-                        href="/noise-tutorial"
-                        onClick={handleNoiseClick}
-                        className="bg-foreground text-background px-6 py-2.5 font-pixel text-sm border-2 border-border hover:bg-foreground/80 transition-colors pixel-shadow active:translate-x-[2px] active:translate-y-[2px] active:shadow-none text-center flex-1 md:flex-none"
-                      >
-                        CODE
-                      </Link>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" className="bg-card text-foreground border-4 border-border text-base px-3 py-2 pixel-shadow max-w-xs rounded-none">
-                      Same content plus hands-on coding exercises where you build key parts of the protocol.
-                    </TooltipContent>
-                  </Tooltip>
+              </div>
+              {/* Bracket annotation — large screens */}
+              <div className="hidden lg:flex items-center shrink-0">
+                <svg width="24" viewBox="0 0 24 100" preserveAspectRatio="none" className="h-full text-foreground/70" style={{ minHeight: 80 }}>
+                  <defs>
+                    <filter id="sketch2" x="-20%" y="-20%" width="140%" height="140%" filterUnits="objectBoundingBox" primitiveUnits="userSpaceOnUse">
+                      <feTurbulence type="turbulence" baseFrequency="0.03 0.01" numOctaves="3" seed="7" result="noise" />
+                      <feDisplacementMap in="SourceGraphic" in2="noise" scale="4" xChannelSelector="R" yChannelSelector="G" />
+                    </filter>
+                  </defs>
+                  <path d="M 2,2 L 14,2 L 14,46 L 22,50 L 14,54 L 14,98 L 2,98" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" filter="url(#sketch2)" />
+                </svg>
+                <div className="pl-3 w-64" style={{ fontFamily: 'Caveat, cursive' }}>
+                  <div className="text-3xl text-foreground/90 leading-snug font-bold">Network layer</div>
+                  <div className="text-2xl text-foreground/70 leading-snug">
+                    BOLT 8 &mdash; transport<br />
+                    Noise_XK handshake<br />
+                    DH key exchange<br />
+                    Key rotation
+                  </div>
                 </div>
               </div>
             </div>
-            {/* Bracket annotation */}
-            <div className="hidden lg:flex items-center shrink-0">
-              <svg width="24" viewBox="0 0 24 100" preserveAspectRatio="none" className="h-full text-foreground/70" style={{ minHeight: 80 }}>
-                <defs>
-                  <filter id="sketch2" x="-20%" y="-20%" width="140%" height="140%" filterUnits="objectBoundingBox" primitiveUnits="userSpaceOnUse">
-                    <feTurbulence type="turbulence" baseFrequency="0.03 0.01" numOctaves="3" seed="7" result="noise" />
-                    <feDisplacementMap in="SourceGraphic" in2="noise" scale="4" xChannelSelector="R" yChannelSelector="G" />
-                  </filter>
-                </defs>
-                <path d="M 2,2 L 14,2 L 14,46 L 22,50 L 14,54 L 14,98 L 2,98" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" filter="url(#sketch2)" />
-              </svg>
-              <div className="pl-3 w-64" style={{ fontFamily: 'Caveat, cursive' }}>
-                <div className="text-3xl text-foreground/90 leading-snug font-bold">Network layer</div>
-                <div className="text-2xl text-foreground/70 leading-snug">
-                  BOLT 8 &mdash; transport<br />
-                  Noise_XK handshake<br />
-                  DH key exchange<br />
-                  Key rotation
-                </div>
-              </div>
+            {/* Annotation below card — small screens */}
+            <div className="lg:hidden pl-6 mt-2" style={{ fontFamily: 'Caveat, cursive' }}>
+              <div className="text-2xl text-foreground/90 leading-snug font-bold underline decoration-foreground/30 underline-offset-4">Network layer</div>
+              <ul className="text-xl text-foreground/70 leading-snug list-disc pl-6 mt-0.5">
+                <li>BOLT 8 &mdash; transport</li>
+                <li>Noise_XK handshake</li>
+                <li>DH key exchange</li>
+                <li>Key rotation</li>
+              </ul>
             </div>
           </div>
 
           {/* Coming Soon: Onion Routing */}
-          <div className="flex items-stretch gap-0">
-            <div className="bg-muted border-4 border-muted-foreground/30 p-4 opacity-75 cursor-not-allowed relative overflow-hidden flex-1 min-w-0">
-              <div className="absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.05)_50%)] bg-[length:100%_4px] pointer-events-none" />
-              <h2 className="text-lg md:text-xl font-pixel text-muted-foreground">
-                Coming Soon... Onion Routing & Lightning Payments
-              </h2>
-            </div>
-            {/* Bracket annotation */}
-            <div className="hidden lg:flex items-center shrink-0">
-              <svg width="24" viewBox="0 0 24 100" preserveAspectRatio="none" className="h-full text-foreground/70" style={{ minHeight: 50 }}>
-                <defs>
-                  <filter id="sketch3" x="-20%" y="-20%" width="140%" height="140%" filterUnits="objectBoundingBox" primitiveUnits="userSpaceOnUse">
-                    <feTurbulence type="turbulence" baseFrequency="0.03 0.01" numOctaves="3" seed="13" result="noise" />
-                    <feDisplacementMap in="SourceGraphic" in2="noise" scale="4" xChannelSelector="R" yChannelSelector="G" />
-                  </filter>
-                </defs>
-                <path d="M 2,2 L 14,2 L 14,46 L 22,50 L 14,54 L 14,98 L 2,98" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" filter="url(#sketch3)" />
-              </svg>
-              <div className="pl-3 w-64" style={{ fontFamily: 'Caveat, cursive' }}>
-                <div className="text-3xl text-foreground/90 leading-snug font-bold">Routing layer</div>
-                <div className="text-2xl text-foreground/70 leading-snug">
-                  BOLT 4 &mdash; onion routing<br />
-                  BOLT 7 &mdash; pathfinding
+          <div>
+            <div className="flex items-stretch gap-0">
+              <div className="bg-muted border-4 border-muted-foreground/30 p-4 opacity-75 cursor-not-allowed relative overflow-hidden flex-1 min-w-0">
+                <div className="absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.05)_50%)] bg-[length:100%_4px] pointer-events-none" />
+                <h2 className="text-lg md:text-xl font-pixel text-muted-foreground">
+                  Coming Soon... Onion Routing & Lightning Payments
+                </h2>
+              </div>
+              {/* Bracket annotation — large screens */}
+              <div className="hidden lg:flex items-center shrink-0">
+                <svg width="24" viewBox="0 0 24 100" preserveAspectRatio="none" className="h-full text-foreground/70" style={{ minHeight: 50 }}>
+                  <defs>
+                    <filter id="sketch3" x="-20%" y="-20%" width="140%" height="140%" filterUnits="objectBoundingBox" primitiveUnits="userSpaceOnUse">
+                      <feTurbulence type="turbulence" baseFrequency="0.03 0.01" numOctaves="3" seed="13" result="noise" />
+                      <feDisplacementMap in="SourceGraphic" in2="noise" scale="4" xChannelSelector="R" yChannelSelector="G" />
+                    </filter>
+                  </defs>
+                  <path d="M 2,2 L 14,2 L 14,46 L 22,50 L 14,54 L 14,98 L 2,98" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" filter="url(#sketch3)" />
+                </svg>
+                <div className="pl-3 w-64" style={{ fontFamily: 'Caveat, cursive' }}>
+                  <div className="text-3xl text-foreground/90 leading-snug font-bold">Routing layer</div>
+                  <div className="text-2xl text-foreground/70 leading-snug">
+                    BOLT 4 &mdash; onion routing<br />
+                    BOLT 7 &mdash; pathfinding
+                  </div>
                 </div>
               </div>
+            </div>
+            {/* Annotation below card — small screens */}
+            <div className="lg:hidden pl-6 mt-2" style={{ fontFamily: 'Caveat, cursive' }}>
+              <div className="text-2xl text-foreground/90 leading-snug font-bold underline decoration-foreground/30 underline-offset-4">Routing layer</div>
+              <ul className="text-xl text-foreground/70 leading-snug list-disc pl-6 mt-0.5">
+                <li>BOLT 4 &mdash; onion routing</li>
+                <li>BOLT 7 &mdash; pathfinding</li>
+              </ul>
             </div>
           </div>
 
           {/* Coming Soon: Lightning Invoices */}
-          <div className="flex items-stretch gap-0">
-            <div className="bg-muted border-4 border-muted-foreground/30 p-4 opacity-75 cursor-not-allowed relative overflow-hidden flex-1 min-w-0">
-              <div className="absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.05)_50%)] bg-[length:100%_4px] pointer-events-none" />
-              <h2 className="text-lg md:text-xl font-pixel text-muted-foreground">
-                Coming Soon... Lightning Invoices
-              </h2>
-            </div>
-            {/* Bracket annotation */}
-            <div className="hidden lg:flex items-center shrink-0">
-              <svg width="24" viewBox="0 0 24 100" preserveAspectRatio="none" className="h-full text-foreground/70" style={{ minHeight: 50 }}>
-                <defs>
-                  <filter id="sketch4" x="-20%" y="-20%" width="140%" height="140%" filterUnits="objectBoundingBox" primitiveUnits="userSpaceOnUse">
-                    <feTurbulence type="turbulence" baseFrequency="0.03 0.01" numOctaves="3" seed="19" result="noise" />
-                    <feDisplacementMap in="SourceGraphic" in2="noise" scale="4" xChannelSelector="R" yChannelSelector="G" />
-                  </filter>
-                </defs>
-                <path d="M 2,2 L 14,2 L 14,46 L 22,50 L 14,54 L 14,98 L 2,98" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" filter="url(#sketch4)" />
-              </svg>
-              <div className="pl-3 w-64" style={{ fontFamily: 'Caveat, cursive' }}>
-                <div className="text-3xl text-foreground/90 leading-snug font-bold">Payment layer</div>
-                <div className="text-2xl text-foreground/70 leading-snug">
-                  BOLT 11 &mdash; invoices<br />
-                  BOLT 12 &mdash; offers
+          <div>
+            <div className="flex items-stretch gap-0">
+              <div className="bg-muted border-4 border-muted-foreground/30 p-4 opacity-75 cursor-not-allowed relative overflow-hidden flex-1 min-w-0">
+                <div className="absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.05)_50%)] bg-[length:100%_4px] pointer-events-none" />
+                <h2 className="text-lg md:text-xl font-pixel text-muted-foreground">
+                  Coming Soon... Lightning Invoices
+                </h2>
+              </div>
+              {/* Bracket annotation — large screens */}
+              <div className="hidden lg:flex items-center shrink-0">
+                <svg width="24" viewBox="0 0 24 100" preserveAspectRatio="none" className="h-full text-foreground/70" style={{ minHeight: 50 }}>
+                  <defs>
+                    <filter id="sketch4" x="-20%" y="-20%" width="140%" height="140%" filterUnits="objectBoundingBox" primitiveUnits="userSpaceOnUse">
+                      <feTurbulence type="turbulence" baseFrequency="0.03 0.01" numOctaves="3" seed="19" result="noise" />
+                      <feDisplacementMap in="SourceGraphic" in2="noise" scale="4" xChannelSelector="R" yChannelSelector="G" />
+                    </filter>
+                  </defs>
+                  <path d="M 2,2 L 14,2 L 14,46 L 22,50 L 14,54 L 14,98 L 2,98" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" filter="url(#sketch4)" />
+                </svg>
+                <div className="pl-3 w-64" style={{ fontFamily: 'Caveat, cursive' }}>
+                  <div className="text-3xl text-foreground/90 leading-snug font-bold">Payment layer</div>
+                  <div className="text-2xl text-foreground/70 leading-snug">
+                    BOLT 11 &mdash; invoices<br />
+                    BOLT 12 &mdash; offers
+                  </div>
                 </div>
               </div>
+            </div>
+            {/* Annotation below card — small screens */}
+            <div className="lg:hidden pl-6 mt-2" style={{ fontFamily: 'Caveat, cursive' }}>
+              <div className="text-2xl text-foreground/90 leading-snug font-bold underline decoration-foreground/30 underline-offset-4">Payment layer</div>
+              <ul className="text-xl text-foreground/70 leading-snug list-disc pl-6 mt-0.5">
+                <li>BOLT 11 &mdash; invoices</li>
+                <li>BOLT 12 &mdash; offers</li>
+              </ul>
             </div>
           </div>
         </div>

@@ -1,16 +1,90 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { EditorView, keymap, placeholder as cmPlaceholder, lineNumbers, highlightActiveLineGutter, highlightSpecialChars, drawSelection, dropCursor, rectangularSelection, crosshairCursor, highlightActiveLine } from "@codemirror/view";
-import { EditorState } from "@codemirror/state";
+import { EditorView, ViewPlugin, keymap, placeholder as cmPlaceholder, lineNumbers, highlightActiveLineGutter, highlightSpecialChars, drawSelection, dropCursor, rectangularSelection, crosshairCursor, highlightActiveLine, Decoration, type DecorationSet, type ViewUpdate } from "@codemirror/view";
+import { EditorState, StateField, StateEffect, RangeSetBuilder } from "@codemirror/state";
 import { indentUnit, indentOnInput, bracketMatching, foldGutter, foldKeymap, syntaxHighlighting, defaultHighlightStyle } from "@codemirror/language";
 import { python } from "@codemirror/lang-python";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { defaultKeymap, indentWithTab, history, historyKeymap } from "@codemirror/commands";
 import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
-import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
+import { closeBrackets, closeBracketsKeymap, autocompletion, completionKeymap } from "@codemirror/autocomplete";
+// pythonLanguage import kept for potential future use
+// import { pythonLanguage } from "@codemirror/lang-python";
 import { lintKeymap } from "@codemirror/lint";
-import { runPythonTests, preloadWorker, type TestResult } from "../lib/pyodide-runner";
+import { runPythonTests, type TestResult } from "../lib/pyodide-runner";
+import { createPyodideCompletionSource, preloadCompletionContext, invalidateCompletionCache } from "../lib/pyodide-completions";
 import { QRCodeSVG } from "qrcode.react";
 import ExerciseFileBrowser from "./ExerciseFileBrowser";
+
+// ─── Editable Range Extensions ───────────────────────────────────────────────
+
+/** Effect to initialize or reset the editable range */
+const setEditableRange = StateEffect.define<{ from: number; to: number }>();
+
+/** StateField tracking the editable region boundaries as the user types */
+const editableRangeField = StateField.define<{ from: number; to: number }>({
+  create: () => ({ from: 0, to: 0 }),
+  update(value, tr) {
+    let newValue = value;
+    for (const e of tr.effects) {
+      if (e.is(setEditableRange)) newValue = e.value;
+    }
+    if (tr.docChanged && newValue !== value) {
+      // Just set, don't map
+      return newValue;
+    }
+    if (tr.docChanged) {
+      return {
+        from: tr.changes.mapPos(newValue.from),
+        to: tr.changes.mapPos(newValue.to, 1), // bias right so inserts expand range
+      };
+    }
+    return newValue;
+  },
+});
+
+/** Transaction filter that blocks edits outside the editable range */
+const editableRangeFilter = EditorState.transactionFilter.of((tr) => {
+  if (!tr.docChanged) return tr;
+  const range = tr.startState.field(editableRangeField);
+  // If range is 0,0 (not initialized), allow everything
+  if (range.from === 0 && range.to === 0) return tr;
+  let dominated = false;
+  tr.changes.iterChangedRanges((fromA, toA) => {
+    if (fromA < range.from || toA > range.to) dominated = true;
+  });
+  return dominated ? [] : tr;
+});
+
+/** Line decoration for read-only regions */
+const readOnlyLineDeco = Decoration.line({ class: "cm-readonly-line" });
+
+/** ViewPlugin that adds dim decorations to lines outside the editable range */
+const readOnlyDecoPlugin = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet;
+    constructor(view: EditorView) {
+      this.decorations = this.build(view);
+    }
+    update(update: ViewUpdate) {
+      if (update.docChanged || update.viewportChanged || update.transactions.some(t => t.effects.some(e => e.is(setEditableRange)))) {
+        this.decorations = this.build(update.view);
+      }
+    }
+    build(view: EditorView): DecorationSet {
+      const range = view.state.field(editableRangeField);
+      if (range.from === 0 && range.to === 0) return Decoration.none;
+      const builder = new RangeSetBuilder<Decoration>();
+      for (let i = 1; i <= view.state.doc.lines; i++) {
+        const line = view.state.doc.line(i);
+        if (line.to <= range.from || line.from >= range.to) {
+          builder.add(line.from, line.from, readOnlyLineDeco);
+        }
+      }
+      return builder.finish();
+    }
+  },
+  { decorations: (v) => v.decorations }
+);
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -51,7 +125,9 @@ interface CodeExerciseProps {
   // Group context for "accumulating file" model
   fileLabel?: string;
   preamble?: string;
-  priorExercises?: Array<{ id: string; solutionCode: string }>;
+  setupCode?: string; // Hidden Python code executed but not shown in editor
+  priorExercises?: Array<{ id: string; solutionCode: string; starterCode: string }>;
+  futureExercises?: Array<{ id: string; starterCode: string }>;
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -71,29 +147,49 @@ export default function CodeExercise({
   saveProgress,
   fileLabel,
   preamble,
+  setupCode,
   priorExercises,
+  futureExercises,
 }: CodeExerciseProps) {
   const dark = theme === "dark";
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const storageKey = `pl-exercise-${exerciseId}`;
 
+  // Whether this exercise has group context (read-only region above)
+  const hasGroupContext = !!preamble;
+
   const [expanded, setExpanded] = useState(false);
   const hydratedRef = useRef(false);
 
+  // Hydrate editor from server-saved progress (once).
+  // We track the last getProgress ref to detect when server data first arrives,
+  // but stop attempting hydration as soon as the user starts editing.
+  const userEditedRef = useRef(false);
   useEffect(() => {
-    if (hydratedRef.current) return;
+    if (hydratedRef.current || userEditedRef.current) return;
     const serverSaved = getProgress(`exercise-${exerciseId}`);
     if (serverSaved && viewRef.current) {
-      const currentCode = viewRef.current.state.doc.toString();
-      if (currentCode !== serverSaved) {
-        viewRef.current.dispatch({
-          changes: { from: 0, to: currentCode.length, insert: serverSaved },
-        });
+      if (hasGroupContext) {
+        // Replace only the editable region with server-saved code
+        const range = viewRef.current.state.field(editableRangeField);
+        const currentEditable = viewRef.current.state.doc.sliceString(range.from, range.to);
+        if (currentEditable !== serverSaved) {
+          viewRef.current.dispatch({
+            changes: { from: range.from, to: range.to, insert: serverSaved },
+          });
+        }
+      } else {
+        const currentCode = viewRef.current.state.doc.toString();
+        if (currentCode !== serverSaved) {
+          viewRef.current.dispatch({
+            changes: { from: 0, to: currentCode.length, insert: serverSaved },
+          });
+        }
       }
       hydratedRef.current = true;
     }
-  }, [getProgress, exerciseId]);
+  }, [getProgress, exerciseId, hasGroupContext]);
 
   // File browser state
   const [fileBrowserOpen, setFileBrowserOpen] = useState(false);
@@ -162,28 +258,87 @@ export default function CodeExercise({
 
   const [hoveredBlock, setHoveredBlock] = useState<number | null>(null);
 
-  // Assemble preamble + prior exercise solutions into a single context string.
-  // Called at test-run time so it picks up any changes the student made earlier
-  // in the same session.
+  // Assemble the editor display: visible preamble + editable student code.
+  // No prior exercises, no future stubs — only clean imports + current exercise.
+  const assembleFullFile = useCallback((studentCode: string): { code: string; editableFrom: number; editableTo: number } => {
+    if (!hasGroupContext) {
+      return { code: studentCode, editableFrom: 0, editableTo: studentCode.length };
+    }
+    const readOnlyTop = preamble ?? "";
+    const beforeEditable = readOnlyTop ? readOnlyTop + "\n\n" : "";
+    const fullCode = beforeEditable + studentCode;
+    const editableFrom = beforeEditable.length;
+    const editableTo = editableFrom + studentCode.length;
+    return { code: fullCode, editableFrom, editableTo };
+  }, [preamble, hasGroupContext]);
+
+  // Assemble context for autocomplete preloading (includes hidden setupCode)
   const assembleContext = useCallback((): string => {
     const parts: string[] = [];
+    if (setupCode) parts.push(setupCode);
     if (preamble) parts.push(preamble);
     for (const pe of priorExercises ?? []) {
       try {
         const saved = localStorage.getItem(`pl-exercise-${pe.id}`);
-        parts.push(saved ?? pe.solutionCode);
+        parts.push(saved ?? pe.starterCode);
       } catch {
-        parts.push(pe.solutionCode);
+        parts.push(pe.starterCode);
       }
     }
     return parts.filter(Boolean).join("\n\n");
-  }, [preamble, priorExercises]);
+  }, [setupCode, preamble, priorExercises]);
+
+  // Assemble full code for test execution (setupCode + preamble + cross-group deps + prior + student + future stubs)
+  const assembleTestCode = useCallback((): string => {
+    if (!hasGroupContext) {
+      const studentCode = viewRef.current?.state.doc.toString() || "";
+      const context = assembleContext();
+      return [context, studentCode].filter(Boolean).join("\n\n");
+    }
+
+    const parts: string[] = [];
+
+    // 1. Hidden setup code (registers `ln` module, not shown in editor)
+    if (setupCode) parts.push(setupCode);
+
+    // 2. Visible preamble (imports from ln, class declarations)
+    if (preamble) parts.push(preamble);
+
+    // 3. Prior exercises (cross-group deps + in-group): use saved code, fall back to starter code (not solution)
+    for (const pe of priorExercises ?? []) {
+      try {
+        const saved = localStorage.getItem(`pl-exercise-${pe.id}`);
+        parts.push(saved ?? pe.starterCode);
+      } catch {
+        parts.push(pe.starterCode);
+      }
+    }
+
+    // 4. Current exercise: extract from editor
+    const range = viewRef.current?.state.field(editableRangeField);
+    const editableCode = range
+      ? viewRef.current?.state.doc.sliceString(range.from, range.to) || ""
+      : viewRef.current?.state.doc.toString() || "";
+    parts.push(editableCode);
+
+    // 5. Future exercises: include stubs so class body is complete
+    for (const fe of futureExercises ?? []) {
+      parts.push(fe.starterCode);
+    }
+
+    return parts.filter(Boolean).join("\n\n");
+  }, [setupCode, preamble, priorExercises, futureExercises, hasGroupContext, assembleContext]);
 
 
-  // Pre-warm Pyodide on mount
+  // Stable completion source (created once)
+  const pyodideCompleteSource = useMemo(() => createPyodideCompletionSource(), []);
+
+  // Preload completion context immediately on mount (Pyodide worker is
+  // pre-warmed at the tutorial page level, so the exec queues behind init)
   useEffect(() => {
-    preloadWorker();
-  }, []);
+    const ctx = assembleContext();
+    if (ctx) preloadCompletionContext(ctx);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Lock body scroll and handle Escape when expanded
   useEffect(() => {
@@ -201,6 +356,7 @@ export default function CodeExercise({
 
   // ── CodeMirror setup ────────────────────────────────────────────────────
 
+  // Load only the student's editable code (not the full file)
   const savedCode = useMemo(() => {
     try {
       const saved = localStorage.getItem(storageKey);
@@ -211,6 +367,9 @@ export default function CodeExercise({
 
   useEffect(() => {
     if (!editorRef.current) return;
+
+    // Assemble the full file with saved student code in the editable slot
+    const { code: fullFile, editableFrom, editableTo } = assembleFullFile(savedCode);
 
     const extensions = [
       lineNumbers(),
@@ -225,12 +384,18 @@ export default function CodeExercise({
       syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
       bracketMatching(),
       closeBrackets(),
+      autocompletion({
+        activateOnTyping: true,
+        activateOnTypingDelay: 100,
+        override: [pyodideCompleteSource],
+      }),
       rectangularSelection(),
       crosshairCursor(),
       highlightActiveLine(),
       highlightSelectionMatches(),
       keymap.of([
         ...closeBracketsKeymap,
+        ...completionKeymap,
         ...searchKeymap,
         ...historyKeymap,
         ...foldKeymap,
@@ -240,13 +405,30 @@ export default function CodeExercise({
       indentUnit.of("    "),
       EditorState.tabSize.of(4),
       keymap.of([...defaultKeymap, indentWithTab]),
+      // Editable range tracking + restriction (only when group context exists)
+      ...(hasGroupContext ? [
+        editableRangeField,
+        editableRangeFilter,
+        readOnlyDecoPlugin,
+      ] : []),
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {
-          const code = update.state.doc.toString();
-          try {
-            localStorage.setItem(storageKey, code);
-          } catch {}
-          saveProgress(`exercise-${exerciseId}`, code);
+          userEditedRef.current = true;
+          if (hasGroupContext) {
+            // Save only the editable region
+            const range = update.state.field(editableRangeField);
+            const editableCode = update.state.doc.sliceString(range.from, range.to);
+            try {
+              localStorage.setItem(storageKey, editableCode);
+            } catch {}
+            saveProgress(`exercise-${exerciseId}`, editableCode);
+          } else {
+            const code = update.state.doc.toString();
+            try {
+              localStorage.setItem(storageKey, code);
+            } catch {}
+            saveProgress(`exercise-${exerciseId}`, code);
+          }
         }
       }),
       // Apply oneDark BEFORE custom overrides so syntax highlighting takes effect
@@ -264,11 +446,15 @@ export default function CodeExercise({
           backgroundColor: dark ? "#1e1e2e" : "#f5f0e8",
           borderRight: dark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.08)",
         },
+        ".cm-readonly-line": {
+          opacity: "0.45",
+        },
       }),
     ];
 
     const state = EditorState.create({
-      doc: savedCode,
+      doc: fullFile,
+      selection: hasGroupContext ? { anchor: editableFrom } : undefined,
       extensions,
     });
 
@@ -279,11 +465,24 @@ export default function CodeExercise({
 
     viewRef.current = view;
 
+    // Initialize editable range and scroll to it
+    if (hasGroupContext) {
+      view.dispatch({
+        effects: setEditableRange.of({ from: editableFrom, to: editableTo }),
+      });
+      // Scroll editable region into view
+      requestAnimationFrame(() => {
+        view.dispatch({
+          effects: EditorView.scrollIntoView(editableFrom, { y: "start", yMargin: 50 }),
+        });
+      });
+    }
+
     return () => {
       view.destroy();
       viewRef.current = null;
     };
-  }, [dark, expanded]);
+  }, [dark, expanded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Reward polling (same as CheckpointQuestion) ──────────────────────────
 
@@ -373,9 +572,7 @@ export default function CodeExercise({
     setAllPassed(false);
 
     try {
-      const studentCode = viewRef.current?.state.doc.toString() || "";
-      const context = assembleContext();
-      const fullCode = [context, studentCode].filter(Boolean).join("\n\n");
+      const fullCode = assembleTestCode();
       const testResults = await runPythonTests(fullCode, data.testCode);
       setResults(testResults);
       const passed = testResults.length > 0 && testResults.every((r) => r.passed);
@@ -385,8 +582,12 @@ export default function CodeExercise({
     } finally {
       setRunning(false);
       setPyodideLoading(false);
+      invalidateCompletionCache();
+      // Re-preload context so completions work after test run
+      const ctx = assembleContext();
+      if (ctx) preloadCompletionContext(ctx);
     }
-  }, [running, data.testCode]);
+  }, [running, data.testCode, assembleTestCode, assembleContext]);
 
   // ── Claim reward ─────────────────────────────────────────────────────────
 
@@ -460,20 +661,28 @@ export default function CodeExercise({
 
   const handleReset = useCallback(() => {
     if (!viewRef.current) return;
-    viewRef.current.dispatch({
-      changes: {
-        from: 0,
-        to: viewRef.current.state.doc.length,
-        insert: data.starterCode,
-      },
-    });
+    if (hasGroupContext) {
+      // Replace only the editable region with the starter code
+      const range = viewRef.current.state.field(editableRangeField);
+      viewRef.current.dispatch({
+        changes: { from: range.from, to: range.to, insert: data.starterCode },
+      });
+    } else {
+      viewRef.current.dispatch({
+        changes: {
+          from: 0,
+          to: viewRef.current.state.doc.length,
+          insert: data.starterCode,
+        },
+      });
+    }
     try {
       localStorage.removeItem(storageKey);
     } catch {}
     setResults(null);
     setRunError(null);
     setAllPassed(false);
-  }, [data.starterCode, storageKey]);
+  }, [data.starterCode, storageKey, hasGroupContext]);
 
   // ── Send to Scratchpad ──────────────────────────────────────────────────
 
@@ -503,9 +712,9 @@ export default function CodeExercise({
     <div className={expanded ? "flex flex-col flex-1 min-h-0" : `my-4 border-2 ${completedDisplay ? goldBorder : cardBorder} ${cardBg} p-5`}>
       {/* Description + Expand button */}
       <div className="flex items-start gap-3 mb-3">
-        <div className={`text-lg md:text-[19px] ${textMuted} leading-relaxed flex-1`} style={sansFont}>
-          {data.description}
-        </div>
+        <div className={`text-lg md:text-[19px] ${textMuted} leading-relaxed flex-1 [&_code]:bg-amber-100/60 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-[0.88em] [&_code]:font-mono`} style={sansFont}
+          dangerouslySetInnerHTML={{ __html: data.description }}
+        />
         {!expanded && (
           <button
             onClick={() => setExpanded(true)}
@@ -545,12 +754,9 @@ export default function CodeExercise({
         </div>
       )}
 
-      {/* Code Editor with Scratchpad overlay */}
-      <div className={`relative mb-3 ${expanded ? "flex-1 min-h-0" : ""}`}>
-        <div ref={editorRef} className="h-full" />
-
-        {/* Scratchpad overlay button — top-right of editor */}
-        <div className="absolute top-1.5 right-2 z-10 hidden lg:block">
+      {/* Scratchpad button — above editor, right-aligned */}
+      <div className="flex justify-end mb-1.5 hidden lg:flex">
+        <div className="relative">
           <button
             onClick={handleSendToScratchpad}
             onMouseEnter={() => setShowScratchpadTooltip(true)}
@@ -559,9 +765,9 @@ export default function CodeExercise({
               scratchpadSent
                 ? `${goldBorder} ${dark ? "bg-[#FFD700]/20 text-[#FFD700]" : "bg-[#b8860b]/15 text-[#9a7200]"}`
                 : dark
-                  ? "border-[#2a3552]/80 bg-[#0f1930]/90 text-slate-500 hover:text-[#FFD700] hover:border-[#FFD700]/40 hover:bg-[#0f1930]"
-                  : "border-border/60 bg-white/90 text-foreground/40 hover:text-[#9a7200] hover:border-[#b8860b]/40 hover:bg-white"
-            } backdrop-blur-sm`}
+                  ? "border-[#2a3552]/80 bg-[#0f1930] text-slate-500 hover:text-[#FFD700] hover:border-[#FFD700]/40 hover:bg-[#0f1930]"
+                  : "border-border/60 bg-white text-foreground/40 hover:text-[#9a7200] hover:border-[#b8860b]/40 hover:bg-white"
+            }`}
             data-testid="button-send-to-scratchpad"
           >
             <span style={{ fontFamily: "monospace", fontSize: "10px", lineHeight: 1 }}>{"{ }"}</span>
@@ -583,6 +789,11 @@ export default function CodeExercise({
             </div>
           )}
         </div>
+      </div>
+
+      {/* Code Editor */}
+      <div className={`relative mb-3 ${expanded ? "flex-1 min-h-0" : ""}`}>
+        <div ref={editorRef} className="h-full" />
       </div>
 
       {/* Action buttons */}

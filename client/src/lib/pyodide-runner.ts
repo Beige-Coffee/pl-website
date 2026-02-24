@@ -16,6 +16,11 @@ export interface CodeRunResult {
   error: string | null;
 }
 
+export interface CompletionItem {
+  label: string;
+  type: "function" | "variable";
+}
+
 // ---------------------------------------------------------------------------
 // Inline Web Worker source (avoids a separate file that Vite may struggle with)
 // ---------------------------------------------------------------------------
@@ -33,12 +38,19 @@ const WORKER_SRC = [
   '    await pyodide.loadPackage("micropip");',
   '    const micropip = pyodide.pyimport("micropip");',
   '    await micropip.install(["cryptography", "ecdsa", "python-bitcoinlib"]);',
+  "    // Optional: load coincurve + bip32 if the WASM wheel is available",
+  "    try {",
+  '      await micropip.install(self.location.origin + "/wasm-wheels/coincurve-20.0.0-cp312-cp312-pyodide_2024_0_wasm32.whl");',
+  '      await micropip.install("bip32");',
+  "    } catch (e) {",
+  '      console.warn("Optional: coincurve/bip32 not available:", e);',
+  "    }",
   "  })();",
   "  return readyPromise;",
   "}",
   "",
   "self.onmessage = async (e) => {",
-  "  const { id, studentCode, testCode, code, mode } = e.data;",
+  "  const { id, studentCode, testCode, code, mode, expression } = e.data;",
   "  try {",
   "    await initPyodide();",
   "",
@@ -63,6 +75,39 @@ const WORKER_SRC = [
   "      ].join('\\n');",
   "      const output = await pyodide.runPythonAsync(getOutput);",
   '      self.postMessage({ id, type: "run_result", output: output || "", error: error });',
+  "      return;",
+  "    }",
+  "",
+  '    if (mode === "exec") {',
+  "      // ── Exec mode: run code silently (no stdout capture, no test harness) ──",
+  "      await pyodide.runPythonAsync(code);",
+  '      self.postMessage({ id, type: "exec_result" });',
+  "      return;",
+  "    }",
+  "",
+  '    if (mode === "complete") {',
+  "      // ── Complete mode: introspect an expression and return its attributes ──",
+  '      const script = [',
+  '        "import json as _json",',
+  '        "_completion_result = \\"[]\\"",',
+  '        "try:",',
+  '        "    _obj = eval(" + JSON.stringify(expression) + ")",',
+  '        "    _attrs = []",',
+  '        "    for _a in dir(_obj):",',
+  '        "        if _a.startswith(\\"_\\"):",',
+  '        "            continue",',
+  '        "        try:",',
+  '        "            _attrs.append({\\"label\\": _a, \\"type\\": \\"function\\" if callable(getattr(_obj, _a)) else \\"variable\\"})",',
+  '        "        except Exception:",',
+  '        "            _attrs.append({\\"label\\": _a, \\"type\\": \\"variable\\"})",',
+  '        "    _completion_result = _json.dumps(_attrs)",',
+  '        "except Exception:",',
+  '        "    _completion_result = _json.dumps([])",',
+  '        "_completion_result",',
+  "      ].join('\\n');",
+  "      const result = await pyodide.runPythonAsync(script);",
+  "      const items = JSON.parse(result);",
+  '      self.postMessage({ id, type: "complete_result", items });',
   "      return;",
   "    }",
   "",
@@ -119,7 +164,7 @@ function getWorker(): Worker {
   if (!worker) {
     worker = new Worker(workerURL);
     worker.onmessage = (e) => {
-      const { id, type, results, message, output, error } = e.data;
+      const { id, type, results, message, output, error, items } = e.data;
       const entry = pending.get(id);
       if (!entry) return;
       pending.delete(id);
@@ -128,6 +173,10 @@ function getWorker(): Worker {
         entry.resolve(results);
       } else if (type === "run_result") {
         entry.resolve({ output: output || "", error: error || null });
+      } else if (type === "exec_result") {
+        entry.resolve(undefined);
+      } else if (type === "complete_result") {
+        entry.resolve(items as CompletionItem[]);
       } else {
         entry.reject(new Error(message));
       }
@@ -144,6 +193,7 @@ function getWorker(): Worker {
 }
 
 const TIMEOUT_MS = 60_000; // 60s — first run installs packages
+const COMPLETION_TIMEOUT_MS = 5_000; // 5s for completions
 
 /**
  * Run student Python code against a test suite. Returns structured results.
@@ -183,8 +233,50 @@ export async function runPythonCode(code: string): Promise<CodeRunResult> {
 }
 
 /**
+ * Run Python code silently — no stdout capture, no test harness.
+ * Used to preload exercise context (preamble + prior exercises) into Pyodide
+ * so that `dir()` introspection works for autocomplete.
+ */
+export async function execPythonSilent(code: string): Promise<void> {
+  const w = getWorker();
+  const id = ++messageId;
+  return new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      pending.delete(id);
+      reject(new Error("Exec timed out (60 s)."));
+    }, TIMEOUT_MS);
+    pending.set(id, { resolve, reject, timer });
+    w.postMessage({ id, code, mode: "exec" });
+  });
+}
+
+/**
+ * Introspect a Python expression and return its public attributes.
+ * Returns `[]` if the expression can't be evaluated.
+ */
+export async function getPythonCompletions(expression: string): Promise<CompletionItem[]> {
+  const w = getWorker();
+  const id = ++messageId;
+  return new Promise<CompletionItem[]>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      pending.delete(id);
+      resolve([]); // graceful: return empty on timeout
+    }, COMPLETION_TIMEOUT_MS);
+    pending.set(id, { resolve, reject, timer });
+    w.postMessage({ id, expression, mode: "complete" });
+  });
+}
+
+/**
  * Pre-warm the worker so the first "Run Tests" click is faster.
  */
 export function preloadWorker(): void {
   getWorker();
+}
+
+/**
+ * Returns true if the Pyodide worker has been created (not necessarily ready).
+ */
+export function isWorkerCreated(): boolean {
+  return worker !== null;
 }

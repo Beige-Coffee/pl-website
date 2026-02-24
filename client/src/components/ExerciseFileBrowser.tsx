@@ -4,7 +4,7 @@ import { EditorState } from "@codemirror/state";
 import { python } from "@codemirror/lang-python";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { syntaxHighlighting, defaultHighlightStyle } from "@codemirror/language";
-import { EXERCISE_GROUPS, type ExerciseGroup } from "../lib/exercise-groups";
+import { EXERCISE_GROUPS, LN_MODULE_DISPLAY_CODE, type ExerciseGroup } from "../lib/exercise-groups";
 import { LIGHTNING_EXERCISES } from "../data/lightning-exercises";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -112,13 +112,15 @@ export default function ExerciseFileBrowser({
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
 
-  const selectedGroup = EXERCISE_GROUPS[selectedGroupId];
+  const isLnModule = selectedGroupId === "__ln_module__";
+  const selectedGroup = isLnModule ? null : EXERCISE_GROUPS[selectedGroupId];
 
   // Build content for selected file
   const fileContent = useMemo(() => {
+    if (isLnModule) return { code: LN_MODULE_DISPLAY_CODE, currentLineStart: -1, currentLineEnd: -1 };
     if (!selectedGroup) return { code: "", currentLineStart: -1, currentLineEnd: -1 };
     return assembleFileContent(selectedGroup, currentExerciseId);
-  }, [selectedGroup, currentExerciseId]);
+  }, [selectedGroup, currentExerciseId, isLnModule]);
 
   // Escape key to close
   useEffect(() => {
@@ -217,6 +219,23 @@ export default function ExerciseFileBrowser({
             <span className={`font-pixel text-[10px] ${goldText}`}>FILES</span>
           </div>
           <div className="flex-1 overflow-y-auto py-1">
+            {/* ln.py — root level helper module */}
+            <button
+              type="button"
+              onClick={() => setSelectedGroupId("__ln_module__")}
+              className={`w-full flex items-center gap-1.5 px-3 pl-5 py-1.5 text-left transition-colors cursor-pointer border-l-2 ${
+                isLnModule
+                  ? `${activeFileBg} ${activeFileBorder}`
+                  : `border-l-transparent ${hoverBg}`
+              }`}
+            >
+              <span className={`text-sm ${
+                isLnModule ? goldText : textMuted
+              }`} style={sansFont}>
+                ln.py
+              </span>
+            </button>
+
             {DIR_ORDER.map((dir) => {
               const groups = fileTree[dir];
               if (!groups?.length) return null;
@@ -280,15 +299,21 @@ export default function ExerciseFileBrowser({
           <div className={`px-4 py-2.5 border-b ${borderColor} flex items-center justify-between shrink-0`}>
             <div className="flex items-center gap-3">
               <span className={`text-base font-semibold ${dark ? "text-slate-200" : "text-black/80"}`} style={sansFont}>
-                {selectedGroup?.label || ""}
+                {isLnModule ? "ln.py" : selectedGroup?.label || ""}
               </span>
-              {selectedGroupId === currentGroupId && (
+              {isLnModule ? (
+                <span className={`text-xs px-2 py-0.5 ${
+                  dark ? "bg-slate-700/50 text-slate-400" : "bg-black/5 text-black/50"
+                }`} style={sansFont}>
+                  helper module — available in all exercises
+                </span>
+              ) : selectedGroupId === currentGroupId ? (
                 <span className={`text-xs px-2 py-0.5 ${
                   dark ? "bg-[#FFD700]/15 text-[#FFD700]" : "bg-[#b8860b]/10 text-[#9a7200]"
                 }`} style={sansFont}>
                   current file
                 </span>
-              )}
+              ) : null}
             </div>
             <button
               onClick={onClose}
@@ -302,8 +327,8 @@ export default function ExerciseFileBrowser({
             </button>
           </div>
 
-          {/* Exercise tabs within file */}
-          {selectedGroup && (
+          {/* Exercise tabs within file (hidden for ln.py) */}
+          {selectedGroup && !isLnModule && (
             <div className={`px-3 py-1.5 border-b ${borderColor} flex items-center gap-1 overflow-x-auto shrink-0`}>
               {selectedGroup.exerciseIds.map((exId) => {
                 const exData = LIGHTNING_EXERCISES[exId];

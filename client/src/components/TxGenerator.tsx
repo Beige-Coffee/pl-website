@@ -195,7 +195,7 @@ export default function TxGenerator({ config, theme }: TxGeneratorProps) {
 
       {/* Body */}
       <div className="px-4 py-3">
-        <p className={`text-xs mb-3 leading-relaxed ${mutedText}`}>
+        <p className={`text-sm mb-3 leading-relaxed ${mutedText}`}>
           {config.description}
         </p>
 

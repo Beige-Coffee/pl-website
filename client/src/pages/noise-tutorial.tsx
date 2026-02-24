@@ -14,6 +14,7 @@ import CodeExercise from "../components/CodeExercise";
 import Scratchpad from "../components/Scratchpad";
 import { CollapsibleItem, CollapsibleGroup } from "../components/CollapsibleSection";
 import { CODE_EXERCISES } from "../data/code-exercises";
+import { Tooltip, TooltipTrigger, TooltipContent } from "../components/ui/tooltip";
 
 // --- Checkpoint questions embedded inline in tutorial chapters ---
 const CHECKPOINT_QUESTIONS: Record<string, {
@@ -957,7 +958,46 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
                                 {isComplete && "\u2713"}
                               </span>
                             )}
-                            <div className="text-[16px] leading-snug" style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>{c.title}</div>
+                            <div className="flex-1 min-w-0 text-[16px] leading-snug" style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>{c.title}</div>
+                            {(() => {
+                              const reqs = CHAPTER_REQUIREMENTS[c.id];
+                              if (!reqs) return null;
+                              const showExercises = tutorialMode === "code" && reqs.exercises.length > 0;
+                              const showQuizzes = reqs.checkpoints.length > 0;
+                              if (!showExercises && !showQuizzes) return null;
+                              const completedIds = new Set(auth.completedCheckpoints.map(cp => cp.checkpointId));
+                              const dim = theme === "dark" ? "text-slate-600" : "text-foreground/25";
+                              const lit = theme === "dark" ? "text-green-400" : "text-green-600";
+                              const tooltipClass = `font-pixel text-sm px-3 py-1.5 border-2 rounded-none ${
+                                theme === "dark"
+                                  ? "bg-[#0f1930] text-slate-200 border-[#2a3552]"
+                                  : "bg-card text-foreground border-border pixel-shadow"
+                              }`;
+                              return (
+                                <span className="flex items-center gap-1.5 shrink-0 ml-1">
+                                  {showQuizzes && reqs.checkpoints.map((cpId) => (
+                                    <Tooltip key={cpId} delayDuration={200}>
+                                      <TooltipTrigger asChild>
+                                        <span className={`font-pixel text-[13px] leading-none cursor-default ${completedIds.has(cpId) ? lit : dim}`}>?</span>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="bottom" className={tooltipClass}>
+                                        {completedIds.has(cpId) ? "Quiz complete" : "Quiz"}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ))}
+                                  {showExercises && reqs.exercises.map((exId) => (
+                                    <Tooltip key={exId} delayDuration={200}>
+                                      <TooltipTrigger asChild>
+                                        <span className={`font-mono text-[13px] leading-none font-bold cursor-default ${completedIds.has(exId) ? lit : dim}`}>&lt;/&gt;</span>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="bottom" className={tooltipClass}>
+                                        {completedIds.has(exId) ? "Exercise complete" : "Coding exercise"}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ))}
+                                </span>
+                              );
+                            })()}
                           </div>
                         </button>
                       );

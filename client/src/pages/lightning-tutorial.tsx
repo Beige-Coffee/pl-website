@@ -20,7 +20,10 @@ import { CollapsibleItem, CollapsibleGroup } from "../components/CollapsibleSect
 import { LIGHTNING_EXERCISES } from "../data/lightning-exercises";
 import { getExerciseGroupContext } from "../lib/exercise-groups";
 import TxGenerator from "../components/TxGenerator";
+import NotebookRef from "../components/NotebookRef";
 import { TX_GENERATORS } from "../data/tx-generators";
+import { Tooltip, TooltipTrigger, TooltipContent } from "../components/ui/tooltip";
+import { preloadWorker } from "../lib/pyodide-runner";
 
 // --- Checkpoint questions embedded inline in tutorial chapters ---
 const CHECKPOINT_QUESTIONS: Record<string, {
@@ -444,7 +447,7 @@ const chapters: Chapter[] = [
   },
   {
     id: "htlc-fees-dust",
-    title: "HTLC Fees & Dust",
+    title: "HTLC Commitment Outputs",
     section: "HTLCs",
     kind: "md",
     file: "/lightning_tutorial/6.3-htlc-fees-dust.md",
@@ -490,9 +493,9 @@ const CHAPTER_REQUIREMENTS: Record<string, {
   "intro": { checkpoints: [], exercises: [] },
   "bitcoin-cli": { checkpoints: ["course-tools-match"], exercises: [] },
   "protocols-fairness": { checkpoints: ["channel-fairness"], exercises: [] },
-  "keys-manager": { checkpoints: [], exercises: ["ln-exercise-keys-manager"] },
-  "bip32-derivation": { checkpoints: ["bip32-derivation"], exercises: ["ln-exercise-derive-key"] },
-  "channel-keys": { checkpoints: [], exercises: ["ln-exercise-channel-keys"] },
+  "keys-manager": { checkpoints: [], exercises: [] },
+  "bip32-derivation": { checkpoints: ["bip32-derivation"], exercises: [] },
+  "channel-keys": { checkpoints: [], exercises: ["ln-exercise-channel-key-manager"] },
   "payment-channels-overview": { checkpoints: ["payment-channels-scaling"], exercises: [] },
   "funding-script": { checkpoints: ["funding-multisig", "pubkey-sorting"], exercises: ["ln-exercise-funding-script"] },
   "funding-transaction": { checkpoints: [], exercises: ["ln-exercise-funding-tx"] },
@@ -502,10 +505,10 @@ const CHAPTER_REQUIREMENTS: Record<string, {
   "open-channel": { checkpoints: [], exercises: [] },
   "revocation-keys": { checkpoints: ["revocation-purpose"], exercises: ["ln-exercise-revocation-pubkey", "ln-exercise-revocation-privkey"] },
   "commitment-secrets": { checkpoints: ["commitment-secret-algorithm"], exercises: ["ln-exercise-commitment-secret", "ln-exercise-per-commitment-point"] },
-  "key-derivation": { checkpoints: [], exercises: ["ln-exercise-derive-pubkey", "ln-exercise-derive-privkey"] },
+  "key-derivation": { checkpoints: [], exercises: ["ln-exercise-derive-pubkey", "ln-exercise-derive-privkey", "ln-exercise-get-commitment-keys"] },
   "commitment-scripts": { checkpoints: [], exercises: ["ln-exercise-to-remote-script", "ln-exercise-to-local-script"] },
   "obscured-commitment": { checkpoints: [], exercises: ["ln-exercise-obscure-factor", "ln-exercise-obscured-commitment"] },
-  "commitment-assembly": { checkpoints: [], exercises: ["ln-exercise-commitment-outputs", "ln-exercise-sort-outputs", "ln-exercise-commitment-tx"] },
+  "commitment-assembly": { checkpoints: [], exercises: ["ln-exercise-commitment-outputs", "ln-exercise-commitment-tx"] },
   "commitment-finalization": { checkpoints: [], exercises: ["ln-exercise-finalize-commitment"] },
   "get-commitment-tx": { checkpoints: [], exercises: [] },
   "routing-payments": { checkpoints: [], exercises: [] },
@@ -517,7 +520,7 @@ const CHAPTER_REQUIREMENTS: Record<string, {
   "get-htlc-commitment": { checkpoints: [], exercises: [] },
   "get-htlc-timeout": { checkpoints: [], exercises: [] },
   "received-htlcs": { checkpoints: ["htlc-timeout-vs-success"], exercises: ["ln-exercise-received-htlc-script", "ln-exercise-htlc-success-tx", "ln-exercise-finalize-htlc-success"] },
-  "htlc-fees-dust": { checkpoints: ["htlc-dust", "p2wsh-wrapping"], exercises: [] },
+  "htlc-fees-dust": { checkpoints: ["htlc-dust", "p2wsh-wrapping"], exercises: ["ln-exercise-htlc-outputs"] },
   "closing-channels": { checkpoints: [], exercises: [] },
   "quiz": { checkpoints: [], exercises: [] },
   "pay-it-forward": { checkpoints: [], exercises: [] },
@@ -930,6 +933,10 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
     auth.rewardClaimed,
   );
 
+  // Pre-warm Pyodide worker as soon as the tutorial page loads
+  // (downloading + installing packages takes ~10-15s on first visit)
+  useEffect(() => { preloadWorker(); }, []);
+
   // On mount: sync localStorage DragDrop completions to server + local state
   // so sidebar checkmarks appear immediately without navigating to each page
   const localSyncDone = useRef(false);
@@ -1306,7 +1313,46 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
                                 {isComplete && "\u2713"}
                               </span>
                             )}
-                            <div className="text-[16px] leading-snug" style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>{c.title}</div>
+                            <div className="flex-1 min-w-0 text-[16px] leading-snug" style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>{c.title}</div>
+                            {(() => {
+                              const reqs = CHAPTER_REQUIREMENTS[c.id];
+                              if (!reqs) return null;
+                              const showExercises = tutorialMode === "code" && reqs.exercises.length > 0;
+                              const showQuizzes = reqs.checkpoints.length > 0;
+                              if (!showExercises && !showQuizzes) return null;
+                              const completedIds = new Set(auth.completedCheckpoints.map(cp => cp.checkpointId));
+                              const dim = theme === "dark" ? "text-slate-600" : "text-foreground/25";
+                              const lit = theme === "dark" ? "text-[#FFD700]" : "text-[#b8860b]";
+                              const tooltipClass = `font-pixel text-sm px-3 py-1.5 border-2 rounded-none ${
+                                theme === "dark"
+                                  ? "bg-[#0f1930] text-slate-200 border-[#2a3552]"
+                                  : "bg-card text-foreground border-border pixel-shadow"
+                              }`;
+                              return (
+                                <span className="flex items-center gap-1.5 shrink-0 ml-1">
+                                  {showQuizzes && reqs.checkpoints.map((cpId) => (
+                                    <Tooltip key={cpId} delayDuration={200}>
+                                      <TooltipTrigger asChild>
+                                        <span className={`font-pixel text-[13px] leading-none cursor-default ${completedIds.has(cpId) ? lit : dim}`}>?</span>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="bottom" className={tooltipClass}>
+                                        {completedIds.has(cpId) ? "Quiz complete" : "Quiz"}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ))}
+                                  {showExercises && reqs.exercises.map((exId) => (
+                                    <Tooltip key={exId} delayDuration={200}>
+                                      <TooltipTrigger asChild>
+                                        <span className={`font-mono text-[13px] leading-none font-bold cursor-default ${completedIds.has(exId) ? lit : dim}`}>&lt;/&gt;</span>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="bottom" className={tooltipClass}>
+                                        {completedIds.has(exId) ? "Exercise complete" : "Coding exercise"}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ))}
+                                </span>
+                              );
+                            })()}
                           </div>
                         </button>
                       );
@@ -3141,9 +3187,15 @@ function ChapterContent({
                     saveProgress={progress.saveProgress}
                     fileLabel={ctx?.fileLabel}
                     preamble={ctx?.preamble}
+                    setupCode={ctx?.setupCode}
                     priorExercises={ctx?.priorExercises.map(pe => ({
                       id: pe.id,
                       solutionCode: LIGHTNING_EXERCISES[pe.id]?.hints.code ?? "",
+                      starterCode: LIGHTNING_EXERCISES[pe.id]?.starterCode ?? "",
+                    }))}
+                    futureExercises={ctx?.futureExercises.map(fe => ({
+                      id: fe.id,
+                      starterCode: LIGHTNING_EXERCISES[fe.id]?.starterCode ?? "",
                     }))}
                   />
                 </CollapsibleItem>
@@ -3184,9 +3236,15 @@ function ChapterContent({
                         saveProgress={progress.saveProgress}
                         fileLabel={ctx?.fileLabel}
                         preamble={ctx?.preamble}
+                        setupCode={ctx?.setupCode}
                         priorExercises={ctx?.priorExercises.map(pe => ({
                           id: pe.id,
                           solutionCode: LIGHTNING_EXERCISES[pe.id]?.hints.code ?? "",
+                          starterCode: LIGHTNING_EXERCISES[pe.id]?.starterCode ?? "",
+                        }))}
+                        futureExercises={ctx?.futureExercises.map(fe => ({
+                          id: fe.id,
+                          starterCode: LIGHTNING_EXERCISES[fe.id]?.starterCode ?? "",
                         }))}
                       />
                     </CollapsibleItem>
@@ -3241,6 +3299,9 @@ function ChapterContent({
             const genConfig = TX_GENERATORS[genId];
             if (!genConfig) return null;
             return <TxGenerator config={genConfig} theme={theme} />;
+          },
+          "notebook-ref": ({ storageKey, label }: any) => {
+            return <NotebookRef storageKey={String(storageKey)} label={String(label || storageKey)} theme={theme} />;
           },
           "code-outro": ({ text }: any) => {
             if (tutorialMode !== "code") return null;
