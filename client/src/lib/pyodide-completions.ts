@@ -73,6 +73,14 @@ const STATIC_COMPLETIONS: Record<string, Completion[]> = {
     { label: "DER", type: "property" },
     { label: "Raw", type: "property" },
   ],
+  // commitment_keys parameter (CommitmentKeys instance used in exercises)
+  commitment_keys: [
+    { label: "per_commitment_point", type: "property", detail: "33-byte per-commitment point" },
+    { label: "revocation_key", type: "property", detail: "33-byte revocation public key" },
+    { label: "local_delayed_payment_key", type: "property", detail: "33-byte local delayed payment key" },
+    { label: "local_htlc_key", type: "property", detail: "33-byte local HTLC key" },
+    { label: "remote_htlc_key", type: "property", detail: "33-byte remote HTLC key" },
+  ],
   PublicFormat: [
     { label: "CompressedPoint", type: "property" },
     { label: "UncompressedPoint", type: "property" },
@@ -138,6 +146,14 @@ const INSTANCE_COMPLETIONS: Record<string, Completion[]> = {
     { label: "curve", type: "property" },
     { label: "key_size", type: "property" },
   ],
+  // CommitmentKeys (data container for per-commitment derived keys)
+  CommitmentKeys: [
+    { label: "per_commitment_point", type: "property", detail: "33-byte per-commitment point" },
+    { label: "revocation_key", type: "property", detail: "33-byte revocation public key" },
+    { label: "local_delayed_payment_key", type: "property", detail: "33-byte local delayed payment key" },
+    { label: "local_htlc_key", type: "property", detail: "33-byte local HTLC key" },
+    { label: "remote_htlc_key", type: "property", detail: "33-byte remote HTLC key" },
+  ],
   // bytes
   bytes: [
     { label: "hex", type: "function", detail: "Convert to hex string" },
@@ -165,6 +181,7 @@ const TYPE_PATTERNS: Array<{ pattern: RegExp; type: string }> = [
   { pattern: /SigningKey\.from_pem\b/, type: "SigningKey" },
   { pattern: /SigningKey\.from_der\b/, type: "SigningKey" },
   { pattern: /SigningKey\(/, type: "SigningKey" },
+  { pattern: /CommitmentKeys\(/, type: "CommitmentKeys" },
   { pattern: /BIP32\.from_seed\b/, type: "BIP32" },
   { pattern: /hashlib\.sha256\b/, type: "hash" },
   { pattern: /hashlib\.sha512\b/, type: "hash" },
@@ -207,6 +224,48 @@ function inferTypeFromDoc(varName: string, doc: string): string | null {
     if (pattern.test(lastMatch)) return type;
   }
   return null;
+}
+
+// ── "self." completions for class methods ────────────────────────────────────
+// `self` doesn't exist in the Pyodide global namespace, so we provide
+// instance-level completions statically keyed by class name.
+
+const SELF_COMPLETIONS: Record<string, Completion[]> = {
+  ChannelKeyManager: [
+    // Instance attributes (set in __init__)
+    { label: "funding_key", type: "property", detail: "Family 0 private key" },
+    { label: "funding_pubkey", type: "property", detail: "Family 0 public key" },
+    { label: "revocation_basepoint_secret", type: "property", detail: "Family 1 private key" },
+    { label: "revocation_basepoint", type: "property", detail: "Family 1 public key" },
+    { label: "htlc_basepoint_secret", type: "property", detail: "Family 2 private key" },
+    { label: "htlc_basepoint", type: "property", detail: "Family 2 public key" },
+    { label: "payment_basepoint_secret", type: "property", detail: "Family 3 private key" },
+    { label: "payment_basepoint", type: "property", detail: "Family 3 public key" },
+    { label: "delayed_payment_basepoint_secret", type: "property", detail: "Family 4 private key" },
+    { label: "delayed_payment_basepoint", type: "property", detail: "Family 4 public key" },
+    { label: "commitment_seed", type: "property", detail: "Family 5 seed (no pubkey)" },
+    // Methods
+    { label: "sign_input", type: "function", detail: "Sign a transaction input" },
+    { label: "build_commitment_secret", type: "function", detail: "Derive per-commitment secret" },
+    { label: "derive_per_commitment_point", type: "function", detail: "Derive per-commitment point" },
+    { label: "get_commitment_keys", type: "function", detail: "Get all commitment keys for a state" },
+  ],
+};
+
+/**
+ * Detect the enclosing class from the document text by looking for
+ * `class ClassName:` before the cursor position.
+ */
+function detectEnclosingClass(doc: string, cursorPos: number): string | null {
+  const textBefore = doc.substring(0, cursorPos);
+  // Find the last `class X:` or `class X(...):`
+  const classRe = /class\s+(\w+)\s*[:(]/g;
+  let lastClass: string | null = null;
+  let m: RegExpExecArray | null;
+  while ((m = classRe.exec(textBefore)) !== null) {
+    lastClass = m[1];
+  }
+  return lastClass;
 }
 
 // ─── Cache + state ──────────────────────────────────────────────────────────
@@ -275,6 +334,35 @@ export function createPyodideCompletionSource() {
     let completions = cache.get(objExpr);
     if (completions) {
       return { from, options: completions, validFor: /^\w*$/ };
+    }
+
+    // Handle "self." inside a class method: detect enclosing class and
+    // return its instance attributes + methods from SELF_COMPLETIONS.
+    if (objExpr === "self") {
+      const docText = context.state.doc.toString();
+      const cursorPos = context.pos;
+      const className = detectEnclosingClass(docText, cursorPos);
+      if (className && SELF_COMPLETIONS[className]) {
+        completions = SELF_COMPLETIONS[className];
+        cache.set("self", completions);
+        return { from, options: completions, validFor: /^\w*$/ };
+      }
+      // Also try Pyodide: instantiate or dir() the class
+      if (isWorkerCreated() && contextPreloaded && className) {
+        try {
+          const items = await getPythonCompletions(className);
+          if (items.length > 0) {
+            completions = items.map((item) => ({
+              label: item.label,
+              type: item.type === "function" ? "function" : "property",
+            }));
+            cache.set("self", completions);
+            return { from, options: completions, validFor: /^\w*$/ };
+          }
+        } catch {
+          // Fall through
+        }
+      }
     }
 
     // Try live Pyodide introspection if the worker is ready

@@ -1,5 +1,5 @@
 import { Link, Route, Switch, useLocation } from "wouter";
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
@@ -667,6 +667,21 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
     setMobileNavOpen(false);
   }, [location, setMobileNavOpen]);
 
+  // Disable browser scroll anchoring so DOM changes don't cause scroll jumps.
+  useLayoutEffect(() => {
+    document.documentElement.style.overflowAnchor = "none";
+    return () => { document.documentElement.style.overflowAnchor = ""; };
+  }, []);
+
+  // Wrap markCheckpointCompleted to preserve scroll position.
+  const stableMarkCompleted = useCallback((id: string, amountSats?: number) => {
+    const scrollY = window.scrollY;
+    auth.markCheckpointCompleted(id, amountSats);
+    requestAnimationFrame(() => {
+      window.scrollTo(0, scrollY);
+    });
+  }, [auth.markCheckpointCompleted]);
+
   const [theme, setTheme] = useState<"light" | "dark">("light");
 
   useEffect(() => {
@@ -1042,7 +1057,7 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
                 emailVerified={auth.emailVerified}
                 pubkey={auth.pubkey}
                 onLoginRequest={() => setShowLoginModal(true)}
-                onCheckpointCompleted={auth.markCheckpointCompleted}
+                onCheckpointCompleted={stableMarkCompleted}
                 onOpenProfile={() => setShowProfileDropdown(true)}
                 getProgress={progress.getProgress}
                 saveProgress={progress.saveProgress}

@@ -401,6 +401,20 @@ export class DatabaseStorage implements IStorage {
   async setFeedbackGithubUrl(id: string, url: string): Promise<void> {
     await db.update(feedback).set({ githubIssueUrl: url }).where(eq(feedback.id, id));
   }
+
+  async getRecentFeedback(limit: number) {
+    return db.select({
+      id: feedback.id,
+      userId: feedback.userId,
+      category: feedback.category,
+      message: feedback.message,
+      pageUrl: feedback.pageUrl,
+      chapterTitle: feedback.chapterTitle,
+      exerciseId: feedback.exerciseId,
+      githubIssueUrl: feedback.githubIssueUrl,
+      createdAt: feedback.createdAt,
+    }).from(feedback).orderBy(desc(feedback.createdAt)).limit(limit);
+  }
 }
 
 export const storage = new DatabaseStorage();

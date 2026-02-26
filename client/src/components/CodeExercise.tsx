@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { EditorView, ViewPlugin, keymap, placeholder as cmPlaceholder, lineNumbers, highlightActiveLineGutter, highlightSpecialChars, drawSelection, dropCursor, rectangularSelection, crosshairCursor, highlightActiveLine, Decoration, type DecorationSet, type ViewUpdate } from "@codemirror/view";
 import { EditorState, StateField, StateEffect, RangeSetBuilder } from "@codemirror/state";
-import { indentUnit, indentOnInput, bracketMatching, foldGutter, foldKeymap, syntaxHighlighting, defaultHighlightStyle } from "@codemirror/language";
+import { indentUnit, indentOnInput, bracketMatching, foldGutter, foldKeymap, syntaxHighlighting, defaultHighlightStyle, HighlightStyle } from "@codemirror/language";
+import { tags } from "@lezer/highlight";
 import { python } from "@codemirror/lang-python";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { defaultKeymap, indentWithTab, history, historyKeymap } from "@codemirror/commands";
@@ -16,6 +17,27 @@ import { signatureHints } from "../lib/signature-hint-extension";
 import { cleanErrorMessage } from "../lib/error-cleanup";
 import { QRCodeSVG } from "qrcode.react";
 import ExerciseFileBrowser from "./ExerciseFileBrowser";
+
+// ─── Light Mode Syntax Highlighting ──────────────────────────────────────────
+
+const lightHighlightStyle = HighlightStyle.define([
+  { tag: tags.keyword, color: "#d73a49" },               // if, for, def, class, return, from, import
+  { tag: tags.controlKeyword, color: "#d73a49" },
+  { tag: tags.definitionKeyword, color: "#d73a49" },
+  { tag: tags.operatorKeyword, color: "#d73a49" },        // and, or, not, in, is
+  { tag: tags.standard(tags.variableName), color: "#6f42c1" }, // bytearray, int, bytes, len, range, print
+  { tag: tags.function(tags.variableName), color: "#6f42c1" },  // function calls
+  { tag: tags.function(tags.definition(tags.variableName)), color: "#6f42c1" }, // function defs
+  { tag: tags.string, color: "#032f62" },                 // strings
+  { tag: tags.comment, color: "#6a737d", fontStyle: "italic" },
+  { tag: tags.number, color: "#005cc5" },
+  { tag: tags.bool, color: "#005cc5" },                   // True, False
+  { tag: tags.self, color: "#d73a49" },                   // self
+  { tag: tags.operator, color: "#d73a49" },               // =, +, *, etc.
+  { tag: tags.className, color: "#6f42c1" },
+  { tag: tags.propertyName, color: "#005cc5" },
+  { tag: tags.special(tags.string), color: "#032f62" },   // f-strings, docstrings
+]);
 
 // ─── Editable Range Extensions ───────────────────────────────────────────────
 
@@ -240,7 +262,8 @@ export default function CodeExercise({
       python(),
       EditorView.editable.of(false),
       EditorState.readOnly.of(true),
-      ...(dark ? [oneDark] : []),
+      ...(dark ? [oneDark] : [syntaxHighlighting(lightHighlightStyle)]),
+      syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
       EditorView.theme({
         "&": { fontSize: "14px", borderRadius: "4px", overflow: "hidden" },
         ".cm-scroller": { overflow: "auto", maxHeight: "350px" },
@@ -427,7 +450,7 @@ export default function CodeExercise({
       dropCursor(),
       EditorState.allowMultipleSelections.of(true),
       indentOnInput(),
-      ...(dark ? [oneDark] : []),
+      ...(dark ? [oneDark] : [syntaxHighlighting(lightHighlightStyle)]),
       syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
       bracketMatching(),
       closeBrackets(),

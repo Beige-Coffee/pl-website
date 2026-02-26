@@ -55,9 +55,20 @@ interface DashboardData {
     message: string | null;
     createdAt: string;
   }>;
+  recentFeedback: Array<{
+    id: string;
+    userId: string | null;
+    category: string;
+    message: string;
+    pageUrl: string;
+    chapterTitle: string | null;
+    exerciseId: string | null;
+    githubIssueUrl: string | null;
+    createdAt: string;
+  }>;
 }
 
-type Tab = "overview" | "users" | "withdrawals" | "checkpoints" | "analytics" | "donations";
+type Tab = "overview" | "users" | "withdrawals" | "checkpoints" | "analytics" | "donations" | "feedback";
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return "-";
@@ -286,6 +297,7 @@ export default function AdminPage() {
           <button className={tabClass("checkpoints")} onClick={() => setActiveTab("checkpoints")}>CHECKPOINTS</button>
           <button className={tabClass("analytics")} onClick={() => setActiveTab("analytics")}>ANALYTICS</button>
           <button className={tabClass("donations")} onClick={() => setActiveTab("donations")}>DONATIONS ({(data.recentDonations || []).length})</button>
+          <button className={tabClass("feedback")} onClick={() => setActiveTab("feedback")}>FEEDBACK ({(data.recentFeedback || []).length})</button>
         </nav>
 
         {/* Main content */}
@@ -1113,6 +1125,72 @@ export default function AdminPage() {
             </div>
           );
         })()}
+
+        {/* Feedback Tab */}
+        {activeTab === "feedback" && (
+          <div className={`${cardClass} overflow-x-auto`}>
+            <div className="font-pixel text-xs mb-3">
+              FEEDBACK &mdash; {(data.recentFeedback || []).length} SUBMISSIONS
+            </div>
+            <table className={tableClass} style={{ fontFamily: sansFont }}>
+              <thead>
+                <tr>
+                  <th className={thClass}>CATEGORY</th>
+                  <th className={thClass}>MESSAGE</th>
+                  <th className={thClass}>CHAPTER</th>
+                  <th className={thClass}>USER</th>
+                  <th className={thClass}>DATE</th>
+                  <th className={thClass}>GITHUB</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(data.recentFeedback || []).map((f) => {
+                  const categoryColors: Record<string, string> = {
+                    bug: "text-red-500",
+                    confusing: "text-yellow-500",
+                    suggestion: "text-blue-400",
+                    other: "text-foreground/60",
+                  };
+                  return (
+                    <tr key={f.id} className="hover:bg-primary/5">
+                      <td className={tdClass}>
+                        <span className={`font-pixel text-[10px] ${categoryColors[f.category] || "text-foreground/60"}`}>
+                          {f.category.toUpperCase()}
+                        </span>
+                      </td>
+                      <td className={`${tdClass} max-w-xs`}>
+                        <div className="truncate" title={f.message}>{f.message}</div>
+                      </td>
+                      <td className={tdClass}>
+                        {f.chapterTitle ? (
+                          <span className="truncate block max-w-[120px]" title={f.chapterTitle}>{f.chapterTitle}</span>
+                        ) : (
+                          <span className="text-foreground/30">-</span>
+                        )}
+                      </td>
+                      <td className={tdClass}>
+                        {f.userId ? truncate(f.userId, 8) : <span className="text-foreground/30">anon</span>}
+                      </td>
+                      <td className={tdClass}>{formatDate(f.createdAt)}</td>
+                      <td className={tdClass}>
+                        {f.githubIssueUrl ? (
+                          <a href={f.githubIssueUrl} target="_blank" rel="noopener noreferrer" className="font-pixel text-[10px] text-blue-400 hover:text-blue-300 underline">
+                            VIEW
+                          </a>
+                        ) : (
+                          <span className="text-foreground/30">-</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {(data.recentFeedback || []).length === 0 && (
+                  <tr><td colSpan={6} className={`${tdClass} text-center text-foreground/40`}>No feedback yet</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         {/* Donations Tab */}
         {activeTab === "donations" && (

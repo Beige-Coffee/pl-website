@@ -1209,9 +1209,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let totalViews = 0;
       let recentEvents: Awaited<ReturnType<typeof storage.getRecentPageEvents>> = [];
       let recentDonations: Awaited<ReturnType<typeof storage.getRecentDonations>> = [];
+      let recentFeedback: Awaited<ReturnType<typeof storage.getRecentFeedback>> = [];
 
       try {
-        [recentWithdrawals, users, userCount, checkpointCompletions, pageStats, totalViews, recentEvents, recentDonations] =
+        [recentWithdrawals, users, userCount, checkpointCompletions, pageStats, totalViews, recentEvents, recentDonations, recentFeedback] =
           await Promise.all([
             storage.getRecentWithdrawals(100),
             storage.getAllUsers(),
@@ -1221,6 +1222,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             storage.getTotalPageViews(),
             storage.getRecentPageEvents(100),
             storage.getRecentDonations(100),
+            storage.getRecentFeedback(100),
           ]);
       } catch (dbErr) {
         console.error("Admin dashboard DB error (continuing with empty data):", dbErr);
@@ -1255,6 +1257,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         pageStats,
         recentEvents,
         recentDonations,
+        recentFeedback,
       });
     } catch (err) {
       console.error("Admin dashboard error:", err);

@@ -3,12 +3,35 @@ import { EditorView, keymap } from "@codemirror/view";
 import { EditorState } from "@codemirror/state";
 import { python } from "@codemirror/lang-python";
 import { oneDark } from "@codemirror/theme-one-dark";
+import { syntaxHighlighting, HighlightStyle } from "@codemirror/language";
+import { tags } from "@lezer/highlight";
 import { defaultKeymap, indentWithTab } from "@codemirror/commands";
 import { basicSetup } from "codemirror";
 import { runPythonCode, preloadWorker, type CodeRunResult } from "../lib/pyodide-runner";
 import { signatureHints } from "../lib/signature-hint-extension";
 import { cleanErrorMessage } from "../lib/error-cleanup";
 import { usePanelState } from "../hooks/use-panel-state";
+
+// ─── Light Mode Syntax Highlighting ──────────────────────────────────────────
+
+const lightHighlightStyle = HighlightStyle.define([
+  { tag: tags.keyword, color: "#d73a49" },
+  { tag: tags.controlKeyword, color: "#d73a49" },
+  { tag: tags.definitionKeyword, color: "#d73a49" },
+  { tag: tags.operatorKeyword, color: "#d73a49" },
+  { tag: tags.standard(tags.variableName), color: "#6f42c1" },
+  { tag: tags.function(tags.variableName), color: "#6f42c1" },
+  { tag: tags.function(tags.definition(tags.variableName)), color: "#6f42c1" },
+  { tag: tags.string, color: "#032f62" },
+  { tag: tags.comment, color: "#6a737d", fontStyle: "italic" },
+  { tag: tags.number, color: "#005cc5" },
+  { tag: tags.bool, color: "#005cc5" },
+  { tag: tags.self, color: "#d73a49" },
+  { tag: tags.operator, color: "#d73a49" },
+  { tag: tags.className, color: "#6f42c1" },
+  { tag: tags.propertyName, color: "#005cc5" },
+  { tag: tags.special(tags.string), color: "#032f62" },
+]);
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -287,7 +310,7 @@ export default function Scratchpad({ theme }: ScratchpadProps) {
           } catch {}
         }
       }),
-      ...(dark ? [oneDark] : []),
+      ...(dark ? [oneDark] : [syntaxHighlighting(lightHighlightStyle)]),
       EditorView.theme({
         "&": {
           fontSize: "13px",

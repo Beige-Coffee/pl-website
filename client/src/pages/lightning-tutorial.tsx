@@ -1035,7 +1035,11 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
     if ("scrollRestoration" in history) {
       history.scrollRestoration = "manual";
     }
+    // Disable browser scroll anchoring — it causes unexpected jumps when
+    // exercises/checkpoints change state and DOM heights shift.
+    document.documentElement.style.overflowAnchor = "none";
     window.scrollTo(0, 0);
+    return () => { document.documentElement.style.overflowAnchor = ""; };
   }, []);
 
   // Track chapter switches: save scroll position of outgoing chapter,
@@ -1081,6 +1085,18 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, [activeId]);
+
+  // Wrap markCheckpointCompleted to preserve scroll position.
+  // Completing a checkpoint triggers a state update that re-renders the page,
+  // which can cause the browser to jump to a different scroll position.
+  const stableMarkCompleted = useCallback((id: string, amountSats?: number) => {
+    const scrollY = window.scrollY;
+    auth.markCheckpointCompleted(id, amountSats);
+    // Restore scroll position after React re-renders
+    requestAnimationFrame(() => {
+      window.scrollTo(0, scrollY);
+    });
+  }, [auth.markCheckpointCompleted]);
 
   const [theme, setTheme] = useState<"light" | "dark">("light");
 
@@ -1497,7 +1513,7 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
                 emailVerified={auth.emailVerified}
                 pubkey={auth.pubkey}
                 onLoginRequest={() => setShowLoginModal(true)}
-                onCheckpointCompleted={auth.markCheckpointCompleted}
+                onCheckpointCompleted={stableMarkCompleted}
                 onOpenProfile={() => setShowProfileDropdown(true)}
                 progress={progress}
               />
