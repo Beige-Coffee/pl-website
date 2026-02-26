@@ -22,6 +22,7 @@ declare module 'http' {
   }
 }
 app.use(express.json({
+  limit: '10mb',
   verify: (req, _res, buf) => {
     req.rawBody = buf;
   }
@@ -67,8 +68,12 @@ export default async function runApp(
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
 
-    res.status(status).json({ message });
-    throw err;
+    if (!res.headersSent) {
+      res.status(status).json({ message });
+    }
+    if (status >= 500) {
+      console.error("[express] Error:", err.message || err);
+    }
   });
 
   // importantly run the final setup after setting up all the other routes so
