@@ -403,3 +403,57 @@ export function createPyodideCompletionSource() {
     return null;
   };
 }
+
+// ─── Word-level completion (identifiers from the document) ──────────────
+
+const PYTHON_KEYWORDS: Completion[] = [
+  "def", "class", "return", "if", "elif", "else", "for", "while", "break",
+  "continue", "pass", "import", "from", "as", "try", "except", "finally",
+  "raise", "with", "assert", "yield", "lambda", "not", "and", "or", "in",
+  "is", "True", "False", "None",
+].map(kw => ({ label: kw, type: "keyword" }));
+
+const PYTHON_BUILTINS: Completion[] = [
+  "print", "len", "range", "int", "str", "bytes", "bytearray", "list",
+  "dict", "set", "tuple", "bool", "hex", "bin", "ord", "chr", "abs",
+  "min", "max", "sum", "sorted", "reversed", "enumerate", "zip", "map",
+  "filter", "isinstance", "hasattr", "getattr", "setattr", "type",
+  "super", "property", "staticmethod", "classmethod",
+].map(fn => ({ label: fn, type: "function", boost: -1 }));
+
+/**
+ * Create a CodeMirror CompletionSource that suggests identifiers already
+ * present in the document (imports, variable names, function names, etc.)
+ * plus Python keywords and builtins. Triggers after 2+ characters typed.
+ */
+export function createWordCompletionSource() {
+  return function wordCompletionSource(
+    context: CompletionContext
+  ): CompletionResult | null {
+    // Match a word being typed (at least 2 chars), but NOT after a dot
+    const word = context.matchBefore(/(?<![.\w])\w{2,}$/);
+    if (!word) return null;
+
+    // Extract all unique identifiers from the document (3+ chars)
+    const doc = context.state.doc.toString();
+    const wordSet = new Set<string>();
+    const idRe = /\b[a-zA-Z_]\w{2,}\b/g;
+    let m: RegExpExecArray | null;
+    while ((m = idRe.exec(doc)) !== null) {
+      wordSet.add(m[0]);
+    }
+
+    // Build options from document words (excluding Python keywords which
+    // we add separately with proper type tagging)
+    const kwSet = new Set(PYTHON_KEYWORDS.map(k => k.label));
+    const docOptions: Completion[] = [];
+    for (const w of wordSet) {
+      if (!kwSet.has(w)) {
+        docOptions.push({ label: w, type: "variable", boost: -2 });
+      }
+    }
+
+    const options = [...PYTHON_KEYWORDS, ...PYTHON_BUILTINS, ...docOptions];
+    return { from: word.from, options, validFor: /^\w*$/ };
+  };
+}

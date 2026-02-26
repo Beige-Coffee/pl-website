@@ -104,7 +104,7 @@ def _ripemd160(data):
 def hash160(data):
     return _ripemd160(hashlib.sha256(data).digest())
 
-def decompress_pubkey(compressed):
+def pubkey_to_point(compressed):
     prefix = compressed[0]
     x = int.from_bytes(compressed[1:], 'big')
     p = CURVE.p()
@@ -114,9 +114,13 @@ def decompress_pubkey(compressed):
         y = p - y
     return Point(CURVE, x, y)
 
-def compress_point(point):
+def point_to_pubkey(point):
     prefix = b'\\x02' if point.y() % 2 == 0 else b'\\x03'
     return prefix + point.x().to_bytes(32, 'big')
+
+# Backwards-compatible aliases
+decompress_pubkey = pubkey_to_point
+compress_point = point_to_pubkey
 
 # ── BIP32 HD Wallet (with fallback when bip32 library is unavailable) ──
 
@@ -188,8 +192,10 @@ _ln = _types.ModuleType('ln')
 _ln.__dict__.update({
     'privkey_to_pubkey': privkey_to_pubkey,
     'hash160': hash160,
-    'decompress_pubkey': decompress_pubkey,
-    'compress_point': compress_point,
+    'pubkey_to_point': pubkey_to_point,
+    'point_to_pubkey': point_to_pubkey,
+    'decompress_pubkey': pubkey_to_point,
+    'compress_point': point_to_pubkey,
     'BIP32': BIP32,
     'CommitmentKeys': CommitmentKeys,
     'CURVE': CURVE,
@@ -235,7 +241,7 @@ def hash160(data: bytes) -> bytes:
     """Compute RIPEMD160(SHA256(data)) — used for Bitcoin address hashing."""
     return _ripemd160(hashlib.sha256(data).digest())
 
-def decompress_pubkey(compressed: bytes) -> Point:
+def pubkey_to_point(compressed: bytes) -> Point:
     """Decompress a 33-byte compressed public key to an EC Point."""
     prefix = compressed[0]
     x = int.from_bytes(compressed[1:], 'big')
@@ -246,10 +252,14 @@ def decompress_pubkey(compressed: bytes) -> Point:
         y = p - y
     return Point(CURVE, x, y)
 
-def compress_point(point: Point) -> bytes:
+def point_to_pubkey(point: Point) -> bytes:
     """Compress an EC Point to a 33-byte compressed public key."""
     prefix = b'\\x02' if point.y() % 2 == 0 else b'\\x03'
     return prefix + point.x().to_bytes(32, 'big')
+
+# Backwards-compatible aliases
+decompress_pubkey = pubkey_to_point
+compress_point = point_to_pubkey
 
 # ── BIP32 HD Wallet ──
 
@@ -316,7 +326,7 @@ from ecdsa.util import sigencode_der_canonize
 
 class ChannelKeyManager:`;
 
-const KEYS_COMMITMENT_PREAMBLE = `from ln import decompress_pubkey, compress_point, CURVE, G, ORDER, privkey_to_pubkey`;
+const KEYS_COMMITMENT_PREAMBLE = `from ln import pubkey_to_point, point_to_pubkey, CURVE, G, ORDER, privkey_to_pubkey`;
 
 const SCRIPTS_FUNDING_PREAMBLE = `from bitcoin.core.script import CScript, OP_2, OP_CHECKMULTISIG`;
 

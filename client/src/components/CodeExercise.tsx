@@ -12,7 +12,7 @@ import { closeBrackets, closeBracketsKeymap, autocompletion, completionKeymap } 
 // import { pythonLanguage } from "@codemirror/lang-python";
 import { lintKeymap } from "@codemirror/lint";
 import { runPythonTests, type TestResult } from "../lib/pyodide-runner";
-import { createPyodideCompletionSource, preloadCompletionContext, invalidateCompletionCache } from "../lib/pyodide-completions";
+import { createPyodideCompletionSource, createWordCompletionSource, preloadCompletionContext, invalidateCompletionCache } from "../lib/pyodide-completions";
 import { signatureHints } from "../lib/signature-hint-extension";
 import { cleanErrorMessage } from "../lib/error-cleanup";
 import { QRCodeSVG } from "qrcode.react";
@@ -399,8 +399,9 @@ export default function CodeExercise({
   }, [setupCode, preamble, crossGroupExercises, classMethodExercises, priorInGroupExercises, futureExercises, hasGroupContext, assembleContext]);
 
 
-  // Stable completion source (created once)
+  // Stable completion sources (created once)
   const pyodideCompleteSource = useMemo(() => createPyodideCompletionSource(), []);
+  const wordCompleteSource = useMemo(() => createWordCompletionSource(), []);
 
   // Preload completion context immediately on mount (Pyodide worker is
   // pre-warmed at the tutorial page level, so the exec queues behind init)
@@ -457,7 +458,7 @@ export default function CodeExercise({
       autocompletion({
         activateOnTyping: true,
         activateOnTypingDelay: 100,
-        override: [pyodideCompleteSource],
+        override: [pyodideCompleteSource, wordCompleteSource],
       }),
       signatureHints(),
       rectangularSelection(),
@@ -517,6 +518,9 @@ export default function CodeExercise({
         },
         ".cm-readonly-line": {
         },
+        ".cm-panels": { fontSize: "14px" },
+        ".cm-search": { fontSize: "14px" },
+        ".cm-search input, .cm-search button, .cm-search label": { fontSize: "14px" },
       }),
     ];
 
@@ -533,16 +537,10 @@ export default function CodeExercise({
 
     viewRef.current = view;
 
-    // Initialize editable range and scroll to it
+    // Initialize editable range
     if (hasGroupContext) {
       view.dispatch({
         effects: setEditableRange.of({ from: editableFrom, to: editableTo }),
-      });
-      // Scroll editable region into view
-      requestAnimationFrame(() => {
-        view.dispatch({
-          effects: EditorView.scrollIntoView(editableFrom, { y: "start", yMargin: 50 }),
-        });
       });
     }
 
