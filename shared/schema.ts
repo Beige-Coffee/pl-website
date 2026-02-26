@@ -92,7 +92,6 @@ export const feedback = pgTable("feedback", {
   userId: varchar("user_id"),
   category: text("category").notNull(),
   message: text("message").notNull(),
-  screenshotBase64: text("screenshot_base64"),
   pageUrl: text("page_url").notNull(),
   chapterTitle: text("chapter_title"),
   exerciseId: text("exercise_id"),

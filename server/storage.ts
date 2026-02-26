@@ -52,7 +52,6 @@ export interface IStorage {
   getUserProgress(userId: string): Promise<Record<string, string>>;
   setUserProgress(userId: string, key: string, value: string): Promise<void>;
   createFeedback(data: InsertFeedback): Promise<Feedback>;
-  getFeedbackScreenshot(id: string): Promise<string | null>;
   setFeedbackGithubUrl(id: string, url: string): Promise<void>;
 }
 
@@ -397,12 +396,6 @@ export class DatabaseStorage implements IStorage {
   async createFeedback(data: InsertFeedback): Promise<Feedback> {
     const [row] = await db.insert(feedback).values(data).returning();
     return row;
-  }
-
-  async getFeedbackScreenshot(id: string): Promise<string | null> {
-    const [row] = await db.select({ screenshotBase64: feedback.screenshotBase64 })
-      .from(feedback).where(eq(feedback.id, id));
-    return row?.screenshotBase64 ?? null;
   }
 
   async setFeedbackGithubUrl(id: string, url: string): Promise<void> {

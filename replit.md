@@ -6,6 +6,8 @@ Free, open-source educational website teaching Bitcoin Lightning Network through
 Created by Austin (Spiral and HRF grantee), inspired by Programming Bitcoin.
 
 ## Recent Changes
+- 2026-02-26: Removed screenshot capture/upload from feedback widget (text-only now), removed html2canvas-pro dependency, dropped screenshotBase64 from DB
+- 2026-02-26: Server stability fixes — removed process.exit(1) from Vite error handler, fixed Express error handler re-throw, added global uncaughtException/unhandledRejection handlers
 - 2026-02-21: "Send to Scratchpad" button on code exercises — dispatches sampleCode via CustomEvent, Scratchpad receives and loads it (with pendingCodeRef buffer for closed panel)
 - 2026-02-21: Server-side progress sync for quiz selections and code exercises (userProgress table, useProgress hook)
 - 2026-02-18: Added "Pay It Forward" donation page (below Quiz in sidebar)
