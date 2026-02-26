@@ -326,6 +326,7 @@ export default function DragDropExercise({
     setSubmitted(true);
     setCorrect(true);
     setWrongAttempt(false);
+    justSubmittedRef.current = true;
 
     // Save completion server-side (independent of reward claim)
     if (sessionToken) {
@@ -348,9 +349,14 @@ export default function DragDropExercise({
   }, [assignments, shuffledDefs, authenticated, onLoginRequest, onCompleted, checkpointId, sessionToken]);
 
   // Claim reward (mirrors CheckpointQuestion)
+  const claimingRef = useRef(false);
+  const justSubmittedRef = useRef(false);
+
   const handleClaimReward = useCallback(
     async (claimMethod?: "address" | "lnurl") => {
       if (!sessionToken) return;
+      if (claimingRef.current) return;
+      claimingRef.current = true;
       setClaiming(true);
       setClaimError(null);
       setShowClaimChoice(false);
@@ -408,6 +414,7 @@ export default function DragDropExercise({
         setAutoPaySending(false);
         setClaimError("Network error. Please try again.");
       } finally {
+        claimingRef.current = false;
         setClaiming(false);
       }
     },
@@ -437,6 +444,7 @@ export default function DragDropExercise({
 
   // If completed but sats not yet claimed, auto-set submitted state so claim UI shows
   useEffect(() => {
+    if (justSubmittedRef.current) return;
     if (completedButUnclaimed && !submitted) {
       // Set correct assignments
       const correctAssignments = MATCH_DATA.map((_, slotIndex) => {
@@ -772,7 +780,7 @@ export default function DragDropExercise({
             </div>
           )}
 
-          {rewardLnurl && (
+          {rewardLnurl && !autoPaySending && (
             <div className="mt-4 text-center">
               {withdrawalStatus === "paid" ? (
                 <div>

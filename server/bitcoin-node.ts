@@ -38,29 +38,16 @@ const RPC_PASS = "pldevpass";
 const MIN_PORT = 18500;
 const MAX_PORT = 18999;
 
-const ALLOWED_COMMANDS = new Set([
-  "getblockchaininfo",
-  "getblock",
-  "getblockhash",
-  "getblockcount",
-  "getrawtransaction",
-  "decoderawtransaction",
-  "decodescript",
-  "sendrawtransaction",
-  "getnewaddress",
-  "getbalance",
-  "getwalletinfo",
-  "listwallets",
-  "listunspent",
-  "gettransaction",
-  "gettxout",
-  "generatetoaddress",
-  "getmempoolinfo",
-  "getrawmempool",
-  "validateaddress",
-  "getbestblockhash",
-  "getblockheader",
-  "help",
+const BLOCKED_COMMANDS = new Set([
+  "stop",           // would kill the node process
+  "dumpprivkey",    // unnecessary on regtest, avoid confusion
+  "dumpwallet",     // unnecessary on regtest
+  "importprivkey",  // could corrupt wallet state
+  "importwallet",   // could corrupt wallet state
+  "encryptwallet",  // would lock the wallet
+  "walletpassphrase", // not applicable
+  "walletpassphrasechange", // not applicable
+  "backupwallet",   // no filesystem access needed
 ]);
 
 // ─── NodeManager Singleton ──────────────────────────────────────────────────
@@ -318,11 +305,11 @@ class NodeManager {
       return { result: "__CLEAR__" };
     }
 
-    // Handle "help" with no args
+    // Handle "help" with no args — show common commands, note that most bitcoin-cli commands work
     if (cmd === "help" && args.length === 0) {
       return {
         result: [
-          "Available commands:",
+          "Most bitcoin-cli commands are supported. Here are some common ones:",
           "",
           "  getblockchaininfo          - Get blockchain status",
           "  getblockcount              - Get current block height",
@@ -332,27 +319,24 @@ class NodeManager {
           "  decoderawtransaction <hex> - Decode a raw transaction",
           "  decodescript <hex>         - Decode a script",
           "  sendrawtransaction <hex>   - Broadcast a raw transaction",
+          "  createrawtransaction       - Create a raw transaction",
+          "  testmempoolaccept <hex>    - Test if a transaction would be accepted",
           "  getnewaddress              - Generate a new address",
           "  getbalance                 - Get wallet balance",
-          "  getwalletinfo              - Get wallet status",
-          "  listwallets                - List loaded wallets",
           "  listunspent                - List unspent outputs",
-          "  gettransaction <txid>      - Get wallet transaction info",
           "  gettxout <txid> <n>        - Get UTXO info",
-          "  getbestblockhash           - Get hash of best block",
-          "  getblockheader <hash>      - Get block header",
           "  getmempoolinfo             - Get mempool info",
-          "  getrawmempool              - Get mempool transactions",
           "  validateaddress <addr>     - Validate a Bitcoin address",
-          "  mine <n>                   - Mine n blocks",
+          "  help <command>             - Get help for a specific command",
+          "",
+          "  mine <n>                   - Mine n blocks (shortcut)",
           "  clear                      - Clear terminal",
-          "  help                       - Show this help",
         ].join("\n"),
       };
     }
 
-    if (!ALLOWED_COMMANDS.has(cmd)) {
-      return { error: `Command '${cmd}' is not allowed` };
+    if (BLOCKED_COMMANDS.has(cmd)) {
+      return { error: `Command '${cmd}' is not available in this environment.` };
     }
 
     // Convert numeric-looking args

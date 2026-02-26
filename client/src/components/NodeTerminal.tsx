@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { usePanelState } from "../hooks/use-panel-state";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -66,10 +67,23 @@ interface NodeTerminalProps {
 
 export default function NodeTerminal({ theme, sessionToken, authenticated }: NodeTerminalProps) {
   const dark = theme === "dark";
+  const panel = usePanelState();
 
-  const [isOpen, setIsOpen] = useState(() => {
+  const [isOpenRaw, setIsOpenRaw] = useState(() => {
     try { return localStorage.getItem(STORAGE_KEY_OPEN) === "1"; } catch { return false; }
   });
+
+  // Wrap setter to sync with panel context
+  const isOpen = isOpenRaw;
+  const setIsOpen = useCallback((val: boolean | ((prev: boolean) => boolean)) => {
+    setIsOpenRaw((prev) => {
+      const next = typeof val === "function" ? val(prev) : val;
+      if (!next && prev) {
+        panel.closePanel("node");
+      }
+      return next;
+    });
+  }, [panel]);
   const [lines, setLines] = useState<Array<{ type: "cmd" | "output" | "error" | "info"; text: string }>>([]);
   const [input, setInput] = useState("");
   const [running, setRunning] = useState(false);
@@ -112,22 +126,19 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
     try { localStorage.setItem(STORAGE_KEY_SPLIT, String(splitRatio)); } catch {}
   }, [splitRatio]);
 
-  // Mutual exclusion with Scratchpad
+  // Sync with panel context when open or width changes
   useEffect(() => {
     if (isOpen) {
-      window.dispatchEvent(new CustomEvent("node-terminal-open"));
+      panel.openPanel("node", panelWidth);
     }
-  }, [isOpen]);
+  }, [isOpen, panelWidth]);
 
+  // Close if another panel takes over
   useEffect(() => {
-    const handler = () => { if (isOpen) setIsOpen(false); };
-    window.addEventListener("scratchpad-open", handler);
-    window.addEventListener("tx-notebook-open", handler);
-    return () => {
-      window.removeEventListener("scratchpad-open", handler);
-      window.removeEventListener("tx-notebook-open", handler);
-    };
-  }, [isOpen]);
+    if (isOpen && panel.activePanel !== null && panel.activePanel !== "node") {
+      setIsOpenRaw(false);
+    }
+  }, [isOpen, panel.activePanel]);
 
   // Provision node on open
   useEffect(() => {
@@ -272,6 +283,7 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
   const handleWidthDragStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     isDraggingWidth.current = true;
+    panel.startDragging();
     const startX = e.clientX;
     const startWidth = panelWidth;
 
@@ -279,11 +291,14 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
       if (!isDraggingWidth.current) return;
       const delta = startX - ev.clientX;
       const maxW = window.innerWidth * MAX_WIDTH_RATIO;
-      setPanelWidth(Math.min(maxW, Math.max(MIN_WIDTH, startWidth + delta)));
+      const newWidth = Math.min(maxW, Math.max(MIN_WIDTH, startWidth + delta));
+      setPanelWidth(newWidth);
+      panel.resizePanel(newWidth);
     };
 
     const onUp = () => {
       isDraggingWidth.current = false;
+      panel.stopDragging();
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
       document.body.style.cursor = "";
@@ -294,7 +309,7 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
     document.body.style.userSelect = "none";
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
-  }, [panelWidth]);
+  }, [panelWidth, panel]);
 
   // ── Vertical drag ───────────────────────────────────────────────────────
 

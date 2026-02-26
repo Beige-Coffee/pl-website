@@ -452,9 +452,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Checkpoint group IDs (answer 0 = all questions correct)
     "crypto-review": 0,
     // Exercise IDs (answer 0 = tests passed)
-    "ln-exercise-keys-manager": 0,
-    "ln-exercise-derive-key": 0,
-    "ln-exercise-channel-keys": 0,
+    "ln-exercise-channel-key-manager": 0,
     "ln-exercise-funding-script": 0,
     "ln-exercise-funding-tx": 0,
     "ln-exercise-sign-input": 0,
@@ -469,15 +467,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "ln-exercise-obscure-factor": 0,
     "ln-exercise-obscured-commitment": 0,
     "ln-exercise-commitment-outputs": 0,
-    "ln-exercise-sort-outputs": 0,
     "ln-exercise-commitment-tx": 0,
+    "ln-exercise-get-commitment-keys": 0,
     "ln-exercise-finalize-commitment": 0,
+    "ln-exercise-htlc-outputs": 0,
     "ln-exercise-offered-htlc-script": 0,
     "ln-exercise-received-htlc-script": 0,
     "ln-exercise-htlc-timeout-tx": 0,
     "ln-exercise-htlc-success-tx": 0,
     "ln-exercise-finalize-htlc-timeout": 0,
     "ln-exercise-finalize-htlc-success": 0,
+    // TX Generator IDs (answer 0 = successful generation)
+    "gen-funding": 0,
+    "gen-commitment": 0,
+    "gen-htlc-commitment": 0,
+    "gen-htlc-timeout": 0,
   };
   const CHECKPOINT_REWARD_SATS = parseInt(process.env.CHECKPOINT_REWARD_SATS || "21", 10);
   const CHECKPOINT_REWARD_MSATS = CHECKPOINT_REWARD_SATS * 1000;
@@ -626,7 +630,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.cancelPendingWithdrawalsForCheckpoint(user.id, checkpointId);
 
       // Exercises get the full reward amount; regular checkpoints get the smaller amount
-      const isExercise = checkpointId.startsWith("exercise-");
+      const isExercise = checkpointId.startsWith("exercise-") || checkpointId.startsWith("ln-exercise-") || checkpointId.startsWith("gen-");
       const rewardSats = isExercise ? REWARD_AMOUNT_SATS : CHECKPOINT_REWARD_SATS;
       const rewardMsats = rewardSats * 1000;
 

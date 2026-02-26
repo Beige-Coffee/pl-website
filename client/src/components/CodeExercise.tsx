@@ -12,6 +12,8 @@ import { closeBrackets, closeBracketsKeymap, autocompletion, completionKeymap } 
 import { lintKeymap } from "@codemirror/lint";
 import { runPythonTests, type TestResult } from "../lib/pyodide-runner";
 import { createPyodideCompletionSource, preloadCompletionContext, invalidateCompletionCache } from "../lib/pyodide-completions";
+import { signatureHints } from "../lib/signature-hint-extension";
+import { cleanErrorMessage } from "../lib/error-cleanup";
 import { QRCodeSVG } from "qrcode.react";
 import ExerciseFileBrowser from "./ExerciseFileBrowser";
 
@@ -126,7 +128,9 @@ interface CodeExerciseProps {
   fileLabel?: string;
   preamble?: string;
   setupCode?: string; // Hidden Python code executed but not shown in editor
-  priorExercises?: Array<{ id: string; solutionCode: string; starterCode: string }>;
+  crossGroupExercises?: Array<{ id: string; starterCode: string }>; // Standalone functions — before preamble
+  classMethodExercises?: Array<{ id: string; starterCode: string }>; // CKM class methods — after setupCode's class decl
+  priorInGroupExercises?: Array<{ id: string; starterCode: string }>; // Same-group priors — after preamble
   futureExercises?: Array<{ id: string; starterCode: string }>;
 }
 
@@ -148,7 +152,9 @@ export default function CodeExercise({
   fileLabel,
   preamble,
   setupCode,
-  priorExercises,
+  crossGroupExercises,
+  classMethodExercises,
+  priorInGroupExercises,
   futureExercises,
 }: CodeExerciseProps) {
   const dark = theme === "dark";
@@ -276,8 +282,27 @@ export default function CodeExercise({
   const assembleContext = useCallback((): string => {
     const parts: string[] = [];
     if (setupCode) parts.push(setupCode);
+    // Class method deps go right after setupCode (inside class ChannelKeyManager:)
+    for (const cm of classMethodExercises ?? []) {
+      try {
+        const saved = localStorage.getItem(`pl-exercise-${cm.id}`);
+        parts.push(saved ?? cm.starterCode);
+      } catch {
+        parts.push(cm.starterCode);
+      }
+    }
+    // Standalone cross-group deps go before the preamble
+    for (const cg of crossGroupExercises ?? []) {
+      try {
+        const saved = localStorage.getItem(`pl-exercise-${cg.id}`);
+        parts.push(saved ?? cg.starterCode);
+      } catch {
+        parts.push(cg.starterCode);
+      }
+    }
     if (preamble) parts.push(preamble);
-    for (const pe of priorExercises ?? []) {
+    // Prior in-group exercises go after preamble
+    for (const pe of priorInGroupExercises ?? []) {
       try {
         const saved = localStorage.getItem(`pl-exercise-${pe.id}`);
         parts.push(saved ?? pe.starterCode);
@@ -286,9 +311,10 @@ export default function CodeExercise({
       }
     }
     return parts.filter(Boolean).join("\n\n");
-  }, [setupCode, preamble, priorExercises]);
+  }, [setupCode, preamble, crossGroupExercises, classMethodExercises, priorInGroupExercises]);
 
-  // Assemble full code for test execution (setupCode + preamble + cross-group deps + prior + student + future stubs)
+  // Assemble full code for test execution
+  // Order: [setupCode] → [classMethodDeps] → [standaloneDeps] → [preamble] → [inGroupPriors] → [student] → [futureStubs]
   const assembleTestCode = useCallback((): string => {
     if (!hasGroupContext) {
       const studentCode = viewRef.current?.state.doc.toString() || "";
@@ -298,14 +324,34 @@ export default function CodeExercise({
 
     const parts: string[] = [];
 
-    // 1. Hidden setup code (registers `ln` module, not shown in editor)
+    // 1. Hidden setup code (registers `ln` module, may include `class ChannelKeyManager:`)
     if (setupCode) parts.push(setupCode);
 
-    // 2. Visible preamble (imports from ln, class declarations)
+    // 2. Class method cross-group deps (go right after setupCode's class declaration)
+    for (const cm of classMethodExercises ?? []) {
+      try {
+        const saved = localStorage.getItem(`pl-exercise-${cm.id}`);
+        parts.push(saved ?? cm.starterCode);
+      } catch {
+        parts.push(cm.starterCode);
+      }
+    }
+
+    // 3. Standalone cross-group deps (go BEFORE the preamble, at module level)
+    for (const cg of crossGroupExercises ?? []) {
+      try {
+        const saved = localStorage.getItem(`pl-exercise-${cg.id}`);
+        parts.push(saved ?? cg.starterCode);
+      } catch {
+        parts.push(cg.starterCode);
+      }
+    }
+
+    // 4. Visible preamble (imports from ln, class declarations)
     if (preamble) parts.push(preamble);
 
-    // 3. Prior exercises (cross-group deps + in-group): use saved code, fall back to starter code (not solution)
-    for (const pe of priorExercises ?? []) {
+    // 5. Prior in-group exercises (inside the class body if applicable)
+    for (const pe of priorInGroupExercises ?? []) {
       try {
         const saved = localStorage.getItem(`pl-exercise-${pe.id}`);
         parts.push(saved ?? pe.starterCode);
@@ -314,20 +360,20 @@ export default function CodeExercise({
       }
     }
 
-    // 4. Current exercise: extract from editor
+    // 6. Current exercise: extract from editor
     const range = viewRef.current?.state.field(editableRangeField);
     const editableCode = range
       ? viewRef.current?.state.doc.sliceString(range.from, range.to) || ""
       : viewRef.current?.state.doc.toString() || "";
     parts.push(editableCode);
 
-    // 5. Future exercises: include stubs so class body is complete
+    // 7. Future exercises: include stubs so class body is complete
     for (const fe of futureExercises ?? []) {
       parts.push(fe.starterCode);
     }
 
     return parts.filter(Boolean).join("\n\n");
-  }, [setupCode, preamble, priorExercises, futureExercises, hasGroupContext, assembleContext]);
+  }, [setupCode, preamble, crossGroupExercises, classMethodExercises, priorInGroupExercises, futureExercises, hasGroupContext, assembleContext]);
 
 
   // Stable completion source (created once)
@@ -357,7 +403,7 @@ export default function CodeExercise({
   // ── CodeMirror setup ────────────────────────────────────────────────────
 
   // Load only the student's editable code (not the full file)
-  const savedCode = useMemo(() => {
+  const getStudentCode = useCallback(() => {
     try {
       const saved = localStorage.getItem(storageKey);
       if (saved) return saved;
@@ -368,8 +414,8 @@ export default function CodeExercise({
   useEffect(() => {
     if (!editorRef.current) return;
 
-    // Assemble the full file with saved student code in the editable slot
-    const { code: fullFile, editableFrom, editableTo } = assembleFullFile(savedCode);
+    // Assemble the full file with fresh student code from localStorage
+    const { code: fullFile, editableFrom, editableTo } = assembleFullFile(getStudentCode());
 
     const extensions = [
       lineNumbers(),
@@ -389,6 +435,7 @@ export default function CodeExercise({
         activateOnTypingDelay: 100,
         override: [pyodideCompleteSource],
       }),
+      signatureHints(),
       rectangularSelection(),
       crosshairCursor(),
       highlightActiveLine(),
@@ -447,7 +494,6 @@ export default function CodeExercise({
           borderRight: dark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.08)",
         },
         ".cm-readonly-line": {
-          opacity: "0.45",
         },
       }),
     ];
@@ -528,6 +574,7 @@ export default function CodeExercise({
   const completedDisplay = alreadyCompleted || autoPaid;
 
   useEffect(() => {
+    if (allPassed) justCompletedRef.current = true;
     if (allPassed && sessionToken) {
       // Save completion server-side (independent of reward claim)
       fetch("/api/checkpoint/complete", {
@@ -561,6 +608,24 @@ export default function CodeExercise({
     }
   }, [allPassed]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Auto-pay for already-completed but unclaimed exercises ──────────────
+  const completedButUnclaimed = alreadyCompleted && (!claimInfo || claimInfo.amountSats === 0);
+  useEffect(() => {
+    if (justCompletedRef.current) return;
+    if (
+      completedButUnclaimed &&
+      !autoPaid &&
+      !autoPaySending &&
+      !claiming &&
+      !rewardK1 &&
+      authenticated &&
+      lightningAddress &&
+      sessionToken
+    ) {
+      handleClaimReward("address");
+    }
+  }, [completedButUnclaimed, authenticated, lightningAddress]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Run tests ────────────────────────────────────────────────────────────
 
   const handleRunTests = useCallback(async () => {
@@ -578,7 +643,33 @@ export default function CodeExercise({
       const passed = testResults.length > 0 && testResults.every((r) => r.passed);
       setAllPassed(passed);
     } catch (err: any) {
-      setRunError(err.message || "Unknown error");
+      // Calculate how many hidden lines precede student code
+      // Assembly order: setupCode → classMethodDeps → standaloneDeps → preamble → inGroupPriors → student
+      const countLines = (code: string) => code.split("\n").length;
+      const setupLines = countLines(setupCode || "");
+      const classMethodLines = (classMethodExercises ?? []).reduce((sum, cm) => {
+        try {
+          const code = localStorage.getItem(`pl-exercise-${cm.id}`) || cm.starterCode;
+          return sum + countLines(code) + 2;
+        } catch { return sum + countLines(cm.starterCode) + 2; }
+      }, 0);
+      const crossGroupLines = (crossGroupExercises ?? []).reduce((sum, cg) => {
+        try {
+          const code = localStorage.getItem(`pl-exercise-${cg.id}`) || cg.starterCode;
+          return sum + countLines(code) + 2;
+        } catch { return sum + countLines(cg.starterCode) + 2; }
+      }, 0);
+      const preambleLines = countLines(preamble || "");
+      const priorLines = (priorInGroupExercises ?? []).reduce((sum, pe) => {
+        try {
+          const code = localStorage.getItem(`pl-exercise-${pe.id}`) || pe.starterCode;
+          return sum + countLines(code) + 2;
+        } catch { return sum + countLines(pe.starterCode) + 2; }
+      }, 0);
+      const lineOffset = hasGroupContext
+        ? setupLines + 2 + classMethodLines + crossGroupLines + preambleLines + 2 + priorLines
+        : 0;
+      setRunError(cleanErrorMessage(err.message || "Unknown error", lineOffset));
     } finally {
       setRunning(false);
       setPyodideLoading(false);
@@ -587,13 +678,18 @@ export default function CodeExercise({
       const ctx = assembleContext();
       if (ctx) preloadCompletionContext(ctx);
     }
-  }, [running, data.testCode, assembleTestCode, assembleContext]);
+  }, [running, data.testCode, assembleTestCode, assembleContext, setupCode, preamble, crossGroupExercises, classMethodExercises, priorInGroupExercises, hasGroupContext]);
 
   // ── Claim reward ─────────────────────────────────────────────────────────
+
+  const claimingRef = useRef(false);
+  const justCompletedRef = useRef(false);
 
   const handleClaimReward = useCallback(
     async (claimMethod?: "address" | "lnurl") => {
       if (!sessionToken) return;
+      if (claimingRef.current) return;
+      claimingRef.current = true;
       setClaiming(true);
       setClaimError(null);
       setShowClaimChoice(false);
@@ -651,6 +747,7 @@ export default function CodeExercise({
         setAutoPaySending(false);
         setClaimError("Network error. Please try again.");
       } finally {
+        claimingRef.current = false;
         setClaiming(false);
       }
     },
@@ -687,11 +784,12 @@ export default function CodeExercise({
   // ── Send to Scratchpad ──────────────────────────────────────────────────
 
   const [showScratchpadTooltip, setShowScratchpadTooltip] = useState(false);
+  const [showExpandTooltip, setShowExpandTooltip] = useState(false);
   const [scratchpadSent, setScratchpadSent] = useState(false);
 
   const handleSendToScratchpad = useCallback(() => {
     window.dispatchEvent(
-      new CustomEvent("scratchpad-send-code", { detail: data.sampleCode })
+      new CustomEvent("scratchpad-send-code", { detail: data.sampleCode || "" })
     );
     setScratchpadSent(true);
     setTimeout(() => setScratchpadSent(false), 2000);
@@ -716,23 +814,41 @@ export default function CodeExercise({
           dangerouslySetInnerHTML={{ __html: data.description }}
         />
         {!expanded && (
-          <button
-            onClick={() => setExpanded(true)}
-            className={`font-pixel text-base border-2 px-2.5 py-0.5 transition-all shrink-0 mt-0.5 leading-none ${
-              dark
-                ? "border-[#2a3552] bg-[#0f1930] text-slate-400 hover:text-slate-200 hover:bg-[#132043]"
-                : "border-border bg-background text-foreground/60 hover:text-foreground hover:bg-secondary"
-            }`}
-            title="Expand to full screen"
-            data-testid="button-expand-exercise"
-          >
-            +
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => setExpanded(true)}
+              onMouseEnter={() => setShowExpandTooltip(true)}
+              onMouseLeave={() => setShowExpandTooltip(false)}
+              className={`font-pixel text-base border-2 px-2.5 py-0.5 transition-all shrink-0 mt-0.5 leading-none cursor-pointer ${
+                dark
+                  ? "border-[#2a3552] bg-[#0f1930] text-slate-400 hover:text-slate-200 hover:bg-[#132043]"
+                  : "border-border bg-background text-foreground/60 hover:text-foreground hover:bg-secondary"
+              }`}
+              data-testid="button-expand-exercise"
+            >
+              +
+            </button>
+            {showExpandTooltip && (
+              <div
+                className={`absolute top-full right-0 mt-1.5 w-44 px-3 py-2 text-xs z-50 border ${
+                  dark
+                    ? "bg-[#0f1930] border-[#2a3552] text-slate-300"
+                    : "bg-white border-border text-foreground/80"
+                } shadow-lg`}
+                style={sansFont}
+              >
+                Expand editor to full screen
+                <div className={`absolute bottom-full right-3 w-0 h-0 border-l-[5px] border-r-[5px] border-b-[5px] border-l-transparent border-r-transparent ${
+                  dark ? "border-b-[#2a3552]" : "border-b-border"
+                }`} />
+              </div>
+            )}
+          </div>
         )}
       </div>
 
       {/* File browser button (shown when group context is available) */}
-      {(fileLabel || (priorExercises && priorExercises.length > 0) || preamble) && (
+      {(fileLabel || (priorInGroupExercises && priorInGroupExercises.length > 0) || (crossGroupExercises && crossGroupExercises.length > 0) || (classMethodExercises && classMethodExercises.length > 0) || preamble) && (
         <div className="mb-2">
           <button
             type="button"
@@ -771,7 +887,7 @@ export default function CodeExercise({
             data-testid="button-send-to-scratchpad"
           >
             <span style={{ fontFamily: "monospace", fontSize: "10px", lineHeight: 1 }}>{"{ }"}</span>
-            <span>{scratchpadSent ? "SENT!" : "SCRATCHPAD"}</span>
+            <span>{scratchpadSent ? "SENT!" : "SEND TO SANDBOX"}</span>
           </button>
           {showScratchpadTooltip && !scratchpadSent && (
             <div
@@ -873,7 +989,7 @@ export default function CodeExercise({
           {([
             { key: "conceptual" as const, label: "Conceptual" },
             { key: "steps" as const, label: "Steps" },
-            { key: "code" as const, label: "Code" },
+            { key: "code" as const, label: "Answer" },
           ]).map(({ key, label }) => (
             <button
               key={key}
@@ -885,7 +1001,7 @@ export default function CodeExercise({
                   : `${cardBorder} ${dark ? "text-slate-400 hover:text-[#FFD700] hover:border-[#FFD700]/40" : "text-foreground/50 hover:text-[#9a7200] hover:border-[#b8860b]/40"}`
               }`}
             >
-              Hint: {label}
+              {label}
             </button>
           ))}
         </div>
@@ -1035,7 +1151,7 @@ export default function CodeExercise({
             <div className="mt-2 font-pixel text-xs text-red-400">{claimError}</div>
           )}
 
-          {rewardLnurl && withdrawalStatus === "pending" && (
+          {rewardLnurl && !autoPaySending && withdrawalStatus === "pending" && (
             <div className="mt-4 text-center">
               <div className={`font-pixel text-sm mb-3 ${goldText}`}>
                 SCAN TO CLAIM {rewardAmountSats} SATS
@@ -1128,7 +1244,7 @@ export default function CodeExercise({
               {autoPaySending ? `SENDING ${rewardAmountSats} SATS...` : "GENERATING QR..."}
             </div>
           )}
-          {rewardLnurl && withdrawalStatus !== "paid" && (
+          {rewardLnurl && !autoPaySending && withdrawalStatus !== "paid" && (
             <div className="px-5 py-4 text-center">
               {withdrawalStatus === "expired" ? (
                 <div>

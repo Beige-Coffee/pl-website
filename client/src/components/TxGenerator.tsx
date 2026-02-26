@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { runPythonCode } from "../lib/pyodide-runner";
 import type { TxGeneratorConfig } from "../data/tx-generators";
 
@@ -12,6 +12,9 @@ const sansFont = {
 interface TxGeneratorProps {
   config: TxGeneratorConfig;
   theme: "light" | "dark";
+  sessionToken?: string | null;
+  isCompleted?: boolean;
+  onCompleted?: (id: string, amountSats?: number) => void;
 }
 
 /** Parse stdout lines in format "LABEL: value" */
@@ -26,7 +29,7 @@ function parseOutput(stdout: string): Record<string, string> {
   return result;
 }
 
-export default function TxGenerator({ config, theme }: TxGeneratorProps) {
+export default function TxGenerator({ config, theme, sessionToken, isCompleted, onCompleted }: TxGeneratorProps) {
   const dark = theme === "dark";
   const isUtility = config.type === "utility";
 
@@ -36,6 +39,9 @@ export default function TxGenerator({ config, theme }: TxGeneratorProps) {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+
+  // Track whether we've already submitted completion this session
+  const completionSubmittedRef = useRef(false);
 
   // Auto-fill inputs from localStorage
   useEffect(() => {
@@ -52,6 +58,22 @@ export default function TxGenerator({ config, theme }: TxGeneratorProps) {
       setInputs((prev) => ({ ...filled, ...prev }));
     }
   }, [config.inputs]);
+
+  // Restore previously saved output from localStorage
+  useEffect(() => {
+    if (!config.notebookSaves) return;
+    const restored: Record<string, string> = {};
+    for (const save of config.notebookSaves) {
+      try {
+        const val = localStorage.getItem(STORAGE_PREFIX + save.key);
+        if (val) restored[save.parseLabel] = val;
+      } catch {}
+    }
+    if (Object.keys(restored).length > 0) {
+      setOutputParsed(restored);
+      setSaved(true);
+    }
+  }, [config.notebookSaves]);
 
   const handleRun = useCallback(async () => {
     if (running) return;
@@ -96,12 +118,32 @@ export default function TxGenerator({ config, theme }: TxGeneratorProps) {
         window.dispatchEvent(new CustomEvent("tx-notebook-updated"));
         setSaved(true);
       }
+
+      // Submit completion for tracked generators
+      if (sessionToken && onCompleted && !completionSubmittedRef.current && !isCompleted) {
+        completionSubmittedRef.current = true;
+        try {
+          await fetch("/api/checkpoint/complete", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${sessionToken}`,
+            },
+            body: JSON.stringify({ checkpointId: config.id, answer: 0 }),
+          });
+          onCompleted(config.id);
+        } catch (e) {
+          // Non-critical; don't block the UI
+          console.warn("Generator completion save failed:", e);
+          completionSubmittedRef.current = false;
+        }
+      }
     } catch (err: any) {
       setError(err.message || "Unknown error");
     } finally {
       setRunning(false);
     }
-  }, [running, config, inputs]);
+  }, [running, config, inputs, sessionToken, isCompleted, onCompleted]);
 
   const handleCopy = useCallback((label: string, value: string) => {
     navigator.clipboard.writeText(value);
@@ -182,22 +224,26 @@ export default function TxGenerator({ config, theme }: TxGeneratorProps) {
     );
   }
 
+  const completed = isCompleted || completionSubmittedRef.current;
+  const completedBorder = completed ? (dark ? "border-[#FFD700]/60" : "border-[#b8860b]/60") : panelBorder;
+
   // ── Transaction layout (full card) ──
   return (
-    <div className={`my-6 border-2 ${panelBorder} ${panelBg} overflow-hidden`} style={sansFont}>
+    <div className={`my-6 border-2 ${completedBorder} ${panelBg} overflow-hidden`} style={sansFont}>
       {/* Header */}
       <div className={`flex items-center gap-2 px-4 py-2.5 border-b ${panelBorder} ${headerBg}`}>
         <span className={`font-pixel text-[10px] ${goldText}`}>TX GENERATOR</span>
-        <span className={`text-sm font-semibold ${dark ? "text-slate-200" : "text-black/80"}`}>
+        <span className={`text-lg font-semibold ${dark ? "text-slate-200" : "text-black/80"}`}>
           {config.title}
         </span>
+        {completed && (
+          <span className={`ml-auto font-pixel text-[10px] ${goldText}`}>COMPLETE</span>
+        )}
       </div>
 
       {/* Body */}
       <div className="px-4 py-3">
-        <p className={`text-sm mb-3 leading-relaxed ${mutedText}`}>
-          {config.description}
-        </p>
+        <p className={`text-base mb-3 leading-relaxed ${mutedText}`} dangerouslySetInnerHTML={{ __html: config.description }} />
 
         {/* Input fields */}
         {config.inputs.length > 0 && (
@@ -232,9 +278,10 @@ export default function TxGenerator({ config, theme }: TxGeneratorProps) {
         <button
           onClick={handleRun}
           disabled={running}
-          className={`font-pixel text-[10px] px-5 py-2.5 border-2 transition-all cursor-pointer
+          className={`font-semibold text-sm px-5 py-2.5 border-2 transition-all cursor-pointer
             ${goldBorder} ${dark ? "bg-[#0f1930] text-[#FFD700] hover:bg-[#132043]" : "bg-[#f0e8d8] text-[#9a7200] hover:bg-[#e8dcc8]"}
             disabled:opacity-50 disabled:cursor-not-allowed active:scale-95`}
+          style={sansFont}
         >
           {running ? "Generating..." : config.buttonLabel}
         </button>
@@ -248,57 +295,60 @@ export default function TxGenerator({ config, theme }: TxGeneratorProps) {
 
         {/* Output */}
         {outputParsed && !error && (
-          <div className={`mt-3 border ${panelBorder} ${outputBg} px-3 py-3`}>
+          <div className={`mt-3 border ${panelBorder} ${outputBg} px-4 py-4`}>
             {outputParsed.TXID && (
-              <div className="mb-2">
-                <div className="flex items-center justify-between mb-1">
-                  <span className={`text-[10px] font-semibold uppercase ${labelColor}`}>
+              <div className="mb-3">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className={`text-sm font-bold uppercase ${labelColor}`}>
                     Transaction ID
                   </span>
                   <button
                     onClick={() => handleCopy("TXID", outputParsed.TXID!)}
-                    className={`font-pixel text-[9px] px-2 py-0.5 border ${panelBorder} ${mutedText} hover:opacity-80 transition-opacity cursor-pointer`}
+                    className={`text-xs font-semibold px-2.5 py-1 border ${panelBorder} ${mutedText} hover:opacity-80 transition-opacity cursor-pointer`}
+                    style={sansFont}
                   >
                     {copied === "TXID" ? "COPIED" : "COPY"}
                   </button>
                 </div>
-                <code className={`text-xs font-mono break-all ${dark ? "text-slate-200" : "text-black/80"}`}>
+                <code className={`text-base font-mono break-all ${dark ? "text-slate-200" : "text-black/80"}`}>
                   {outputParsed.TXID}
                 </code>
               </div>
             )}
             {outputParsed.HEX && (
-              <div className="mb-2">
-                <div className="flex items-center justify-between mb-1">
-                  <span className={`text-[10px] font-semibold uppercase ${labelColor}`}>
+              <div className="mb-3">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className={`text-sm font-bold uppercase ${labelColor}`}>
                     Raw Transaction Hex
                   </span>
                   <button
                     onClick={() => handleCopy("HEX", outputParsed.HEX!)}
-                    className={`font-pixel text-[9px] px-2 py-0.5 border ${panelBorder} ${mutedText} hover:opacity-80 transition-opacity cursor-pointer`}
+                    className={`text-xs font-semibold px-2.5 py-1 border ${panelBorder} ${mutedText} hover:opacity-80 transition-opacity cursor-pointer`}
+                    style={sansFont}
                   >
                     {copied === "HEX" ? "COPIED" : "COPY"}
                   </button>
                 </div>
-                <code className={`text-[11px] font-mono break-all leading-relaxed ${dark ? "text-slate-300" : "text-black/70"}`}>
+                <code className={`text-base font-mono break-all leading-relaxed ${dark ? "text-slate-300" : "text-black/70"}`}>
                   {outputParsed.HEX}
                 </code>
               </div>
             )}
             {outputParsed.RESULT && (
-              <div className="mb-2">
-                <div className="flex items-center justify-between mb-1">
-                  <span className={`text-[10px] font-semibold uppercase ${labelColor}`}>
+              <div className="mb-3">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className={`text-sm font-bold uppercase ${labelColor}`}>
                     Result
                   </span>
                   <button
                     onClick={() => handleCopy("RESULT", outputParsed.RESULT!)}
-                    className={`font-pixel text-[9px] px-2 py-0.5 border ${panelBorder} ${mutedText} hover:opacity-80 transition-opacity cursor-pointer`}
+                    className={`text-xs font-semibold px-2.5 py-1 border ${panelBorder} ${mutedText} hover:opacity-80 transition-opacity cursor-pointer`}
+                    style={sansFont}
                   >
                     {copied === "RESULT" ? "COPIED" : "COPY"}
                   </button>
                 </div>
-                <code className={`text-xs font-mono break-all ${dark ? "text-emerald-300" : "text-emerald-800"}`}>
+                <code className={`text-base font-mono break-all ${dark ? "text-emerald-300" : "text-emerald-800"}`}>
                   {outputParsed.RESULT}
                 </code>
               </div>

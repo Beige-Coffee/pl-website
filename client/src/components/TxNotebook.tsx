@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { usePanelState } from "../hooks/use-panel-state";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -76,12 +77,24 @@ const MIN_WIDTH = 300;
 
 export default function TxNotebook({ theme }: TxNotebookProps) {
   const dark = theme === "dark";
-  const [isOpen, setIsOpen] = useState(false);
+  const panel = usePanelState();
+  const [isOpenRaw, setIsOpenRaw] = useState(false);
   const [values, setValues] = useState<Record<FieldKey, string>>(loadAll);
   const [width, setWidth] = useState(DEFAULT_WIDTH);
   const draggingRef = useRef(false);
   const startXRef = useRef(0);
   const startWidthRef = useRef(0);
+
+  const isOpen = isOpenRaw;
+  const setIsOpen = useCallback((val: boolean | ((prev: boolean) => boolean)) => {
+    setIsOpenRaw((prev) => {
+      const next = typeof val === "function" ? val(prev) : val;
+      if (!next && prev) {
+        panel.closePanel("notebook");
+      }
+      return next;
+    });
+  }, [panel]);
 
   // Persist changes to localStorage
   function handleChange(key: FieldKey, val: string) {
@@ -96,15 +109,21 @@ export default function TxNotebook({ theme }: TxNotebookProps) {
       const delta = startXRef.current - e.clientX;
       const newWidth = Math.max(MIN_WIDTH, Math.min(startWidthRef.current + delta, window.innerWidth * 0.75));
       setWidth(newWidth);
+      panel.resizePanel(newWidth);
     };
-    const onUp = () => { draggingRef.current = false; };
+    const onUp = () => {
+      if (draggingRef.current) {
+        draggingRef.current = false;
+        panel.stopDragging();
+      }
+    };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
     return () => {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
     };
-  }, []);
+  }, [panel]);
 
   // Refresh when a TxGenerator saves new values
   useEffect(() => {
@@ -113,16 +132,19 @@ export default function TxNotebook({ theme }: TxNotebookProps) {
     return () => window.removeEventListener("tx-notebook-updated", refresh);
   }, []);
 
-  // Mutual exclusion
+  // Sync with panel context when open or width changes
   useEffect(() => {
-    const close = () => { if (isOpen) setIsOpen(false); };
-    window.addEventListener("scratchpad-open", close);
-    window.addEventListener("node-terminal-open", close);
-    return () => {
-      window.removeEventListener("scratchpad-open", close);
-      window.removeEventListener("node-terminal-open", close);
-    };
-  }, [isOpen]);
+    if (isOpen) {
+      panel.openPanel("notebook", width);
+    }
+  }, [isOpen, width]);
+
+  // Close if another panel takes over
+  useEffect(() => {
+    if (isOpen && panel.activePanel !== null && panel.activePanel !== "notebook") {
+      setIsOpenRaw(false);
+    }
+  }, [isOpen, panel.activePanel]);
 
   // ── Theme ────────────────────────────────────────────────────────────────
   const goldBorder = dark ? "border-[#FFD700]" : "border-[#b8860b]";
@@ -159,6 +181,7 @@ export default function TxNotebook({ theme }: TxNotebookProps) {
           draggingRef.current = true;
           startXRef.current = e.clientX;
           startWidthRef.current = width;
+          panel.startDragging();
           e.preventDefault();
         }}
       />

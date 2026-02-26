@@ -20,10 +20,12 @@ import { CollapsibleItem, CollapsibleGroup } from "../components/CollapsibleSect
 import { LIGHTNING_EXERCISES } from "../data/lightning-exercises";
 import { getExerciseGroupContext } from "../lib/exercise-groups";
 import TxGenerator from "../components/TxGenerator";
+import FundingTxDiagram from "../components/FundingTxDiagram";
 import NotebookRef from "../components/NotebookRef";
 import { TX_GENERATORS } from "../data/tx-generators";
 import { Tooltip, TooltipTrigger, TooltipContent } from "../components/ui/tooltip";
 import { preloadWorker } from "../lib/pyodide-runner";
+import { PanelStateContext, usePanelStateProvider, usePanelState } from "../hooks/use-panel-state";
 
 // --- Checkpoint questions embedded inline in tutorial chapters ---
 const CHECKPOINT_QUESTIONS: Record<string, {
@@ -498,7 +500,7 @@ const CHAPTER_REQUIREMENTS: Record<string, {
   "channel-keys": { checkpoints: [], exercises: ["ln-exercise-channel-key-manager"] },
   "payment-channels-overview": { checkpoints: ["payment-channels-scaling"], exercises: [] },
   "funding-script": { checkpoints: ["funding-multisig", "pubkey-sorting"], exercises: ["ln-exercise-funding-script"] },
-  "funding-transaction": { checkpoints: [], exercises: ["ln-exercise-funding-tx"] },
+  "funding-transaction": { checkpoints: [], exercises: ["ln-exercise-funding-tx", "gen-funding"] },
   "refund-transactions": { checkpoints: [], exercises: [] },
   "revocable-transactions": { checkpoints: ["asymmetric-commits"], exercises: [] },
   "signing": { checkpoints: [], exercises: ["ln-exercise-sign-input"] },
@@ -510,15 +512,15 @@ const CHAPTER_REQUIREMENTS: Record<string, {
   "obscured-commitment": { checkpoints: [], exercises: ["ln-exercise-obscure-factor", "ln-exercise-obscured-commitment"] },
   "commitment-assembly": { checkpoints: [], exercises: ["ln-exercise-commitment-outputs", "ln-exercise-commitment-tx"] },
   "commitment-finalization": { checkpoints: [], exercises: ["ln-exercise-finalize-commitment"] },
-  "get-commitment-tx": { checkpoints: [], exercises: [] },
+  "get-commitment-tx": { checkpoints: [], exercises: ["gen-commitment"] },
   "routing-payments": { checkpoints: [], exercises: [] },
   "htlc-introduction": { checkpoints: ["offered-vs-received"], exercises: [] },
   "simple-htlc": { checkpoints: [], exercises: [] },
   "htlcs-on-lightning": { checkpoints: [], exercises: [] },
   "channel-state-updates": { checkpoints: [], exercises: [] },
   "offered-htlcs": { checkpoints: ["offered-vs-received"], exercises: ["ln-exercise-offered-htlc-script", "ln-exercise-htlc-timeout-tx", "ln-exercise-finalize-htlc-timeout"] },
-  "get-htlc-commitment": { checkpoints: [], exercises: [] },
-  "get-htlc-timeout": { checkpoints: [], exercises: [] },
+  "get-htlc-commitment": { checkpoints: [], exercises: ["gen-htlc-commitment"] },
+  "get-htlc-timeout": { checkpoints: [], exercises: ["gen-htlc-timeout"] },
   "received-htlcs": { checkpoints: ["htlc-timeout-vs-success"], exercises: ["ln-exercise-received-htlc-script", "ln-exercise-htlc-success-tx", "ln-exercise-finalize-htlc-success"] },
   "htlc-fees-dust": { checkpoints: ["htlc-dust", "p2wsh-wrapping"], exercises: ["ln-exercise-htlc-outputs"] },
   "closing-channels": { checkpoints: [], exercises: [] },
@@ -569,7 +571,7 @@ function idxOf(id: string) {
 function introMarkdown() {
   return `# Programming Lightning: Intro to Payment Channels
 
-Welcome to **Programming Lightning**, a comprehensive course that teaches you how to program a Lightning payment channel from scratch! By the end of this course, your implementation will pass some of the major [BOLT 3 Test Vectors](https://github.com/lightning/bolts/blob/master/03-transactions.md#appendix-b-funding-transaction-test-vectors). Test Vectors are pre-defined inputs and expected outputs that verify your code correctly implements the protocol. Passing these tests means your implementation is on its way to being interoperable with production Lightning implementations like LND, LDK, Eclair, and Core Lightning.
+Welcome to **Programming Lightning**, a comprehensive course that teaches you how to program a Lightning payment channel from scratch! By the end of this course, your implementation will pass some of the major [BOLT 3 Test Vectors](https://github.com/lightning/bolts/blob/master/03-transactions.md#appendix-b-funding-transaction-test-vectors). Test Vectors are pre-defined inputs and expected outputs that verify your code correctly implements the protocol. Passing these tests means your implementation is on its way to being interoperable with production Lightning implementations like LND, LDK, Eclair, and Core Lightning, and you'll be on your way to becoming a Lightning Zen Master 😎
 
 In this course, we'll build payment channels from the ground up, starting with our Lightning wallet. Once we have that foundation, we'll explore the simplest possible payment channel and examine its limitations. Then, step by step, we'll address each weakness and build toward a full, BOLT-compliant Lightning channel in all its glory.
 
@@ -582,7 +584,7 @@ This course assumes you have already read or understand the information containe
 
 > ### ⚡ Earn sats as you learn! ⚡
 >
-> This tutorial rewards you with real bitcoin for successfully completing checkpoint quizzes and coding exercises. You can redeem your earnings using any wallet that supports LNURL withdrawal, or link a Lightning Address to your account for automatic payouts. Sign in first, then click the profile icon in the top-right corner to set it up!`;
+> This tutorial rewards you with real bitcoin for successfully completing checkpoint quizzes and coding exercises. You can redeem your earnings using any wallet that supports LNURL withdrawal, or link a Lightning Address to your account for automatic payouts. Sign in first, then click the [profile icon](#open-profile) in the top-right corner to set it up!`;
 }
 
 function ProfileDropdown({
@@ -996,6 +998,45 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
     setMobileNavOpen(false);
   }, [location, setMobileNavOpen]);
 
+  // Save scroll position per chapter so it persists across refresh
+  const prevChapterRef = useRef(activeId);
+  useEffect(() => {
+    // Save previous chapter's scroll position before switching
+    if (prevChapterRef.current !== activeId) {
+      try {
+        sessionStorage.setItem(
+          `pl-scroll-${prevChapterRef.current}`,
+          String(window.scrollY),
+        );
+      } catch {}
+      prevChapterRef.current = activeId;
+      // Scroll to top for new chapter navigation
+      window.scrollTo(0, 0);
+    }
+  }, [activeId]);
+
+  // Restore scroll position on page load (refresh)
+  useEffect(() => {
+    const saved = sessionStorage.getItem(`pl-scroll-${activeId}`);
+    if (!saved) return;
+    const y = parseInt(saved, 10);
+    if (isNaN(y) || y <= 0) return;
+    // Delay to allow markdown content to render
+    const timer = setTimeout(() => window.scrollTo(0, y), 300);
+    return () => clearTimeout(timer);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Continuously save scroll position for current chapter
+  useEffect(() => {
+    const onScroll = () => {
+      try {
+        sessionStorage.setItem(`pl-scroll-${activeId}`, String(window.scrollY));
+      } catch {}
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [activeId]);
+
   const [theme, setTheme] = useState<"light" | "dark">("light");
 
   useEffect(() => {
@@ -1071,8 +1112,17 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
     }
   }, [sidebarCollapsed]);
 
+  // Panel state for content-compressing side panels
+  const panelState = usePanelStateProvider();
+  const panelPadding = panelState.activePanel ? panelState.panelWidth : 0;
+  const panelTransition = panelState.isDragging ? "none" : "padding-right 300ms cubic-bezier(0.4, 0, 0.2, 1)";
+
   return (
-    <div className={`min-h-screen ${t.pageBg} ${t.pageText}`} data-theme={theme}>
+    <PanelStateContext.Provider value={panelState}>
+    <div
+      className={`min-h-screen ${t.pageBg} ${t.pageText}`}
+      data-theme={theme}
+    >
       <div className={`w-full border-b-4 ${t.headerBorder} ${t.headerBg} px-2 py-2 md:px-4 md:py-3 flex items-center justify-between sticky top-0 z-50`}>
         <div className="flex items-center gap-2 md:gap-3">
           <button
@@ -1190,6 +1240,7 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
         </div>
       </div>
 
+      <div style={{ paddingRight: panelPadding, transition: panelTransition }}>
       <div
         className="mx-auto w-full max-w-7xl grid gap-0"
         style={{
@@ -1340,16 +1391,22 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
                                       </TooltipContent>
                                     </Tooltip>
                                   ))}
-                                  {showExercises && reqs.exercises.map((exId) => (
-                                    <Tooltip key={exId} delayDuration={200}>
-                                      <TooltipTrigger asChild>
-                                        <span className={`font-mono text-[13px] leading-none font-bold cursor-default ${completedIds.has(exId) ? lit : dim}`}>&lt;/&gt;</span>
-                                      </TooltipTrigger>
-                                      <TooltipContent side="bottom" className={tooltipClass}>
-                                        {completedIds.has(exId) ? "Exercise complete" : "Coding exercise"}
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  ))}
+                                  {showExercises && reqs.exercises.map((exId) => {
+                                    const isGen = exId.startsWith("gen-");
+                                    return (
+                                      <Tooltip key={exId} delayDuration={200}>
+                                        <TooltipTrigger asChild>
+                                          <span className={`font-mono text-[13px] leading-none font-bold cursor-default ${completedIds.has(exId) ? lit : dim}`}>{isGen ? ">_" : "</>"}
+                                          </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="bottom" className={tooltipClass}>
+                                          {completedIds.has(exId)
+                                            ? (isGen ? "Generator complete" : "Exercise complete")
+                                            : (isGen ? "TX Generator" : "Coding exercise")}
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    );
+                                  })}
                                 </span>
                               );
                             })()}
@@ -1432,14 +1489,23 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
           </div>
         </main>
       </div>
+      </div>
 
       {tutorialMode === "code" && (
         <>
           {/* Tools dropdown */}
-          <div ref={toolsRef} className="fixed top-[78px] right-4 z-40 hidden lg:block">
+          <div
+            ref={toolsRef}
+            className={`fixed top-[78px] z-40 hidden lg:block border-2 rounded ${
+              theme === "dark"
+                ? "bg-[#0b1220] border-[#2a3552]"
+                : "bg-[#fdf9f2] border-[#d4c9a8]"
+            }`}
+            style={{ right: panelPadding + 16, transition: panelTransition, padding: "8px 10px" }}
+          >
             <button
               onClick={() => setToolsOpen((o) => !o)}
-              className={`flex items-center gap-2 font-pixel text-[14px] tracking-wide mb-2 cursor-pointer ${
+              className={`flex items-center gap-2 font-pixel text-[14px] tracking-wide cursor-pointer ${
                 theme === "dark"
                   ? "text-slate-300 hover:text-slate-100"
                   : "text-foreground/70 hover:text-foreground"
@@ -1448,35 +1514,37 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
               <span>TOOLS</span>
               <span className={`text-[10px] transition-transform ${toolsOpen ? "" : "-rotate-90"}`}>&#9660;</span>
             </button>
-            <div className={`h-[2px] ${theme === "dark" ? "bg-[#1f2a44]" : "bg-border"}`} />
             {toolsOpen && (
-              <div className="grid gap-1 mt-2">
-                {[
-                  { label: "Scratchpad", event: "scratchpad-open" },
-                  { label: "Bitcoin Node", event: "node-terminal-open" },
-                  { label: "Files", event: null },
-                  { label: "Transactions", event: "tx-notebook-open" },
-                ].map((item) => (
-                  <button
-                    key={item.label}
-                    onClick={() => {
-                      if (item.event) {
-                        window.dispatchEvent(new CustomEvent(item.event));
-                      } else {
-                        setFileBrowserOpen(true);
-                      }
-                      setToolsOpen(false);
-                    }}
-                    className={`w-full text-left border-2 px-3 py-1.5 transition-colors cursor-pointer ${
-                      theme === "dark"
-                        ? "bg-[#0f1930] border-[#2a3552] text-slate-100 hover:bg-[#132043]"
-                        : "bg-card border-border text-foreground hover:bg-secondary"
-                    }`}
-                  >
-                    <div className="text-[16px] leading-snug" style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>{item.label}</div>
-                  </button>
-                ))}
-              </div>
+              <>
+                <div className={`h-[2px] mt-2 mb-2 ${theme === "dark" ? "bg-[#2a3552]" : "bg-[#d4c9a8]"}`} />
+                <div className="grid gap-1">
+                  {[
+                    { label: "Scratchpad", event: "scratchpad-open" },
+                    { label: "Bitcoin Node", event: "node-terminal-open" },
+                    { label: "Files", event: null },
+                    { label: "Transactions", event: "tx-notebook-open" },
+                  ].map((item) => (
+                    <button
+                      key={item.label}
+                      onClick={() => {
+                        if (item.event) {
+                          window.dispatchEvent(new CustomEvent(item.event));
+                        } else {
+                          setFileBrowserOpen(true);
+                        }
+                        setToolsOpen(false);
+                      }}
+                      className={`w-full text-left border-2 px-3 py-1.5 transition-colors cursor-pointer ${
+                        theme === "dark"
+                          ? "bg-[#0f1930] border-[#2a3552] text-slate-100 hover:bg-[#132043]"
+                          : "bg-card border-[#d4c9a8] text-foreground hover:bg-secondary"
+                      }`}
+                    >
+                      <div className="text-[16px] leading-snug" style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>{item.label}</div>
+                    </button>
+                  ))}
+                </div>
+              </>
             )}
           </div>
 
@@ -1504,6 +1572,7 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
         />
       )}
     </div>
+    </PanelStateContext.Provider>
   );
 }
 
@@ -3015,12 +3084,12 @@ function ChapterContent({
       .replaceAll("src='./tutorial_images/", "src='/lightning_tutorial/tutorial_images/");
   };
 
-  // Move exercise intro text (last ⚡ heading + prose immediately before <code-intro>) into the card.
-  // Uses a callback to find the last ⚡ heading before each <code-intro>, capturing only
-  // the content from that final heading to the tag (not earlier ⚡ headings).
+  // Move exercise intro text (heading + prose immediately before <code-intro>) into the card.
+  // Uses a callback to find the last heading before each <code-intro>, capturing only
+  // the content from that final heading to the tag (not earlier headings).
   const extractExerciseIntros = (raw: string) => {
     return raw.replace(
-      /(#{2,3}\s+⚡️?\s+[^\n]*\n)((?:(?!#{2,3}\s+⚡️?)[\s\S])*?)(<code-intro\s)/g,
+      /(#{2,3}\s+⚡️?\s*[^\n]*\n)((?:(?!#{2,3}\s)[\s\S])*?)(<code-intro\s)/g,
       (_match, _heading, content, tag) => {
         const trimmed = content.trim();
         if (!trimmed) return tag;
@@ -3063,17 +3132,45 @@ function ChapterContent({
               />
             );
           },
-          a: ({ ...props }) => (
-            <a
-              {...props}
-              className={`underline underline-offset-4 hover:opacity-80 ${
-                theme === "dark" ? "text-[#ffd700]" : "text-[#b8860b]"
-              }`}
-              target={props.href?.startsWith("http") ? "_blank" : undefined}
-              rel={props.href?.startsWith("http") ? "noreferrer" : undefined}
-              data-testid="link-markdown"
-            />
-          ),
+          a: ({ ...props }) => {
+            if (props.href === "#open-profile") {
+              return (
+                <a
+                  {...props}
+                  href="#"
+                  onClick={(e: React.MouseEvent) => { e.preventDefault(); onOpenProfile(); }}
+                  className={`underline underline-offset-4 hover:opacity-80 cursor-pointer ${
+                    theme === "dark" ? "text-[#ffd700]" : "text-[#b8860b]"
+                  }`}
+                  data-testid="link-open-profile"
+                />
+              );
+            }
+            if (props.href === "#open-bitcoin-node") {
+              return (
+                <a
+                  {...props}
+                  href="#"
+                  onClick={(e: React.MouseEvent) => { e.preventDefault(); window.dispatchEvent(new CustomEvent("node-terminal-open")); }}
+                  className={`underline underline-offset-4 hover:opacity-80 cursor-pointer ${
+                    theme === "dark" ? "text-[#ffd700]" : "text-[#b8860b]"
+                  }`}
+                  data-testid="link-open-bitcoin-node"
+                />
+              );
+            }
+            return (
+              <a
+                {...props}
+                className={`underline underline-offset-4 hover:opacity-80 ${
+                  theme === "dark" ? "text-[#ffd700]" : "text-[#b8860b]"
+                }`}
+                target={props.href?.startsWith("http") ? "_blank" : undefined}
+                rel={props.href?.startsWith("http") ? "noreferrer" : undefined}
+                data-testid="link-markdown"
+              />
+            );
+          },
           code: ({ className, children, ...props }: any) => (
             <code
               className={`${className ?? ""} rounded px-1 py-0.5 ${theme === "dark" ? "bg-white/10" : "bg-black/[0.03]"}`}
@@ -3090,7 +3187,7 @@ function ChapterContent({
             const isCompleted = completedCheckpoints.some(c => c.checkpointId === cpId);
             return (
               <CollapsibleItem
-                title={cpData.question}
+                title="Knowledge Check"
                 completed={isCompleted}
                 theme={theme}
                 label="CHECKPOINT"
@@ -3104,6 +3201,8 @@ function ChapterContent({
                   explanation={cpData.explanation}
                   theme={theme}
                   authenticated={authenticated}
+                  emailVerified={emailVerified}
+                  pubkey={pubkey}
                   sessionToken={sessionToken}
                   lightningAddress={lightningAddress}
                   alreadyCompleted={isCompleted}
@@ -3160,137 +3259,123 @@ function ChapterContent({
               ? (allDone ? "text-green-400" : "text-[#FFD700]")
               : (allDone ? "text-green-700" : "text-[#9a7200]");
 
-            const exerciseContent = exerciseList.length === 1 ? (() => {
-              const ex = exerciseList[0];
+            // Decode intro prose if present
+            let introMdContent: string | null = null;
+            if (introMdEncoded) {
+              try {
+                introMdContent = decodeURIComponent(escape(atob(introMdEncoded)));
+              } catch {}
+            }
+
+            const renderExercise = (ex: { id: string; data: any }) => {
               const isCompleted = completedCheckpoints.some(c => c.checkpointId === ex.id);
               const ctx = getExerciseGroupContext(ex.id);
               return (
-                <CollapsibleItem
-                  title={ex.data.title}
-                  completed={isCompleted}
+                <CodeExercise
+                  exerciseId={ex.id}
+                  data={ex.data}
                   theme={theme}
-                  label="EXERCISE"
-                  storageKey={`pl-collapse-ex-${ex.id}`}
-                >
-                  <CodeExercise
-                    exerciseId={ex.id}
-                    data={ex.data}
-                    theme={theme}
-                    authenticated={authenticated}
-                    sessionToken={sessionToken}
-                    lightningAddress={lightningAddress}
-                    alreadyCompleted={isCompleted}
-                    claimInfo={completedCheckpoints.find(c => c.checkpointId === ex.id) || null}
-                    onLoginRequest={onLoginRequest}
-                    onCompleted={onCheckpointCompleted}
-                    getProgress={progress.getProgress}
-                    saveProgress={progress.saveProgress}
-                    fileLabel={ctx?.fileLabel}
-                    preamble={ctx?.preamble}
-                    setupCode={ctx?.setupCode}
-                    priorExercises={ctx?.priorExercises.map(pe => ({
-                      id: pe.id,
-                      solutionCode: LIGHTNING_EXERCISES[pe.id]?.hints.code ?? "",
-                      starterCode: LIGHTNING_EXERCISES[pe.id]?.starterCode ?? "",
-                    }))}
-                    futureExercises={ctx?.futureExercises.map(fe => ({
-                      id: fe.id,
-                      starterCode: LIGHTNING_EXERCISES[fe.id]?.starterCode ?? "",
-                    }))}
-                  />
-                </CollapsibleItem>
+                  authenticated={authenticated}
+                  sessionToken={sessionToken}
+                  lightningAddress={lightningAddress}
+                  alreadyCompleted={isCompleted}
+                  claimInfo={completedCheckpoints.find(c => c.checkpointId === ex.id) || null}
+                  onLoginRequest={onLoginRequest}
+                  onCompleted={onCheckpointCompleted}
+                  getProgress={progress.getProgress}
+                  saveProgress={progress.saveProgress}
+                  fileLabel={ctx?.fileLabel}
+                  preamble={ctx?.preamble}
+                  setupCode={ctx?.setupCode}
+                  crossGroupExercises={ctx?.crossGroupExercises.map(cg => ({
+                    id: cg.id,
+                    starterCode: LIGHTNING_EXERCISES[cg.id]?.starterCode ?? "",
+                  }))}
+                  classMethodExercises={ctx?.classMethodExercises.map(cm => ({
+                    id: cm.id,
+                    starterCode: LIGHTNING_EXERCISES[cm.id]?.starterCode ?? "",
+                  }))}
+                  priorInGroupExercises={ctx?.priorInGroupExercises.map(pe => ({
+                    id: pe.id,
+                    starterCode: LIGHTNING_EXERCISES[pe.id]?.starterCode ?? "",
+                  }))}
+                  futureExercises={ctx?.futureExercises.map(fe => ({
+                    id: fe.id,
+                    starterCode: LIGHTNING_EXERCISES[fe.id]?.starterCode ?? "",
+                  }))}
+                />
               );
-            })() : (
-              <CollapsibleGroup
-                heading={heading}
-                description={description}
-                completedCount={completedCount}
-                totalCount={exerciseList.length}
-                theme={theme}
-                storageKey={`pl-collapse-group-${ids.join("-")}`}
-              >
-                {exerciseList.map((ex: any) => {
-                  const isCompleted = completedCheckpoints.some(c => c.checkpointId === ex.id);
-                  const ctx = getExerciseGroupContext(ex.id);
-                  return (
-                    <CollapsibleItem
-                      key={ex.id}
-                      title={ex.data.title}
-                      completed={isCompleted}
-                      theme={theme}
-                      label="EXERCISE"
-                      storageKey={`pl-collapse-ex-${ex.id}`}
-                    >
-                      <CodeExercise
-                        exerciseId={ex.id}
-                        data={ex.data}
-                        theme={theme}
-                        authenticated={authenticated}
-                        sessionToken={sessionToken}
-                        lightningAddress={lightningAddress}
-                        alreadyCompleted={isCompleted}
-                        claimInfo={completedCheckpoints.find(c => c.checkpointId === ex.id) || null}
-                        onLoginRequest={onLoginRequest}
-                        onCompleted={onCheckpointCompleted}
-                        getProgress={progress.getProgress}
-                        saveProgress={progress.saveProgress}
-                        fileLabel={ctx?.fileLabel}
-                        preamble={ctx?.preamble}
-                        setupCode={ctx?.setupCode}
-                        priorExercises={ctx?.priorExercises.map(pe => ({
-                          id: pe.id,
-                          solutionCode: LIGHTNING_EXERCISES[pe.id]?.hints.code ?? "",
-                          starterCode: LIGHTNING_EXERCISES[pe.id]?.starterCode ?? "",
-                        }))}
-                        futureExercises={ctx?.futureExercises.map(fe => ({
-                          id: fe.id,
-                          starterCode: LIGHTNING_EXERCISES[fe.id]?.starterCode ?? "",
-                        }))}
-                      />
-                    </CollapsibleItem>
-                  );
-                })}
-              </CollapsibleGroup>
-            );
+            };
 
-            return (
-              <div className={`my-8 border-2 ${cardBorder} ${cardBg} relative overflow-hidden`}>
-                {/* Gold/green left accent bar */}
-                <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${accentBg}`} />
+            if (exerciseList.length === 1) {
+              const ex = exerciseList[0];
+              const isCompleted = completedCheckpoints.some(c => c.checkpointId === ex.id);
+              return (
+                <div className="my-8 relative exercise-accent-card">
+                  {/* Gold/green left accent bar */}
+                  <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${accentBg} z-10`} />
+                  <style>{`.exercise-accent-card > div { margin: 0 !important; }`}</style>
 
-                {/* Header */}
-                <div className={`flex items-center gap-2 px-5 pl-6 py-3 border-b ${
-                  isDark ? "border-[#2a3552]/50" : "border-[#e8dcc8]"
-                }`}>
-                  <span className="text-base">&#9889;</span>
-                  <span className={`font-pixel text-xs tracking-wide ${headerText}`}>
-                    CODING EXERCISE{exerciseList.length > 1 ? "S" : ""}
-                  </span>
-                  {allDone && (
-                    <span className={`font-pixel text-xs ${isDark ? "text-green-400" : "text-green-700"}`}>
-                      COMPLETE
-                    </span>
-                  )}
-                </div>
-
-                {/* Intro prose (moved from above the card) */}
-                {introMdEncoded && (() => {
-                  try {
-                    const introMd = decodeURIComponent(escape(atob(introMdEncoded)));
-                    return (
+                  {/* Collapsible exercise header */}
+                  <CollapsibleItem
+                    title={ex.data.title}
+                    completed={isCompleted}
+                    theme={theme}
+                    label="EXERCISE"
+                    storageKey={`pl-collapse-ex-${ex.id}`}
+                  >
+                    {/* Intro prose */}
+                    {introMdContent && (
                       <div className={`px-5 pl-6 pt-4 pb-2 noise-md noise-md-${theme}`}>
                         <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
-                          {rewriteTutorialImagePaths(introMd)}
+                          {rewriteTutorialImagePaths(introMdContent)}
                         </ReactMarkdown>
                       </div>
-                    );
-                  } catch { return null; }
-                })()}
-
-                {/* Exercise content */}
-                <div className="px-4 pl-5 py-4">
-                  {exerciseContent}
+                    )}
+                    {renderExercise(ex)}
+                  </CollapsibleItem>
                 </div>
+              );
+            }
+
+            return (
+              <div className="my-8 relative exercise-accent-card">
+                {/* Gold/green left accent bar */}
+                <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${accentBg} z-10`} />
+                <style>{`.exercise-accent-card > div { margin: 0 !important; }`}</style>
+
+                <CollapsibleGroup
+                  heading={heading}
+                  description={description}
+                  completedCount={completedCount}
+                  totalCount={exerciseList.length}
+                  theme={theme}
+                  storageKey={`pl-collapse-group-${ids.join("-")}`}
+                >
+                  {/* Intro prose */}
+                  {introMdContent && (
+                    <div className={`px-5 pl-6 pt-2 pb-2 noise-md noise-md-${theme}`}>
+                      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+                        {rewriteTutorialImagePaths(introMdContent)}
+                      </ReactMarkdown>
+                    </div>
+                  )}
+                  {exerciseList.map((ex: any) => {
+                    const isCompleted = completedCheckpoints.some(c => c.checkpointId === ex.id);
+                    return (
+                      <CollapsibleItem
+                        key={ex.id}
+                        title={ex.data.title}
+                        completed={isCompleted}
+                        theme={theme}
+                        label="EXERCISE"
+                        storageKey={`pl-collapse-ex-${ex.id}`}
+                      >
+                        {renderExercise(ex)}
+                      </CollapsibleItem>
+                    );
+                  })}
+                </CollapsibleGroup>
               </div>
             );
           },
@@ -3298,7 +3383,22 @@ function ChapterContent({
             const genId = String(id || "");
             const genConfig = TX_GENERATORS[genId];
             if (!genConfig) return null;
-            return <TxGenerator config={genConfig} theme={theme} />;
+            const isTracked = genConfig.type === "transaction";
+            const genCompleted = isTracked && completedCheckpoints.some(
+              (c) => c.checkpointId === genId
+            );
+            return (
+              <TxGenerator
+                config={genConfig}
+                theme={theme}
+                sessionToken={isTracked ? sessionToken : undefined}
+                isCompleted={genCompleted}
+                onCompleted={isTracked ? onCheckpointCompleted : undefined}
+              />
+            );
+          },
+          "funding-diagram": () => {
+            return <FundingTxDiagram theme={theme} />;
           },
           "notebook-ref": ({ storageKey, label }: any) => {
             return <NotebookRef storageKey={String(storageKey)} label={String(label || storageKey)} theme={theme} />;
@@ -3338,6 +3438,8 @@ function ChapterContent({
                   rewardSats={210}
                   theme={theme}
                   authenticated={authenticated}
+                  emailVerified={emailVerified}
+                  pubkey={pubkey}
                   sessionToken={sessionToken}
                   lightningAddress={lightningAddress}
                   alreadyCompleted={isGroupCompleted}

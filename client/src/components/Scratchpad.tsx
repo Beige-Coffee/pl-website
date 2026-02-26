@@ -6,6 +6,9 @@ import { oneDark } from "@codemirror/theme-one-dark";
 import { defaultKeymap, indentWithTab } from "@codemirror/commands";
 import { basicSetup } from "codemirror";
 import { runPythonCode, preloadWorker, type CodeRunResult } from "../lib/pyodide-runner";
+import { signatureHints } from "../lib/signature-hint-extension";
+import { cleanErrorMessage } from "../lib/error-cleanup";
+import { usePanelState } from "../hooks/use-panel-state";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -46,15 +49,30 @@ interface ScratchpadProps {
 
 export default function Scratchpad({ theme }: ScratchpadProps) {
   const dark = theme === "dark";
+  const panel = usePanelState();
 
   // State
-  const [isOpen, setIsOpen] = useState(() => {
+  const [isOpen, setIsOpenRaw] = useState(() => {
     try {
       return localStorage.getItem(STORAGE_KEY_OPEN) === "1";
     } catch {
       return false;
     }
   });
+
+  // Wrap setIsOpen to sync with panel context
+  const setIsOpen = useCallback((val: boolean | ((prev: boolean) => boolean)) => {
+    setIsOpenRaw((prev) => {
+      const next = typeof val === "function" ? val(prev) : val;
+      if (next && !prev) {
+        // Opening — read current width from state
+        // (we'll call openPanel after state updates via effect)
+      } else if (!next && prev) {
+        panel.closePanel("scratchpad");
+      }
+      return next;
+    });
+  }, [panel]);
   const [output, setOutput] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
@@ -109,6 +127,20 @@ export default function Scratchpad({ theme }: ScratchpadProps) {
     } catch {}
   }, [splitRatio]);
 
+  // Sync with panel context when open or width changes
+  useEffect(() => {
+    if (isOpen) {
+      panel.openPanel("scratchpad", panelWidth);
+    }
+  }, [isOpen, panelWidth]);
+
+  // Close if another panel takes over
+  useEffect(() => {
+    if (isOpen && panel.activePanel !== null && panel.activePanel !== "scratchpad") {
+      setIsOpenRaw(false);
+    }
+  }, [isOpen, panel.activePanel]);
+
   // Pre-warm Pyodide
   useEffect(() => {
     if (isOpen) preloadWorker();
@@ -118,15 +150,16 @@ export default function Scratchpad({ theme }: ScratchpadProps) {
   useEffect(() => {
     const handler = (e: Event) => {
       const code = (e as CustomEvent<string>).detail;
-      if (!code) return;
-      if (viewRef.current) {
-        viewRef.current.dispatch({
-          changes: { from: 0, to: viewRef.current.state.doc.length, insert: code },
-        });
-        try { localStorage.setItem(STORAGE_KEY_CODE, code); } catch {}
-      } else {
-        pendingCodeRef.current = code;
-        try { localStorage.setItem(STORAGE_KEY_CODE, code); } catch {}
+      if (code) {
+        if (viewRef.current) {
+          viewRef.current.dispatch({
+            changes: { from: 0, to: viewRef.current.state.doc.length, insert: code },
+          });
+          try { localStorage.setItem(STORAGE_KEY_CODE, code); } catch {}
+        } else {
+          pendingCodeRef.current = code;
+          try { localStorage.setItem(STORAGE_KEY_CODE, code); } catch {}
+        }
       }
       if (!isOpen) {
         window.dispatchEvent(new CustomEvent("scratchpad-open"));
@@ -142,6 +175,7 @@ export default function Scratchpad({ theme }: ScratchpadProps) {
   const handleWidthDragStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     isDraggingWidth.current = true;
+    panel.startDragging();
     const startX = e.clientX;
     const startWidth = panelWidth;
 
@@ -151,10 +185,12 @@ export default function Scratchpad({ theme }: ScratchpadProps) {
       const maxW = window.innerWidth * MAX_WIDTH_RATIO;
       const newWidth = Math.min(maxW, Math.max(MIN_WIDTH, startWidth + delta));
       setPanelWidth(newWidth);
+      panel.resizePanel(newWidth);
     };
 
     const onUp = () => {
       isDraggingWidth.current = false;
+      panel.stopDragging();
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
       document.body.style.cursor = "";
@@ -165,7 +201,7 @@ export default function Scratchpad({ theme }: ScratchpadProps) {
     document.body.style.userSelect = "none";
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
-  }, [panelWidth]);
+  }, [panelWidth, panel]);
 
   // ── Vertical drag (editor/terminal split) ──────────────────────────────
 
@@ -233,6 +269,7 @@ export default function Scratchpad({ theme }: ScratchpadProps) {
     const extensions = [
       basicSetup,
       python(),
+      signatureHints(),
       keymap.of([
         ...defaultKeymap,
         indentWithTab,
@@ -315,10 +352,10 @@ export default function Scratchpad({ theme }: ScratchpadProps) {
       const result: CodeRunResult = await runPythonCode(code);
       setOutput(result.output);
       if (result.error) {
-        setError(result.error);
+        setError(cleanErrorMessage(result.error, 0));
       }
     } catch (err: any) {
-      setError(err.message || "Unknown error");
+      setError(cleanErrorMessage(err.message || "Unknown error", 0));
     } finally {
       setRunning(false);
       setPyLoading(false);
@@ -344,18 +381,7 @@ export default function Scratchpad({ theme }: ScratchpadProps) {
   const textMuted = dark ? "text-slate-400" : "text-black/60";
   const dragHandleColor = dark ? "bg-[#2a3552] hover:bg-[#FFD700]/40" : "bg-[#d4c9a8] hover:bg-[#b8860b]/30";
 
-  // Mutual exclusion: close when NodeTerminal or TxNotebook opens
-  useEffect(() => {
-    const handler = () => { if (isOpen) setIsOpen(false); };
-    window.addEventListener("node-terminal-open", handler);
-    window.addEventListener("tx-notebook-open", handler);
-    return () => {
-      window.removeEventListener("node-terminal-open", handler);
-      window.removeEventListener("tx-notebook-open", handler);
-    };
-  }, [isOpen]);
-
-  // Listen for open event from Tools menu
+  // Listen for open event from Tools menu (and "send to scratchpad" opens)
   useEffect(() => {
     const handler = () => setIsOpen(true);
     window.addEventListener("scratchpad-open", handler);
@@ -397,8 +423,8 @@ export default function Scratchpad({ theme }: ScratchpadProps) {
 
       {/* Description */}
       <div className={`px-3 py-2 border-b ${panelBorder} shrink-0`} style={sansFont}>
-        <div className={`text-[11px] leading-snug ${textMuted}`}>
-          Sandbox for experimenting with Python. Click <span className={`font-pixel text-[9px] ${goldText}`}>SCRATCHPAD</span> in any exercise to load sample inputs here.
+        <div className={`text-[15px] leading-snug ${textMuted}`}>
+          Sandbox for experimenting with Python. Click <span className={`font-pixel text-[11px] ${goldText}`}>SEND TO SANDBOX</span> in any exercise to load sample inputs here.
         </div>
       </div>
 

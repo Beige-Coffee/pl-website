@@ -299,7 +299,7 @@ Let's get started.
 
 > ### ⚡ Earn sats as you learn! ⚡
 >
-> This tutorial rewards you with real bitcoin for successfully completing checkpoint quizzes throughout the course. You can redeem your earnings using any wallet that supports LNURL withdrawal, or link a Lightning Address to your account for automatic payouts. Sign in first, then click the profile icon in the top-right corner to set it up!`;
+> This tutorial rewards you with real bitcoin for successfully completing checkpoint quizzes throughout the course. You can redeem your earnings using any wallet that supports LNURL withdrawal, or link a Lightning Address to your account for automatic payouts. Sign in first, then click the [profile icon](#open-profile) in the top-right corner to set it up!`;
 }
 
 function ProfileDropdown({
@@ -2663,17 +2663,32 @@ function ChapterContent({
               />
             );
           },
-          a: ({ ...props }) => (
-            <a
-              {...props}
-              className={`underline underline-offset-4 hover:opacity-80 ${
-                theme === "dark" ? "text-[#ffd700]" : "text-[#b8860b]"
-              }`}
-              target={props.href?.startsWith("http") ? "_blank" : undefined}
-              rel={props.href?.startsWith("http") ? "noreferrer" : undefined}
-              data-testid="link-markdown"
-            />
-          ),
+          a: ({ ...props }) => {
+            if (props.href === "#open-profile") {
+              return (
+                <a
+                  {...props}
+                  href="#"
+                  onClick={(e: React.MouseEvent) => { e.preventDefault(); onOpenProfile(); }}
+                  className={`underline underline-offset-4 hover:opacity-80 cursor-pointer ${
+                    theme === "dark" ? "text-[#ffd700]" : "text-[#b8860b]"
+                  }`}
+                  data-testid="link-open-profile"
+                />
+              );
+            }
+            return (
+              <a
+                {...props}
+                className={`underline underline-offset-4 hover:opacity-80 ${
+                  theme === "dark" ? "text-[#ffd700]" : "text-[#b8860b]"
+                }`}
+                target={props.href?.startsWith("http") ? "_blank" : undefined}
+                rel={props.href?.startsWith("http") ? "noreferrer" : undefined}
+                data-testid="link-markdown"
+              />
+            );
+          },
           code: ({ className, children, ...props }: any) => (
             <code
               className={`${className ?? ""} rounded px-1 py-0.5 ${theme === "dark" ? "bg-white/10" : "bg-black/[0.03]"}`}
@@ -2728,75 +2743,89 @@ function ChapterContent({
               completedCheckpoints.some(c => c.checkpointId === e.id)
             ).length;
 
-            // Single exercise: render as a single CollapsibleItem (no nesting)
+            const allDone = completedCount === exerciseList.length;
+            const isDark = theme === "dark";
+            const accentBg = allDone
+              ? (isDark ? "bg-green-500" : "bg-green-600")
+              : (isDark ? "bg-[#FFD700]" : "bg-[#b8860b]");
+
+            // Single exercise: render as a single CollapsibleItem with accent bar
             if (exerciseList.length === 1) {
               const ex = exerciseList[0];
               const isCompleted = completedCheckpoints.some(c => c.checkpointId === ex.id);
               return (
-                <CollapsibleItem
-                  title={ex.data.title}
-                  completed={isCompleted}
-                  theme={theme}
-                  label="EXERCISE"
-                  storageKey={`pl-collapse-ex-${ex.id}`}
-                >
-                  <CodeExercise
-                    exerciseId={ex.id}
-                    data={ex.data}
+                <div className="my-8 relative exercise-accent-card">
+                  <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${accentBg} z-10`} />
+                  <style>{`.exercise-accent-card > div { margin: 0 !important; }`}</style>
+                  <CollapsibleItem
+                    title={ex.data.title}
+                    completed={isCompleted}
                     theme={theme}
-                    authenticated={authenticated}
-                    sessionToken={sessionToken}
-                    lightningAddress={lightningAddress}
-                    alreadyCompleted={isCompleted}
-                    claimInfo={completedCheckpoints.find(c => c.checkpointId === ex.id) || null}
-                    onLoginRequest={onLoginRequest}
-                    onCompleted={onCheckpointCompleted}
-                    getProgress={getProgress}
-                    saveProgress={saveProgress}
-                  />
-                </CollapsibleItem>
+                    label="EXERCISE"
+                    storageKey={`pl-collapse-ex-${ex.id}`}
+                  >
+                    <CodeExercise
+                      exerciseId={ex.id}
+                      data={ex.data}
+                      theme={theme}
+                      authenticated={authenticated}
+                      sessionToken={sessionToken}
+                      lightningAddress={lightningAddress}
+                      alreadyCompleted={isCompleted}
+                      claimInfo={completedCheckpoints.find(c => c.checkpointId === ex.id) || null}
+                      onLoginRequest={onLoginRequest}
+                      onCompleted={onCheckpointCompleted}
+                      getProgress={getProgress}
+                      saveProgress={saveProgress}
+                    />
+                  </CollapsibleItem>
+                </div>
               );
             }
 
-            // Multiple exercises: render as CollapsibleGroup with nested CollapsibleItems
+            // Multiple exercises: render as CollapsibleGroup with accent bar
             return (
-              <CollapsibleGroup
-                heading={heading}
-                description={description}
-                completedCount={completedCount}
-                totalCount={exerciseList.length}
-                theme={theme}
-                storageKey={`pl-collapse-group-${ids.join("-")}`}
-              >
-                {exerciseList.map((ex: any) => {
-                  const isCompleted = completedCheckpoints.some(c => c.checkpointId === ex.id);
-                  return (
-                    <CollapsibleItem
-                      key={ex.id}
-                      title={ex.data.title}
-                      completed={isCompleted}
-                      theme={theme}
-                      label="EXERCISE"
-                      storageKey={`pl-collapse-ex-${ex.id}`}
-                    >
-                      <CodeExercise
-                        exerciseId={ex.id}
-                        data={ex.data}
+              <div className="my-8 relative exercise-accent-card">
+                <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${accentBg} z-10`} />
+                <style>{`.exercise-accent-card > div { margin: 0 !important; }`}</style>
+                <CollapsibleGroup
+                  heading={heading}
+                  description={description}
+                  completedCount={completedCount}
+                  totalCount={exerciseList.length}
+                  theme={theme}
+                  storageKey={`pl-collapse-group-${ids.join("-")}`}
+                >
+                  {exerciseList.map((ex: any) => {
+                    const isCompleted = completedCheckpoints.some(c => c.checkpointId === ex.id);
+                    return (
+                      <CollapsibleItem
+                        key={ex.id}
+                        title={ex.data.title}
+                        completed={isCompleted}
                         theme={theme}
-                        authenticated={authenticated}
-                        sessionToken={sessionToken}
-                        lightningAddress={lightningAddress}
-                        alreadyCompleted={isCompleted}
-                        claimInfo={completedCheckpoints.find(c => c.checkpointId === ex.id) || null}
-                        onLoginRequest={onLoginRequest}
-                        onCompleted={onCheckpointCompleted}
-                        getProgress={getProgress}
-                        saveProgress={saveProgress}
-                      />
-                    </CollapsibleItem>
-                  );
-                })}
-              </CollapsibleGroup>
+                        label="EXERCISE"
+                        storageKey={`pl-collapse-ex-${ex.id}`}
+                      >
+                        <CodeExercise
+                          exerciseId={ex.id}
+                          data={ex.data}
+                          theme={theme}
+                          authenticated={authenticated}
+                          sessionToken={sessionToken}
+                          lightningAddress={lightningAddress}
+                          alreadyCompleted={isCompleted}
+                          claimInfo={completedCheckpoints.find(c => c.checkpointId === ex.id) || null}
+                          onLoginRequest={onLoginRequest}
+                          onCompleted={onCheckpointCompleted}
+                          getProgress={getProgress}
+                          saveProgress={saveProgress}
+                        />
+                      </CollapsibleItem>
+                    );
+                  })}
+                </CollapsibleGroup>
+              </div>
             );
           },
           "code-outro": ({ text }: any) => {

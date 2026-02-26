@@ -12,6 +12,7 @@ import { execPythonSilent, getPythonCompletions, isWorkerCreated } from "./pyodi
 // ─── Static fallback completions (available instantly, before Pyodide loads) ─
 
 const STATIC_COMPLETIONS: Record<string, Completion[]> = {
+  // ── Module-level completions ───────────────────────────────────────────
   hashlib: [
     { label: "sha256", type: "function" },
     { label: "sha512", type: "function" },
@@ -54,7 +55,159 @@ const STATIC_COMPLETIONS: Record<string, Completion[]> = {
     { label: "is_witness_v0_keyhash", type: "function" },
     { label: "is_witness_v0_scripthash", type: "function" },
   ],
+  ec: [
+    { label: "generate_private_key", type: "function" },
+    { label: "derive_private_key", type: "function" },
+    { label: "SECP256K1", type: "function" },
+    { label: "ECDH", type: "function" },
+    { label: "EllipticCurvePublicKey", type: "class" },
+  ],
+  SigningKey: [
+    { label: "from_string", type: "function" },
+    { label: "from_pem", type: "function" },
+    { label: "from_der", type: "function" },
+  ],
+  Encoding: [
+    { label: "X962", type: "property" },
+    { label: "PEM", type: "property" },
+    { label: "DER", type: "property" },
+    { label: "Raw", type: "property" },
+  ],
+  PublicFormat: [
+    { label: "CompressedPoint", type: "property" },
+    { label: "UncompressedPoint", type: "property" },
+    { label: "SubjectPublicKeyInfo", type: "property" },
+  ],
 };
+
+// ── Instance-type completions ────────────────────────────────────────────
+// These match when the user types `variable.` and we can infer the type
+// from how the variable was assigned in the current document.
+
+const INSTANCE_COMPLETIONS: Record<string, Completion[]> = {
+  // ecdsa SigningKey instances
+  SigningKey: [
+    { label: "sign_digest", type: "function", detail: "Sign a hash digest" },
+    { label: "sign", type: "function", detail: "Sign data" },
+    { label: "sign_deterministic", type: "function", detail: "Deterministic sign" },
+    { label: "get_verifying_key", type: "function", detail: "Get public key" },
+    { label: "to_string", type: "function", detail: "Raw private key bytes" },
+    { label: "to_pem", type: "function", detail: "PEM-encoded key" },
+    { label: "privkey", type: "property" },
+    { label: "curve", type: "property" },
+  ],
+  // BIP32 HD key instances
+  BIP32: [
+    { label: "get_privkey_from_path", type: "function", detail: "Derive privkey" },
+    { label: "get_pubkey_from_path", type: "function", detail: "Derive pubkey" },
+    { label: "get_xpriv", type: "function" },
+    { label: "get_xpub", type: "function" },
+  ],
+  // Hash objects (hashlib.sha256(), etc.)
+  hash: [
+    { label: "digest", type: "function", detail: "Get hash as bytes" },
+    { label: "hexdigest", type: "function", detail: "Get hash as hex string" },
+    { label: "update", type: "function", detail: "Feed more data" },
+    { label: "copy", type: "function" },
+    { label: "digest_size", type: "property" },
+    { label: "block_size", type: "property" },
+    { label: "name", type: "property" },
+  ],
+  // HMAC objects
+  hmac: [
+    { label: "digest", type: "function", detail: "Get HMAC as bytes" },
+    { label: "hexdigest", type: "function", detail: "Get HMAC as hex string" },
+    { label: "update", type: "function", detail: "Feed more data" },
+    { label: "copy", type: "function" },
+  ],
+  // cryptography ec private key
+  ec_private_key: [
+    { label: "public_key", type: "function", detail: "Get public key" },
+    { label: "exchange", type: "function", detail: "ECDH key exchange" },
+    { label: "sign", type: "function", detail: "Sign data" },
+    { label: "private_numbers", type: "function" },
+    { label: "private_bytes", type: "function" },
+    { label: "curve", type: "property" },
+    { label: "key_size", type: "property" },
+  ],
+  // cryptography ec public key
+  ec_public_key: [
+    { label: "public_bytes", type: "function", detail: "Serialize to bytes" },
+    { label: "public_numbers", type: "function" },
+    { label: "verify", type: "function" },
+    { label: "curve", type: "property" },
+    { label: "key_size", type: "property" },
+  ],
+  // bytes
+  bytes: [
+    { label: "hex", type: "function", detail: "Convert to hex string" },
+    { label: "decode", type: "function" },
+    { label: "startswith", type: "function" },
+    { label: "endswith", type: "function" },
+    { label: "count", type: "function" },
+    { label: "find", type: "function" },
+    { label: "replace", type: "function" },
+    { label: "split", type: "function" },
+    { label: "strip", type: "function" },
+    { label: "join", type: "function" },
+  ],
+  // int
+  int: [
+    { label: "to_bytes", type: "function", detail: "Convert to bytes" },
+    { label: "from_bytes", type: "function", detail: "Create from bytes" },
+    { label: "bit_length", type: "function" },
+  ],
+};
+
+// Patterns that map constructor calls to instance types
+const TYPE_PATTERNS: Array<{ pattern: RegExp; type: string }> = [
+  { pattern: /SigningKey\.from_string\b/, type: "SigningKey" },
+  { pattern: /SigningKey\.from_pem\b/, type: "SigningKey" },
+  { pattern: /SigningKey\.from_der\b/, type: "SigningKey" },
+  { pattern: /SigningKey\(/, type: "SigningKey" },
+  { pattern: /BIP32\.from_seed\b/, type: "BIP32" },
+  { pattern: /hashlib\.sha256\b/, type: "hash" },
+  { pattern: /hashlib\.sha512\b/, type: "hash" },
+  { pattern: /hashlib\.sha1\b/, type: "hash" },
+  { pattern: /hashlib\.new\b/, type: "hash" },
+  { pattern: /hmac\.new\b/, type: "hmac" },
+  { pattern: /hmac\.HMAC\b/, type: "hmac" },
+  { pattern: /ec\.generate_private_key\b/, type: "ec_private_key" },
+  { pattern: /ec\.derive_private_key\b/, type: "ec_private_key" },
+  { pattern: /\.public_key\(\)/, type: "ec_public_key" },
+  { pattern: /int\.from_bytes\b/, type: "int" },
+  { pattern: /\.to_bytes\b/, type: "bytes" },
+  { pattern: /\.digest\(\)/, type: "bytes" },
+  { pattern: /\.hexdigest\(\)/, type: "bytes" },
+  { pattern: /\.hex\(\)/, type: "bytes" },
+  { pattern: /privkey_to_pubkey\b/, type: "bytes" },
+  { pattern: /hash160\b/, type: "bytes" },
+  { pattern: /b'/, type: "bytes" },
+  { pattern: /b"/, type: "bytes" },
+  { pattern: /bytes\.fromhex\b/, type: "bytes" },
+  { pattern: /lx\(/, type: "bytes" },
+];
+
+/**
+ * Try to infer the type of a variable by scanning the document for its
+ * assignment (e.g., `key = SigningKey.from_string(...)` → SigningKey instance).
+ */
+function inferTypeFromDoc(varName: string, doc: string): string | null {
+  // Look for `varName = <something>` pattern
+  const escapedVar = varName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const assignRe = new RegExp(`${escapedVar}\\s*=\\s*(.+)`, "g");
+  let lastMatch: string | null = null;
+  let m: RegExpExecArray | null;
+  while ((m = assignRe.exec(doc)) !== null) {
+    lastMatch = m[1];
+  }
+  if (!lastMatch) return null;
+
+  for (const { pattern, type } of TYPE_PATTERNS) {
+    if (pattern.test(lastMatch)) return type;
+  }
+  return null;
+}
 
 // ─── Cache + state ──────────────────────────────────────────────────────────
 
@@ -145,6 +298,18 @@ export function createPyodideCompletionSource() {
     const staticItems = STATIC_COMPLETIONS[objExpr];
     if (staticItems) {
       return { from, options: staticItems, validFor: /^\w*$/ };
+    }
+
+    // Fall back to type inference: scan the document for how this variable
+    // was assigned and offer instance methods for the inferred type.
+    const docText = context.state.doc.toString();
+    const inferredType = inferTypeFromDoc(objExpr, docText);
+    if (inferredType) {
+      const instanceItems = INSTANCE_COMPLETIONS[inferredType];
+      if (instanceItems) {
+        cache.set(objExpr, instanceItems);
+        return { from, options: instanceItems, validFor: /^\w*$/ };
+      }
     }
 
     return null;

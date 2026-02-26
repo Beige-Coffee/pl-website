@@ -21,6 +21,12 @@ export interface CompletionItem {
   type: "function" | "variable";
 }
 
+export interface SignatureResult {
+  name: string;
+  params: string;
+  description: string;
+}
+
 // ---------------------------------------------------------------------------
 // Inline Web Worker source (avoids a separate file that Vite may struggle with)
 // ---------------------------------------------------------------------------
@@ -82,6 +88,28 @@ const WORKER_SRC = [
   "      // ── Exec mode: run code silently (no stdout capture, no test harness) ──",
   "      await pyodide.runPythonAsync(code);",
   '      self.postMessage({ id, type: "exec_result" });',
+  "      return;",
+  "    }",
+  "",
+  '    if (mode === "signature") {',
+  "      // ── Signature mode: get function signature via inspect ──",
+  '      const script = [',
+  '        "import json as _json",',
+  '        "import inspect as _inspect",',
+  '        "_sig_result = \\"null\\"",',
+  '        "try:",',
+  '        "    _obj = eval(" + JSON.stringify(expression) + ")",',
+  '        "    _sig = _inspect.signature(_obj)",',
+  '        "    _name = getattr(_obj, \\"__name__\\", " + JSON.stringify(expression) + ")",',
+  '        "    _doc = (getattr(_obj, \\"__doc__\\", \\"\\") or \\"\\").split(\\"\\\\n\\")[0].strip()",',
+  '        "    _sig_result = _json.dumps({\\"name\\": str(_name), \\"params\\": str(_sig), \\"description\\": _doc[:120]})",',
+  '        "except Exception:",',
+  '        "    _sig_result = \\"null\\"",',
+  '        "_sig_result",',
+  "      ].join('\\n');",
+  "      const result = await pyodide.runPythonAsync(script);",
+  "      const parsed = JSON.parse(result);",
+  '      self.postMessage({ id, type: "signature_result", signature: parsed });',
   "      return;",
   "    }",
   "",
@@ -164,7 +192,7 @@ function getWorker(): Worker {
   if (!worker) {
     worker = new Worker(workerURL);
     worker.onmessage = (e) => {
-      const { id, type, results, message, output, error, items } = e.data;
+      const { id, type, results, message, output, error, items, signature } = e.data;
       const entry = pending.get(id);
       if (!entry) return;
       pending.delete(id);
@@ -177,6 +205,8 @@ function getWorker(): Worker {
         entry.resolve(undefined);
       } else if (type === "complete_result") {
         entry.resolve(items as CompletionItem[]);
+      } else if (type === "signature_result") {
+        entry.resolve(signature);
       } else {
         entry.reject(new Error(message));
       }
@@ -264,6 +294,27 @@ export async function getPythonCompletions(expression: string): Promise<Completi
     }, COMPLETION_TIMEOUT_MS);
     pending.set(id, { resolve, reject, timer });
     w.postMessage({ id, expression, mode: "complete" });
+  });
+}
+
+const SIGNATURE_TIMEOUT_MS = 3_000;
+
+/**
+ * Introspect a Python expression and return its function signature.
+ * Returns `null` if the expression can't be evaluated or isn't callable.
+ * Used as a fallback when the static signature registry has no entry.
+ */
+export async function getPythonSignature(expression: string): Promise<SignatureResult | null> {
+  if (!worker) return null; // Don't create worker just for signature lookup
+  const w = getWorker();
+  const id = ++messageId;
+  return new Promise<SignatureResult | null>((resolve) => {
+    const timer = setTimeout(() => {
+      pending.delete(id);
+      resolve(null);
+    }, SIGNATURE_TIMEOUT_MS);
+    pending.set(id, { resolve, reject: () => resolve(null), timer });
+    w.postMessage({ id, expression, mode: "signature" });
   });
 }
 

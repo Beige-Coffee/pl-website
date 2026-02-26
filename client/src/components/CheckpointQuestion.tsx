@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { QRCodeSVG } from "qrcode.react";
 
 interface CheckpointQuestionProps {
@@ -144,6 +144,7 @@ export default function CheckpointQuestion({
     setSubmitted(true);
     setCorrect(true);
     setWrongAttempt(false);
+    justSubmittedRef.current = true;
 
     // Save completion server-side (independent of reward claim)
     if (sessionToken) {
@@ -165,8 +166,13 @@ export default function CheckpointQuestion({
     onCompleted(checkpointId);
   }, [selected, answer, authenticated, onLoginRequest, sessionToken, checkpointId, onCompleted]);
 
+  const claimingRef = useRef(false);
+  const justSubmittedRef = useRef(false);
+
   const handleClaimReward = useCallback(async (claimMethod?: "address" | "lnurl") => {
     if (!sessionToken) return;
+    if (claimingRef.current) return;
+    claimingRef.current = true;
     setClaiming(true);
     setClaimError(null);
     setShowClaimChoice(false);
@@ -222,6 +228,7 @@ export default function CheckpointQuestion({
       setAutoPaySending(false);
       setClaimError("Network error. Please try again.");
     } finally {
+      claimingRef.current = false;
       setClaiming(false);
     }
   }, [sessionToken, checkpointId, selected, onCompleted, lightningAddress]);
@@ -246,12 +253,31 @@ export default function CheckpointQuestion({
 
   // If completed but sats not yet claimed, auto-set submitted state so claim UI shows
   useEffect(() => {
+    if (justSubmittedRef.current) return;
     if (completedButUnclaimed && !submitted) {
       setSelected(answer);
       setSubmitted(true);
       setCorrect(true);
     }
   }, [completedButUnclaimed]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-claim reward via lightning address when correct answer is submitted
+  useEffect(() => {
+    if (
+      submitted &&
+      correct &&
+      !autoPaid &&
+      !autoPaySending &&
+      !claiming &&
+      !rewardK1 &&
+      (!alreadyCompleted || completedButUnclaimed) &&
+      canClaimRewards &&
+      lightningAddress &&
+      sessionToken
+    ) {
+      handleClaimReward("address");
+    }
+  }, [submitted, correct]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (alreadyCompleted && !rewardLnurl && !completedButUnclaimed) {
     return (
@@ -475,7 +501,7 @@ export default function CheckpointQuestion({
             </div>
           )}
 
-          {rewardLnurl && (
+          {rewardLnurl && !autoPaySending && (
             <div className="mt-4 text-center">
               {withdrawalStatus === "paid" ? (
                 <div>

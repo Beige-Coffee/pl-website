@@ -231,12 +231,27 @@ export function useAuth() {
   }, []);
 
   const markCheckpointCompleted = useCallback((checkpointId: string, amountSats?: number) => {
-    setAuth((a) => ({
-      ...a,
-      completedCheckpoints: a.completedCheckpoints.some(c => c.checkpointId === checkpointId)
-        ? a.completedCheckpoints
-        : [...a.completedCheckpoints, { checkpointId, amountSats: amountSats || 0, paidAt: new Date().toISOString() }],
-    }));
+    setAuth((a) => {
+      const existing = a.completedCheckpoints.find(c => c.checkpointId === checkpointId);
+      if (existing) {
+        // Update amountSats/paidAt if a reward was just claimed
+        if (amountSats && amountSats > 0 && existing.amountSats === 0) {
+          return {
+            ...a,
+            completedCheckpoints: a.completedCheckpoints.map(c =>
+              c.checkpointId === checkpointId
+                ? { ...c, amountSats, paidAt: new Date().toISOString() }
+                : c
+            ),
+          };
+        }
+        return a;
+      }
+      return {
+        ...a,
+        completedCheckpoints: [...a.completedCheckpoints, { checkpointId, amountSats: amountSats || 0, paidAt: new Date().toISOString() }],
+      };
+    });
   }, []);
 
   const setLightningAddress = useCallback(async (address: string | null) => {
