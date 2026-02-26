@@ -21,6 +21,7 @@ import { LIGHTNING_EXERCISES } from "../data/lightning-exercises";
 import { getExerciseGroupContext } from "../lib/exercise-groups";
 import TxGenerator from "../components/TxGenerator";
 import FundingTxDiagram from "../components/FundingTxDiagram";
+import FeedbackWidget from "../components/FeedbackWidget";
 import NotebookRef from "../components/NotebookRef";
 import { TX_GENERATORS } from "../data/tx-generators";
 import { Tooltip, TooltipTrigger, TooltipContent } from "../components/ui/tooltip";
@@ -1604,6 +1605,12 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
           <TxNotebook theme={theme} />
         </>
       )}
+
+      <FeedbackWidget
+        theme={theme}
+        chapterTitle={active.title}
+        sessionToken={auth.sessionToken}
+      />
 
       {showLoginModal && (
         <LoginModal

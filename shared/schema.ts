@@ -87,6 +87,26 @@ export const insertPageEventSchema = createInsertSchema(pageEvents).omit({ id: t
 export type InsertPageEvent = z.infer<typeof insertPageEventSchema>;
 export type PageEvent = typeof pageEvents.$inferSelect;
 
+export const feedback = pgTable("feedback", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id"),
+  category: text("category").notNull(),
+  message: text("message").notNull(),
+  screenshotBase64: text("screenshot_base64"),
+  pageUrl: text("page_url").notNull(),
+  chapterTitle: text("chapter_title"),
+  exerciseId: text("exercise_id"),
+  userAgent: text("user_agent"),
+  githubIssueUrl: text("github_issue_url"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertFeedbackSchema = createInsertSchema(feedback).omit({
+  id: true, createdAt: true, githubIssueUrl: true,
+});
+export type InsertFeedback = z.infer<typeof insertFeedbackSchema>;
+export type Feedback = typeof feedback.$inferSelect;
+
 export const insertUserSchema = createInsertSchema(users).pick({
   pubkey: true,
   email: true,

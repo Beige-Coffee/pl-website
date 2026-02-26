@@ -74,6 +74,7 @@
     "express-session": "^1.18.1",
     "framer-motion": "^12.23.24",
     "highlight.js": "^11.11.1",
+    "html2canvas-pro": "^2.0.2",
     "input-otp": "^1.4.2",
     "light-bolt11-decoder": "^3.2.0",
     "lucide-react": "^0.545.0",

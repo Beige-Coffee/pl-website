@@ -15,6 +15,7 @@ import Scratchpad from "../components/Scratchpad";
 import { CollapsibleItem, CollapsibleGroup } from "../components/CollapsibleSection";
 import { CODE_EXERCISES } from "../data/code-exercises";
 import { Tooltip, TooltipTrigger, TooltipContent } from "../components/ui/tooltip";
+import FeedbackWidget from "../components/FeedbackWidget";
 
 // --- Checkpoint questions embedded inline in tutorial chapters ---
 const CHECKPOINT_QUESTIONS: Record<string, {
@@ -1083,6 +1084,12 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
       {tutorialMode === "code" && (
         <Scratchpad theme={theme} />
       )}
+
+      <FeedbackWidget
+        theme={theme}
+        chapterTitle={active.title}
+        sessionToken={auth.sessionToken}
+      />
 
       {showLoginModal && (
         <LoginModal

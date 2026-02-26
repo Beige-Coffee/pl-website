@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type LnAuthChallenge, type Session, type LnurlWithdrawal, type InsertPageEvent, type PageEvent, type CheckpointCompletion, type Donation, type UserProgress, users, lnAuthChallenges, sessions, lnurlWithdrawals, pageEvents, checkpointCompletions, donations, userProgress } from "@shared/schema";
+import { type User, type InsertUser, type LnAuthChallenge, type Session, type LnurlWithdrawal, type InsertPageEvent, type PageEvent, type CheckpointCompletion, type Donation, type UserProgress, type InsertFeedback, type Feedback, users, lnAuthChallenges, sessions, lnurlWithdrawals, pageEvents, checkpointCompletions, donations, userProgress, feedback } from "@shared/schema";
 import { eq, desc, inArray, and, sql, count } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
@@ -51,6 +51,9 @@ export interface IStorage {
   markDonationSpam(id: string): Promise<void>;
   getUserProgress(userId: string): Promise<Record<string, string>>;
   setUserProgress(userId: string, key: string, value: string): Promise<void>;
+  createFeedback(data: InsertFeedback): Promise<Feedback>;
+  getFeedbackScreenshot(id: string): Promise<string | null>;
+  setFeedbackGithubUrl(id: string, url: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -389,6 +392,21 @@ export class DatabaseStorage implements IStorage {
         target: [userProgress.userId, userProgress.key],
         set: { value, updatedAt: new Date() },
       });
+  }
+
+  async createFeedback(data: InsertFeedback): Promise<Feedback> {
+    const [row] = await db.insert(feedback).values(data).returning();
+    return row;
+  }
+
+  async getFeedbackScreenshot(id: string): Promise<string | null> {
+    const [row] = await db.select({ screenshotBase64: feedback.screenshotBase64 })
+      .from(feedback).where(eq(feedback.id, id));
+    return row?.screenshotBase64 ?? null;
+  }
+
+  async setFeedbackGithubUrl(id: string, url: string): Promise<void> {
+    await db.update(feedback).set({ githubIssueUrl: url }).where(eq(feedback.id, id));
   }
 }
 

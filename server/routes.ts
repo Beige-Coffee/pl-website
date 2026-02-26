@@ -8,7 +8,7 @@ import { bech32 } from "bech32";
 import QRCode from "qrcode";
 import bcrypt from "bcryptjs";
 import { decode as decodeBolt11 } from "light-bolt11-decoder";
-import { emailAuthSchema, insertPageEventSchema } from "@shared/schema";
+import { emailAuthSchema, insertPageEventSchema, type Feedback } from "@shared/schema";
 import { existsSync } from "fs";
 import { sendVerificationEmail } from "./email";
 import { nodeManager } from "./bitcoin-node";
@@ -47,6 +47,7 @@ class RateLimiter {
 const authLimiter = new RateLimiter(10, 60_000);
 const claimLimiter = new RateLimiter(5, 60_000);
 const adminLimiter = new RateLimiter(5, 60_000);
+const feedbackLimiter = new RateLimiter(5, 600_000);
 
 function getClientIp(req: Request): string {
   return (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";
@@ -1521,6 +1522,201 @@ export async function registerRoutes(app: Express): Promise<Server> {
   nodeManager.startCleanup();
   nodeManager.ensureBitcoindBinary().catch((err) => {
     console.log("[node] Binary pre-download deferred:", err.message);
+  });
+
+  // ── Feedback ────────────────────────────────────────────────────────────
+
+  async function uploadScreenshotToGithub(
+    token: string, owner: string, repoName: string, feedbackId: string, base64Data: string
+  ): Promise<string | null> {
+    const path = `feedback-screenshots/${feedbackId}.png`;
+    try {
+      const res = await fetch(
+        `https://api.github.com/repos/${owner}/${repoName}/contents/${path}`,
+        {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/vnd.github+json",
+            "Content-Type": "application/json",
+            "X-GitHub-Api-Version": "2022-11-28",
+          },
+          body: JSON.stringify({
+            message: `Add feedback screenshot ${feedbackId}`,
+            content: base64Data,
+          }),
+          signal: AbortSignal.timeout(30000),
+        }
+      );
+      if (res.ok) {
+        const data = await res.json() as { content: { download_url: string } };
+        console.log(`[feedback] Screenshot uploaded to GitHub: ${path}`);
+        return data.content.download_url;
+      } else {
+        console.error(`[feedback] Screenshot upload failed ${res.status}: ${await res.text()}`);
+        return null;
+      }
+    } catch (err) {
+      console.error("[feedback] Screenshot upload error:", err);
+      return null;
+    }
+  }
+
+  async function createGithubIssue(record: Feedback, baseUrl: string) {
+    const token = process.env.GITHUB_TOKEN;
+    const repo = process.env.GITHUB_FEEDBACK_REPO || "Beige-Coffee/pl-website";
+    if (!token) {
+      console.log("[feedback] No GITHUB_TOKEN set, skipping issue creation");
+      return;
+    }
+
+    const [owner, repoName] = repo.split("/");
+
+    const categoryLabels: Record<string, string> = {
+      bug: "bug", confusing: "content", suggestion: "enhancement", other: "feedback",
+    };
+    const categoryTitles: Record<string, string> = {
+      bug: "Bug Report", confusing: "Confusing Content", suggestion: "Suggestion", other: "Feedback",
+    };
+
+    const title = `[${categoryTitles[record.category] || "Feedback"}] ${record.message.slice(0, 80)}${record.message.length > 80 ? "..." : ""}`;
+
+    let screenshotSection = "";
+    if (record.screenshotBase64) {
+      const githubImageUrl = await uploadScreenshotToGithub(
+        token, owner!, repoName!, record.id, record.screenshotBase64
+      );
+      if (githubImageUrl) {
+        screenshotSection = `\n\n### Screenshot\n![Screenshot](${githubImageUrl})`;
+      } else {
+        screenshotSection = `\n\n### Screenshot\n![Screenshot](${baseUrl}/api/feedback-image/${record.id})`;
+      }
+    }
+
+    const body = [
+      `### Category\n${record.category}`,
+      `### Message\n${record.message}`,
+      `### Context`,
+      `- **Page:** ${record.pageUrl}`,
+      `- **Chapter:** ${record.chapterTitle || "N/A"}`,
+      `- **Exercise:** ${record.exerciseId || "N/A"}`,
+      `- **User Agent:** ${record.userAgent || "N/A"}`,
+      `- **User ID:** ${record.userId || "Anonymous"}`,
+      `- **Feedback ID:** ${record.id}`,
+      screenshotSection,
+    ].join("\n");
+
+    const labels = ["feedback"];
+    const catLabel = categoryLabels[record.category];
+    if (catLabel) labels.push(catLabel);
+
+    try {
+      const res = await fetch(`https://api.github.com/repos/${owner}/${repoName}/issues`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.github+json",
+          "Content-Type": "application/json",
+          "X-GitHub-Api-Version": "2022-11-28",
+        },
+        body: JSON.stringify({ title, body, labels }),
+        signal: AbortSignal.timeout(15000),
+      });
+
+      if (res.ok) {
+        const data = await res.json() as { html_url: string };
+        await storage.setFeedbackGithubUrl(record.id, data.html_url);
+        console.log(`[feedback] GitHub issue created: ${data.html_url}`);
+      } else {
+        console.error(`[feedback] GitHub API error ${res.status}: ${await res.text()}`);
+      }
+    } catch (err) {
+      console.error("[feedback] GitHub request failed:", err);
+    }
+  }
+
+  app.post("/api/feedback", async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    if (!feedbackLimiter.check(ip)) {
+      return res.status(429).json({ error: "Too many feedback submissions. Try again in a few minutes." });
+    }
+
+    try {
+      const { category, message, screenshot, pageUrl, chapterTitle, exerciseId, userAgent } = req.body;
+
+      if (!category || !message || !pageUrl) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+      if (typeof category !== "string" || typeof message !== "string" || typeof pageUrl !== "string") {
+        return res.status(400).json({ error: "Invalid field types" });
+      }
+
+      const validCategories = ["bug", "confusing", "suggestion", "other"];
+      if (!validCategories.includes(category)) {
+        return res.status(400).json({ error: "Invalid category" });
+      }
+      if (message.length > 5000) {
+        return res.status(400).json({ error: "Message too long (max 5000 chars)" });
+      }
+
+      let screenshotBase64: string | null = null;
+      if (screenshot && typeof screenshot === "string") {
+        const base64Data = screenshot.replace(/^data:image\/png;base64,/, "");
+        if (base64Data.length > 7_000_000) {
+          return res.status(400).json({ error: "Screenshot too large" });
+        }
+        screenshotBase64 = base64Data;
+      }
+
+      const user = await getAuthUser(req);
+
+      const record = await storage.createFeedback({
+        userId: user?.id ?? null,
+        category,
+        message,
+        screenshotBase64,
+        pageUrl,
+        chapterTitle: typeof chapterTitle === "string" ? chapterTitle.slice(0, 200) : null,
+        exerciseId: typeof exerciseId === "string" ? exerciseId.slice(0, 100) : null,
+        userAgent: typeof userAgent === "string" ? userAgent.slice(0, 500) : null,
+      });
+
+      const protocol = req.headers["x-forwarded-proto"] || req.protocol;
+      const host = req.headers["x-forwarded-host"] || req.get("host");
+      const baseUrl = `${protocol}://${host}`;
+
+      createGithubIssue(record, baseUrl).catch((err) => {
+        console.error("[feedback] GitHub issue creation failed:", err);
+      });
+
+      res.json({ success: true, id: record.id });
+    } catch (err) {
+      console.error("Feedback submission error:", err);
+      res.status(500).json({ error: "Failed to submit feedback" });
+    }
+  });
+
+  app.get("/api/feedback-image/:id", async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      if (!/^[0-9a-f-]{36}$/i.test(id)) {
+        return res.status(400).json({ error: "Invalid ID" });
+      }
+
+      const base64 = await storage.getFeedbackScreenshot(id);
+      if (!base64) {
+        return res.status(404).json({ error: "Not found" });
+      }
+
+      const buffer = Buffer.from(base64, "base64");
+      res.setHeader("Content-Type", "image/png");
+      res.setHeader("Content-Length", buffer.length);
+      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      res.send(buffer);
+    } catch (err) {
+      console.error("Feedback image error:", err);
+      res.status(500).json({ error: "Failed to retrieve image" });
+    }
   });
 
   const httpServer = createServer(app);
