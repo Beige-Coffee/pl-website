@@ -1,5 +1,5 @@
 import { Link, Route, Switch, useLocation } from "wouter";
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
@@ -66,6 +66,28 @@ const CHECKPOINT_QUESTIONS: Record<string, {
     ],
     answer: 2,
     explanation: "The revocation key is the enforcement mechanism behind Lightning's fairness protocol. When a channel state is updated, the old state is 'revoked' by sharing the per-commitment secret. If a party tries to cheat by broadcasting an old commitment transaction, the counterparty can use the revocation key (derived from the shared secret) to claim ALL funds in the channel as a penalty. This makes cheating economically irrational.",
+  },
+  "revocation-key-construction": {
+    question: "Why can't Alice calculate the private key to the Revocation Public Key in her own `to_local` output?",
+    options: [
+      "Because the revocation public key is generated randomly by the Bitcoin network",
+      "Because it is derived from Bob's Revocation Basepoint, and Bob will never reveal his Revocation Basepoint Secret to Alice",
+      "Because the revocation private key is destroyed after the commitment transaction is signed",
+      "Because Alice uses a different elliptic curve than Bob for her keys",
+    ],
+    answer: 1,
+    explanation: "Alice's Revocation Public Key is created by combining Bob's Revocation Basepoint with Alice's Per-Commitment Point. Since Bob never reveals his Revocation Basepoint Secret, Alice can never compute the corresponding private key. Only Bob can derive it, and only after Alice reveals her Per-Commitment Secret when they advance to a new state. This is what makes the penalty mechanism trustless.",
+  },
+  "revocation-secret-exchange": {
+    question: "When Alice and Bob advance from Channel State 1 to Channel State 2, what does Alice send to Bob?",
+    options: [
+      "Her Revocation Basepoint Secret and her new Per-Commitment Point",
+      "Her Per-Commitment Secret for State 1 and her new Per-Commitment Point for the next channel state",
+      "Bob's Revocation Private Key from State 1",
+      "Her funding private key and a signed revocation transaction",
+    ],
+    answer: 1,
+    explanation: "When advancing states, Alice sends Bob two things: (1) her Per-Commitment Secret from the old state (State 1), which allows Bob to derive the Revocation Private Key for Alice's old commitment transaction, and (2) her new Per-Commitment Point for the next state (State 2), so Bob can construct the new Revocation Public Key. The Revocation Basepoint never changes and was already exchanged during channel opening.",
   },
   "csv-purpose": {
     question: "Why does BOLT 3 use OP_CHECKSEQUENCEVERIFY (CSV) in the to_local output?",
@@ -322,18 +344,18 @@ const chapters: Chapter[] = [
     file: "/lightning_tutorial/3.3-signing.md",
   },
   {
-    id: "open-channel",
-    title: "Channel Open",
-    section: "Payment Channels",
-    kind: "md",
-    file: "/lightning_tutorial/3.5-open-channel.md",
-  },
-  {
     id: "revocation-keys",
     title: "Revocation Keys",
     section: "Commitment Keys",
     kind: "md",
     file: "/lightning_tutorial/4.1-revocation-keys.md",
+  },
+  {
+    id: "deriving-revocation-keys",
+    title: "Deriving Revocation Keys",
+    section: "Commitment Keys",
+    kind: "md",
+    file: "/lightning_tutorial/4.1b-deriving-revocation-keys.md",
   },
   {
     id: "commitment-secrets",
@@ -383,6 +405,13 @@ const chapters: Chapter[] = [
     section: "Commitment Transactions",
     kind: "md",
     file: "/lightning_tutorial/5.5-get-commitment-tx.md",
+  },
+  {
+    id: "open-channel",
+    title: "Channel Open",
+    section: "Commitment Transactions",
+    kind: "md",
+    file: "/lightning_tutorial/3.5-open-channel.md",
   },
   {
     id: "routing-payments",
@@ -505,7 +534,8 @@ const CHAPTER_REQUIREMENTS: Record<string, {
   "revocable-transactions": { checkpoints: ["asymmetric-commits"], exercises: [] },
   "signing": { checkpoints: [], exercises: ["ln-exercise-sign-input"] },
   "open-channel": { checkpoints: [], exercises: [] },
-  "revocation-keys": { checkpoints: ["revocation-purpose"], exercises: ["ln-exercise-revocation-pubkey", "ln-exercise-revocation-privkey"] },
+  "revocation-keys": { checkpoints: ["revocation-purpose", "revocation-key-construction", "revocation-secret-exchange"], exercises: [] },
+  "deriving-revocation-keys": { checkpoints: [], exercises: ["ln-exercise-revocation-pubkey", "ln-exercise-revocation-privkey"] },
   "commitment-secrets": { checkpoints: ["commitment-secret-algorithm"], exercises: ["ln-exercise-commitment-secret", "ln-exercise-per-commitment-point"] },
   "key-derivation": { checkpoints: [], exercises: ["ln-exercise-derive-pubkey", "ln-exercise-derive-privkey", "ln-exercise-get-commitment-keys"] },
   "commitment-scripts": { checkpoints: [], exercises: ["ln-exercise-to-remote-script", "ln-exercise-to-local-script"] },
@@ -998,37 +1028,51 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
     setMobileNavOpen(false);
   }, [location, setMobileNavOpen]);
 
-  // Save scroll position per chapter so it persists across refresh
+  // Always start at the top on page load / refresh.
+  // useLayoutEffect runs before paint to prevent visible scroll jumps.
+  useLayoutEffect(() => {
+    if ("scrollRestoration" in history) {
+      history.scrollRestoration = "manual";
+    }
+    window.scrollTo(0, 0);
+  }, []);
+
+  // Track chapter switches: save scroll position of outgoing chapter,
+  // scroll to top for the new chapter. Scroll restore only happens
+  // for in-session chapter navigation, NOT on page refresh.
   const prevChapterRef = useRef(activeId);
+  const programmaticScrollRef = useRef(false);
+  const visitedChaptersRef = useRef(new Set<string>());
   useEffect(() => {
-    // Save previous chapter's scroll position before switching
     if (prevChapterRef.current !== activeId) {
+      // Save outgoing chapter's scroll position
       try {
         sessionStorage.setItem(
           `pl-scroll-${prevChapterRef.current}`,
           String(window.scrollY),
         );
       } catch {}
+      // Mark the outgoing chapter as visited this session
+      visitedChaptersRef.current.add(prevChapterRef.current);
       prevChapterRef.current = activeId;
-      // Scroll to top for new chapter navigation
-      window.scrollTo(0, 0);
+
+      // Restore scroll if we visited this chapter earlier in the session
+      const saved = visitedChaptersRef.current.has(activeId)
+        ? sessionStorage.getItem(`pl-scroll-${activeId}`)
+        : null;
+      const y = saved ? parseInt(saved, 10) : 0;
+
+      programmaticScrollRef.current = true;
+      window.scrollTo(0, isNaN(y) ? 0 : y);
+      setTimeout(() => { programmaticScrollRef.current = false; }, 100);
     }
   }, [activeId]);
 
-  // Restore scroll position on page load (refresh)
-  useEffect(() => {
-    const saved = sessionStorage.getItem(`pl-scroll-${activeId}`);
-    if (!saved) return;
-    const y = parseInt(saved, 10);
-    if (isNaN(y) || y <= 0) return;
-    // Delay to allow markdown content to render
-    const timer = setTimeout(() => window.scrollTo(0, y), 300);
-    return () => clearTimeout(timer);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Continuously save scroll position for current chapter
+  // Save scroll position when navigating between chapters (user-initiated only).
+  // Restored in the activeId-change effect above, NOT on page refresh.
   useEffect(() => {
     const onScroll = () => {
+      if (programmaticScrollRef.current) return;
       try {
         sessionStorage.setItem(`pl-scroll-${activeId}`, String(window.scrollY));
       } catch {}
@@ -1354,7 +1398,7 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
                         >
                           <div className="flex items-center gap-2">
                             {showIcon && (
-                              <span className={`w-7 h-7 shrink-0 rounded-full flex items-center justify-center text-base font-extrabold leading-none ${
+                              <span className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-lg font-extrabold leading-none ${
                                 isComplete
                                   ? theme === "dark"
                                     ? "bg-[#FFD700] text-white"

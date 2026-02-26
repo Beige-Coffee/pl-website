@@ -439,6 +439,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "pubkey-sorting": 1,
     "bip32-derivation": 1,
     "revocation-purpose": 2,
+    "revocation-key-construction": 1,
+    "revocation-secret-exchange": 1,
     "commitment-secret-algorithm": 1,
     "csv-purpose": 1,
     "obscured-commitment": 2,

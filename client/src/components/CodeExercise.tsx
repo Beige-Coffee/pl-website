@@ -427,6 +427,7 @@ export default function CodeExercise({
       dropCursor(),
       EditorState.allowMultipleSelections.of(true),
       indentOnInput(),
+      ...(dark ? [oneDark] : []),
       syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
       bracketMatching(),
       closeBrackets(),
@@ -478,8 +479,6 @@ export default function CodeExercise({
           }
         }
       }),
-      // Apply oneDark BEFORE custom overrides so syntax highlighting takes effect
-      ...(dark ? [oneDark] : []),
       EditorView.theme({
         "&": {
           fontSize: "14px",
@@ -856,14 +855,14 @@ export default function CodeExercise({
             className={`flex items-center gap-2 px-3 py-2 text-left transition-all border cursor-pointer ${
               dark
                 ? "border-[#2a3552] bg-[#0b1220] text-slate-400 hover:text-[#FFD700] hover:border-[#FFD700]/40 hover:bg-[#0f1930]"
-                : "border-border bg-secondary/50 text-foreground/60 hover:text-[#9a7200] hover:border-[#b8860b]/40 hover:bg-secondary"
+                : "border-border bg-secondary/50 text-foreground/80 hover:text-[#9a7200] hover:border-[#b8860b]/40 hover:bg-secondary"
             }`}
           >
-            <span className="text-sm opacity-70">📁</span>
+            <span className="text-sm opacity-80">📁</span>
             <span className="text-sm" style={sansFont}>
               {fileLabel ?? "exercise files"}
             </span>
-            <span className={`ml-auto text-sm opacity-50`} style={sansFont}>
+            <span className={`ml-auto text-sm opacity-70`} style={sansFont}>
               browse all files
             </span>
           </button>
@@ -920,7 +919,7 @@ export default function CodeExercise({
           className={`font-pixel text-xs border-2 px-5 py-2.5 transition-all ${
             running
               ? "opacity-50 cursor-not-allowed border-[#2a3552] bg-[#0f1930] text-slate-500"
-              : `${goldBorder} bg-[#FFD700] text-black hover:bg-[#FFC800] active:scale-95 cursor-pointer`
+              : `${goldBorder} bg-[#FFD700] !text-[#000000] hover:bg-[#FFC800] active:scale-95 cursor-pointer`
           }`}
         >
           {running ? (

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from "react";
 import { QRCodeSVG } from "qrcode.react";
 
 interface CheckpointQuestionProps {
@@ -251,6 +251,26 @@ export default function CheckpointQuestion({
 
   const completedButUnclaimed = alreadyCompleted && (!claimInfo || claimInfo.amountSats === 0);
 
+  // Prevent scroll jump when component shrinks on completion.
+  // Capture the element's top offset before render and restore scroll after.
+  const containerRef = useRef<HTMLDivElement>(null);
+  const prevCompletedRef = useRef(alreadyCompleted);
+  useLayoutEffect(() => {
+    if (alreadyCompleted && !prevCompletedRef.current && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      // Keep the top of the checkpoint at the same viewport position
+      requestAnimationFrame(() => {
+        if (!containerRef.current) return;
+        const newRect = containerRef.current.getBoundingClientRect();
+        const drift = newRect.top - rect.top;
+        if (Math.abs(drift) > 5) {
+          window.scrollBy(0, drift);
+        }
+      });
+    }
+    prevCompletedRef.current = alreadyCompleted;
+  }, [alreadyCompleted]);
+
   // If completed but sats not yet claimed, auto-set submitted state so claim UI shows
   useEffect(() => {
     if (justSubmittedRef.current) return;
@@ -281,7 +301,7 @@ export default function CheckpointQuestion({
 
   if (alreadyCompleted && !rewardLnurl && !completedButUnclaimed) {
     return (
-      <div className={`my-8 border-2 ${goldBorder} ${cardBg} p-5`}>
+      <div ref={containerRef} className={`my-8 border-2 ${goldBorder} ${cardBg} p-5`} style={{ overflowAnchor: "none" }}>
         <div className="flex items-center gap-3 mb-2">
           <div className={`font-pixel text-xs ${goldText}`}>CHECKPOINT</div>
           <div className={`font-pixel text-xs ${greenText}`}>COMPLETED</div>
@@ -309,7 +329,7 @@ export default function CheckpointQuestion({
   }
 
   return (
-    <div className={`my-8 border-2 ${submitted && correct ? goldBorder : cardBorder} ${cardBg} p-5 ${shaking ? "animate-shake" : ""}`}>
+    <div ref={containerRef} className={`my-8 border-2 ${submitted && correct ? goldBorder : cardBorder} ${cardBg} p-5 ${shaking ? "animate-shake" : ""}`} style={{ overflowAnchor: "none" }}>
       <style>{`
         @keyframes shake {
           0%, 100% { transform: translateX(0); }
