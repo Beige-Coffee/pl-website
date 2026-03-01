@@ -615,8 +615,8 @@ export default function CodeExercise({
   useEffect(() => {
     if (
       allPassed &&
-      !completedDisplay &&
       !autoPaid &&
+      (!claimInfo || claimInfo.amountSats === 0) &&
       !autoPaySending &&
       !claiming &&
       !rewardK1 &&
@@ -750,6 +750,12 @@ export default function CodeExercise({
           } else if (resData.alreadyCompleted) {
             setAutoPaySending(false);
             onCompleted(exerciseId, resData.amountSats || rewardAmountSats);
+          } else if (claimMethod === "address" && lightningAddress && resData.k1) {
+            // Auto-pay was attempted but failed silently (server fell back to QR).
+            // Show the error/retry UI instead of auto-displaying a QR code.
+            setAutoPaySending(false);
+            setRewardAmountSats(resData.amountSats || data.rewardSats);
+            setClaimError("Auto-pay failed. Retry or use QR withdrawal.");
           } else {
             setAutoPaySending(false);
             setRewardK1(resData.k1);
@@ -1210,7 +1216,7 @@ export default function CodeExercise({
             ) : (
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <span>Exercise Completed</span>
-                {authenticated && !showClaimChoice && !claiming && !rewardK1 && (
+                {authenticated && !showClaimChoice && !claiming && !rewardK1 && !autoPaySending && !(lightningAddress && !claimError) && (
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); setShowClaimChoice(true); }}

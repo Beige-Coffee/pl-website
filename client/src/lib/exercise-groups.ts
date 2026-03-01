@@ -344,7 +344,7 @@ const SCRIPTS_HTLC_PREAMBLE = `from bitcoin.core.script import (
 )
 from ln import hash160, CommitmentKeys`;
 
-const TRANSACTIONS_COMMITMENT_PREAMBLE = `from bitcoin.core import CMutableTransaction, CTxIn, CTxOut, COutPoint, lx, CTransaction, CTxWitness, CTxInWitness, CScriptWitness
+const TRANSACTIONS_COMMITMENT_PREAMBLE = `from bitcoin.core import CMutableTransaction, CMutableTxIn, CTxIn, CTxOut, COutPoint, lx, CTransaction, CTxWitness, CTxInWitness, CScriptWitness
 from bitcoin.core.script import CScript, OP_0, OP_IF, OP_ELSE, OP_ENDIF, OP_CHECKSIG, OP_CHECKSEQUENCEVERIFY, OP_DROP, SignatureHash, SIGHASH_ALL, SIGVERSION_WITNESS_V0
 from ln import hash160, CommitmentKeys
 import hashlib, struct`;
@@ -445,6 +445,7 @@ export const EXERCISE_GROUPS: Record<string, ExerciseGroup> = {
       "ln-exercise-obscure-factor",
       "ln-exercise-obscured-commitment",
       "ln-exercise-commitment-outputs",
+      "ln-exercise-sort-outputs",
       "ln-exercise-commitment-tx",
       "ln-exercise-finalize-commitment",
       "ln-exercise-htlc-outputs",

@@ -207,8 +207,14 @@ export default function CheckpointQuestion({
           setAutoPaySending(false);
           setRewardAmountSats(data.amountSats || 5);
           onCompleted(checkpointId, data.amountSats || 5);
+        } else if (claimMethod === "address" && lightningAddress && data.k1) {
+          // Auto-pay was attempted but failed silently (server fell back to QR).
+          // Show the error/retry UI instead of auto-displaying a QR code.
+          setAutoPaySending(false);
+          setRewardAmountSats(data.amountSats || 5);
+          setClaimError("Auto-pay failed. Retry or use QR withdrawal.");
         } else {
-          // Fall back to QR flow
+          // Explicit QR flow
           setAutoPaySending(false);
           setRewardK1(data.k1);
           setRewardLnurl(data.lnurl);

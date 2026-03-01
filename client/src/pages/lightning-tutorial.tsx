@@ -395,7 +395,7 @@ const chapters: Chapter[] = [
   },
   {
     id: "commitment-finalization",
-    title: "Commitment Finalization",
+    title: "Signing the Commitment Transaction",
     section: "Commitment Transactions",
     kind: "md",
     file: "/lightning_tutorial/5.4-commitment-finalization.md",
@@ -541,7 +541,7 @@ const CHAPTER_REQUIREMENTS: Record<string, {
   "key-derivation": { checkpoints: [], exercises: ["ln-exercise-derive-pubkey", "ln-exercise-derive-privkey", "ln-exercise-get-commitment-keys"] },
   "commitment-scripts": { checkpoints: [], exercises: ["ln-exercise-to-remote-script", "ln-exercise-to-local-script"] },
   "obscured-commitment": { checkpoints: [], exercises: ["ln-exercise-obscure-factor", "ln-exercise-obscured-commitment"] },
-  "commitment-assembly": { checkpoints: [], exercises: ["ln-exercise-commitment-outputs", "ln-exercise-commitment-tx"] },
+  "commitment-assembly": { checkpoints: [], exercises: ["ln-exercise-commitment-outputs", "ln-exercise-sort-outputs", "ln-exercise-commitment-tx"] },
   "commitment-finalization": { checkpoints: [], exercises: ["ln-exercise-finalize-commitment"] },
   "get-commitment-tx": { checkpoints: [], exercises: ["gen-commitment"] },
   "routing-payments": { checkpoints: [], exercises: [] },

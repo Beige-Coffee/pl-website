@@ -470,6 +470,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "ln-exercise-obscure-factor": 0,
     "ln-exercise-obscured-commitment": 0,
     "ln-exercise-commitment-outputs": 0,
+    "ln-exercise-sort-outputs": 0,
     "ln-exercise-commitment-tx": 0,
     "ln-exercise-get-commitment-keys": 0,
     "ln-exercise-finalize-commitment": 0,

@@ -1158,40 +1158,34 @@ def get_obscure_factor(opener_payment_basepoint, accepter_payment_basepoint):
     title: "Exercise 15: Set Obscured Commitment Number",
     description:
       "Given a commitment number and the obscure factor, set the obscured commitment number in a transaction's <code>nLockTime</code> and <code>nSequence</code> fields. The lower 24 bits go in <code>nLockTime</code> (with upper byte <code>0x20</code>), the upper 24 bits go in <code>vin[0].nSequence</code> (with upper byte <code>0x80</code>).",
-    starterCode: `def set_obscured_commitment_number(tx_hex: str,
+    starterCode: `def set_obscured_commitment_number(tx: CMutableTransaction,
                                     commitment_number: int,
                                     opener_bp: bytes,
-                                    accepter_bp: bytes) -> str:
+                                    accepter_bp: bytes) -> None:
     """
-    Set the obscured commitment number in a transaction.
+    Set the obscured commitment number in a transaction (modifies tx in place).
 
     The obscured number = commitment_number XOR obscure_factor.
     Lower 24 bits → nLockTime (upper byte = 0x20)
     Upper 24 bits → input[0].nSequence (upper byte = 0x80)
 
     Steps:
-    1. Deserialize the tx hex into a CMutableTransaction
-    2. Compute obscured = commitment_number ^ get_obscure_factor(...)
-    3. Set tx.nLockTime = (0x20 << 24) | (obscured & 0xFFFFFF)
-    4. Set tx.vin[0].nSequence = (0x80 << 24) | ((obscured >> 24) & 0xFFFFFF)
-    5. Re-serialize and return hex
+    1. XOR the commitment number with the obscure factor
+    2. Place the lower 24 bits into nLockTime, with 0x20 as the upper byte
+    3. Place the upper 24 bits into vin[0].nSequence, with 0x80 as the upper byte
 
     Args:
-        tx_hex: hex-encoded transaction
+        tx: a CMutableTransaction to modify in place
         commitment_number: the commitment index (e.g. 42)
         opener_bp: 33-byte opener payment basepoint
         accepter_bp: 33-byte accepter payment basepoint
-
-    Returns:
-        str: hex-encoded modified transaction
     """
     # === YOUR CODE HERE ===
     pass
 `,
     testCode: `
 import hashlib
-import struct
-from bitcoin.core import CMutableTransaction, CTxIn, CTxOut, COutPoint
+from bitcoin.core import CMutableTransaction, CMutableTxIn, CTxOut, COutPoint
 
 def _get_factor(a, b):
     h = hashlib.sha256(a + b).digest()
@@ -1203,15 +1197,11 @@ def test_bolt3_values():
     commitment_number = 42
     factor = _get_factor(opener, accepter)
     obscured = factor ^ commitment_number
-    # Build a minimal tx with one input
-    txin = CTxIn(COutPoint())
+    txin = CMutableTxIn(COutPoint())
     tx = CMutableTransaction([txin], [])
-    tx_hex = tx.serialize().hex()
-    result_hex = set_obscured_commitment_number(tx_hex, commitment_number, opener, accepter)
-    result_bytes = bytes.fromhex(result_hex)
-    locktime = struct.unpack('<I', result_bytes[-4:])[0]
-    assert locktime >> 24 == 0x20, f"Locktime upper byte must be 0x20, got {locktime >> 24:#x}"
-    lower_24 = locktime & 0xffffff
+    set_obscured_commitment_number(tx, commitment_number, opener, accepter)
+    assert tx.nLockTime >> 24 == 0x20, f"Locktime upper byte must be 0x20, got {tx.nLockTime >> 24:#x}"
+    lower_24 = tx.nLockTime & 0xffffff
     assert lower_24 == (obscured & 0xffffff), "Locktime lower 24 bits must match"
 
 def test_sequence_upper_byte():
@@ -1219,26 +1209,21 @@ def test_sequence_upper_byte():
     accepter = bytes.fromhex("032c0b7cf95324a07d05398b240174dc0c2be444d96b159aa6c7f7b1e668680991")
     factor = _get_factor(opener, accepter)
     obscured = factor ^ 42
-    txin = CTxIn(COutPoint())
+    txin = CMutableTxIn(COutPoint())
     tx = CMutableTransaction([txin], [])
-    tx_hex = tx.serialize().hex()
-    result_hex = set_obscured_commitment_number(tx_hex, 42, opener, accepter)
-    from bitcoin.core import CTransaction
-    result_tx = CTransaction.deserialize(bytes.fromhex(result_hex))
-    seq = result_tx.vin[0].nSequence
+    set_obscured_commitment_number(tx, 42, opener, accepter)
+    seq = tx.vin[0].nSequence
     assert seq >> 24 == 0x80, f"Sequence upper byte must be 0x80, got {seq >> 24:#x}"
 `,
     hints: {
       conceptual:
-        "<p><strong>Goal:</strong> Encode an <strong>obscured commitment number</strong> into a transaction's <code>nLockTime</code> and first input's <code>nSequence</code> fields.<br><br><strong>How it works:</strong> XOR the commitment number with the obscure factor (from <code>get_obscure_factor()</code>) to produce a 48-bit obscured value. The <strong>lower 24 bits</strong> go into <code>nLockTime</code> with <code>0x20</code> as the upper byte. The <strong>upper 24 bits</strong> go into <code>nSequence</code> with <code>0x80</code> as the upper byte.<br><br><strong>Tools you will need:</strong> <code>CMutableTransaction.deserialize()</code> to get a mutable transaction you can modify, then set the fields directly and re-serialize with <code>.serialize().hex()</code>.</p>",
+        "<p><strong>Goal:</strong> Encode an <strong>obscured commitment number</strong> into a transaction's <code>nLockTime</code> and first input's <code>nSequence</code> fields (modifying the transaction in place).<br><br><strong>How it works:</strong> XOR (<code>^</code>) the commitment number with the obscure factor (from <code>get_obscure_factor()</code>) to produce a 48-bit obscured value. The <strong>lower 24 bits</strong> go into <code>tx.nLockTime</code> with <code>0x20</code> as the upper byte. The <strong>upper 24 bits</strong> go into <code>tx.vin[0].nSequence</code> with <code>0x80</code> as the upper byte.<br><br><strong>Key operations:</strong><br>- <strong>XOR</strong>: <code>a ^ b</code> flips bits where the two values differ<br>- <strong>Mask lower 24 bits</strong>: <code>value &amp; 0xFFFFFF</code> keeps only the bottom 24 bits<br>- <strong>Extract upper 24 bits</strong>: <code>(value &gt;&gt; 24) &amp; 0xFFFFFF</code> shifts down then masks<br>- <strong>Set upper byte</strong>: <code>(0x20 &lt;&lt; 24) | lower_bits</code> places <code>0x20</code> in the top byte via left-shift and combines with OR</p>",
       steps:
-        '<ol><li>Deserialize the hex transaction using <code>CMutableTransaction.deserialize()</code> after converting from hex to bytes with <code>bytes.fromhex()</code></li><li>Compute the obscured value by XORing the commitment number with the result of <code>get_obscure_factor()</code></li><li>Set <code>tx.nLockTime</code>: put <code>0x20</code> in the upper byte (shift left by 24) and the lower 24 bits of the obscured value in the remaining bytes, combined with bitwise OR</li><li>Set <code>tx.vin[0].nSequence</code>: put <code>0x80</code> in the upper byte and the upper 24 bits of the obscured value (right-shift by 24, mask with <code>0xFFFFFF</code>) in the remaining bytes</li><li>Serialize the modified transaction with <code>.serialize().hex()</code> and return the result</li></ol>',
-      code: `def set_obscured_commitment_number(tx_hex, commitment_number, opener_bp, accepter_bp):
-    tx = CMutableTransaction.deserialize(bytes.fromhex(tx_hex))
+        '<ol><li>Compute the obscured value: <code>obscured = commitment_number ^ get_obscure_factor(opener_bp, accepter_bp)</code></li><li>Set <code>tx.nLockTime</code>: combine <code>0x20</code> in the upper byte with the lower 24 bits of the obscured value. Use <code>(0x20 &lt;&lt; 24)</code> to place <code>0x20</code> in the top byte, then <code>| (obscured &amp; 0xFFFFFF)</code> to fill in the bottom 24 bits</li><li>Set <code>tx.vin[0].nSequence</code>: combine <code>0x80</code> in the upper byte with the upper 24 bits of the obscured value. Use <code>(0x80 &lt;&lt; 24)</code> for the top byte, then <code>| ((obscured &gt;&gt; 24) &amp; 0xFFFFFF)</code> to shift down and mask the upper 24 bits</li></ol>',
+      code: `def set_obscured_commitment_number(tx, commitment_number, opener_bp, accepter_bp):
     obscured = commitment_number ^ get_obscure_factor(opener_bp, accepter_bp)
     tx.nLockTime = (0x20 << 24) | (obscured & 0xFFFFFF)
-    tx.vin[0].nSequence = (0x80 << 24) | ((obscured >> 24) & 0xFFFFFF)
-    return tx.serialize().hex()`,
+    tx.vin[0].nSequence = (0x80 << 24) | ((obscured >> 24) & 0xFFFFFF)`,
     },
     rewardSats: 21,
     group: "transactions/commitment",
@@ -1252,7 +1237,7 @@ def test_sequence_upper_byte():
     id: "ln-exercise-commitment-outputs",
     title: "Exercise 15: Create Commitment TX Outputs",
     description:
-      "Create the commitment transaction outputs (<code>to_local</code> and <code>to_remote</code>) using keys from a <code>CommitmentKeys</code> object. Apply dust limit filtering and fee deduction from the <code>to_local</code> output. Sort outputs by value then by script bytes (BIP69-like).",
+      "Create the commitment transaction outputs (<code>to_local</code> and <code>to_remote</code>) using keys from a <code>CommitmentKeys</code> object. Apply dust limit filtering and fee deduction from the <code>to_local</code> output.",
     starterCode: `def create_commitment_outputs(to_local_sat: int, to_remote_sat: int,
                                commitment_keys,
                                remote_payment_pubkey: bytes,
@@ -1264,7 +1249,6 @@ def test_sequence_upper_byte():
     Fee is deducted from to_local. Outputs below dust_limit are omitted.
     The to_local output uses P2WSH: CScript([OP_0, SHA256(witness_script)])
     The to_remote output uses P2WPKH: create_to_remote_script()
-    Sort outputs by: (value, script_bytes).
 
     Use commitment_keys.revocation_key and
     commitment_keys.local_delayed_payment_key for the to_local script.
@@ -1279,16 +1263,13 @@ def test_sequence_upper_byte():
         fee: fee to deduct from to_local
 
     Returns:
-        list of CTxOut: sorted by (value, script bytes)
+        list of output dicts: [{"value": int, "script": bytes, "cltv_expiry": None}, ...]
     """
     # === YOUR CODE HERE ===
     pass
 `,
     testCode: `
 import hashlib
-
-def _h160(data):
-    return hash160(data)
 
 def test_two_outputs():
     rev_pk = bytes.fromhex("0212a140cd0c6539d07cd08dfe09984dec3251ea808b892efeac3ede9402bf2b19")
@@ -1297,6 +1278,8 @@ def test_two_outputs():
     ck = CommitmentKeys(bytes(33), rev_pk, delayed_pk, bytes(33), bytes(33))
     outputs = create_commitment_outputs(7_000_000, 3_000_000, ck, remote_pk, 144, 546, 10000)
     assert len(outputs) == 2, f"Expected 2 outputs, got {len(outputs)}"
+    for o in outputs:
+        assert "value" in o and "script" in o and "cltv_expiry" in o, f"Each output must have 'value', 'script', and 'cltv_expiry' keys"
 
 def test_fee_deducted_from_local():
     rev_pk = bytes.fromhex("0212a140cd0c6539d07cd08dfe09984dec3251ea808b892efeac3ede9402bf2b19")
@@ -1304,7 +1287,7 @@ def test_fee_deducted_from_local():
     remote_pk = bytes.fromhex("032c0b7cf95324a07d05398b240174dc0c2be444d96b159aa6c7f7b1e668680991")
     ck = CommitmentKeys(bytes(33), rev_pk, delayed_pk, bytes(33), bytes(33))
     outputs = create_commitment_outputs(7_000_000, 3_000_000, ck, remote_pk, 144, 546, 10000)
-    values = sorted([o.nValue for o in outputs])
+    values = sorted([o["value"] for o in outputs])
     assert 3_000_000 in values, "to_remote should be 3,000,000"
     assert 6_990_000 in values, "to_local should be 7,000,000 - 10,000 = 6,990,000"
 
@@ -1316,30 +1299,22 @@ def test_dust_filtering():
     outputs = create_commitment_outputs(500, 400, ck, remote_pk, 144, 546, 100)
     assert len(outputs) == 0, "Both below dust should produce no outputs"
 
-def test_sorted_by_value():
-    rev_pk = bytes.fromhex("0212a140cd0c6539d07cd08dfe09984dec3251ea808b892efeac3ede9402bf2b19")
-    delayed_pk = bytes.fromhex("03fd5960528dc152014952efdb702a88f71e3c1653b2314431701ec77e57fde83c")
-    remote_pk = bytes.fromhex("032c0b7cf95324a07d05398b240174dc0c2be444d96b159aa6c7f7b1e668680991")
-    ck = CommitmentKeys(bytes(33), rev_pk, delayed_pk, bytes(33), bytes(33))
-    outputs = create_commitment_outputs(7_000_000, 3_000_000, ck, remote_pk, 144, 546, 10000)
-    assert outputs[0].nValue <= outputs[1].nValue, "Outputs must be sorted by value"
 `,
     hints: {
       conceptual:
-        "<p><strong>Goal:</strong> Create the two main commitment transaction outputs: a <strong>to_local</strong> output (P2WSH wrapping the conditional revocation/delay script) and a <strong>to_remote</strong> output (P2WPKH).<br><br><strong>How it works:</strong> Deduct the fee from the local balance. Omit any output whose value falls below the <strong>dust limit</strong>. Sort remaining outputs by <code>(value, raw script bytes)</code>.<br><br><strong>Tools you will need:</strong> <code>create_to_local_script()</code> with keys from the <code>commitment_keys</code> object for the witness script, <code>hashlib.sha256</code> to hash it for the P2WSH wrapper, <code>create_to_remote_script()</code> for the remote output, and <code>CTxOut</code> to create each non-dust output.</p>",
+        "<p><strong>Goal:</strong> Create the two main commitment transaction outputs: a <strong>to_local</strong> output (P2WSH wrapping the conditional revocation/delay script) and a <strong>to_remote</strong> output (P2WPKH).<br><br><strong>How it works:</strong> Deduct the fee from the local balance. Omit any output whose value falls below the <strong>dust limit</strong>.<br><br><strong>Tools you will need:</strong> <code>create_to_local_script()</code> with keys from the <code>commitment_keys</code> object for the witness script, <code>hashlib.sha256</code> to hash it for the P2WSH wrapper, and <code>create_to_remote_script()</code> for the remote output.<br><br><strong>Return format:</strong> A list of output dicts. Each dict has <code>\"value\"</code> (int, satoshis), <code>\"script\"</code> (bytes, the locking script), and <code>\"cltv_expiry\"</code> (set to <code>None</code> for channel outputs).</p>",
       steps:
-        '<ol><li>Compute the to_local value by subtracting the fee from the local balance</li><li>Build the to_local witness script using <code>create_to_local_script()</code> with the revocation key and local delayed payment key from the <code>commitment_keys</code> object, plus the delay value</li><li>Wrap the witness script as a P2WSH scriptPubKey using <code>CScript()</code> with <code>OP_0</code> and the <code>hashlib.sha256()</code> hash of the witness script bytes</li><li>Build the to_remote scriptPubKey using <code>create_to_remote_script()</code></li><li>For each output, check if the value meets the dust limit. Only create <code>CTxOut(value, script)</code> objects for non-dust outputs</li><li>Sort the output list by a tuple of <code>(o.nValue, bytes(o.scriptPubKey))</code> and return it</li></ol>',
+        '<ol><li>Compute the to_local value by subtracting the fee from the local balance</li><li>Build the to_local witness script using <code>create_to_local_script()</code> with the revocation key and local delayed payment key from the <code>commitment_keys</code> object, plus the delay value</li><li>Wrap the witness script as a P2WSH scriptPubKey using <code>CScript()</code> with <code>OP_0</code> and the <code>hashlib.sha256()</code> hash of the witness script bytes</li><li>Build the to_remote scriptPubKey using <code>create_to_remote_script()</code></li><li>For each output, check if the value meets the dust limit. Only add non-dust outputs as dicts to the list</li><li>Return the list of output dicts</li></ol><p style=\'margin-top: 8px\'><strong>Return format:</strong> Each output dict has <code>\"value\"</code> (int, satoshis), <code>\"script\"</code> (bytes, the locking script), and <code>\"cltv_expiry\"</code> (<code>None</code> for channel outputs).</p>',
       code: `def create_commitment_outputs(to_local_sat, to_remote_sat, commitment_keys, remote_payment_pubkey, to_self_delay, dust_limit, fee):
     outputs = []
     to_local_value = to_local_sat - fee
     if to_local_value >= dust_limit:
         witness_script = create_to_local_script(commitment_keys.revocation_key, commitment_keys.local_delayed_payment_key, to_self_delay)
         p2wsh = CScript([OP_0, hashlib.sha256(bytes(witness_script)).digest()])
-        outputs.append(CTxOut(to_local_value, p2wsh))
+        outputs.append({"value": to_local_value, "script": bytes(p2wsh), "cltv_expiry": None})
     if to_remote_sat >= dust_limit:
         p2wpkh = create_to_remote_script(remote_payment_pubkey)
-        outputs.append(CTxOut(to_remote_sat, p2wpkh))
-    outputs.sort(key=lambda o: (o.nValue, bytes(o.scriptPubKey)))
+        outputs.append({"value": to_remote_sat, "script": bytes(p2wpkh), "cltv_expiry": None})
     return outputs`,
     },
     rewardSats: 21,
@@ -1348,13 +1323,83 @@ def test_sorted_by_value():
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // EXERCISE 16 - Sort Outputs (BIP 69 / BOLT 3)
+  // ═══════════════════════════════════════════════════════════════════════════
+  "ln-exercise-sort-outputs": {
+    id: "ln-exercise-sort-outputs",
+    title: "Exercise 16: Sort Outputs",
+    description:
+      "Sort a list of commitment transaction output dictionaries per BIP 69 and BOLT 3: by value (ascending), then by script bytes (lexicographic), then by <code>cltv_expiry</code> (ascending).",
+    starterCode: `def sort_outputs(outputs: list) -> list:
+    """
+    Sort output dicts per BOLT 3 (BIP 69 + CLTV expiry).
+
+    Each dict has keys: "value" (int), "script" (bytes), "cltv_expiry" (int or None).
+
+    Sort order:
+    1. By value, ascending (smallest first)
+    2. By script bytes, lexicographic
+    3. By cltv_expiry, ascending (treat None as 0)
+
+    Args:
+        outputs: list of output dicts
+
+    Returns:
+        list: the sorted output dicts
+    """
+    # === YOUR CODE HERE ===
+    pass
+`,
+    testCode: `
+def test_sorts_by_value():
+    a = {"value": 5000, "script": b'\\x00\\x01', "cltv_expiry": None}
+    b = {"value": 3000, "script": b'\\x00\\x02', "cltv_expiry": None}
+    result = sort_outputs([a, b])
+    assert result[0]["value"] == 3000, f"Expected 3000 first, got {result[0]['value']}"
+    assert result[1]["value"] == 5000, f"Expected 5000 second, got {result[1]['value']}"
+
+def test_sorts_by_script_on_tie():
+    a = {"value": 5000, "script": b'\\x00\\x14\\xff', "cltv_expiry": None}
+    b = {"value": 5000, "script": b'\\x00\\x14\\x01', "cltv_expiry": None}
+    result = sort_outputs([a, b])
+    assert result[0]["script"] == b'\\x00\\x14\\x01', "Lexicographically smaller script should come first"
+    assert result[1]["script"] == b'\\x00\\x14\\xff'
+
+def test_sorts_by_cltv_on_tie():
+    a = {"value": 5000, "script": b'\\x00\\x14', "cltv_expiry": 500}
+    b = {"value": 5000, "script": b'\\x00\\x14', "cltv_expiry": 100}
+    result = sort_outputs([a, b])
+    assert result[0]["cltv_expiry"] == 100, "Lower CLTV expiry should come first"
+    assert result[1]["cltv_expiry"] == 500
+
+def test_none_cltv_treated_as_zero():
+    a = {"value": 5000, "script": b'\\x00\\x14', "cltv_expiry": 100}
+    b = {"value": 5000, "script": b'\\x00\\x14', "cltv_expiry": None}
+    result = sort_outputs([b, a])
+    assert (result[0]["cltv_expiry"] or 0) == 0, "None (treated as 0) should come first"
+`,
+    hints: {
+      conceptual:
+        "<p><strong>Goal:</strong> Sort a list of output dictionaries following the BIP 69 / BOLT 3 ordering rules.<br><br><strong>Sort priority:</strong><br>1. <strong>Value</strong> (ascending, smallest first)<br>2. <strong>Script bytes</strong> (lexicographic, if values are equal)<br>3. <strong>CLTV expiry</strong> (ascending, if both value and script match; treat <code>None</code> as <code>0</code>)<br><br><strong>Each output dict has:</strong> <code>\"value\"</code> (int), <code>\"script\"</code> (bytes), <code>\"cltv_expiry\"</code> (int or None).</p>",
+      steps:
+        '<ol><li>Sort the list using a key function that returns a tuple of <code>(value, script, cltv_expiry)</code></li><li>For <code>cltv_expiry</code>, use <code>o[\"cltv_expiry\"] or 0</code> to treat <code>None</code> as <code>0</code></li><li>Return the sorted list (you can also sort in place with <code>.sort()</code>)</li></ol>',
+      code: `def sort_outputs(outputs):
+    outputs.sort(key=lambda o: (o["value"], o["script"], o["cltv_expiry"] or 0))
+    return outputs`,
+    },
+    rewardSats: 21,
+    group: "transactions/commitment",
+    groupOrder: 4,
+  },
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // EXERCISE 17 - Create Commitment Transaction
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-commitment-tx": {
     id: "ln-exercise-commitment-tx",
-    title: "Exercise 16: Create Commitment Transaction",
+    title: "Exercise 17: Create Commitment Transaction",
     description:
-      "Assemble a complete unsigned commitment transaction with the funding input, obscured commitment number, and sorted outputs (including any HTLCs). Uses a <code>CommitmentKeys</code> object for derived keys. Fee calculation accounts for HTLC weight: <code>weight = 724 + 172 * num_htlcs</code>.",
+      "Assemble a complete unsigned commitment transaction with the funding input, obscured commitment number, and sorted outputs. Uses <code>create_commitment_outputs()</code> and <code>sort_outputs()</code> to build and order the outputs. The <code>offered_htlcs</code> and <code>received_htlcs</code> parameters are included for future use (ignore them for now).",
     starterCode: `def create_commitment_tx(funding_txid_hex: str, funding_vout: int,
                           to_local_sat: int, to_remote_sat: int,
                           commitment_keys,
@@ -1362,26 +1407,26 @@ def test_sorted_by_value():
                           opener_bp: bytes, accepter_bp: bytes,
                           commitment_number: int, to_self_delay: int,
                           dust_limit: int, feerate_per_kw: int,
-                          offered_htlcs=None, received_htlcs=None) -> str:
+                          offered_htlcs=None, received_htlcs=None) -> CMutableTransaction:
     """
-    Create an unsigned commitment transaction.
+    Create an unsigned commitment transaction (no HTLCs for now).
 
     Combines: funding input, obscured commitment number,
-    to_local/to_remote outputs with dust filtering, fee deduction,
-    and any HTLC outputs.
+    and to_local/to_remote outputs with dust filtering and fee deduction.
 
-    Fee calculation: weight = 724 + 172 * num_htlcs,
-    fee = weight * feerate_per_kw // 1000
+    Note: offered_htlcs and received_htlcs are included in the
+    signature for future use. You can ignore them for this exercise.
+
+    Fee: weight = 724, fee = weight * feerate_per_kw // 1000
 
     Steps:
-    1. Count HTLCs and compute fee (accounting for HTLC weight)
-    2. Create channel outputs with create_commitment_outputs()
-    3. Create HTLC outputs with create_htlc_outputs()
-    4. Wrap channel outputs as [{"output": o, "cltv_expiry": 0}, ...]
-    5. Combine and sort all outputs by (nValue, scriptPubKey bytes, cltv_expiry)
-    6. Extract the CTxOut list from the sorted dicts
-    7. Build CMutableTransaction with obscured commitment number
-    8. Return serialized hex
+    1. Compute fee from the base commitment weight (724)
+    2. Create channel output dicts with create_commitment_outputs()
+    3. Sort outputs with sort_outputs()
+    4. Convert sorted dicts to CTxOut objects
+    5. Build CMutableTransaction (nVersion=2) with the funding input
+    6. Use set_obscured_commitment_number() to set nLockTime/nSequence
+    7. Return the CMutableTransaction
 
     Args:
         funding_txid_hex: funding txid (big-endian hex)
@@ -1394,17 +1439,18 @@ def test_sorted_by_value():
         to_self_delay: CSV delay
         dust_limit: dust limit satoshis
         feerate_per_kw: fee rate per kilo-weight unit
-        offered_htlcs: list of offered HTLC dicts (optional)
-        received_htlcs: list of received HTLC dicts (optional)
+        offered_htlcs: (ignore for now)
+        received_htlcs: (ignore for now)
 
     Returns:
-        str: hex-encoded unsigned commitment transaction
+        CMutableTransaction: unsigned commitment transaction
     """
     # === YOUR CODE HERE ===
     pass
 `,
     testCode: `
-def test_bolt3_no_htlcs():
+def test_structure():
+    from bitcoin.core import COutPoint, lx
     funding_txid = "8984484a580b825b9972d7adb15050b3ab624ccd731946b3eeddb92f4e7ef6be"
     rev_pk = bytes.fromhex("0212a140cd0c6539d07cd08dfe09984dec3251ea808b892efeac3ede9402bf2b19")
     delayed_pk = bytes.fromhex("03fd5960528dc152014952efdb702a88f71e3c1653b2314431701ec77e57fde83c")
@@ -1412,11 +1458,29 @@ def test_bolt3_no_htlcs():
     opener_bp = bytes.fromhex("034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa")
     accepter_bp = bytes.fromhex("032c0b7cf95324a07d05398b240174dc0c2be444d96b159aa6c7f7b1e668680991")
     ck = CommitmentKeys(bytes(33), rev_pk, delayed_pk, bytes(33), bytes(33))
-    result = create_commitment_tx(funding_txid, 0, 7_000_000, 3_000_000, ck, remote_pk, opener_bp, accepter_bp, 42, 144, 546, 0)
-    expected = "0200000001bef67e4e2fb9ddeeb3461973cd4c62abb35050b1add772995b820b584a488489000000000038b02b8002c0c62d0000000000160014cc1b07838e387deacd0e5232e1e8b49f4c29e484c0cf6a0000000000220020f50bac8895d89a8a4f1de0b87bf52383f4d853e4368db17467fa50e3798d69803e195220"
-    assert result == expected, f"TX mismatch.\\nExpected: {expected}\\nGot:      {result}"
+    tx = create_commitment_tx(funding_txid, 0, 7_000_000, 3_000_000, ck, remote_pk, opener_bp, accepter_bp, 42, 144, 546, 0)
+    assert isinstance(tx, CMutableTransaction), f"Must return CMutableTransaction, got {type(tx).__name__}"
+    # nVersion must be 2 (BOLT 3)
+    assert tx.nVersion == 2, f"nVersion should be 2, got {tx.nVersion}"
+    # Single input spending the funding outpoint
+    assert len(tx.vin) == 1, f"Expected 1 input, got {len(tx.vin)}"
+    assert tx.vin[0].prevout.hash == lx(funding_txid), "Input must spend the funding txid"
+    assert tx.vin[0].prevout.n == 0, "Input must spend vout 0"
+    # Two outputs (feerate=0 so no fees deducted, both above dust)
+    assert len(tx.vout) == 2, f"Expected 2 outputs, got {len(tx.vout)}"
+    values = sorted([o.nValue for o in tx.vout])
+    assert values == [3_000_000, 7_000_000], f"Output values should be [3M, 7M], got {values}"
+    # Check script types: one P2WPKH (to_remote, 22 bytes) and one P2WSH (to_local, 34 bytes)
+    script_lens = sorted([len(o.scriptPubKey) for o in tx.vout])
+    assert script_lens == [22, 34], f"Expected script lengths [22 (P2WPKH), 34 (P2WSH)], got {script_lens}"
+    # Verify obscured commitment number in nLockTime and nSequence
+    obscured = 42 ^ get_obscure_factor(opener_bp, accepter_bp)
+    expected_locktime = (0x20 << 24) | (obscured & 0xFFFFFF)
+    expected_sequence = (0x80 << 24) | ((obscured >> 24) & 0xFFFFFF)
+    assert tx.nLockTime == expected_locktime, f"nLockTime mismatch: expected {expected_locktime:#x}, got {tx.nLockTime:#x}"
+    assert tx.vin[0].nSequence == expected_sequence, f"nSequence mismatch: expected {expected_sequence:#x}, got {tx.vin[0].nSequence:#x}"
 
-def test_returns_string():
+def test_fee_applied():
     funding_txid = "8984484a580b825b9972d7adb15050b3ab624ccd731946b3eeddb92f4e7ef6be"
     rev_pk = bytes.fromhex("0212a140cd0c6539d07cd08dfe09984dec3251ea808b892efeac3ede9402bf2b19")
     delayed_pk = bytes.fromhex("03fd5960528dc152014952efdb702a88f71e3c1653b2314431701ec77e57fde83c")
@@ -1424,64 +1488,37 @@ def test_returns_string():
     opener_bp = bytes.fromhex("034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa")
     accepter_bp = bytes.fromhex("032c0b7cf95324a07d05398b240174dc0c2be444d96b159aa6c7f7b1e668680991")
     ck = CommitmentKeys(bytes(33), rev_pk, delayed_pk, bytes(33), bytes(33))
-    result = create_commitment_tx(funding_txid, 0, 7_000_000, 3_000_000, ck, remote_pk, opener_bp, accepter_bp, 42, 144, 546, 0)
-    assert isinstance(result, str), "Must return hex string"
-
-def test_with_htlc():
-    import hashlib as _hl
-    funding_txid = "8984484a580b825b9972d7adb15050b3ab624ccd731946b3eeddb92f4e7ef6be"
-    rev_pk = bytes.fromhex("0212a140cd0c6539d07cd08dfe09984dec3251ea808b892efeac3ede9402bf2b19")
-    delayed_pk = bytes.fromhex("03fd5960528dc152014952efdb702a88f71e3c1653b2314431701ec77e57fde83c")
-    local_htlc = bytes.fromhex("030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e7")
-    remote_htlc = bytes.fromhex("0394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b")
-    remote_pk = bytes.fromhex("032c0b7cf95324a07d05398b240174dc0c2be444d96b159aa6c7f7b1e668680991")
-    opener_bp = bytes.fromhex("034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa")
-    accepter_bp = bytes.fromhex("032c0b7cf95324a07d05398b240174dc0c2be444d96b159aa6c7f7b1e668680991")
-    ck = CommitmentKeys(bytes(33), rev_pk, delayed_pk, local_htlc, remote_htlc)
-    preimage = bytes([0x02] * 32)
-    payment_hash = _hl.sha256(preimage).digest()
-    offered = [{"amount_sat": 405000, "payment_hash": payment_hash, "cltv_expiry": 500}]
-    result = create_commitment_tx(funding_txid, 0, 7_000_000, 3_000_000, ck, remote_pk, opener_bp, accepter_bp, 42, 144, 546, 0, offered_htlcs=offered)
-    tx_bytes = bytes.fromhex(result)
-    # With 1 HTLC and feerate=0, should have 3 outputs: to_remote, htlc, to_local
-    # Count outputs from the serialized tx (version=4, marker+flag=0, vin count, vin, vout count...)
-    from bitcoin.core import CTransaction
-    tx = CTransaction.deserialize(tx_bytes)
-    assert len(tx.vout) == 3, f"Expected 3 outputs with 1 HTLC, got {len(tx.vout)}"
+    # feerate=1000 -> fee = 724 * 1000 // 1000 = 724
+    tx = create_commitment_tx(funding_txid, 0, 7_000_000, 3_000_000, ck, remote_pk, opener_bp, accepter_bp, 42, 144, 546, 1000)
+    values = sorted([o.nValue for o in tx.vout])
+    assert 3_000_000 in values, "to_remote should be 3,000,000"
+    assert (7_000_000 - 724) in values, f"to_local should be 7,000,000 - 724 = {7_000_000 - 724}, got {values}"
 `,
     hints: {
       conceptual:
-        "<p><strong>Goal:</strong> Assemble a complete <strong>unsigned commitment transaction</strong>. This combines everything: a funding input, obscured commitment number in nLockTime/nSequence, channel outputs (to_local and to_remote), and HTLC outputs.<br><br><strong>Fee formula:</strong> <code>weight = 724 + 172 * num_htlcs</code>, and <code>fee = weight * feerate_per_kw // 1000</code>. The weight accounts for each HTLC output added to the transaction.<br><br><strong>Key details:</strong> Use <code>create_commitment_outputs()</code> and <code>create_htlc_outputs()</code> to build the outputs, then merge and sort them. All outputs get wrapped in dicts with <code>cltv_expiry</code> so they can be sorted by <strong>(value, script, cltv_expiry)</strong> per the BOLT 3 output ordering rule.</p>",
+        "<p><strong>Goal:</strong> Assemble a complete <strong>unsigned commitment transaction</strong>. This combines a funding input, obscured commitment number in nLockTime/nSequence, and channel outputs (to_local and to_remote). Ignore the HTLC parameters for now.<br><br><strong>Fee formula:</strong> <code>weight = 724</code> (the base weight of a commitment transaction with no HTLCs), and <code>fee = weight * feerate_per_kw // 1000</code>.<br><br><strong>Key details:</strong> Use <code>create_commitment_outputs()</code> to build the output dicts, sort them with <code>sort_outputs()</code>, then convert each sorted dict into a <code>CTxOut</code> for the final transaction. Use <code>set_obscured_commitment_number()</code> to encode the commitment number into the transaction. BOLT 3 specifies <code>nVersion=2</code> for commitment transactions.</p>",
       steps:
-        '<ol><li>Count total HTLCs from both lists (handle <code>None</code> with <code>or []</code>), then compute the fee: <code>weight = 724 + 172 * num_htlcs</code>, <code>fee = weight * feerate_per_kw // 1000</code></li><li>Create channel outputs using <code>create_commitment_outputs()</code>, passing the balances, commitment keys, remote payment pubkey, delay, dust limit, and fee</li><li>Create HTLC outputs using <code>create_htlc_outputs()</code> with the commitment keys and HTLC lists</li><li>Wrap each channel output in a dict with <code>"output"</code> and <code>"cltv_expiry": 0</code> to match the HTLC output dict format, then combine both lists</li><li>Sort all output dicts by <code>(nValue, scriptPubKey bytes, cltv_expiry)</code>, then extract the <code>CTxOut</code> objects from the sorted list</li><li>Compute the obscured value using <code>get_obscure_factor()</code> and XOR, then split into nLockTime and nSequence (same formula as <code>set_obscured_commitment_number</code>). Build a <code>CTxIn</code> using <code>COutPoint(lx(...), vout)</code> with the computed nSequence, then construct a <code>CMutableTransaction</code> and return <code>.serialize().hex()</code></li></ol>',
+        '<ol><li>Compute the fee: <code>weight = 724</code>, <code>fee = weight * feerate_per_kw // 1000</code></li><li>Create channel output dicts using <code>create_commitment_outputs()</code>, passing the balances, commitment keys, remote payment pubkey, delay, dust limit, and fee</li><li>Sort the output dicts using <code>sort_outputs()</code></li><li>Convert each sorted dict into a <code>CTxOut(d[\"value\"], CScript(d[\"script\"]))</code></li><li>Build a <code>CMutableTxIn</code> using <code>COutPoint(lx(funding_txid_hex), funding_vout)</code></li><li>Construct a <code>CMutableTransaction</code> with <code>nVersion=2</code></li><li>Call <code>set_obscured_commitment_number(tx, ...)</code> to set the nLockTime and nSequence</li><li>Return the <code>CMutableTransaction</code></li></ol>',
       code: `def create_commitment_tx(funding_txid_hex, funding_vout, to_local_sat, to_remote_sat,
                           commitment_keys, remote_payment_pubkey,
                           opener_bp, accepter_bp, commitment_number, to_self_delay,
                           dust_limit, feerate_per_kw,
                           offered_htlcs=None, received_htlcs=None):
-    num_htlcs = len(offered_htlcs or []) + len(received_htlcs or [])
-    weight = 724 + 172 * num_htlcs
+    weight = 724
     fee = weight * feerate_per_kw // 1000
     channel_outputs = create_commitment_outputs(to_local_sat, to_remote_sat, commitment_keys,
                                                 remote_payment_pubkey, to_self_delay, dust_limit, fee)
-    htlc_outputs = create_htlc_outputs(commitment_keys, offered_htlcs or [], received_htlcs or [])
+    sort_outputs(channel_outputs)
+    outputs = [CTxOut(d["value"], CScript(d["script"])) for d in channel_outputs]
 
-    all_outputs = [{"output": o, "cltv_expiry": 0} for o in channel_outputs]
-    all_outputs.extend(htlc_outputs)
-    all_outputs.sort(key=lambda d: (d["output"].nValue, bytes(d["output"].scriptPubKey), d["cltv_expiry"]))
-    outputs = [d["output"] for d in all_outputs]
-
-    obscured = commitment_number ^ get_obscure_factor(opener_bp, accepter_bp)
-    locktime = (0x20 << 24) | (obscured & 0xFFFFFF)
-    sequence = (0x80 << 24) | ((obscured >> 24) & 0xFFFFFF)
-
-    txin = CTxIn(COutPoint(lx(funding_txid_hex), funding_vout), nSequence=sequence)
-    tx = CMutableTransaction([txin], outputs, nLockTime=locktime)
-    return tx.serialize().hex()`,
+    txin = CMutableTxIn(COutPoint(lx(funding_txid_hex), funding_vout))
+    tx = CMutableTransaction([txin], outputs, nVersion=2)
+    set_obscured_commitment_number(tx, commitment_number, opener_bp, accepter_bp)
+    return tx`,
     },
-    rewardSats: 42,
+    rewardSats: 21,
     group: "transactions/commitment",
-    groupOrder: 4,
+    groupOrder: 5,
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1489,112 +1526,110 @@ def test_with_htlc():
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-finalize-commitment": {
     id: "ln-exercise-finalize-commitment",
-    title: "Exercise 17: Finalize Commitment Transaction",
+    title: "Exercise 18: Finalize Commitment Transaction",
     description:
       "Sign and finalize a commitment transaction using the <code>ChannelKeyManager</code>. Call <code>km.sign_input()</code> with <code>km.funding_key</code> to produce the local signature, then build the witness: <code>[empty, sig1, sig2, funding_script]</code>.",
-    starterCode: `def finalize_commitment_tx(km, unsigned_tx_hex: str,
+    starterCode: `def finalize_commitment_tx(km, unsigned_tx: bytes,
                             funding_script: bytes,
                             funding_amount: int,
                             remote_signature: bytes,
-                            local_sig_first: bool) -> str:
+                            local_sig_first: bool) -> CMutableTransaction:
     """
     Sign and finalize a commitment transaction.
 
     Steps:
-    1. Get tx_bytes from the unsigned tx hex
-    2. Sign with km.sign_input() using km.funding_key
-    3. Build witness using CScriptWitness, CTxInWitness, CTxWitness:
+    1. Sign input 0 with km.sign_input() using km.funding_key
+    2. Build witness using CScriptWitness, CTxInWitness, CTxWitness:
        items = [b'', sig1, sig2, funding_script]
        sig1/sig2 order depends on local_sig_first
-    4. Deserialize into mutable tx, attach the witness, serialize
+    3. Deserialize into mutable tx, attach the witness, return it
 
     Args:
         km: ChannelKeyManager with funding_key
-        unsigned_tx_hex: hex of unsigned commitment tx
+        unsigned_tx: serialized bytes of unsigned commitment tx
         funding_script: the 2-of-2 multisig script
         funding_amount: satoshi value of funding output
         remote_signature: DER signature + SIGHASH_ALL byte
         local_sig_first: True if local sig comes first in witness
 
     Returns:
-        str: hex of signed segwit commitment transaction
+        CMutableTransaction: signed commitment transaction with witness
     """
     # === YOUR CODE HERE ===
     pass
 `,
     testCode: `
-def test_returns_string():
+def test_returns_tx():
     seed = bytes([0x01] * 32)
     km = ChannelKeyManager(seed)
-    unsigned_tx = "0200000001bef67e4e2fb9ddeeb3461973cd4c62abb35050b1add772995b820b584a488489000000000038b02b8002c0c62d0000000000160014cc1b07838e387deacd0e5232e1e8b49f4c29e48454a56a00000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e3e195220"
+    unsigned_tx = bytes.fromhex("0200000001bef67e4e2fb9ddeeb3461973cd4c62abb35050b1add772995b820b584a488489000000000038b02b8002c0c62d0000000000160014cc1b07838e387deacd0e5232e1e8b49f4c29e48454a56a00000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e3e195220")
     funding_script = bytes.fromhex("5221023da092f6980e58d2c037173180e9a465476026ee50f96695963e8efe436f54eb21030e9f7b623d2ccc7c9bd44d66d5ce21ce504c0acf6385a132cec6d3c39fa711c152ae")
     remote_sig = bytes.fromhex("3045022100c3127b33dcc741dd6b05b1e63cbd1a9a7d816f37af9b6756fa2376b056f032370220408b96279808fe57eb7e463710804cdf4f108388bc5cf722d8c848d2c7f9f3b001")
     result = finalize_commitment_tx(km, unsigned_tx, funding_script, 10_000_000, remote_sig, True)
-    assert isinstance(result, str), "Must return hex string"
-    assert "0001" in result[:12], "Must include segwit marker"
+    assert isinstance(result, CMutableTransaction), f"Must return CMutableTransaction, got {type(result).__name__}"
+    # Serialized signed tx should include segwit marker
+    signed_hex = result.serialize().hex()
+    assert "0001" in signed_hex[:12], "Must include segwit marker"
 
-def test_uses_km_sign_input():
+def test_has_witness():
     seed = bytes([0x01] * 32)
     km = ChannelKeyManager(seed)
-    unsigned_tx = "0200000001bef67e4e2fb9ddeeb3461973cd4c62abb35050b1add772995b820b584a488489000000000038b02b8002c0c62d0000000000160014cc1b07838e387deacd0e5232e1e8b49f4c29e48454a56a00000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e3e195220"
+    unsigned_tx = bytes.fromhex("0200000001bef67e4e2fb9ddeeb3461973cd4c62abb35050b1add772995b820b584a488489000000000038b02b8002c0c62d0000000000160014cc1b07838e387deacd0e5232e1e8b49f4c29e48454a56a00000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e3e195220")
     funding_script = bytes.fromhex("5221023da092f6980e58d2c037173180e9a465476026ee50f96695963e8efe436f54eb21030e9f7b623d2ccc7c9bd44d66d5ce21ce504c0acf6385a132cec6d3c39fa711c152ae")
     remote_sig = bytes.fromhex("3045022100c3127b33dcc741dd6b05b1e63cbd1a9a7d816f37af9b6756fa2376b056f032370220408b96279808fe57eb7e463710804cdf4f108388bc5cf722d8c848d2c7f9f3b001")
     result = finalize_commitment_tx(km, unsigned_tx, funding_script, 10_000_000, remote_sig, True)
-    signed = bytes.fromhex(result)
-    # Should have witness data
-    assert len(signed) > len(bytes.fromhex(unsigned_tx)), "Signed tx must be larger than unsigned"
+    # Should have witness data - signed tx should be larger than unsigned
+    assert len(result.serialize()) > len(unsigned_tx), "Signed tx must be larger than unsigned"
 `,
     hints: {
       conceptual:
         "<p><strong>Goal:</strong> Sign and add a <strong>segwit witness</strong> to the commitment transaction.<br><br><strong>How it works:</strong> Use <code>km.sign_input()</code> with <code>km.funding_key</code> to produce the local signature. The witness for a <strong>2-of-2 multisig P2WSH</strong> is: <code>[empty bytes, sig1, sig2, witness_script]</code>. The empty bytes are the OP_0 dummy required by the CHECKMULTISIG off-by-one bug. The signature order depends on <code>local_sig_first</code>.<br><br><strong>Tools you will need:</strong> python-bitcoinlib's witness types (<code>CScriptWitness</code>, <code>CTxInWitness</code>, <code>CTxWitness</code>) to construct the witness, then <code>CMutableTransaction.from_tx()</code> to attach it to a mutable copy of the transaction.</p>",
       steps:
-        '<ol><li>Convert the hex to bytes with <code>bytes.fromhex()</code>, then sign input 0 using <code>km.sign_input()</code> with the funding script wrapped in <code>CScript()</code>, the funding amount, and <code>km.funding_key</code></li><li>Order the two signatures based on <code>local_sig_first</code>: if true, local goes first; otherwise remote goes first</li><li>Deserialize the transaction bytes using <code>CTransaction.deserialize()</code></li><li>Construct the witness: <code>CScriptWitness()</code> with four items: empty bytes (<code>b\'\'</code>), the two ordered signatures, and the funding script</li><li>Wrap in <code>CTxInWitness()</code> then <code>CTxWitness()</code></li><li>Create a mutable copy using <code>CMutableTransaction.from_tx()</code>, attach the witness to <code>.wit</code>, then return <code>.serialize().hex()</code></li></ol>',
-      code: `def finalize_commitment_tx(km, unsigned_tx_hex, funding_script, funding_amount,
+        '<ol><li>Sign input 0 using <code>km.sign_input()</code> with the unsigned tx bytes, the funding script wrapped in <code>CScript()</code>, the funding amount, and <code>km.funding_key</code></li><li>Order the two signatures based on <code>local_sig_first</code>: if true, local goes first; otherwise remote goes first</li><li>Deserialize the transaction bytes using <code>CTransaction.deserialize()</code></li><li>Construct the witness: <code>CScriptWitness()</code> with four items: empty bytes (<code>b\'\'</code>), the two ordered signatures, and the funding script</li><li>Wrap in <code>CTxInWitness()</code> then <code>CTxWitness()</code></li><li>Create a mutable copy using <code>CMutableTransaction.from_tx()</code>, attach the witness to <code>.wit</code>, and return the <code>CMutableTransaction</code></li></ol>',
+      code: `def finalize_commitment_tx(km, unsigned_tx, funding_script, funding_amount,
                             remote_signature, local_sig_first):
-    tx_bytes = bytes.fromhex(unsigned_tx_hex)
-    local_sig = km.sign_input(tx_bytes, 0, CScript(funding_script), funding_amount, km.funding_key)
+    local_sig = km.sign_input(unsigned_tx, 0, CScript(funding_script), funding_amount, km.funding_key)
 
     if local_sig_first:
         sig1, sig2 = local_sig, remote_signature
     else:
         sig1, sig2 = remote_signature, local_sig
 
-    tx = CTransaction.deserialize(tx_bytes)
+    tx = CTransaction.deserialize(unsigned_tx)
     witness = CScriptWitness([b'', sig1, sig2, funding_script])
     in_witness = CTxInWitness(witness)
     tx_witness = CTxWitness([in_witness])
 
     mtx = CMutableTransaction.from_tx(tx)
     mtx.wit = tx_witness
-    return mtx.serialize().hex()`,
+    return mtx`,
     },
-    rewardSats: 42,
+    rewardSats: 21,
     group: "transactions/commitment",
-    groupOrder: 5,
+    groupOrder: 6,
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 18 - Create HTLC Outputs
+  // EXERCISE 19 - Create HTLC Outputs
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-htlc-outputs": {
     id: "ln-exercise-htlc-outputs",
     title: "Exercise 18: Create HTLC Outputs",
     description:
-      "Create HTLC output metadata for commitment transactions. For each offered HTLC, wrap in an offered HTLC script (P2WSH). For each received HTLC, wrap in a received HTLC script (P2WSH). Returns a list of dicts with <code>\"output\"</code> (CTxOut) and <code>\"cltv_expiry\"</code> (int) keys.",
+      "Create HTLC output dicts for commitment transactions. For each offered HTLC, wrap in an offered HTLC script (P2WSH). For each received HTLC, wrap in a received HTLC script (P2WSH). Returns a list of output dicts with <code>\"value\"</code>, <code>\"script\"</code>, and <code>\"cltv_expiry\"</code> keys.",
     starterCode: `def create_htlc_outputs(commitment_keys, offered_htlcs: list, received_htlcs: list) -> list:
     """
-    Create HTLC output metadata for commitment transactions.
+    Create HTLC output dicts for commitment transactions.
 
     Each HTLC in offered_htlcs/received_htlcs is a dict:
       {"amount_sat": int, "payment_hash": bytes, "cltv_expiry": int}
 
-    Returns list of dicts:
-      [{"output": CTxOut, "cltv_expiry": int}, ...]
+    Returns list of output dicts:
+      [{"value": int, "script": bytes, "cltv_expiry": int}, ...]
 
     For offered HTLCs: call create_offered_htlc_script(commitment_keys, htlc["payment_hash"])
     For received HTLCs: call create_received_htlc_script(commitment_keys, htlc["payment_hash"], htlc["cltv_expiry"])
     Wrap each script as P2WSH: CScript([OP_0, hashlib.sha256(bytes(script)).digest()])
-    Create CTxOut with htlc["amount_sat"] and the P2WSH script.
 
     Args:
         commitment_keys: CommitmentKeys object with derived keys
@@ -1602,7 +1637,7 @@ def test_uses_km_sign_input():
         received_htlcs: list of received HTLC dicts
 
     Returns:
-        list of dicts: [{"output": CTxOut, "cltv_expiry": int}, ...]
+        list of output dicts: [{"value": int, "script": bytes, "cltv_expiry": int}, ...]
     """
     # === YOUR CODE HERE ===
     pass
@@ -1629,7 +1664,8 @@ def test_output_dict_keys():
     ck = CommitmentKeys(bytes(33), rev_pk, bytes(33), local_htlc, remote_htlc)
     offered = [{"amount_sat": 405000, "payment_hash": _hl.sha256(bytes([0x02] * 32)).digest(), "cltv_expiry": 500}]
     result = create_htlc_outputs(ck, offered, [])
-    assert "output" in result[0], "Each dict must have 'output' key"
+    assert "value" in result[0], "Each dict must have 'value' key"
+    assert "script" in result[0], "Each dict must have 'script' key"
     assert "cltv_expiry" in result[0], "Each dict must have 'cltv_expiry' key"
     assert isinstance(result[0]["cltv_expiry"], int), "cltv_expiry must be int"
 
@@ -1640,7 +1676,7 @@ def test_p2wsh_wrapping():
     ck = CommitmentKeys(bytes(33), rev_pk, bytes(33), local_htlc, remote_htlc)
     offered = [{"amount_sat": 405000, "payment_hash": _hl.sha256(bytes([0x02] * 32)).digest(), "cltv_expiry": 500}]
     result = create_htlc_outputs(ck, offered, [])
-    spk = bytes(result[0]["output"].scriptPubKey)
+    spk = result[0]["script"]
     assert spk[0] == 0x00, "P2WSH must start with OP_0"
     assert len(spk) == 34, f"P2WSH scriptPubKey must be 34 bytes (OP_0 + push32 + 32-byte hash), got {len(spk)}"
 
@@ -1652,33 +1688,33 @@ def test_values_match():
     offered = [{"amount_sat": 405000, "payment_hash": _hl.sha256(bytes([0x02] * 32)).digest(), "cltv_expiry": 500}]
     received = [{"amount_sat": 300000, "payment_hash": _hl.sha256(bytes(32)).digest(), "cltv_expiry": 600}]
     result = create_htlc_outputs(ck, offered, received)
-    values = sorted([d["output"].nValue for d in result])
+    values = sorted([d["value"] for d in result])
     assert values == [300000, 405000], f"Output values should match input amounts, got {values}"
 `,
     hints: {
       conceptual:
-        "<p><strong>Goal:</strong> Create <strong>P2WSH outputs</strong> for each HTLC and return them as dicts with <code>\"output\"</code> (CTxOut) and <code>\"cltv_expiry\"</code> (int) keys.<br><br><strong>How it works:</strong> For <strong>offered HTLCs</strong>, generate the witness script with <code>create_offered_htlc_script()</code> using the commitment keys and payment hash. For <strong>received HTLCs</strong>, use <code>create_received_htlc_script()</code> which also takes a cltv_expiry. Each witness script gets wrapped as P2WSH using <code>CScript</code> with <code>OP_0</code> and the SHA256 of the witness script.<br><br><strong>Key details:</strong> Each HTLC input dict has <code>amount_sat</code>, <code>payment_hash</code>, and <code>cltv_expiry</code> fields. Create a <code>CTxOut</code> for each HTLC and return the list of dicts.</p>",
+        "<p><strong>Goal:</strong> Create <strong>P2WSH output dicts</strong> for each HTLC with <code>\"value\"</code>, <code>\"script\"</code>, and <code>\"cltv_expiry\"</code> keys.<br><br><strong>How it works:</strong> For <strong>offered HTLCs</strong>, generate the witness script with <code>create_offered_htlc_script()</code> using the commitment keys and payment hash. For <strong>received HTLCs</strong>, use <code>create_received_htlc_script()</code> which also takes a cltv_expiry. Each witness script gets wrapped as P2WSH using <code>CScript</code> with <code>OP_0</code> and the SHA256 of the witness script.<br><br><strong>Key details:</strong> Each HTLC input dict has <code>amount_sat</code>, <code>payment_hash</code>, and <code>cltv_expiry</code> fields. Return output dicts with the same format as <code>create_commitment_outputs()</code> so they can be combined and sorted together.</p>",
       steps:
-        '<ol><li>Initialize an empty list for the results</li><li>Loop through each offered HTLC dict: call <code>create_offered_htlc_script()</code> with the commitment keys and the HTLC\'s payment hash. Wrap the result as P2WSH using <code>CScript()</code> with <code>OP_0</code> and the <code>hashlib.sha256()</code> hash of the script bytes. Create a <code>CTxOut</code> with the HTLC amount and the P2WSH script. Append a dict with <code>"output"</code> and <code>"cltv_expiry"</code> keys</li><li>Loop through each received HTLC dict: same pattern but use <code>create_received_htlc_script()</code>, which also takes the CLTV expiry as a third argument</li><li>Return the list of dicts</li></ol>',
+        '<ol><li>Initialize an empty list for the results</li><li>Loop through each offered HTLC dict: call <code>create_offered_htlc_script()</code> with the commitment keys and the HTLC\'s payment hash. Wrap the result as P2WSH using <code>CScript()</code> with <code>OP_0</code> and the <code>hashlib.sha256()</code> hash of the script bytes. Append a dict with <code>"value"</code> (the HTLC amount), <code>"script"</code> (the P2WSH bytes), and <code>"cltv_expiry"</code></li><li>Loop through each received HTLC dict: same pattern but use <code>create_received_htlc_script()</code>, which also takes the CLTV expiry as a third argument</li><li>Return the list of output dicts</li></ol>',
       code: `def create_htlc_outputs(commitment_keys, offered_htlcs, received_htlcs):
     outputs = []
     for htlc in offered_htlcs:
         script = create_offered_htlc_script(commitment_keys, htlc["payment_hash"])
         p2wsh = CScript([OP_0, hashlib.sha256(bytes(script)).digest()])
-        outputs.append({"output": CTxOut(htlc["amount_sat"], p2wsh), "cltv_expiry": htlc["cltv_expiry"]})
+        outputs.append({"value": htlc["amount_sat"], "script": bytes(p2wsh), "cltv_expiry": htlc["cltv_expiry"]})
     for htlc in received_htlcs:
         script = create_received_htlc_script(commitment_keys, htlc["payment_hash"], htlc["cltv_expiry"])
         p2wsh = CScript([OP_0, hashlib.sha256(bytes(script)).digest()])
-        outputs.append({"output": CTxOut(htlc["amount_sat"], p2wsh), "cltv_expiry": htlc["cltv_expiry"]})
+        outputs.append({"value": htlc["amount_sat"], "script": bytes(p2wsh), "cltv_expiry": htlc["cltv_expiry"]})
     return outputs`,
     },
     rewardSats: 21,
     group: "transactions/commitment",
-    groupOrder: 6,
+    groupOrder: 7,
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 19 -Create Offered HTLC Script
+  // EXERCISE 20 -Create Offered HTLC Script
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-offered-htlc-script": {
     id: "ln-exercise-offered-htlc-script",
@@ -2136,7 +2172,7 @@ def test_witness_items():
     mtx.wit = tx_witness
     return mtx.serialize().hex()`,
     },
-    rewardSats: 42,
+    rewardSats: 21,
     group: "transactions/htlc",
     groupOrder: 3,
   },
@@ -2234,7 +2270,7 @@ def test_witness_contains_preimage():
     mtx.wit = tx_witness
     return mtx.serialize().hex()`,
     },
-    rewardSats: 42,
+    rewardSats: 21,
     group: "transactions/htlc",
     groupOrder: 4,
   },

@@ -854,8 +854,7 @@ export const TX_GENERATORS: Record<string, TxGeneratorConfig> = {
       {
         key: "funding_txid_input",
         label: "Funding Transaction ID",
-        placeholder: "Auto-filled from Transactions notebook, or paste here",
-        autoFillFrom: "funding-txid",
+        placeholder: "Paste your Funding TxID here",
       },
     ],
     pythonCode: GEN_COMMITMENT_CODE,
