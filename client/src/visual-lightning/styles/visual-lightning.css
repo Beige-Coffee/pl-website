@@ -1,0 +1,418 @@
+.vl-root {
+  /* Override global pixel-art theme */
+  --vl-bg: #ffffff;
+  --vl-bg-warm: #fefdfb;
+  --vl-gold-50: #fdf8e8;
+  --vl-gold-100: #f9edcc;
+  --vl-gold-200: #f0d899;
+  --vl-gold-300: #e5bd5e;
+  --vl-gold-400: #d4a038;
+  --vl-gold-500: #b8860b;
+  --vl-gold-600: #8a6508;
+  --vl-brown-100: #f5f0e8;
+  --vl-brown-200: #e8dcc8;
+  --vl-brown-800: #3d2e14;
+  --vl-brown-900: #2a1f0d;
+  --vl-text: #1a1612;
+  --vl-text-muted: #6b5d4f;
+  --vl-border: #e8dcc8;
+  --vl-shadow: 0 4px 24px rgba(184, 134, 11, 0.08);
+  --vl-shadow-hover: 0 8px 32px rgba(184, 134, 11, 0.15);
+  --vl-correct: #16a34a;
+  --vl-incorrect: #dc2626;
+
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--vl-bg) !important;
+  background-image: none !important; /* Kill the pixel grid */
+  color: var(--vl-text);
+  line-height: 1.7;
+}
+
+/* Override all the pixel-art defaults within .vl-root */
+.vl-root * {
+  border-color: var(--vl-border);
+}
+
+.vl-root h1, .vl-root h2, .vl-root h3, .vl-root h4 {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--vl-brown-900);
+}
+
+.vl-root h1 { font-size: 2.25rem; line-height: 1.2; }
+.vl-root h2 { font-size: 1.75rem; line-height: 1.25; }
+.vl-root h3 { font-size: 1.25rem; line-height: 1.3; font-weight: 600; }
+
+.vl-root code {
+  font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
+  background: var(--vl-gold-50);
+  border: 1px solid var(--vl-border);
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: 0.9em;
+}
+
+/* 3D floating card */
+.vl-card-3d {
+  perspective: 1200px;
+}
+
+.vl-card-3d-inner {
+  background: white;
+  border: 1px solid var(--vl-border);
+  border-radius: 16px;
+  box-shadow: var(--vl-shadow);
+  transform: rotateX(2deg) rotateY(-1deg) translateZ(0);
+  transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94), box-shadow 0.4s ease;
+}
+
+.vl-card-3d-inner:hover {
+  transform: rotateX(0deg) rotateY(0deg) translateZ(20px);
+  box-shadow: var(--vl-shadow-hover);
+}
+
+/* Ambient floating animation */
+@keyframes vl-float {
+  0%, 100% { transform: translateY(0px) rotateX(2deg); }
+  50% { transform: translateY(-8px) rotateX(0deg); }
+}
+
+.vl-float {
+  animation: vl-float 6s ease-in-out infinite;
+}
+
+/* Quiz shake animation */
+@keyframes vl-shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
+  20%, 40%, 60%, 80% { transform: translateX(4px); }
+}
+
+.vl-shake {
+  animation: vl-shake 0.5s ease-in-out;
+}
+
+/* Callout box */
+.vl-callout {
+  background: var(--vl-gold-50);
+  border: 1px solid var(--vl-gold-200);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  border-left: 4px solid var(--vl-gold-500);
+}
+
+/* ===== SPLIT LAYOUT ===== */
+.vl-split-layout {
+  display: flex;
+  flex-direction: row;
+  min-height: calc(100vh - 60px); /* leave room for bezel */
+  padding-bottom: 60px; /* space for fixed bezel */
+}
+
+.vl-visual-panel {
+  width: 45%;
+  min-width: 45%;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px 80px;
+  box-sizing: border-box;
+}
+
+.vl-visual-panel-inner {
+  width: 100%;
+  max-width: 700px;
+  perspective: 1200px;
+}
+
+/* Strip card chrome from diagrams when inside the visual panel */
+.vl-visual-panel .vl-card-3d-inner {
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+  background: transparent;
+  transform: none;
+}
+
+.vl-visual-panel .vl-card-3d-inner:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.vl-text-panel {
+  flex: 1;
+  min-width: 0;
+  padding: 48px 48px 80px 48px;
+  box-sizing: border-box;
+  overflow-y: auto;
+}
+
+.vl-text-panel-inner {
+  max-width: 640px;
+}
+
+/* ===== RESIZER HANDLE ===== */
+.vl-resizer {
+  width: 8px;
+  flex-shrink: 0;
+  cursor: col-resize;
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.vl-resizer-bar {
+  width: 3px;
+  height: 30vh;
+  border-radius: 3px;
+  background: var(--vl-border);
+  transition: background 0.15s ease, height 0.15s ease;
+}
+
+.vl-resizer:hover .vl-resizer-bar,
+.vl-resizer-active .vl-resizer-bar {
+  background: var(--vl-gold-500);
+  height: 40vh;
+}
+
+/* ===== FLOATING BACK BUTTON ===== */
+.vl-back-button {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 50;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--vl-border);
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: var(--vl-text-muted);
+}
+
+.vl-back-button:hover {
+  background: white;
+  border-color: var(--vl-gold-400);
+  color: var(--vl-brown-900);
+  box-shadow: var(--vl-shadow);
+}
+
+/* ===== COMPASS BEZEL ===== */
+.vl-bezel {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  height: 60px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  border-top: 1px solid var(--vl-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 24px;
+}
+
+.vl-bezel-track {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  max-width: 800px;
+  height: 100%;
+}
+
+/* The connecting line behind the ticks */
+.vl-bezel-line {
+  position: absolute;
+  top: 50%;
+  left: 16px;
+  right: 16px;
+  height: 2px;
+  background: var(--vl-border);
+  transform: translateY(-1px);
+}
+
+.vl-bezel-ticks {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  z-index: 1;
+}
+
+.vl-bezel-tick {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: default;
+}
+
+.vl-bezel-tick-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--vl-border);
+  background: white;
+  transition: all 0.3s ease;
+}
+
+.vl-bezel-tick-label {
+  position: absolute;
+  bottom: -18px;
+  font-size: 10px;
+  color: var(--vl-text-muted);
+  opacity: 0.4;
+  white-space: nowrap;
+  transition: all 0.3s ease;
+}
+
+/* Enabled (clickable) ticks */
+.vl-bezel-tick-enabled {
+  cursor: pointer;
+}
+
+.vl-bezel-tick-enabled .vl-bezel-tick-dot {
+  border-color: var(--vl-gold-300);
+}
+
+.vl-bezel-tick-enabled .vl-bezel-tick-label {
+  opacity: 0.7;
+}
+
+.vl-bezel-tick-enabled:hover .vl-bezel-tick-dot {
+  border-color: var(--vl-gold-500);
+  background: var(--vl-gold-50);
+}
+
+/* Completed ticks */
+.vl-bezel-tick-completed .vl-bezel-tick-dot {
+  background: var(--vl-gold-400);
+  border-color: var(--vl-gold-400);
+}
+
+.vl-bezel-tick-completed .vl-bezel-tick-label {
+  opacity: 0.8;
+  color: var(--vl-gold-600);
+}
+
+/* Locked ticks (have content but not yet unlocked) */
+.vl-bezel-tick-locked .vl-bezel-tick-dot {
+  border-color: var(--vl-border);
+  background: var(--vl-brown-100);
+  opacity: 0.5;
+}
+
+.vl-bezel-tick-locked .vl-bezel-tick-label {
+  opacity: 0.3;
+}
+
+.vl-bezel-tick-locked {
+  cursor: not-allowed;
+}
+
+/* Active tick */
+.vl-bezel-tick-active .vl-bezel-tick-dot {
+  width: 16px;
+  height: 16px;
+  background: var(--vl-gold-500);
+  border-color: var(--vl-gold-500);
+  box-shadow: 0 0 12px rgba(184, 134, 11, 0.4);
+}
+
+.vl-bezel-tick-active .vl-bezel-tick-label {
+  opacity: 1;
+  color: var(--vl-gold-600);
+  font-weight: 600;
+}
+
+/* Title label above the active tick */
+.vl-bezel-title {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--vl-brown-900);
+  white-space: nowrap;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+/* Placeholder visual pulse */
+@keyframes vl-glow-pulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(184, 134, 11, 0.15); }
+  50% { box-shadow: 0 0 40px rgba(184, 134, 11, 0.3); }
+}
+
+.vl-placeholder-glow {
+  animation: vl-glow-pulse 3s ease-in-out infinite;
+}
+
+/* Mobile: reduce 3D effects */
+@media (hover: none) {
+  .vl-card-3d-inner {
+    transform: none;
+  }
+  .vl-card-3d-inner:hover {
+    transform: none;
+  }
+}
+
+/* ===== MOBILE BREAKPOINT ===== */
+@media (max-width: 768px) {
+  .vl-split-layout {
+    flex-direction: column;
+    min-height: auto;
+  }
+
+  .vl-visual-panel {
+    width: 100%;
+    min-width: 100%;
+    position: relative;
+    height: auto;
+    min-height: 280px;
+    padding: 24px 16px;
+  }
+
+  .vl-text-panel {
+    width: 100%;
+    padding: 24px 16px 80px;
+  }
+
+  .vl-bezel {
+    overflow-x: auto;
+    justify-content: flex-start;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .vl-bezel-track {
+    min-width: 600px;
+    padding: 0 16px;
+  }
+
+  .vl-back-button {
+    top: 8px;
+    left: 8px;
+    width: 36px;
+    height: 36px;
+  }
+}
