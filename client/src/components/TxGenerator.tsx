@@ -83,25 +83,45 @@ export default function TxGenerator({ config, theme, sessionToken, isCompleted, 
     setSaved(false);
 
     try {
-      // Inject input variables into the Python code
-      let code = "";
-      for (const inp of config.inputs) {
-        const val = inputs[inp.key] || "";
-        code += `${inp.key} = ${JSON.stringify(val)}\n`;
-      }
-      code += config.pythonCode;
+      let parsed: Record<string, string>;
 
-      const result = await runPythonCode(code);
+      if (config.execute) {
+        // Hybrid execution: uses server RPC + optional Python
+        const nodeRpc = async (method: string, params: unknown[]) => {
+          const res = await fetch("/api/node/rpc", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
+            },
+            body: JSON.stringify({ method, params }),
+          });
+          return res.json();
+        };
+        parsed = await config.execute({ inputs, nodeRpc, runPython: runPythonCode });
+      } else if (config.pythonCode) {
+        // Pure Python execution
+        let code = "";
+        for (const inp of config.inputs) {
+          const val = inputs[inp.key] || "";
+          code += `${inp.key} = ${JSON.stringify(val)}\n`;
+        }
+        code += config.pythonCode;
 
-      if (result.error) {
-        // Extract the last meaningful line from Python tracebacks
-        const lines = result.error.trim().split("\n");
-        const last = lines[lines.length - 1] || result.error;
-        setError(last);
+        const result = await runPythonCode(code);
+
+        if (result.error) {
+          const lines = result.error.trim().split("\n");
+          const last = lines[lines.length - 1] || result.error;
+          setError(last);
+          return;
+        }
+        parsed = parseOutput(result.output);
+      } else {
+        setError("Generator has no execution method configured");
         return;
       }
 
-      const parsed = parseOutput(result.output);
       setOutputParsed(parsed);
 
       // Save to TxNotebook localStorage

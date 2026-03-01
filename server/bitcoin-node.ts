@@ -282,6 +282,15 @@ class NodeManager {
     return data.result;
   }
 
+  async rpc(userId: UserId, method: string, params: unknown[]): Promise<unknown> {
+    if (BLOCKED_COMMANDS.has(method)) {
+      throw new Error(`Command '${method}' is not available in this environment.`);
+    }
+    const instance = await this.getOrCreate(userId);
+    instance.lastActivity = Date.now();
+    return this._rpcCall(instance.rpcPort, method, params);
+  }
+
   async exec(userId: UserId, rawCommand: string): Promise<{ result?: unknown; error?: string }> {
     const instance = await this.getOrCreate(userId);
     instance.lastActivity = Date.now();

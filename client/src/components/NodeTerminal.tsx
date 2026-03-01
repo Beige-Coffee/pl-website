@@ -29,10 +29,10 @@ function highlightJSON(text: string, dark: boolean): React.ReactNode[] {
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
-  const keyColor = dark ? "#FFD700" : "#9a7200";
-  const stringColor = dark ? "#98c379" : "#50a14f";
-  const numberColor = dark ? "#56b6c2" : "#0184bc";
-  const boolColor = dark ? "#c678dd" : "#a626a4";
+  const keyColor = dark ? "#FFD700" : "#7a5a00";
+  const stringColor = dark ? "#98c379" : "#2e7d32";
+  const numberColor = dark ? "#56b6c2" : "#01579b";
+  const boolColor = dark ? "#c678dd" : "#7b1fa2";
 
   // Simple approach: colorize the entire JSON string
   const lines = text.split("\n");
@@ -344,13 +344,19 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
 
   // ── Theme colors ────────────────────────────────────────────────────────
 
-  const panelBg = dark ? "bg-[#0a0f1a]" : "bg-[#1a1a2e]";
+  const panelBg = dark ? "bg-[#0a0f1a]" : "bg-[#faf6ee]";
   const panelBorder = dark ? "border-[#2a3552]" : "border-[#d4c9a8]";
   const headerBg = dark ? "bg-[#0f1930]" : "bg-[#f0e8d8]";
   const goldText = dark ? "text-[#FFD700]" : "text-[#9a7200]";
   const goldBorder = dark ? "border-[#FFD700]" : "border-[#b8860b]";
   const textMuted = dark ? "text-slate-400" : "text-black/60";
   const dragHandleColor = dark ? "bg-[#2a3552] hover:bg-[#FFD700]/40" : "bg-[#d4c9a8] hover:bg-[#b8860b]/30";
+  const termText = dark ? "text-slate-200" : "text-stone-800";
+  const termTextOutput = dark ? "text-slate-300" : "text-stone-700";
+  const promptColor = dark ? "text-[#FFD700]" : "text-[#9a7200]";
+  const infoColor = dark ? "text-[#FFD700]/70" : "text-[#9a7200]/70";
+  const inputTextColor = dark ? "text-slate-200" : "text-stone-800";
+  const placeholderColor = dark ? "placeholder:text-slate-600" : "placeholder:text-stone-400";
 
   // Listen for open event from Tools menu
   useEffect(() => {
@@ -421,43 +427,43 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
           className="absolute inset-0 top-[44px] z-10 overflow-auto px-4 py-4"
           style={{
             ...sansFont,
-            backgroundColor: dark ? "#0a0f1acc" : "#1a1a2eee",
+            backgroundColor: dark ? "#0a0f1acc" : "#faf6eeee",
             backdropFilter: "blur(4px)",
           }}
         >
-          <div className="text-slate-200 text-sm space-y-4">
+          <div className={`${dark ? "text-slate-200" : "text-stone-800"} text-sm space-y-4`}>
             <div>
-              <span className="text-[#FFD700] font-bold">sendrawtransaction</span>
-              <span className="text-slate-400"> &lt;raw tx hex&gt;</span>
-              <div className="text-slate-400 text-xs mt-0.5">Broadcast a raw transaction to the network.</div>
+              <span className={`${dark ? "text-[#FFD700]" : "text-[#9a7200]"} font-bold`}>sendrawtransaction</span>
+              <span className={dark ? "text-slate-400" : "text-stone-500"}> &lt;raw tx hex&gt;</span>
+              <div className={`${dark ? "text-slate-400" : "text-stone-500"} text-xs mt-0.5`}>Broadcast a raw transaction to the network.</div>
             </div>
             <div>
-              <span className="text-[#FFD700] font-bold">decoderawtransaction</span>
-              <span className="text-slate-400"> &lt;raw tx hex&gt;</span>
-              <div className="text-slate-400 text-xs mt-0.5">Decode a raw transaction to inspect its inputs, outputs, and other details.</div>
+              <span className={`${dark ? "text-[#FFD700]" : "text-[#9a7200]"} font-bold`}>decoderawtransaction</span>
+              <span className={dark ? "text-slate-400" : "text-stone-500"}> &lt;raw tx hex&gt;</span>
+              <div className={`${dark ? "text-slate-400" : "text-stone-500"} text-xs mt-0.5`}>Decode a raw transaction to inspect its inputs, outputs, and other details.</div>
             </div>
             <div>
-              <span className="text-[#FFD700] font-bold">gettransaction</span>
-              <span className="text-slate-400"> &lt;txid&gt;</span>
-              <div className="text-slate-400 text-xs mt-0.5">Retrieve info about a broadcast transaction, including confirmation count.</div>
+              <span className={`${dark ? "text-[#FFD700]" : "text-[#9a7200]"} font-bold`}>gettransaction</span>
+              <span className={dark ? "text-slate-400" : "text-stone-500"}> &lt;txid&gt;</span>
+              <div className={`${dark ? "text-slate-400" : "text-stone-500"} text-xs mt-0.5`}>Retrieve info about a broadcast transaction, including confirmation count.</div>
             </div>
             <div>
-              <span className="text-[#FFD700] font-bold">gettxout</span>
-              <span className="text-slate-400"> &lt;txid&gt; &lt;output index&gt;</span>
-              <div className="text-slate-400 text-xs mt-0.5">Look up a UTXO. Returns nothing if it has been spent or never existed.</div>
+              <span className={`${dark ? "text-[#FFD700]" : "text-[#9a7200]"} font-bold`}>gettxout</span>
+              <span className={dark ? "text-slate-400" : "text-stone-500"}> &lt;txid&gt; &lt;output index&gt;</span>
+              <div className={`${dark ? "text-slate-400" : "text-stone-500"} text-xs mt-0.5`}>Look up a UTXO. Returns nothing if it has been spent or never existed.</div>
             </div>
             <div>
-              <span className="text-[#FFD700] font-bold">mine</span>
-              <span className="text-slate-400"> &lt;number of blocks&gt;</span>
-              <div className="text-slate-400 text-xs mt-0.5">Mine blocks on the regtest network. Transactions in the mempool will be included.</div>
+              <span className={`${dark ? "text-[#FFD700]" : "text-[#9a7200]"} font-bold`}>mine</span>
+              <span className={dark ? "text-slate-400" : "text-stone-500"}> &lt;number of blocks&gt;</span>
+              <div className={`${dark ? "text-slate-400" : "text-stone-500"} text-xs mt-0.5`}>Mine blocks on the regtest network. Transactions in the mempool will be included.</div>
             </div>
             <div>
-              <span className="text-[#FFD700] font-bold">help</span>
-              <div className="text-slate-400 text-xs mt-0.5">List all available commands.</div>
+              <span className={`${dark ? "text-[#FFD700]" : "text-[#9a7200]"} font-bold`}>help</span>
+              <div className={`${dark ? "text-slate-400" : "text-stone-500"} text-xs mt-0.5`}>List all available commands.</div>
             </div>
             <div>
-              <span className="text-[#FFD700] font-bold">clear</span>
-              <div className="text-slate-400 text-xs mt-0.5">Clear the terminal output.</div>
+              <span className={`${dark ? "text-[#FFD700]" : "text-[#9a7200]"} font-bold`}>clear</span>
+              <div className={`${dark ? "text-slate-400" : "text-stone-500"} text-xs mt-0.5`}>Clear the terminal output.</div>
             </div>
           </div>
         </div>
@@ -471,32 +477,36 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
             ref={outputRef}
             className="flex-1 min-h-0 overflow-auto px-3 py-2 font-mono text-sm leading-relaxed cursor-text"
             style={{ fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace" }}
-            onClick={() => inputRef.current?.focus()}
+            onClick={() => {
+              // Only focus input if user didn't drag-select text
+              const sel = window.getSelection();
+              if (!sel || sel.isCollapsed) inputRef.current?.focus();
+            }}
           >
             {lines.map((line, i) => (
               <div key={i} className="whitespace-pre-wrap">
                 {line.type === "cmd" && (
                   <span>
-                    <span className="text-[#FFD700]">{PROMPT}</span>
-                    <span className="text-slate-200">{line.text}</span>
+                    <span className={promptColor}>{PROMPT}</span>
+                    <span className={termText}>{line.text}</span>
                   </span>
                 )}
                 {line.type === "output" && (
-                  <span className="text-slate-300">
+                  <span className={termTextOutput}>
                     {highlightJSON(line.text, dark)}
                   </span>
                 )}
                 {line.type === "error" && (
-                  <span className="text-red-400">{line.text}</span>
+                  <span className={dark ? "text-red-400" : "text-red-600"}>{line.text}</span>
                 )}
                 {line.type === "info" && (
-                  <span className="text-[#FFD700]/70 italic">{line.text}</span>
+                  <span className={`${infoColor} italic`}>{line.text}</span>
                 )}
               </div>
             ))}
             {running && (
-              <div className="text-slate-500 flex items-center gap-2">
-                <span className="inline-block w-3 h-3 border-2 border-slate-600 border-t-slate-300 rounded-full animate-spin" />
+              <div className={`${dark ? "text-slate-500" : "text-stone-400"} flex items-center gap-2`}>
+                <span className={`inline-block w-3 h-3 border-2 rounded-full animate-spin ${dark ? "border-slate-600 border-t-slate-300" : "border-stone-300 border-t-stone-500"}`} />
                 executing...
               </div>
             )}
@@ -506,7 +516,7 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
           <div className={`shrink-0 border-t ${panelBorder} px-3 py-2 flex items-center gap-1`}
             style={{ fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace" }}
           >
-            <span className="text-[#FFD700] text-sm shrink-0">{PROMPT}</span>
+            <span className={`${promptColor} text-sm shrink-0`}>{PROMPT}</span>
             <input
               ref={inputRef}
               type="text"
@@ -514,7 +524,7 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               disabled={running || provisioning || !nodeReady}
-              className="flex-1 bg-transparent text-slate-200 text-sm outline-none border-none placeholder:text-slate-600 disabled:opacity-40"
+              className={`flex-1 bg-transparent ${inputTextColor} text-sm outline-none border-none ${placeholderColor} disabled:opacity-40`}
               placeholder={nodeReady ? "type a command..." : "waiting for node..."}
               autoComplete="off"
               spellCheck={false}

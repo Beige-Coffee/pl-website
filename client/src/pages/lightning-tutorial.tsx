@@ -1580,16 +1580,16 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
                 <div className={`h-[2px] mt-2 mb-2 ${theme === "dark" ? "bg-[#2a3552]" : "bg-[#d4c9a8]"}`} />
                 <div className="grid gap-1">
                   {[
-                    { label: "Scratchpad", event: "scratchpad-open" },
-                    { label: "Bitcoin Node", event: "node-terminal-open" },
-                    { label: "Files", event: null },
-                    { label: "Transactions", event: "tx-notebook-open" },
+                    { label: "Scratchpad", panelId: "scratchpad" as const },
+                    { label: "Bitcoin Node", panelId: "node" as const },
+                    { label: "Files", panelId: null },
+                    { label: "Transactions", panelId: "notebook" as const },
                   ].map((item) => (
                     <button
                       key={item.label}
                       onClick={() => {
-                        if (item.event) {
-                          window.dispatchEvent(new CustomEvent(item.event));
+                        if (item.panelId) {
+                          panelState.switchPanel(item.panelId);
                         } else {
                           setFileBrowserOpen(true);
                         }

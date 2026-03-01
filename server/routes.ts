@@ -1522,6 +1522,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/node/rpc", async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    if (!nodeLimiter.check(ip)) {
+      return res.status(429).json({ error: "Too many requests" });
+    }
+
+    try {
+      const user = await getAuthUser(req);
+      if (!user) return res.status(401).json({ error: "Not authenticated" });
+
+      const { method, params } = req.body;
+      if (!method || typeof method !== "string") {
+        return res.status(400).json({ error: "Invalid method" });
+      }
+      if (params !== undefined && !Array.isArray(params)) {
+        return res.status(400).json({ error: "params must be an array" });
+      }
+
+      const result = await nodeManager.rpc(user.id, method, params || []);
+      return res.json({ result });
+    } catch (err: any) {
+      const status = err.message?.includes("busy") ? 503 : 500;
+      return res.json({ error: err.message });
+    }
+  });
+
   // Start node cleanup and pre-download binary
   nodeManager.startCleanup();
   nodeManager.ensureBitcoindBinary().catch((err) => {

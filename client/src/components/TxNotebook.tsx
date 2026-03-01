@@ -171,7 +171,7 @@ export default function TxNotebook({ theme }: TxNotebookProps) {
 
   return (
     <div
-      className={`fixed top-0 right-0 h-full z-50 flex border-l-2 ${panelBorder} ${panelBg} shadow-2xl`}
+      className={`fixed top-[68px] right-0 h-[calc(100vh-68px)] z-40 hidden lg:flex border-l-2 ${panelBorder} ${panelBg} shadow-2xl`}
       style={{ width }}
     >
       {/* Drag handle */}

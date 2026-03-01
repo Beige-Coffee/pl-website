@@ -22,7 +22,14 @@ export interface TxGeneratorConfig {
     placeholder: string;
     autoFillFrom?: string;  // TxNotebook localStorage key to pre-populate
   }>;
-  pythonCode: string;       // Self-contained Python; inputs injected as variables
+  pythonCode?: string;      // Self-contained Python; inputs injected as variables
+  /** Custom async execution function that replaces pure-Python flow.
+   *  Used when the generator needs server interaction (e.g., Bitcoin node RPC). */
+  execute?: (ctx: {
+    inputs: Record<string, string>;
+    nodeRpc: (method: string, params: unknown[]) => Promise<{ result?: any; error?: string }>;
+    runPython: (code: string) => Promise<{ output: string; error?: string | null }>;
+  }) => Promise<Record<string, string>>;
   notebookSaves?: Array<{
     key: string;            // pl-txnotebook-{key}
     parseLabel: string;     // Label in stdout to extract, e.g. "TXID"
@@ -380,10 +387,6 @@ DUST_LIMIT       = 546
 FEERATE_PER_KW   = 150
 COMMITMENT_NUMBER = 0
 
-# Input UTXO for funding (pre-loaded in regtest)
-INPUT_TXID = "898448584a820b5b9972d7adb15050b3ab624ccd731946b3eeddb92f4e7ef6be"
-INPUT_VOUT = 0
-
 # Derive per-commitment keys
 per_commitment_point = derive_per_commitment_point(ALICE_SEED, COMMITMENT_NUMBER)
 
@@ -415,85 +418,95 @@ local_htlc_privkey = derive_privkey(
 
 // ─── Generator: Funding Transaction ─────────────────────────────────────────
 
-const GEN_FUNDING_CODE = `${PREAMBLE}
-${CHANNEL_PARAMS}
-
-# Build funding transaction
-funding_tx_hex = create_funding_tx(
-    INPUT_TXID, INPUT_VOUT, FUNDING_AMOUNT,
-    alice_keys['funding']['pubkey'], bob_keys['funding']['pubkey']
-)
-
-# Sign it (add witness with both signatures)
-funding_script = create_funding_script(
-    alice_keys['funding']['pubkey'], bob_keys['funding']['pubkey']
-)
-
-# For the funding tx, we need to produce a signed version.
-# In a real scenario, both parties sign. Here we simulate by signing with both keys.
-# We'll create a simple signed funding tx using both private keys.
-tx_raw = bytes.fromhex(funding_tx_hex)
-version = tx_raw[0:4]
-prevhash = tx_raw[5:37]
-previndex = tx_raw[37:41]
-sequence_bytes = b'\\xff\\xff\\xff\\xff'
-out_start = 47
-locktime = tx_raw[-4:]
-outputs = tx_raw[out_start:-4]
-
-# BIP143 sighash for the input (spending a P2WPKH-like input)
-# For the funding tx input, we sign with a simple P2PKH-style sighash
-# since the input is from the pre-loaded regtest UTXO (P2WPKH)
-hp = dsha256(prevhash + previndex)
-hs = dsha256(sequence_bytes)
-ho = dsha256(outputs[1:])
-
-# The input is P2WPKH, so scriptCode = OP_DUP OP_HASH160 <20-byte-hash> OP_EQUALVERIFY OP_CHECKSIG
-input_pubkey = alice_keys['funding']['pubkey']
-input_privkey = alice_keys['funding']['privkey']
-pkh = hash160(input_pubkey)
-script_code = b'\\x76\\xa9\\x14' + pkh + b'\\x88\\xac'
-sc = bytes([len(script_code)]) + script_code
-
-# Input amount for the pre-loaded UTXO
-INPUT_AMOUNT = 10_500_000  # slightly more than funding amount to cover fees
-
-preimage_data = (version + hp + hs + prevhash + previndex + sc
-            + struct.pack('<q', INPUT_AMOUNT) + sequence_bytes + ho
-            + locktime + struct.pack('<I', 1))
-sighash = dsha256(preimage_data)
-
-sk = SigningKey.from_string(input_privkey, curve=SECP256k1)
-sig = sk.sign_digest(sighash, sigencode=sigencode_der) + b'\\x01'
-
-# Build signed segwit tx
-signed = version
-signed += b'\\x00\\x01'  # segwit marker
-signed += tx_raw[4:out_start]  # input count + input
-signed += outputs  # output count + outputs
-# Witness: 2 items (sig, pubkey) for P2WPKH
-signed += b'\\x02'
-signed += bytes([len(sig)]) + sig
-signed += bytes([len(input_pubkey)]) + input_pubkey
-signed += locktime
-
-signed_hex = signed.hex()
-txid = dsha256(bytes.fromhex(funding_tx_hex))[::-1].hex()
-
-print(f"TXID: {txid}")
-print(f"HEX: {signed_hex}")
+// Python code to derive the two funding pubkeys from hardcoded seeds.
+const FUNDING_PUBKEY_CODE = `${PREAMBLE}
+alice_keys = derive_channel_keys(bytes([0x01] * 32))
+bob_keys   = derive_channel_keys(bytes([0x02] * 32))
+print(f"ALICE_FUNDING_PUB: {alice_keys['funding']['pubkey'].hex()}")
+print(f"BOB_FUNDING_PUB: {bob_keys['funding']['pubkey'].hex()}")
 `;
+
+/** Parse stdout lines in format "LABEL: value" */
+function parsePythonOutput(stdout: string): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const line of stdout.split("\n")) {
+    const match = line.match(/^([A-Z0-9_]+):\s*(.+)$/);
+    if (match) result[match[1]!] = match[2]!.trim();
+  }
+  return result;
+}
+
+const FUNDING_AMOUNT_BTC = 0.1; // 10,000,000 sats
+
+/**
+ * Funding transaction execute function.
+ * Uses the student's regtest Bitcoin node to create a real, broadcastable funding tx:
+ * 1. Derive Alice + Bob funding pubkeys via Python
+ * 2. createmultisig → P2WSH address for the 2-of-2 multisig
+ * 3. createrawtransaction → unsigned tx with the funding output
+ * 4. fundrawtransaction → auto-select wallet UTXOs, add change
+ * 5. signrawtransactionwithwallet → sign with the wallet's keys
+ * 6. decoderawtransaction → extract txid
+ */
+async function executeFundingGenerator(ctx: {
+  inputs: Record<string, string>;
+  nodeRpc: (method: string, params: unknown[]) => Promise<{ result?: any; error?: string }>;
+  runPython: (code: string) => Promise<{ output: string; error?: string | null }>;
+}): Promise<Record<string, string>> {
+  const { nodeRpc, runPython } = ctx;
+
+  // Step 1: Derive funding pubkeys
+  const pyResult = await runPython(FUNDING_PUBKEY_CODE);
+  if (pyResult.error) throw new Error(`Key derivation failed: ${pyResult.error}`);
+  const pyOut = parsePythonOutput(pyResult.output);
+  const alicePub = pyOut["ALICE_FUNDING_PUB"];
+  const bobPub = pyOut["BOB_FUNDING_PUB"];
+  if (!alicePub || !bobPub) throw new Error("Failed to derive funding pubkeys");
+
+  // Step 2: Create multisig address (P2WSH)
+  const msResult = await nodeRpc("createmultisig", [2, [alicePub, bobPub]]);
+  if (msResult.error) throw new Error(`createmultisig failed: ${msResult.error}`);
+  const msAddress = msResult.result.address as string;
+
+  // Step 3: Create raw tx with just the funding output (no inputs yet)
+  const createResult = await nodeRpc("createrawtransaction", [
+    [],
+    [{ [msAddress]: FUNDING_AMOUNT_BTC }],
+  ]);
+  if (createResult.error) throw new Error(`createrawtransaction failed: ${createResult.error}`);
+  const emptyHex = createResult.result as string;
+
+  // Step 4: Fund the transaction (wallet selects UTXOs, adds change at vout 1)
+  const fundResult = await nodeRpc("fundrawtransaction", [
+    emptyHex,
+    { changePosition: 1 },
+  ]);
+  if (fundResult.error) throw new Error(`fundrawtransaction failed: ${fundResult.error}`);
+  const fundedHex = fundResult.result.hex as string;
+
+  // Step 5: Sign with the wallet's keys
+  const signResult = await nodeRpc("signrawtransactionwithwallet", [fundedHex]);
+  if (signResult.error) throw new Error(`signrawtransactionwithwallet failed: ${signResult.error}`);
+  if (!signResult.result.complete) throw new Error("Transaction signing incomplete");
+  const signedHex = signResult.result.hex as string;
+
+  // Step 6: Decode to get the txid
+  const decodeResult = await nodeRpc("decoderawtransaction", [signedHex]);
+  if (decodeResult.error) throw new Error(`decoderawtransaction failed: ${decodeResult.error}`);
+  const txid = decodeResult.result.txid as string;
+
+  return { TXID: txid, HEX: signedHex };
+}
 
 // ─── Generator: Commitment (Refund) Transaction ─────────────────────────────
 
 const GEN_COMMITMENT_CODE = `${PREAMBLE}
 ${CHANNEL_PARAMS}
 
-# The funding txid comes from the generated funding tx or auto-filled input
-funding_txid = funding_txid_input if funding_txid_input else dsha256(bytes.fromhex(create_funding_tx(
-    INPUT_TXID, INPUT_VOUT, FUNDING_AMOUNT,
-    alice_keys['funding']['pubkey'], bob_keys['funding']['pubkey']
-)))[::-1].hex()
+# The funding txid is required — paste from the Transactions notebook
+if not funding_txid_input or not funding_txid_input.strip():
+    raise ValueError("Funding Transaction ID is required. Open TOOLS > Transactions to find it.")
+funding_txid = funding_txid_input.strip()
 
 # Build unsigned commitment tx
 unsigned_hex = create_commitment_tx(
@@ -561,11 +574,10 @@ CLTV_EXPIRY = 502
 payment_preimage = hashlib.sha256(b"ProgrammingLightning").digest()
 payment_hash = hashlib.sha256(payment_preimage).digest()
 
-# The funding txid comes from the generated funding tx or auto-filled input
-funding_txid = funding_txid_input if funding_txid_input else dsha256(bytes.fromhex(create_funding_tx(
-    INPUT_TXID, INPUT_VOUT, FUNDING_AMOUNT,
-    alice_keys['funding']['pubkey'], bob_keys['funding']['pubkey']
-)))[::-1].hex()
+# The funding txid is required
+if not funding_txid_input or not funding_txid_input.strip():
+    raise ValueError("Funding Transaction ID is required. Open TOOLS > Transactions to find it.")
+funding_txid = funding_txid_input.strip()
 
 # Build offered HTLC script
 htlc_script = create_offered_htlc_script(
@@ -641,27 +653,10 @@ htlc_script = create_offered_htlc_script(
     revocation_pubkey, local_htlc_pubkey, remote_htlc_pubkey, payment_hash
 )
 
-# We need the commitment txid - use auto-filled input or compute from scratch
-if commitment_txid_input:
-    commitment_txid = commitment_txid_input
-else:
-    # Compute funding txid
-    funding_txid = dsha256(bytes.fromhex(create_funding_tx(
-        INPUT_TXID, INPUT_VOUT, FUNDING_AMOUNT,
-        alice_keys['funding']['pubkey'], bob_keys['funding']['pubkey']
-    )))[::-1].hex()
-
-    # Build the HTLC commitment tx to get its txid
-    htlc_outputs = [{'amount': HTLC_AMOUNT, 'script': htlc_script}]
-    commitment_unsigned = create_commitment_tx(
-        funding_txid, 0,
-        TO_LOCAL_AMOUNT, TO_REMOTE_AMOUNT,
-        revocation_pubkey, local_delayed_pubkey, remote_payment_pubkey,
-        alice_keys['payment_base']['pubkey'], bob_keys['payment_base']['pubkey'],
-        COMMITMENT_NUMBER, TO_SELF_DELAY, DUST_LIMIT, FEERATE_PER_KW,
-        htlc_outputs=htlc_outputs
-    )
-    commitment_txid = dsha256(bytes.fromhex(commitment_unsigned))[::-1].hex()
+# The commitment txid is required
+if not commitment_txid_input or not commitment_txid_input.strip():
+    raise ValueError("HTLC Commitment Transaction ID is required. Open TOOLS > Transactions to find it.")
+commitment_txid = commitment_txid_input.strip()
 
 # Find HTLC output index (the HTLC is typically sorted by value)
 # In our case, HTLC is 2000 sats, to_remote is 3M, to_local is ~7M
@@ -833,11 +828,11 @@ export const TX_GENERATORS: Record<string, TxGeneratorConfig> = {
   "gen-funding": {
     id: "gen-funding",
     title: "Generate Funding Transaction",
-    description: "This generator creates two sets of channel keys (one for Alice and one for Bob) using the functions we built earlier. It then fetches a UTXO from our regtest wallet and creates a 2-of-2 multisig Funding Transaction using our <code>create_funding_tx</code> function. The transaction is signed via Bitcoin Core's <code>signrawtransactionwithwallet</code> RPC command. The resulting signed transaction is ready to be broadcast.<br/><br/><strong>NOTE:</strong> Future transactions will be signed using code we write ourselves, so don't feel bad if you wanted to get in the weeds and sign transactions - we'll do this shortly!",
+    description: "This generator creates two sets of channel keys (one for Alice and one for Bob) using the functions we built earlier. It then uses your regtest Bitcoin node to fetch a UTXO, create a 2-of-2 multisig Funding Transaction, and sign it via Bitcoin Core's <code>signrawtransactionwithwallet</code> RPC command. The resulting signed transaction is ready to be broadcast!<br/><br/><strong>NOTE:</strong> Future transactions will be signed using code we write ourselves, so don't feel bad if you wanted to get in the weeds and sign transactions - we'll do this shortly!<br/><br/><strong>IMPORTANT:</strong> Make sure your Bitcoin Node is running (open it via <strong>TOOLS</strong> in the top-right corner) before generating.",
     type: "transaction",
     buttonLabel: "Generate Transaction",
     inputs: [],
-    pythonCode: GEN_FUNDING_CODE,
+    execute: executeFundingGenerator,
     notebookSaves: [
       { key: "funding-txid", parseLabel: "TXID" },
       { key: "funding-txhex", parseLabel: "HEX" },

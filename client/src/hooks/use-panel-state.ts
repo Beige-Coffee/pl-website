@@ -16,6 +16,8 @@ export interface PanelActions {
   resizePanel: (width: number) => void;
   startDragging: () => void;
   stopDragging: () => void;
+  /** Switch to a panel, dispatching the appropriate open event */
+  switchPanel: (id: PanelId) => void;
 }
 
 const defaultState: PanelState & PanelActions = {
@@ -27,6 +29,7 @@ const defaultState: PanelState & PanelActions = {
   resizePanel: () => {},
   startDragging: () => {},
   stopDragging: () => {},
+  switchPanel: () => {},
 };
 
 // ─── Context ─────────────────────────────────────────────────────────────────
@@ -39,19 +42,32 @@ export function usePanelState() {
 
 // ─── Provider hook (used by PanelStateProvider in lightning-tutorial.tsx) ────
 
+const PANEL_EVENTS: Record<PanelId, string> = {
+  node: "node-terminal-open",
+  notebook: "tx-notebook-open",
+  scratchpad: "scratchpad-open",
+};
+
 export function usePanelStateProvider(): PanelState & PanelActions {
   const [activePanel, setActivePanel] = useState<PanelId | null>(null);
   const [panelWidth, setPanelWidth] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const activePanelRef = useRef<PanelId | null>(null);
 
   const openPanel = useCallback((id: PanelId, width: number) => {
+    activePanelRef.current = id;
     setActivePanel(id);
     setPanelWidth(width);
   }, []);
 
   const closePanel = useCallback((id: PanelId) => {
-    setActivePanel((current) => (current === id ? null : current));
-    // Don't reset width — let it persist for reopening
+    setActivePanel((current) => {
+      if (current === id) {
+        activePanelRef.current = null;
+        return null;
+      }
+      return current;
+    });
   }, []);
 
   const resizePanel = useCallback((width: number) => {
@@ -66,6 +82,22 @@ export function usePanelStateProvider(): PanelState & PanelActions {
     setIsDragging(false);
   }, []);
 
+  const switchPanel = useCallback((id: PanelId) => {
+    const current = activePanelRef.current;
+    if (current === id) {
+      // Already showing this panel — do nothing
+      return;
+    }
+    // Set activePanel to the new panel BEFORE dispatching the open event.
+    // This prevents the new panel's close-on-takeover effect from seeing a
+    // stale activePanel value and immediately closing itself.
+    activePanelRef.current = id;
+    setActivePanel(id);
+    // Now dispatch the open event — the new panel will set isOpen=true and
+    // the old panel's close-on-takeover will detect the change and close.
+    window.dispatchEvent(new CustomEvent(PANEL_EVENTS[id]));
+  }, []);
+
   return {
     activePanel,
     panelWidth,
@@ -75,5 +107,6 @@ export function usePanelStateProvider(): PanelState & PanelActions {
     resizePanel,
     startDragging,
     stopDragging,
+    switchPanel,
   };
 }
