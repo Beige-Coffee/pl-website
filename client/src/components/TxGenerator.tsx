@@ -229,12 +229,12 @@ export default function TxGenerator({ config, theme, sessionToken, isCompleted, 
         )}
         {outputParsed?.RESULT && (
           <div className="mt-3 flex items-center gap-2.5">
-            <code className={`text-sm font-mono break-all ${dark ? "text-emerald-300" : "text-emerald-800"}`}>
+            <code className={`text-base font-mono break-all ${dark ? "text-emerald-300" : "text-emerald-800"}`}>
               {outputParsed.RESULT}
             </code>
             <button
               onClick={() => handleCopy("RESULT", outputParsed.RESULT!)}
-              className={`text-xs px-2 py-1 border ${panelBorder} ${mutedText} hover:${goldText} transition-colors cursor-pointer shrink-0`}
+              className={`text-sm px-2.5 py-1 border ${panelBorder} ${mutedText} hover:${goldText} transition-colors cursor-pointer shrink-0`}
             >
               {copied === "RESULT" ? "Copied" : "Copy"}
             </button>
@@ -319,18 +319,18 @@ export default function TxGenerator({ config, theme, sessionToken, isCompleted, 
             {outputParsed.TXID && (
               <div className="mb-3">
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className={`text-sm font-bold uppercase ${labelColor}`}>
+                  <span className={`text-base font-bold uppercase ${labelColor}`}>
                     Transaction ID
                   </span>
                   <button
                     onClick={() => handleCopy("TXID", outputParsed.TXID!)}
-                    className={`text-xs font-semibold px-2.5 py-1 border ${panelBorder} ${mutedText} hover:opacity-80 transition-opacity cursor-pointer`}
+                    className={`text-sm font-semibold px-3 py-1.5 border ${panelBorder} ${mutedText} hover:opacity-80 transition-opacity cursor-pointer`}
                     style={sansFont}
                   >
                     {copied === "TXID" ? "COPIED" : "COPY"}
                   </button>
                 </div>
-                <code className={`text-base font-mono break-all ${dark ? "text-slate-200" : "text-black/80"}`}>
+                <code className={`text-lg font-mono break-all ${dark ? "text-slate-200" : "text-black/80"}`}>
                   {outputParsed.TXID}
                 </code>
               </div>
@@ -338,18 +338,18 @@ export default function TxGenerator({ config, theme, sessionToken, isCompleted, 
             {outputParsed.HEX && (
               <div className="mb-3">
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className={`text-sm font-bold uppercase ${labelColor}`}>
+                  <span className={`text-base font-bold uppercase ${labelColor}`}>
                     Raw Transaction Hex
                   </span>
                   <button
                     onClick={() => handleCopy("HEX", outputParsed.HEX!)}
-                    className={`text-xs font-semibold px-2.5 py-1 border ${panelBorder} ${mutedText} hover:opacity-80 transition-opacity cursor-pointer`}
+                    className={`text-sm font-semibold px-3 py-1.5 border ${panelBorder} ${mutedText} hover:opacity-80 transition-opacity cursor-pointer`}
                     style={sansFont}
                   >
                     {copied === "HEX" ? "COPIED" : "COPY"}
                   </button>
                 </div>
-                <code className={`text-base font-mono break-all leading-relaxed ${dark ? "text-slate-300" : "text-black/70"}`}>
+                <code className={`text-lg font-mono break-all leading-relaxed ${dark ? "text-slate-300" : "text-black/70"}`}>
                   {outputParsed.HEX}
                 </code>
               </div>
@@ -357,18 +357,18 @@ export default function TxGenerator({ config, theme, sessionToken, isCompleted, 
             {outputParsed.RESULT && (
               <div className="mb-3">
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className={`text-sm font-bold uppercase ${labelColor}`}>
+                  <span className={`text-base font-bold uppercase ${labelColor}`}>
                     Result
                   </span>
                   <button
                     onClick={() => handleCopy("RESULT", outputParsed.RESULT!)}
-                    className={`text-xs font-semibold px-2.5 py-1 border ${panelBorder} ${mutedText} hover:opacity-80 transition-opacity cursor-pointer`}
+                    className={`text-sm font-semibold px-3 py-1.5 border ${panelBorder} ${mutedText} hover:opacity-80 transition-opacity cursor-pointer`}
                     style={sansFont}
                   >
                     {copied === "RESULT" ? "COPIED" : "COPY"}
                   </button>
                 </div>
-                <code className={`text-base font-mono break-all ${dark ? "text-emerald-300" : "text-emerald-800"}`}>
+                <code className={`text-lg font-mono break-all ${dark ? "text-emerald-300" : "text-emerald-800"}`}>
                   {outputParsed.RESULT}
                 </code>
               </div>

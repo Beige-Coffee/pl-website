@@ -149,7 +149,7 @@ export function NetworkDiagram() {
   const HTLC_AMOUNTS = ["0.1", "0.099", "0.098"];
 
   return (
-    <div ref={containerRef} className="vl-card-3d relative select-none">
+    <div ref={containerRef} className="vl-card-3d relative select-none" style={{ maxWidth: 840, margin: "0 auto" }}>
       <div className="vl-card-3d-inner" style={{ overflow: "visible" }}>
         <svg
           viewBox={`0 0 ${W} ${H}`}
@@ -295,11 +295,11 @@ export function NetworkDiagram() {
           `}</style>
 
           <defs>
-            <marker id="net-arr-gold" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto">
-              <polygon points="0 0, 6 2, 0 4" fill={GOLD} />
+            <marker id="net-arr-gold" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+              <polygon points="0 0, 8 3, 0 6" fill={GOLD} />
             </marker>
-            <marker id="net-arr-green" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto">
-              <polygon points="0 0, 6 2, 0 4" fill={GREEN} />
+            <marker id="net-arr-green" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+              <polygon points="0 0, 8 3, 0 6" fill={GREEN} />
             </marker>
           </defs>
 
@@ -357,7 +357,9 @@ export function NetworkDiagram() {
             const pulseClass = (node.role === "sender" || node.role === "recipient") ? "net-pulse-send" : "";
             return (
               <g key={node.id} {...hoverProps(node.tooltipRegion)}>
-                <circle
+                {/* Solid white background to occlude channel lines */}
+              <circle cx={node.x} cy={node.y} r={nodeR} fill="white" style={noPtr} />
+              <circle
                   cx={node.x} cy={node.y} r={nodeR}
                   className={pulseClass}
                   fill={hovered === node.tooltipRegion ? `${node.color}20` : `${node.color}0a`}
@@ -367,11 +369,22 @@ export function NetworkDiagram() {
                 />
                 <text
                   x={node.x} y={node.y + 5}
-                  fontSize="13" fontWeight="700" fill={node.color}
+                  fontSize="14" fontWeight="700" fill={node.color}
                   textAnchor="middle" style={noPtr}
                 >
                   {node.id}
                 </text>
+                {/* Sender / Receiver labels */}
+                {node.role === "sender" && (
+                  <text x={node.x} y={node.y + nodeR + 16} fontSize="9" fontWeight="700" fill={node.color} textAnchor="middle" style={noPtr}>
+                    Sender
+                  </text>
+                )}
+                {node.role === "recipient" && (
+                  <text x={node.x} y={node.y + nodeR + 16} fontSize="9" fontWeight="700" fill={node.color} textAnchor="middle" style={noPtr}>
+                    Receiver
+                  </text>
+                )}
               </g>
             );
           })}
@@ -395,11 +408,11 @@ export function NetworkDiagram() {
               <g key={`htlc-${i}`} className={`net-htlc-${i}`} {...hoverProps("htlc-chain")}>
                 <line
                   x1={sx} y1={sy} x2={ex} y2={ey}
-                  stroke={GOLD} strokeWidth="2"
+                  stroke={GOLD} strokeWidth="2.5"
                   markerEnd="url(#net-arr-gold)"
                 />
-                <rect x={mx - 24} y={my - 6} width={48} height={12} rx="3" fill="white" stroke={`${GOLD}44`} strokeWidth="0.5" />
-                <text x={mx} y={my + 3} fontSize="7" fontWeight="600" fill={GOLD} textAnchor="middle" fontFamily={mono} style={noPtr}>
+                <rect x={mx - 30} y={my - 8} width={60} height={16} rx="4" fill="white" stroke={`${GOLD}44`} strokeWidth="0.6" />
+                <text x={mx} y={my + 4} fontSize="9" fontWeight="600" fill={GOLD} textAnchor="middle" fontFamily={mono} style={noPtr}>
                   {HTLC_AMOUNTS[i]}
                 </text>
               </g>
@@ -425,29 +438,29 @@ export function NetworkDiagram() {
               <g key={`pre-${i}`} className={`net-pre-${i}`} {...hoverProps("preimage-flow")}>
                 <line
                   x1={sx} y1={sy} x2={ex} y2={ey}
-                  stroke={GREEN} strokeWidth="2"
+                  stroke={GREEN} strokeWidth="2.5"
                   markerEnd="url(#net-arr-green)"
                 />
-                <rect x={mx - 10} y={my - 6} width={20} height={12} rx="3" fill="white" stroke={`${GREEN}66`} strokeWidth="0.5" />
-                <text x={mx} y={my + 3} fontSize="7" fontWeight="700" fill={GREEN} textAnchor="middle" fontFamily={mono} style={noPtr}>
-                  R
+                <rect x={mx - 34} y={my - 8} width={68} height={16} rx="4" fill="white" stroke={`${GREEN}66`} strokeWidth="0.6" />
+                <text x={mx} y={my + 4} fontSize="9" fontWeight="600" fill={GREEN} textAnchor="middle" fontFamily={mono} style={noPtr}>
+                  preimage
                 </text>
               </g>
             );
           })}
 
           {/* ── Check marks ── */}
-          <text className="net-check-g" x={getNode("G").x + nodeR + 4} y={getNode("G").y + 4} fontSize="13" fill={GREEN} style={noPtr}>&#10003;</text>
-          <text className="net-check-e" x={getNode("E").x + nodeR + 4} y={getNode("E").y + 4} fontSize="13" fill={GREEN} style={noPtr}>&#10003;</text>
-          <text className="net-check-c" x={getNode("C").x + nodeR + 4} y={getNode("C").y + 4} fontSize="13" fill={GREEN} style={noPtr}>&#10003;</text>
-          <text className="net-check-a" x={getNode("A").x + nodeR + 4} y={getNode("A").y + 4} fontSize="13" fill={GREEN} style={noPtr}>&#10003;</text>
+          <text className="net-check-g" x={getNode("G").x + nodeR + 4} y={getNode("G").y + 5} fontSize="15" fill={GREEN} style={noPtr}>&#10003;</text>
+          <text className="net-check-e" x={getNode("E").x + nodeR + 4} y={getNode("E").y + 5} fontSize="15" fill={GREEN} style={noPtr}>&#10003;</text>
+          <text className="net-check-c" x={getNode("C").x + nodeR + 4} y={getNode("C").y + 5} fontSize="15" fill={GREEN} style={noPtr}>&#10003;</text>
+          <text className="net-check-a" x={getNode("A").x + nodeR + 4} y={getNode("A").y + 5} fontSize="15" fill={GREEN} style={noPtr}>&#10003;</text>
 
           {/* ── Fee labels ── */}
           <g className="net-fees" style={noPtr}>
-            <rect x={getNode("C").x - 18} y={getNode("C").y + nodeR + 4} width={36} height={12} rx="3" fill={GOLD_BG} stroke={GOLD} strokeWidth="0.4" />
-            <text x={getNode("C").x} y={getNode("C").y + nodeR + 14} fontSize="6.5" fontWeight="600" fill={GOLD} textAnchor="middle" fontFamily={mono}>+0.001</text>
-            <rect x={getNode("E").x - 18} y={getNode("E").y + nodeR + 4} width={36} height={12} rx="3" fill={GOLD_BG} stroke={GOLD} strokeWidth="0.4" />
-            <text x={getNode("E").x} y={getNode("E").y + nodeR + 14} fontSize="6.5" fontWeight="600" fill={GOLD} textAnchor="middle" fontFamily={mono}>+0.001</text>
+            <rect x={getNode("C").x - 24} y={getNode("C").y + nodeR + 4} width={48} height={16} rx="4" fill={GOLD_BG} stroke={GOLD} strokeWidth="0.5" />
+            <text x={getNode("C").x} y={getNode("C").y + nodeR + 16} fontSize="8.5" fontWeight="600" fill={GOLD} textAnchor="middle" fontFamily={mono}>+0.001</text>
+            <rect x={getNode("E").x - 24} y={getNode("E").y + nodeR + 4} width={48} height={16} rx="4" fill={GOLD_BG} stroke={GOLD} strokeWidth="0.5" />
+            <text x={getNode("E").x} y={getNode("E").y + nodeR + 16} fontSize="8.5" fontWeight="600" fill={GOLD} textAnchor="middle" fontFamily={mono}>+0.001</text>
           </g>
 
           {/* ── Summary ── */}

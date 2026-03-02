@@ -12,6 +12,8 @@ import { RevocationDiagram } from "./diagrams/RevocationDiagram";
 import { StateUpdateDiagram } from "./diagrams/StateUpdateDiagram";
 import { HTLCDiagram } from "./diagrams/HTLCDiagram";
 import { ClosingDiagram } from "./diagrams/ClosingDiagram";
+import { HTLCSettleDiagram } from "./diagrams/HTLCSettleDiagram";
+import { HTLCUpdateDiagram } from "./diagrams/HTLCUpdateDiagram";
 import { NetworkDiagram } from "./diagrams/NetworkDiagram";
 import { PlaceholderVisual } from "./diagrams/PlaceholderVisual";
 import { SIMPLE_TX, FUNDING_TX } from "../data/vl-diagram-data";
@@ -22,7 +24,7 @@ const DIAGRAM_DATA: Record<string, TxDiagramData> = {
   FUNDING_TX,
 };
 
-const ACTIVE_SECTIONS = new Set(["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"]);
+const ACTIVE_SECTIONS = new Set(["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"]);
 
 interface VLLayoutProps {
   currentSectionId: string;
@@ -60,6 +62,10 @@ function renderVisual(
       return <HTLCDiagram />;
     case "ClosingDiagram":
       return <ClosingDiagram />;
+    case "HTLCSettleDiagram":
+      return <HTLCSettleDiagram />;
+    case "HTLCUpdateDiagram":
+      return <HTLCUpdateDiagram />;
     case "NetworkDiagram":
       return <NetworkDiagram />;
     case "PlaceholderVisual":
@@ -83,6 +89,17 @@ export function VLLayout({
     (sectionId: string) => ACTIVE_SECTIONS.has(sectionId),
     [],
   );
+
+  // Mobile detection (matches CSS breakpoint)
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== "undefined" ? window.matchMedia("(max-width: 768px)").matches : false,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 768px)");
+    const onChange = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
 
   // Resizable split panel
   const [splitPct, setSplitPct] = useState(45);
@@ -139,6 +156,97 @@ export function VLLayout({
     return () => window.removeEventListener("keydown", handleKey);
   }, [currentSectionId, canNavigate, onNavigate]);
 
+  // ── Mobile dial effect ──
+  const bezelRef = useRef<HTMLDivElement>(null);
+  const isInitialScrollRef = useRef(true);
+
+  // Scroll listener: scale + fade ticks based on distance from viewport center
+  useEffect(() => {
+    if (!isMobile || !bezelRef.current) return;
+    const bezel = bezelRef.current;
+    let rafId: number;
+
+    const updateDial = () => {
+      const bezelRect = bezel.getBoundingClientRect();
+      if (bezelRect.width === 0) return;
+      const centerX = bezelRect.width / 2;
+      const fadeZone = bezelRect.width * 0.38;
+
+      bezel.querySelectorAll(".vl-bezel-tick").forEach((tick) => {
+        const el = tick as HTMLElement;
+        const tickRect = el.getBoundingClientRect();
+        const tickCenterX = tickRect.left - bezelRect.left + tickRect.width / 2;
+        const dist = Math.abs(tickCenterX - centerX);
+        const t = Math.min(dist / fadeZone, 1);
+        // Quadratic ease: center stays flat, edges drop off fast
+        const ease = t * t;
+
+        const scale = 1 - ease * 0.5;
+        const opacity = 1 - ease * 0.85;
+
+        el.style.transform = `scale(${scale})`;
+        el.style.opacity = String(Math.max(opacity, 0.1));
+      });
+    };
+
+    const onScroll = () => {
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(updateDial);
+    };
+
+    bezel.addEventListener("scroll", onScroll, { passive: true });
+    requestAnimationFrame(updateDial);
+
+    return () => {
+      bezel.removeEventListener("scroll", onScroll);
+      cancelAnimationFrame(rafId);
+      // Clean up inline styles when leaving mobile
+      bezel.querySelectorAll(".vl-bezel-tick").forEach((tick) => {
+        const el = tick as HTMLElement;
+        el.style.transform = "";
+        el.style.opacity = "";
+      });
+    };
+  }, [isMobile]);
+
+  // Center active tick: instant on first mount, smooth on navigation
+  useEffect(() => {
+    if (!isMobile || !bezelRef.current) return;
+    const bezel = bezelRef.current;
+
+    const centerTick = () => {
+      const activeTick = bezel.querySelector(".vl-bezel-tick-active") as HTMLElement | null;
+      if (!activeTick) return;
+
+      const bezelRect = bezel.getBoundingClientRect();
+      const tickRect = activeTick.getBoundingClientRect();
+      const target = bezel.scrollLeft
+        + (tickRect.left + tickRect.width / 2)
+        - (bezelRect.left + bezelRect.width / 2);
+
+      if (isInitialScrollRef.current) {
+        // Instant jump — no animation on first paint
+        bezel.scrollLeft = target;
+        isInitialScrollRef.current = false;
+        // scrollLeft assignment doesn't fire scroll events, so trigger dial update
+        bezel.dispatchEvent(new Event("scroll"));
+      } else {
+        // Smooth dial spin on navigation
+        bezel.scrollTo({ left: target, behavior: "smooth" });
+      }
+    };
+
+    // Double-rAF ensures layout (incl. padding, max-content) is fully computed
+    let outer: number, inner: number;
+    outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(centerTick);
+    });
+    return () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(inner);
+    };
+  }, [isMobile, currentSectionId]);
+
   return (
     <div style={{ position: "relative" }}>
       {/* Floating back button */}
@@ -161,7 +269,7 @@ export function VLLayout({
       {/* Split layout */}
       <div className="vl-split-layout" ref={layoutRef}>
         {/* Left: Visual panel */}
-        <div className="vl-visual-panel" style={{ width: `${splitPct}%`, minWidth: `${splitPct}%` }}>
+        <div className="vl-visual-panel" style={isMobile ? undefined : { width: `${splitPct}%`, minWidth: `${splitPct}%` }}>
           <div className="vl-visual-panel-inner vl-float" key={currentSection.id}>
             {renderVisual(currentSection.visual, currentSection.id, currentSection.title)}
           </div>
@@ -184,7 +292,7 @@ export function VLLayout({
       </div>
 
       {/* Compass bezel */}
-      <div className="vl-bezel">
+      <div className="vl-bezel" ref={bezelRef}>
         <div className="vl-bezel-track">
           <div className="vl-bezel-line" />
           <div className="vl-bezel-ticks">

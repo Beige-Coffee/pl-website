@@ -20,9 +20,9 @@ export interface VLSectionDef {
 }
 
 export const VL_SECTIONS: VLSectionDef[] = [
-  // ===== Section 1: Bitcoin TX Refresher =====
+  // ===== Section 0: Bitcoin TX Refresher =====
   {
-    id: "1",
+    id: "0",
     title: "Bitcoin TX Refresher",
     subtitle: "The visual vocabulary of Bitcoin transactions",
     visual: { component: "TransactionDiagram", data: "SIMPLE_TX" },
@@ -48,7 +48,7 @@ export const VL_SECTIONS: VLSectionDef[] = [
         type: "quiz",
         questions: [
           {
-            id: "s1-q1",
+            id: "s0-q1",
             question: "What does a transaction input reference?",
             options: [
               "A previous transaction's output",
@@ -61,7 +61,7 @@ export const VL_SECTIONS: VLSectionDef[] = [
               "Transaction inputs point to unspent outputs (UTXOs) from previous transactions. This is how Bitcoin tracks ownership: you don't have a balance, you have a collection of unspent outputs you can reference as inputs.",
           },
           {
-            id: "s1-q2",
+            id: "s0-q2",
             question: "What is the witness field used for in SegWit transactions?",
             options: [
               "Storing the recipient's address",
@@ -78,9 +78,9 @@ export const VL_SECTIONS: VLSectionDef[] = [
     ],
   },
 
-  // ===== Section 2: The Scaling Problem =====
+  // ===== Section 1: The Scaling Problem =====
   {
-    id: "2",
+    id: "1",
     title: "The Scaling Problem",
     subtitle: "Why can't we just use Bitcoin for everything?",
     visual: { component: "ScalingDiagram" },
@@ -115,7 +115,7 @@ export const VL_SECTIONS: VLSectionDef[] = [
         type: "quiz",
         questions: [
           {
-            id: "s2-q1",
+            id: "s1-q1",
             question:
               "What is the main limitation of on-chain Bitcoin transactions for everyday payments?",
             options: [
@@ -133,9 +133,9 @@ export const VL_SECTIONS: VLSectionDef[] = [
     ],
   },
 
-  // ===== Section 3: The First Attempt =====
+  // ===== Section 2: The First Attempt =====
   {
-    id: "3",
+    id: "2",
     title: "The First Attempt",
     subtitle: "Naive off-chain payments and why they fail",
     visual: { component: "NaivePaymentDiagram" },
@@ -170,7 +170,7 @@ export const VL_SECTIONS: VLSectionDef[] = [
         type: "quiz",
         questions: [
           {
-            id: "s3-q1",
+            id: "s2-q1",
             question: "Why can Alice steal funds in the naive payment channel?",
             options: [
               "She can spend the funding UTXO on-chain before Bob broadcasts his TX",
@@ -183,7 +183,7 @@ export const VL_SECTIONS: VLSectionDef[] = [
               "Alice controls the funding UTXO and can broadcast a conflicting on-chain transaction at any time. Once that TX is mined, Bob's off-chain TX becomes invalid because its input has already been spent.",
           },
           {
-            id: "s3-q2",
+            id: "s2-q2",
             question: "What does this reveal about naive off-chain payments?",
             options: [
               "They require trust in your counterparty not to double-spend",
@@ -200,9 +200,9 @@ export const VL_SECTIONS: VLSectionDef[] = [
     ],
   },
 
-  // ===== Section 4: Opening a Channel =====
+  // ===== Section 3: Opening a Channel =====
   {
-    id: "4",
+    id: "3",
     title: "Opening a Channel",
     subtitle: "Alice and Bob open a shared tab",
     visual: { component: "FundingChannelDiagram" },
@@ -232,7 +232,7 @@ export const VL_SECTIONS: VLSectionDef[] = [
         type: "quiz",
         questions: [
           {
-            id: "s4-q1",
+            id: "s3-q1",
             question: "Why does the funding transaction use a 2-of-2 multisig?",
             options: [
               "To allow either party to spend unilaterally",
@@ -245,7 +245,7 @@ export const VL_SECTIONS: VLSectionDef[] = [
               "A 2-of-2 multisig ensures neither party can move funds alone. Both Alice and Bob must sign any transaction that spends from the channel, which is the basis for trustless off-chain updates.",
           },
           {
-            id: "s4-q2",
+            id: "s3-q2",
             question: "What happens to the funds after the funding transaction is confirmed?",
             options: [
               "They're split equally between Alice and Bob",
@@ -262,9 +262,9 @@ export const VL_SECTIONS: VLSectionDef[] = [
     ],
   },
 
-  // ===== Section 5: The Cheating Problem =====
+  // ===== Section 4: The Cheating Problem =====
   {
-    id: "5",
+    id: "4",
     title: "The Cheating Problem",
     subtitle: "What happens when Alice broadcasts an old state",
     visual: { component: "CheatingDiagram" },
@@ -299,7 +299,7 @@ export const VL_SECTIONS: VLSectionDef[] = [
         type: "quiz",
         questions: [
           {
-            id: "s5-q1",
+            id: "s4-q1",
             question: "Why can Alice cheat by broadcasting an old transaction?",
             options: [
               "Old transactions are still valid Bitcoin transactions that can be mined",
@@ -312,7 +312,7 @@ export const VL_SECTIONS: VLSectionDef[] = [
               "Old transactions are perfectly valid Bitcoin transactions. The blockchain has no concept of 'channel state'. Any transaction with valid signatures that spends an unspent output will be accepted by miners.",
           },
           {
-            id: "s5-q2",
+            id: "s4-q2",
             question: "What property must the penalty mechanism have to prevent cheating?",
             options: [
               "The cheater must lose MORE than they would gain",
@@ -329,9 +329,9 @@ export const VL_SECTIONS: VLSectionDef[] = [
     ],
   },
 
-  // ===== Section 6: Commitment Transactions =====
+  // ===== Section 5: Commitment Transactions =====
   {
-    id: "6",
+    id: "5",
     title: "Commitment Transactions",
     subtitle: "Asymmetric views of the channel balance",
     visual: { component: "CommitmentPairDiagram" },
@@ -371,7 +371,7 @@ export const VL_SECTIONS: VLSectionDef[] = [
         type: "quiz",
         questions: [
           {
-            id: "s6-q1",
+            id: "s5-q1",
             question: "Why does each party have their own version of the commitment transaction?",
             options: [
               "So they can broadcast without the other party's cooperation",
@@ -384,7 +384,7 @@ export const VL_SECTIONS: VLSectionDef[] = [
               "Each party holds the other's signature on their own commitment TX. This means either party can go on-chain unilaterally if the other becomes unresponsive or tries to cheat.",
           },
           {
-            id: "s6-q2",
+            id: "s5-q2",
             question: "Why is the broadcaster's own output delayed?",
             options: [
               "To give their counterparty time to check if this is an old, revoked state",
@@ -401,9 +401,9 @@ export const VL_SECTIONS: VLSectionDef[] = [
     ],
   },
 
-  // ===== Section 7: Revocation Keys =====
+  // ===== Section 6: Revocation Keys =====
   {
-    id: "7",
+    id: "6",
     title: "Revocation Keys",
     subtitle: "Constructing the penalty mechanism",
     visual: { component: "RevocationDiagram" },
@@ -438,7 +438,7 @@ export const VL_SECTIONS: VLSectionDef[] = [
         type: "quiz",
         questions: [
           {
-            id: "s7-q1",
+            id: "s6-q1",
             question: "What does Alice reveal to Bob when they advance from State 1 to State 2?",
             options: [
               "Her per-commitment secret for State 1, allowing Bob to derive the revocation key",
@@ -451,7 +451,7 @@ export const VL_SECTIONS: VLSectionDef[] = [
               "When advancing states, Alice reveals her per-commitment secret for the OLD state. This gives Bob the ability to derive the revocation key, making Alice's old commitment transaction dangerous for her to broadcast.",
           },
           {
-            id: "s7-q2",
+            id: "s6-q2",
             question: "What happens if Alice broadcasts an old commitment transaction after revealing her per-commitment secret?",
             options: [
               "Bob can use the revocation key to claim ALL channel funds before Alice's delay expires",
@@ -467,9 +467,9 @@ export const VL_SECTIONS: VLSectionDef[] = [
       },
     ],
   },
-  // ===== Section 8: Updating Channel State =====
+  // ===== Section 7: Updating Channel State =====
   {
-    id: "8",
+    id: "7",
     title: "Updating Channel State",
     subtitle: "The careful dance of commit and revoke",
     visual: { component: "StateUpdateDiagram" },
@@ -515,7 +515,7 @@ export const VL_SECTIONS: VLSectionDef[] = [
         type: "quiz",
         questions: [
           {
-            id: "s8-q1",
+            id: "s7-q1",
             question:
               "In what order do the parties update the channel state?",
             options: [
@@ -529,7 +529,7 @@ export const VL_SECTIONS: VLSectionDef[] = [
               "You commit to the new state before revoking the old one. This ensures you always have at least one valid signed commitment TX. Revoking first would leave you with no valid TX to broadcast if the other party disappears.",
           },
           {
-            id: "s8-q2",
+            id: "s7-q2",
             question:
               "What message reveals the per-commitment secret for the old state?",
             options: [
@@ -546,9 +546,9 @@ export const VL_SECTIONS: VLSectionDef[] = [
       },
     ],
   },
-  // ===== Section 9: The Lightning Network =====
+  // ===== Section 8: The Lightning Network =====
   {
-    id: "9",
+    id: "8",
     title: "The Lightning Network",
     subtitle: "From channels to a global payment network",
     visual: { component: "NetworkDiagram" },
@@ -588,7 +588,7 @@ export const VL_SECTIONS: VLSectionDef[] = [
         type: "quiz",
         questions: [
           {
-            id: "s9-q1",
+            id: "s8-q1",
             question:
               "Why can't Alice simply send a payment to someone she doesn't share a channel with?",
             options: [
@@ -602,7 +602,7 @@ export const VL_SECTIONS: VLSectionDef[] = [
               "Lightning payments travel through existing channels. Alice doesn't need a direct channel with the recipient, but she does need a path of channels connecting them through intermediate nodes.",
           },
           {
-            id: "s9-q2",
+            id: "s8-q2",
             question:
               "What is the key problem with routing payments through untrusted nodes?",
             options: [
@@ -620,9 +620,9 @@ export const VL_SECTIONS: VLSectionDef[] = [
     ],
   },
 
-  // ===== Section 10: HTLCs: Conditional Payments =====
+  // ===== Section 9: HTLCs: Conditional Payments =====
   {
-    id: "10",
+    id: "9",
     title: "HTLCs: Conditional Payments",
     subtitle: "Hash locks and time locks working together",
     visual: { component: "HTLCDiagram" },
@@ -662,7 +662,7 @@ export const VL_SECTIONS: VLSectionDef[] = [
         type: "quiz",
         questions: [
           {
-            id: "s10-q1",
+            id: "s9-q1",
             question: "What must the recipient reveal to claim an HTLC?",
             options: [
               "The preimage R such that SHA256(R) equals the payment hash H",
@@ -675,7 +675,7 @@ export const VL_SECTIONS: VLSectionDef[] = [
               "The recipient must reveal the original preimage R. The hash lock verifies that SHA256(R) matches H. This proves the recipient knows the secret and is the intended payee.",
           },
           {
-            id: "s10-q2",
+            id: "s9-q2",
             question:
               "What happens if the recipient never reveals the preimage?",
             options: [
@@ -693,9 +693,158 @@ export const VL_SECTIONS: VLSectionDef[] = [
     ],
   },
 
-  // ===== Section 11: Closing Channels =====
+  // ===== Section 10: HTLCs & Channel Updates =====
+  {
+    id: "10",
+    title: "HTLCs & Channel Updates",
+    subtitle: "Adding an HTLC with the commit/revoke protocol",
+    visual: { component: "HTLCUpdateDiagram" },
+    content: [
+      {
+        type: "heading",
+        text: "HTLCs & Channel Updates",
+        subtitle: "Adding an HTLC with the commit/revoke protocol",
+      },
+      {
+        type: "text",
+        content:
+          "We've seen how the commit/revoke protocol updates simple balances, and how HTLCs create conditional payments using hash locks and time locks. Now let's put them together: how does Alice actually <strong>add an HTLC</strong> to the channel?",
+      },
+      {
+        type: "text",
+        content:
+          "The process starts with a new message: <code>update_add_htlc</code>. Alice sends this to Bob to propose the HTLC. It contains the payment hash H, the amount (405,000 sats), the CLTV expiry (block 200), and an onion-encrypted routing packet. Bob stages the HTLC locally but does NOT forward it yet. The old commitment transactions are still the current valid state.",
+      },
+      {
+        type: "text",
+        content:
+          "Then the familiar commit/revoke dance begins, but now the new commitment transactions include an extra output: the <strong>HTLC output</strong>. On Alice's TX, this is an <strong>offered HTLC</strong> (she's offering to pay). On Bob's TX, it's a <strong>received HTLC</strong> (he's receiving the payment). Each has three spending paths: revocation, hash-lock success, and timeout.",
+      },
+      {
+        type: "callout",
+        title: "When Can Bob Forward?",
+        body: "Bob must NOT forward the HTLC to Dianne until his old state is revoked. If he forwarded early and Alice broadcast her old commitment TX (without the HTLC), Bob would lose money. Once Bob sends revoke_and_ack, his old state is revoked and it's safe to forward.",
+        variant: "warning",
+      },
+      {
+        type: "text",
+        content:
+          "Step through the diagram to watch the five-message flow: <code>update_add_htlc</code>, two <code>commitment_signed</code> messages, and two <code>revoke_and_ack</code> messages. Hover over the HTLC output on each party's commitment TX to see the full witnessScript with its three spending paths.",
+      },
+      {
+        type: "quiz",
+        questions: [
+          {
+            id: "s10-q1",
+            question:
+              "Why must Bob wait to forward the HTLC until after sending revoke_and_ack?",
+            options: [
+              "Because Alice could broadcast her old commitment TX (without the HTLC) and Bob would lose funds",
+              "Because the payment hash hasn't been verified yet",
+              "Because Bob needs more channel capacity",
+              "Because the CLTV expiry hasn't been set",
+            ],
+            correctIndex: 0,
+            explanation:
+              "If Bob forwards the HTLC before his old state is revoked, Alice could broadcast her old commitment TX that doesn't include the HTLC. Bob would have paid Dianne but have no way to claim from Alice. After revoking, Alice's old TX becomes dangerous for her to broadcast.",
+          },
+          {
+            id: "s10-q2",
+            question:
+              "What are the three spending paths in an HTLC output's witnessScript?",
+            options: [
+              "Revocation (penalty), hash-lock success (preimage), and timeout (CLTV expiry)",
+              "Multisig, timelock, and hashlock",
+              "Immediate spend, delayed spend, and penalty",
+              "Alice's key, Bob's key, and a shared key",
+            ],
+            correctIndex: 0,
+            explanation:
+              "Each HTLC output has three paths: (1) Revocation, so cheating is penalized, (2) Hash-lock success, so the recipient can claim by revealing the preimage, and (3) Timeout, so the offerer can reclaim after the CLTV expiry if the preimage is never revealed.",
+          },
+        ],
+      },
+    ],
+  },
+
+  // ===== Section 11: Settling HTLCs =====
   {
     id: "11",
+    title: "Settling HTLCs",
+    subtitle: "Fulfilling and failing off-chain payments",
+    visual: { component: "HTLCSettleDiagram" },
+    content: [
+      {
+        type: "heading",
+        text: "Settling HTLCs",
+        subtitle: "Fulfilling and failing off-chain payments",
+      },
+      {
+        type: "callout",
+        title: "Simplified HTLC View",
+        body: "The HTLC visual from the previous section was simplified. In reality, there's an HTLC output with a more complicated spending script on both Alice and Bob's commitment TX. There are also additional protocol messages involved (per-commitment secrets for revocation). Here we focus on how HTLCs are resolved off-chain.",
+        variant: "info",
+      },
+      {
+        type: "text",
+        content:
+          "The recipient who knows the preimage could claim on-chain by publishing their commitment TX and sweeping the HTLC output. But that closes the channel. Instead, they send <code>update_fulfill_htlc</code> containing the <strong>channel_id</strong>, <strong>htlc_id</strong>, and <strong>payment_preimage</strong> to prove they <em>could</em> claim on-chain. Both parties then remove the HTLC output and add the funds to the recipient's balance in the next commitment state.",
+      },
+      {
+        type: "callout",
+        title: "Atomicity Guarantee",
+        body: "If Dianne claims the HTLC on-chain from Bob instead of sending update_fulfill_htlc, Bob still learns the preimage R from the on-chain transaction. He can use R to claim from Alice. The payment is still atomic.",
+        variant: "key-concept",
+      },
+      {
+        type: "text",
+        content:
+          "When things don't work out (e.g., Dianne goes offline or the next hop can't forward), a peer sends <code>update_fail_htlc</code> or <code>update_fail_malformed_htlc</code> back along the route. <code>update_fail_htlc</code> contains an encrypted <strong>reason</strong> that only the original sender can read. <code>update_fail_malformed_htlc</code> is for BADONION errors where the onion packet was corrupted.",
+      },
+      {
+        type: "text",
+        content:
+          "BOLT 4 defines four failure reason categories, combined as bitmask flags. <strong>BADONION</strong> (0x8000): invalid onion version, HMAC, or key. <strong>PERM</strong> (0x4000): permanent failures that won't resolve on retry. <strong>NODE</strong> (0x2000): node-level failures. <strong>UPDATE</strong> (0x1000): payment parameter errors like insufficient fee, HTLC amount too small, or incorrect CLTV expiry. These can be combined (e.g., PERM | NODE = permanent node failure).",
+      },
+      {
+        type: "quiz",
+        questions: [
+          {
+            id: "s11-q1",
+            question:
+              "Why does the recipient send update_fulfill_htlc instead of claiming the HTLC on-chain?",
+            options: [
+              "To keep the channel open \u2014 both parties remove the HTLC and update balances off-chain",
+              "Because on-chain claims are invalid",
+              "Because the preimage can only be used off-chain",
+              "To avoid paying mining fees to themselves",
+            ],
+            correctIndex: 0,
+            explanation:
+              "Claiming on-chain would force-close the channel. By sending update_fulfill_htlc, both parties simply update their commitment transactions to reflect the new balances. The channel stays open for future payments.",
+          },
+          {
+            id: "s11-q2",
+            question:
+              "What happens if an intermediate node fails to forward an HTLC?",
+            options: [
+              "They send update_fail_htlc back along the route with an encrypted failure reason",
+              "The payment is automatically retried",
+              "The channel is force-closed",
+              "The funds are permanently locked",
+            ],
+            correctIndex: 0,
+            explanation:
+              "The failing node sends update_fail_htlc back toward the sender. The failure reason is onion-encrypted so only the original sender can read it. Each hop along the return path removes the HTLC and restores the sender's balance.",
+          },
+        ],
+      },
+    ],
+  },
+
+  // ===== Section 12: Closing Channels =====
+  {
+    id: "12",
     title: "Closing Channels",
     subtitle: "Cooperative and force close",
     visual: { component: "ClosingDiagram" },
@@ -730,7 +879,7 @@ export const VL_SECTIONS: VLSectionDef[] = [
         type: "quiz",
         questions: [
           {
-            id: "s11-q1",
+            id: "s12-q1",
             question:
               "What is the key advantage of a cooperative close over a force close?",
             options: [
@@ -744,7 +893,7 @@ export const VL_SECTIONS: VLSectionDef[] = [
               "A cooperative close is a single simple transaction with no delays. Both parties get their funds immediately. Force closes are complex, expensive, and the broadcaster must wait for the to_self_delay.",
           },
           {
-            id: "s11-q2",
+            id: "s12-q2",
             question: "When would a force close be necessary?",
             options: [
               "When the counterparty is unreachable or uncooperative",

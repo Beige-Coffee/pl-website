@@ -114,7 +114,7 @@ export function FundingChannelDiagram() {
   const outputScriptY = outputsY + 24 + 30;
 
   return (
-    <div ref={containerRef} className="vl-card-3d relative select-none">
+    <div ref={containerRef} className="vl-card-3d relative select-none" style={{ maxWidth: 680, margin: "0 auto" }}>
       <div className="vl-card-3d-inner" style={{ overflow: "visible" }}>
         <svg
           viewBox={`0 0 ${viewW} ${viewH}`}

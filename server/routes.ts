@@ -448,6 +448,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "p2wsh-wrapping": 1,
     "htlc-dust": 2,
     "htlc-timeout-vs-success": 1,
+    "htlc-preimage-purpose": 1,
     "offered-vs-received": 1,
     "witness-structure": 2,
     "fee-deduction": 1,

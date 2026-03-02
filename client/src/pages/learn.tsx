@@ -16,14 +16,13 @@ function FundingThumbnail() {
   return (
     <div
       className="w-full overflow-hidden pointer-events-none select-none"
-      style={{ height: 180 }}
+      style={{ height: 240 }}
     >
       <div
         style={{
-          transform: "scale(0.38)",
+          transform: "scale(0.55)",
           transformOrigin: "top left",
-          width: "263%",
-          height: "263%",
+          width: "182%",
         }}
       >
         <FundingChannelDiagram />
@@ -60,24 +59,24 @@ export default function Learn() {
           </p>
         </header>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="flex flex-col gap-6">
           {RESOURCES.map((resource) => (
             <Link key={resource.id} href={resource.href}>
-              <a className="block bg-card border-4 border-border pixel-shadow hover:translate-y-[-2px] hover:shadow-[6px_6px_0px_rgba(0,0,0,0.3)] transition-all group">
-                {/* Thumbnail */}
-                <div className="border-b-4 border-border bg-[#faf6ee] overflow-hidden">
+              <a className="flex flex-col sm:flex-row sm:h-[248px] bg-card border-4 border-border pixel-shadow hover:translate-y-[-2px] hover:shadow-[6px_6px_0px_rgba(0,0,0,0.3)] transition-all group overflow-hidden">
+                {/* Thumbnail — left side */}
+                <div className="sm:w-[45%] md:w-[40%] flex-shrink-0 border-b-4 sm:border-b-0 sm:border-r-4 border-border bg-[#faf6ee] overflow-hidden">
                   {resource.thumbnail === "funding-diagram" && (
                     <FundingThumbnail />
                   )}
                 </div>
 
-                {/* Text */}
-                <div className="p-4">
-                  <h2 className="font-pixel text-base md:text-lg group-hover:text-primary transition-colors">
+                {/* Text — right side, vertically centered */}
+                <div className="p-6 md:p-8 flex flex-col justify-center min-h-0">
+                  <h2 className="font-pixel text-lg md:text-xl group-hover:text-primary transition-colors">
                     {resource.title}
                   </h2>
                   <p
-                    className="text-sm md:text-base text-foreground/70 mt-2 leading-relaxed"
+                    className="text-sm md:text-base text-foreground/70 mt-3 leading-relaxed"
                     style={{
                       fontFamily:
                         'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',

@@ -129,10 +129,20 @@ export function RevocationDiagram() {
   const scrPadY = 5;
   const scrH = scriptLines.length * scrLineH + scrPadY * 2;
 
-  // ── Card height (computed from layout) ──
-  // header(22) + gap(4) + outputs section + card bottom pad(8)
-  // outputs section: label(14) + gap(2) + remote row(14) + gap(2) + local row(14) + gap(4) + script(87) + pad(4) = 141
-  const cardH = 175;
+  // ── Output box dimensions (matching CommitmentPairDiagram) ──
+  const outBoxH = 50;          // remote (simple) output box height
+  const localBoxH = 38 + scrH + 22; // to_local box: value + witnessScript label + script + owner
+  const outBoxIndent = 16;
+
+  // ── Card height ──
+  // header(22) + gap(4) + outputs container (label + divider + localBox + gap + remoteBox + pad) + bottom pad(8)
+  const cardH = 258;
+
+  // ── Helper: BTC string to formatted sats ──
+  function btcToSats(btc: string): string {
+    const sats = Math.round(parseFloat(btc) * 1e8);
+    return sats.toLocaleString("en-US");
+  }
 
   // ── Dynamic viewBox height ──
   const s0_cardsY = 58;
@@ -172,19 +182,153 @@ export function RevocationDiagram() {
     const localRegion = isAlice ? "local-a" : "local-b";
     const glowClass = isAlice ? "rev-glow-a" : "rev-glow-b";
 
-    // Y positions (absolute from y)
+    // BOLT 3: sort outputs by lowest value first
+    const localVal = parseFloat(localAmt);
+    const remoteVal = parseFloat(remoteAmt);
+    const localFirst = localVal <= remoteVal;
+
+    // Fixed header positions
     const divY = y + 22;
     const outY = y + 26;
     const outLabelBL = y + 38;
     const outDivY = y + 40;
-    const remBL = y + 54;
-    const locBL = y + 70;
-    const scrTop = y + 76;
-    const outBottom = scrTop + scrH + 4;
+
+    // Inner box dimensions
+    const bx = x + pad;
+    const bw = innerW;
+    const ibx = bx + outBoxIndent;
+    const ibw = bw - outBoxIndent - 4;
+
+    // Dynamic row positions based on BOLT 3 ordering
+    // to_local box is localBoxH (tall, includes script); to_remote box is outBoxH (short)
+    let remoteBoxY: number, localBoxY: number;
+    if (localFirst) {
+      localBoxY = outDivY + 2;
+      remoteBoxY = localBoxY + localBoxH + 6;
+    } else {
+      remoteBoxY = outDivY + 2;
+      localBoxY = remoteBoxY + outBoxH + 6;
+    }
+    const outBottom = localFirst ? remoteBoxY + outBoxH + 4 : localBoxY + localBoxH + 4;
 
     const cardStroke = revoked ? "#fca5a5" : "#e8dcc8";
     const cardFill = revoked ? "#fef8f8" : "white";
     const dashArr = revoked ? "5 3" : undefined;
+
+    // ── Render helpers ──
+    const renderRemoteBox = (baseY: number, idx: number) => (
+      <g key="remote">
+        <text x={bx + 8} y={baseY + 14} fontSize="9" fill="#6b5d4f">{idx}:</text>
+        <g>
+          <rect
+            x={ibx} y={baseY + 2} width={ibw} height={outBoxH - 4} rx="3"
+            fill="white" stroke="#e8dcc8" strokeWidth="0.75"
+          />
+          <text x={ibx + 6} y={baseY + 16} fontSize="8" fill="#6b5d4f" style={noPtr}>value:</text>
+          <text x={ibx + ibw - 6} y={baseY + 16} fontSize="8" fontWeight="600" fill="#b8860b" fontFamily={mono} textAnchor="end" style={noPtr}>{btcToSats(remoteAmt)}</text>
+
+          <text x={ibx + 6} y={baseY + 30} fontSize="8" fill="#6b5d4f" style={noPtr}>scriptPubKey:</text>
+          <text x={ibx + ibw - 6} y={baseY + 30} fontSize="8" fill="#b8860b" fontFamily={mono} textAnchor="end" style={noPtr}>{"OP_0 <pubkey_hash>"}</text>
+
+          <text x={ibx + ibw / 2} y={baseY + 43} fontSize="7.5" fontWeight="600" fill="#16a34a" textAnchor="middle" style={noPtr}>
+            {cpty} (IMMEDIATE)
+          </text>
+        </g>
+      </g>
+    );
+
+    // Script Y positions within local box
+    const scrBaseY = (baseY: number) => baseY + 34;
+
+    const renderLocalBox = (baseY: number, idx: number) => (
+      <g key="local" {...hoverProps(localRegion)}>
+        <text x={bx + 8} y={baseY + 14} fontSize="9" fill="#6b5d4f" style={noPtr}>{idx}:</text>
+        <rect
+          x={ibx} y={baseY + 2} width={ibw} height={localBoxH - 4} rx="3"
+          fill={hovered === localRegion ? "rgba(184,134,11,0.08)" : "#fdf8e8"}
+          stroke={hovered === localRegion ? "#b8860b" : "#d4a038"}
+          strokeWidth="0.75" strokeDasharray="4 2"
+          style={{ transition: "fill 0.15s ease, stroke 0.15s ease" }}
+        />
+        <text x={ibx + 6} y={baseY + 16} fontSize="8" fill="#6b5d4f" style={noPtr}>value:</text>
+        <text x={ibx + ibw - 6} y={baseY + 16} fontSize="8" fontWeight="600" fill="#b8860b" fontFamily={mono} textAnchor="end" style={noPtr}>{btcToSats(localAmt)}</text>
+
+        <text x={ibx + 6} y={baseY + 30} fontSize="8" fill="#6b5d4f" style={noPtr}>witnessScript:</text>
+
+        {/* Script block embedded inside to_local box */}
+        <rect
+          x={ibx + 4} y={scrBaseY(baseY)} width={ibw - 8} height={scrH}
+          rx="3" fill="#f7f2ea" stroke="#e0d5c4" strokeWidth="0.5"
+        />
+        {scriptLines.map((line, i) => {
+          const baseline = scrBaseY(baseY) + scrPadY + i * scrLineH + 9;
+          const textX = ibx + 12 + line.indent;
+
+          if (line.isRev) {
+            const hlY = baseline - 9;
+            const isH = hovered === revRegion;
+
+            if (revoked) {
+              return (
+                <g key={i} {...hoverProps(revRegion)}>
+                  <rect
+                    x={ibx + 6} y={hlY} width={ibw - 12} height={scrLineH}
+                    rx="2"
+                    fill={isH ? "rgba(22,163,74,0.2)" : "rgba(22,163,74,0.1)"}
+                    stroke={isH ? "#16a34a" : "#86efac"} strokeWidth="0.5"
+                    style={{ transition: "fill 0.15s ease" }}
+                  />
+                  <text
+                    x={textX} y={baseline} fontSize="8" fontFamily={mono}
+                    fontWeight="700" fill="#16a34a" style={noPtr}
+                  >
+                    {line.text}
+                  </text>
+                  <text
+                    x={ibx + ibw - 10} y={baseline} fontSize="6.5"
+                    fill="#16a34a" textAnchor="end" fontWeight="600" style={noPtr}
+                  >
+                    key derivable
+                  </text>
+                </g>
+              );
+            }
+
+            return (
+              <g key={i} {...hoverProps(revRegion)}>
+                <rect
+                  x={ibx + 6} y={hlY} width={ibw - 12} height={scrLineH}
+                  rx="2" className={glowClass}
+                  style={{
+                    fill: isH ? med : undefined,
+                    transition: "fill 0.15s ease",
+                  }}
+                />
+                <text
+                  x={textX} y={baseline} fontSize="8" fontFamily={mono}
+                  fontWeight="700" fill={clr} style={noPtr}
+                >
+                  {line.text}
+                </text>
+              </g>
+            );
+          }
+
+          return (
+            <text
+              key={i} x={textX} y={baseline} fontSize="8" fontFamily={mono}
+              fill={line.dim ? "#9a8b78" : "#6b5d4f"} style={noPtr}
+            >
+              {line.text}
+            </text>
+          );
+        })}
+
+        <text x={ibx + ibw / 2} y={scrBaseY(baseY) + scrH + 14} fontSize="7.5" fontWeight="600" fill="#b8860b" textAnchor="middle" style={noPtr}>
+          {owner} (DELAYED)
+        </text>
+      </g>
+    );
 
     return (
       <g key={`${side}-${stateLabel || "s0"}`}>
@@ -235,106 +379,12 @@ export function RevocationDiagram() {
         </text>
         <line x1={x + pad + 6} y1={outDivY} x2={x + cardW - pad - 6} y2={outDivY} stroke="#e8dcc8" strokeWidth="0.5" />
 
-        {/* to_remote */}
-        <text x={x + pad + 8} y={remBL} fontSize="8.5" fill="#6b5d4f" style={noPtr}>
-          to_remote ({cpty}):
-        </text>
-        <text
-          x={x + cardW - pad - 8} y={remBL} fontSize="8.5" fontWeight="600"
-          fill="#16a34a" fontFamily={mono} textAnchor="end" style={noPtr}
-        >
-          {remoteAmt} BTC
-        </text>
-
-        {/* to_local */}
-        <g {...hoverProps(localRegion)}>
-          <rect
-            x={x + pad + 2} y={locBL - 10} width={innerW - 4} height={14} rx="2"
-            fill={hovered === localRegion ? "rgba(184,134,11,0.06)" : "transparent"}
-            style={{ transition: "fill 0.15s ease" }}
-          />
-          <text x={x + pad + 8} y={locBL} fontSize="8.5" fill="#6b5d4f" style={noPtr}>
-            to_local ({owner}):
-          </text>
-          <text
-            x={x + cardW - pad - 8} y={locBL} fontSize="8.5" fontWeight="600"
-            fill="#b8860b" fontFamily={mono} textAnchor="end" style={noPtr}
-          >
-            {localAmt} BTC
-          </text>
-        </g>
-
-        {/* ── Script block ── */}
-        <rect
-          x={x + pad + 2} y={scrTop} width={innerW - 4} height={scrH}
-          rx="4" fill="#f7f2ea" stroke="#e0d5c4" strokeWidth="0.5"
-        />
-
-        {scriptLines.map((line, i) => {
-          const baseline = scrTop + scrPadY + i * scrLineH + 9;
-          const textX = x + pad + 10 + line.indent;
-
-          if (line.isRev) {
-            const hlY = baseline - 9;
-            const isH = hovered === revRegion;
-
-            if (revoked) {
-              // Revoked state: green = key now derivable
-              return (
-                <g key={i} {...hoverProps(revRegion)}>
-                  <rect
-                    x={x + pad + 4} y={hlY} width={innerW - 8} height={scrLineH}
-                    rx="2"
-                    fill={isH ? "rgba(22,163,74,0.2)" : "rgba(22,163,74,0.1)"}
-                    stroke={isH ? "#16a34a" : "#86efac"} strokeWidth="0.5"
-                    style={{ transition: "fill 0.15s ease" }}
-                  />
-                  <text
-                    x={textX} y={baseline} fontSize="8" fontFamily={mono}
-                    fontWeight="700" fill="#16a34a" style={noPtr}
-                  >
-                    {line.text}
-                  </text>
-                  <text
-                    x={x + cardW - pad - 10} y={baseline} fontSize="6.5"
-                    fill="#16a34a" textAnchor="end" fontWeight="600" style={noPtr}
-                  >
-                    key derivable
-                  </text>
-                </g>
-              );
-            }
-
-            // Normal state: pulsing party-colored glow
-            return (
-              <g key={i} {...hoverProps(revRegion)}>
-                <rect
-                  x={x + pad + 4} y={hlY} width={innerW - 8} height={scrLineH}
-                  rx="2" className={glowClass}
-                  style={{
-                    fill: isH ? med : undefined,
-                    transition: "fill 0.15s ease",
-                  }}
-                />
-                <text
-                  x={textX} y={baseline} fontSize="8" fontFamily={mono}
-                  fontWeight="700" fill={clr} style={noPtr}
-                >
-                  {line.text}
-                </text>
-              </g>
-            );
-          }
-
-          return (
-            <text
-              key={i} x={textX} y={baseline} fontSize="8" fontFamily={mono}
-              fill={line.dim ? "#9a8b78" : "#6b5d4f"} style={noPtr}
-            >
-              {line.text}
-            </text>
-          );
-        })}
+        {/* Render outputs in BOLT 3 order (lowest value first) */}
+        {localFirst ? (
+          <>{renderLocalBox(localBoxY, 0)}{renderRemoteBox(remoteBoxY, 1)}</>
+        ) : (
+          <>{renderRemoteBox(remoteBoxY, 0)}{renderLocalBox(localBoxY, 1)}</>
+        )}
       </g>
     );
   }
@@ -344,7 +394,7 @@ export function RevocationDiagram() {
   const rightMid = rightX + cardW / 2;
 
   return (
-    <div ref={containerRef} className="vl-card-3d relative select-none">
+    <div ref={containerRef} className="vl-card-3d relative select-none" style={{ maxWidth: 680, margin: "0 auto" }}>
       <div className="vl-card-3d-inner" style={{ overflow: "visible" }}>
         <svg
           viewBox={`0 0 ${W} ${H}`}

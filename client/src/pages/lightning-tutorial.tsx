@@ -167,6 +167,17 @@ const CHECKPOINT_QUESTIONS: Record<string, {
     answer: 1,
     explanation: "Both HTLC-timeout and HTLC-success are second-stage transactions that spend HTLC outputs from commitment transactions. The HTLC-timeout transaction is used when the HTLC expires without being claimed: it has a locktime equal to the CLTV expiry and passes an empty byte string as the witness (choosing the timeout branch in the script). The HTLC-success transaction is used to claim the HTLC with the preimage: it has locktime 0 (can be broadcast immediately) and includes the 32-byte payment preimage in the witness.",
   },
+  "htlc-preimage-purpose": {
+    question: "In a multi-hop Lightning payment, why does the payment preimage flow backward (from receiver to sender)?",
+    options: [
+      "It doesn't — the preimage flows forward from sender to receiver along with the payment",
+      "The receiver generates the preimage, so only they can reveal it. Each hop reveals it to claim their funds, propagating it back to the sender as proof of payment.",
+      "The preimage flows backward to allow each node to verify the payment hash before forwarding",
+      "The preimage is split into pieces, with each hop holding one piece for security",
+    ],
+    answer: 1,
+    explanation: "The receiver (Dianne) generates a random preimage and includes its hash in the invoice. The sender (Alice) locks funds along each hop using this hash. Payments settle in reverse: Dianne reveals the preimage to Bob to claim her funds, then Bob uses that same preimage to claim funds from Alice. This backward flow is what makes the payment atomic — either every hop gets the preimage and settles, or none do.",
+  },
   "offered-vs-received": {
     question: "From the commitment transaction holder's perspective, what distinguishes an 'offered' HTLC from a 'received' HTLC?",
     options: [
@@ -255,7 +266,7 @@ const CHECKPOINT_QUESTIONS: Record<string, {
 type Chapter = {
   id: string;
   title: string;
-  section: "Introduction" | "Keys & Derivation" | "Payment Channels" | "Commitment Keys" | "Commitment Transactions" | "HTLCs" | "Closing Channels" | "Quiz" | "Pay It Forward";
+  section: "Introduction" | "Keys & Derivation" | "Payment Channels" | "Commitment Keys" | "Commitment Txs" | "HTLCs" | "Closing Channels" | "Quiz" | "Pay It Forward";
   kind: "intro" | "md";
   file?: string;
 };
@@ -375,42 +386,42 @@ const chapters: Chapter[] = [
   {
     id: "commitment-scripts",
     title: "Commitment Scripts",
-    section: "Commitment Transactions",
+    section: "Commitment Txs",
     kind: "md",
     file: "/lightning_tutorial/5.1-commitment-scripts.md",
   },
   {
     id: "obscured-commitment",
     title: "Obscured Commitment Numbers",
-    section: "Commitment Transactions",
+    section: "Commitment Txs",
     kind: "md",
     file: "/lightning_tutorial/5.2-obscured-commitment.md",
   },
   {
     id: "commitment-assembly",
     title: "Commitment Transaction Assembly",
-    section: "Commitment Transactions",
+    section: "Commitment Txs",
     kind: "md",
     file: "/lightning_tutorial/5.3-commitment-assembly.md",
   },
   {
     id: "commitment-finalization",
     title: "Signing the Commitment Transaction",
-    section: "Commitment Transactions",
+    section: "Commitment Txs",
     kind: "md",
     file: "/lightning_tutorial/5.4-commitment-finalization.md",
   },
   {
     id: "get-commitment-tx",
     title: "Inspect Commitment Transaction",
-    section: "Commitment Transactions",
+    section: "Commitment Txs",
     kind: "md",
     file: "/lightning_tutorial/5.5-get-commitment-tx.md",
   },
   {
     id: "open-channel",
     title: "Channel Open",
-    section: "Commitment Transactions",
+    section: "Commitment Txs",
     kind: "md",
     file: "/lightning_tutorial/3.5-open-channel.md",
   },
@@ -511,7 +522,7 @@ const sectionOrder: Chapter["section"][] = [
   "Keys & Derivation",
   "Payment Channels",
   "Commitment Keys",
-  "Commitment Transactions",
+  "Commitment Txs",
   "HTLCs",
   "Closing Channels",
   "Quiz",
@@ -545,7 +556,7 @@ const CHAPTER_REQUIREMENTS: Record<string, {
   "commitment-finalization": { checkpoints: [], exercises: ["ln-exercise-finalize-commitment"] },
   "get-commitment-tx": { checkpoints: [], exercises: ["gen-commitment"] },
   "routing-payments": { checkpoints: [], exercises: [] },
-  "htlc-introduction": { checkpoints: ["offered-vs-received"], exercises: [] },
+  "htlc-introduction": { checkpoints: ["htlc-preimage-purpose"], exercises: [] },
   "simple-htlc": { checkpoints: [], exercises: [] },
   "htlcs-on-lightning": { checkpoints: [], exercises: [] },
   "channel-state-updates": { checkpoints: [], exercises: [] },
@@ -3082,6 +3093,29 @@ function InteractiveQuiz({
   );
 }
 
+function CopyButton({ text, theme }: { text: string; theme: "light" | "dark" }) {
+  const [copied, setCopied] = useState(false);
+  const dark = theme === "dark";
+  return (
+    <button
+      onClick={() => {
+        navigator.clipboard.writeText(text.trim());
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }}
+      className={`absolute top-2 right-2 text-xs px-2 py-1 rounded border transition-all cursor-pointer
+        opacity-0 group-hover:opacity-100
+        ${dark
+          ? "bg-white/10 border-white/20 text-slate-300 hover:bg-white/20"
+          : "bg-white/80 border-black/10 text-black/50 hover:bg-white hover:text-black/70"
+        }`}
+      style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, sans-serif' }}
+    >
+      {copied ? "Copied" : "Copy"}
+    </button>
+  );
+}
+
 function ChapterContent({
   chapter,
   theme,
@@ -3236,6 +3270,27 @@ function ChapterContent({
                 rel={props.href?.startsWith("http") ? "noreferrer" : undefined}
                 data-testid="link-markdown"
               />
+            );
+          },
+          pre: ({ children, ...props }: any) => {
+            const textContent = (() => {
+              try {
+                const extract = (node: any): string => {
+                  if (typeof node === "string") return node;
+                  if (Array.isArray(node)) return node.map(extract).join("");
+                  if (node?.props?.children) return extract(node.props.children);
+                  return "";
+                };
+                return extract(children);
+              } catch { return ""; }
+            })();
+            return (
+              <div className="relative group">
+                <pre {...props}>{children}</pre>
+                {textContent && (
+                  <CopyButton text={textContent} theme={theme} />
+                )}
+              </div>
             );
           },
           code: ({ className, children, ...props }: any) => (

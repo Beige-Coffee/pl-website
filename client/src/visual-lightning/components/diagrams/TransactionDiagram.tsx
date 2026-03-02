@@ -62,7 +62,7 @@ export function TransactionDiagram({ data }: TransactionDiagramProps) {
 
   // Inputs
   const inputsY = metaY + metaRowH * 2 + 10;
-  const inputBoxH = 78; // box with txid, index, scriptSig, sequence
+  const inputBoxH = 72; // box with txid, index, scriptSig, sequence
   const inputRowH = inputBoxH + 8;
   const inputsSectionH = 28 + data.inputs.length * inputRowH;
 
@@ -82,7 +82,7 @@ export function TransactionDiagram({ data }: TransactionDiagramProps) {
   const viewBoxH = cardH + 24;
 
   return (
-    <div ref={containerRef} className="vl-card-3d relative my-6 select-none">
+    <div ref={containerRef} className="vl-card-3d relative my-6 select-none" style={{ maxWidth: 680, margin: "0 auto" }}>
       <div className="vl-card-3d-inner" style={{ overflow: "visible" }}>
         <svg
           viewBox={`0 0 ${viewBoxW} ${viewBoxH}`}
@@ -238,13 +238,13 @@ export function TransactionDiagram({ data }: TransactionDiagramProps) {
                   style={{ cursor: "pointer" }}
                 >
                   <rect
-                    x={boxX} y={rowY + 54} width={boxW} height={inputBoxH - 54}
+                    x={boxX} y={rowY + 50} width={boxW} height={inputBoxH - 50}
                     rx="0" fill="transparent"
                   />
-                  <text x={boxX + 8} y={rowY + 70} fontSize="10" fill="#6b5d4f" style={{ pointerEvents: "none" }}>
+                  <text x={boxX + 8} y={rowY + 64} fontSize="10" fill="#6b5d4f" style={{ pointerEvents: "none" }}>
                     sequence:
                   </text>
-                  <text x={boxX + boxW - 8} y={rowY + 70} fontSize="11" fontWeight="600" fill="#2a1f0d" fontFamily="'JetBrains Mono', monospace" textAnchor="end" style={{ pointerEvents: "none" }}>
+                  <text x={boxX + boxW - 8} y={rowY + 64} fontSize="11" fontWeight="600" fill="#2a1f0d" fontFamily="'JetBrains Mono', monospace" textAnchor="end" style={{ pointerEvents: "none" }}>
                     {formatSequence(input.sequence)}
                   </text>
                 </g>

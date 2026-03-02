@@ -156,8 +156,8 @@ export function CommitmentPairDiagram() {
   const fundY = 52;
   const fundH = 36;
   const cardsY = fundY + fundH + 30;
-  const legendY = cardsY + cardH + 10;
-  const H = legendY + 32;
+  const legendY = cardsY + cardH + 14;
+  const H = legendY + 42;
 
   // Helpers
   const fill = (region: string) =>
@@ -289,51 +289,76 @@ export function CommitmentPairDiagram() {
         </g>
 
         {/* ─── Outputs section ─── */}
-        <rect x={bx} y={y + outOff} width={bw} height={outSecH - 4} rx="4" fill="#fefdfb" stroke="#e8dcc8" strokeWidth="0.5" />
-        <text x={bx + 8} y={y + outOff + 14} fontSize="9" fontWeight="700" fill="#2a1f0d" letterSpacing="0.03em" style={noPtr}>Outputs</text>
-        <line x1={bx + 8} y1={y + outOff + 18} x2={bx + bw - 8} y2={y + outOff + 18} stroke="#e8dcc8" strokeWidth="0.5" />
+        {(() => {
+          // BOLT 3: sort outputs by lowest value first
+          const localNum = parseInt(c.localValue.replace(/,/g, ""), 10);
+          const remoteNum = parseInt(c.remoteValue.replace(/,/g, ""), 10);
+          const localFirst = localNum <= remoteNum;
 
-        {/* Output 0: to_local (DELAYED) */}
-        <text x={bx + 8} y={y + outOff + outHeadH + 14} fontSize="9" fill="#6b5d4f">0:</text>
-        <g {...hoverProps(`${prefix}-local`)}>
-          <rect
-            x={ibx} y={y + outOff + outHeadH + 2} width={ibw} height={outBoxH - 4} rx="3"
-            fill={hovered === `${prefix}-local` ? "rgba(184,134,11,0.08)" : "#fdf8e8"}
-            stroke={hovered === `${prefix}-local` ? "#b8860b" : "#d4a038"}
-            strokeWidth="0.75" strokeDasharray="4 2"
-            style={{ transition: "fill 0.15s ease, stroke 0.15s ease" }}
-          />
-          <text x={ibx + 6} y={y + outOff + outHeadH + 16} fontSize="8" fill="#6b5d4f" style={noPtr}>value:</text>
-          <text x={ibx + ibw - 6} y={y + outOff + outHeadH + 16} fontSize="8" fontWeight="600" fill="#b8860b" fontFamily={mono} textAnchor="end" style={noPtr}>{c.localValue}</text>
+          const out0Y = y + outOff + outHeadH;
+          const out1Y = y + outOff + outHeadH + outBoxH + 6;
 
-          <text x={ibx + 6} y={y + outOff + outHeadH + 30} fontSize="8" fill="#6b5d4f" style={noPtr}>scriptPubKey:</text>
-          <text x={ibx + ibw - 6} y={y + outOff + outHeadH + 30} fontSize="8" fill="#b8860b" fontFamily={mono} textAnchor="end" style={noPtr}>{"OP_0 <script_hash>"}</text>
+          const firstOutput = localFirst ? "local" : "remote";
+          const secondOutput = localFirst ? "remote" : "local";
 
-          <text x={ibx + ibw / 2 + 6} y={y + outOff + outHeadH + 43} fontSize="7.5" fontWeight="600" fill="#b8860b" textAnchor="middle" style={noPtr}>
-            {c.localOwner} (DELAYED)
-          </text>
-        </g>
+          const renderLocal = (baseY: number, idx: number) => (
+            <g key="local">
+              <text x={bx + 8} y={baseY + 14} fontSize="9" fill="#6b5d4f">{idx}:</text>
+              <g {...hoverProps(`${prefix}-local`)}>
+                <rect
+                  x={ibx} y={baseY + 2} width={ibw} height={outBoxH - 4} rx="3"
+                  fill={hovered === `${prefix}-local` ? "rgba(184,134,11,0.08)" : "#fdf8e8"}
+                  stroke={hovered === `${prefix}-local` ? "#b8860b" : "#d4a038"}
+                  strokeWidth="0.75" strokeDasharray="4 2"
+                  style={{ transition: "fill 0.15s ease, stroke 0.15s ease" }}
+                />
+                <text x={ibx + 6} y={baseY + 16} fontSize="8" fill="#6b5d4f" style={noPtr}>value:</text>
+                <text x={ibx + ibw - 6} y={baseY + 16} fontSize="8" fontWeight="600" fill="#b8860b" fontFamily={mono} textAnchor="end" style={noPtr}>{c.localValue}</text>
 
-        {/* Output 1: to_remote (IMMEDIATE) */}
-        <text x={bx + 8} y={y + outOff + outHeadH + outBoxH + 6 + 14} fontSize="9" fill="#6b5d4f">1:</text>
-        <g {...hoverProps(`${prefix}-remote`)}>
-          <rect
-            x={ibx} y={y + outOff + outHeadH + outBoxH + 6 + 2} width={ibw} height={outBoxH - 4} rx="3"
-            fill={hovered === `${prefix}-remote` ? "rgba(184,134,11,0.04)" : "white"}
-            stroke={hovered === `${prefix}-remote` ? "#b8860b" : "#e8dcc8"}
-            strokeWidth="0.75"
-            style={{ transition: "fill 0.15s ease, stroke 0.15s ease" }}
-          />
-          <text x={ibx + 6} y={y + outOff + outHeadH + outBoxH + 6 + 16} fontSize="8" fill="#6b5d4f" style={noPtr}>value:</text>
-          <text x={ibx + ibw - 6} y={y + outOff + outHeadH + outBoxH + 6 + 16} fontSize="8" fontWeight="600" fill="#b8860b" fontFamily={mono} textAnchor="end" style={noPtr}>{c.remoteValue}</text>
+                <text x={ibx + 6} y={baseY + 30} fontSize="8" fill="#6b5d4f" style={noPtr}>scriptPubKey:</text>
+                <text x={ibx + ibw - 6} y={baseY + 30} fontSize="8" fill="#b8860b" fontFamily={mono} textAnchor="end" style={noPtr}>{"OP_0 <script_hash>"}</text>
 
-          <text x={ibx + 6} y={y + outOff + outHeadH + outBoxH + 6 + 30} fontSize="8" fill="#6b5d4f" style={noPtr}>scriptPubKey:</text>
-          <text x={ibx + ibw - 6} y={y + outOff + outHeadH + outBoxH + 6 + 30} fontSize="8" fill="#b8860b" fontFamily={mono} textAnchor="end" style={noPtr}>{"OP_0 <pubkey_hash>"}</text>
+                <text x={ibx + ibw / 2 + 6} y={baseY + 43} fontSize="7.5" fontWeight="600" fill="#b8860b" textAnchor="middle" style={noPtr}>
+                  {c.localOwner} (DELAYED)
+                </text>
+              </g>
+            </g>
+          );
 
-          <text x={ibx + ibw / 2 + 6} y={y + outOff + outHeadH + outBoxH + 6 + 43} fontSize="7.5" fontWeight="600" fill="#16a34a" textAnchor="middle" style={noPtr}>
-            {c.remoteOwner} (IMMEDIATE)
-          </text>
-        </g>
+          const renderRemote = (baseY: number, idx: number) => (
+            <g key="remote">
+              <text x={bx + 8} y={baseY + 14} fontSize="9" fill="#6b5d4f">{idx}:</text>
+              <g {...hoverProps(`${prefix}-remote`)}>
+                <rect
+                  x={ibx} y={baseY + 2} width={ibw} height={outBoxH - 4} rx="3"
+                  fill={hovered === `${prefix}-remote` ? "rgba(184,134,11,0.04)" : "white"}
+                  stroke={hovered === `${prefix}-remote` ? "#b8860b" : "#e8dcc8"}
+                  strokeWidth="0.75"
+                  style={{ transition: "fill 0.15s ease, stroke 0.15s ease" }}
+                />
+                <text x={ibx + 6} y={baseY + 16} fontSize="8" fill="#6b5d4f" style={noPtr}>value:</text>
+                <text x={ibx + ibw - 6} y={baseY + 16} fontSize="8" fontWeight="600" fill="#b8860b" fontFamily={mono} textAnchor="end" style={noPtr}>{c.remoteValue}</text>
+
+                <text x={ibx + 6} y={baseY + 30} fontSize="8" fill="#6b5d4f" style={noPtr}>scriptPubKey:</text>
+                <text x={ibx + ibw - 6} y={baseY + 30} fontSize="8" fill="#b8860b" fontFamily={mono} textAnchor="end" style={noPtr}>{"OP_0 <pubkey_hash>"}</text>
+
+                <text x={ibx + ibw / 2 + 6} y={baseY + 43} fontSize="7.5" fontWeight="600" fill="#16a34a" textAnchor="middle" style={noPtr}>
+                  {c.remoteOwner} (IMMEDIATE)
+                </text>
+              </g>
+            </g>
+          );
+
+          return (
+            <>
+              <rect x={bx} y={y + outOff} width={bw} height={outSecH - 4} rx="4" fill="#fefdfb" stroke="#e8dcc8" strokeWidth="0.5" />
+              <text x={bx + 8} y={y + outOff + 14} fontSize="9" fontWeight="700" fill="#2a1f0d" letterSpacing="0.03em" style={noPtr}>Outputs</text>
+              <line x1={bx + 8} y1={y + outOff + 18} x2={bx + bw - 8} y2={y + outOff + 18} stroke="#e8dcc8" strokeWidth="0.5" />
+              {firstOutput === "local" ? renderLocal(out0Y, 0) : renderRemote(out0Y, 0)}
+              {secondOutput === "local" ? renderLocal(out1Y, 1) : renderRemote(out1Y, 1)}
+            </>
+          );
+        })()}
 
         {/* ─── Witness section ─── */}
         <rect x={bx} y={y + witOff} width={bw} height={witHeadH + witRowH} rx="4" fill="#fefdfb" stroke="#e8dcc8" strokeWidth="0.5" />
@@ -359,7 +384,7 @@ export function CommitmentPairDiagram() {
   const tooltip = hovered ? TOOLTIPS[hovered] : null;
 
   return (
-    <div ref={containerRef} className="vl-card-3d relative select-none">
+    <div ref={containerRef} className="vl-card-3d relative select-none" style={{ maxWidth: 680, margin: "0 auto" }}>
       <div className="vl-card-3d-inner" style={{ overflow: "visible" }}>
         <svg
           viewBox={`0 0 ${W} ${H}`}
@@ -395,36 +420,62 @@ export function CommitmentPairDiagram() {
             </text>
           </g>
 
-          {/* Arrows from funding to both cards */}
           <defs>
             <marker id="vl-cp-arrow" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto">
-              <polygon points="0 0, 7 2.5, 0 5" fill="#6b5d4f" />
+              <polygon points="0 0, 7 2.5, 0 5" fill="#b8860b" />
             </marker>
           </defs>
-          <line
-            x1={W / 2 - 35} y1={fundY + fundH}
-            x2={leftX + cardW / 2} y2={cardsY - 2}
-            stroke="#6b5d4f" strokeWidth="1.5"
-            markerEnd="url(#vl-cp-arrow)"
-          />
-          <line
-            x1={W / 2 + 35} y1={fundY + fundH}
-            x2={rightX + cardW / 2} y2={cardsY - 2}
-            stroke="#6b5d4f" strokeWidth="1.5"
-            markerEnd="url(#vl-cp-arrow)"
-          />
 
           {/* Render both TX cards */}
           {cards.map(renderCard)}
 
+          {/* Arrows from funding output into left edge of each card's input box (drawn AFTER cards so they render on top) */}
+          {(() => {
+            // Target: vertical midpoint of input 0 box, arrow enters its left edge
+            const inputBoxMidY = cardsY + inpOff + inpHeadH + 2 + (inpBoxH - 4) / 2;
+            const leftElbowX = leftX - 10;
+            const rightElbowX = rightX - 10;
+            // ibx = leftX + pad + 16 (the actual input box left edge)
+            const leftTargetX = leftX + pad + 16;
+            const rightTargetX = rightX + pad + 16;
+            return (
+              <>
+                {/* Vertical stub from funding box center down to the horizontal */}
+                <line
+                  x1={W / 2} y1={fundY + fundH}
+                  x2={W / 2} y2={fundY + fundH + 4}
+                  stroke="#b8860b" strokeWidth="1.5"
+                />
+                {/* Horizontal line from funding bottom to both vertical drops */}
+                <line
+                  x1={leftElbowX} y1={fundY + fundH + 4}
+                  x2={rightElbowX} y2={fundY + fundH + 4}
+                  stroke="#b8860b" strokeWidth="1.5"
+                />
+                {/* Left card: vertical down, 90° turn, horizontal right into input */}
+                <polyline
+                  points={`${leftElbowX},${fundY + fundH + 4} ${leftElbowX},${inputBoxMidY} ${leftTargetX},${inputBoxMidY}`}
+                  fill="none" stroke="#b8860b" strokeWidth="1.5"
+                  markerEnd="url(#vl-cp-arrow)"
+                />
+                {/* Right card: vertical down, 90° turn, horizontal right into input */}
+                <polyline
+                  points={`${rightElbowX},${fundY + fundH + 4} ${rightElbowX},${inputBoxMidY} ${rightTargetX},${inputBoxMidY}`}
+                  fill="none" stroke="#b8860b" strokeWidth="1.5"
+                  markerEnd="url(#vl-cp-arrow)"
+                />
+              </>
+            );
+          })()}
+
           {/* Legend */}
-          <rect x={W / 2 - 130} y={legendY} width={260} height={26} rx="6" fill="#fefdfb" stroke="#e8dcc8" strokeWidth="0.5" />
-          <rect x={W / 2 - 118} y={legendY + 8} width={10} height={10} rx="2" fill="#fdf8e8" stroke="#d4a038" strokeWidth="0.75" strokeDasharray="3 1" />
-          <text x={W / 2 - 104} y={legendY + 17} fontSize="8" fill="#6b5d4f">
+          <rect x={W / 2 - 170} y={legendY} width={340} height={34} rx="8" fill="#fefdfb" stroke="#e8dcc8" strokeWidth="0.75" />
+          <rect x={W / 2 - 152} y={legendY + 10} width={14} height={14} rx="3" fill="#fdf8e8" stroke="#d4a038" strokeWidth="1" strokeDasharray="3 1.5" />
+          <text x={W / 2 - 132} y={legendY + 22} fontSize="11" fill="#6b5d4f">
             Delayed (your own)
           </text>
-          <rect x={W / 2 + 12} y={legendY + 8} width={10} height={10} rx="2" fill="white" stroke="#e8dcc8" strokeWidth="0.75" />
-          <text x={W / 2 + 26} y={legendY + 17} fontSize="8" fill="#6b5d4f">
+          <rect x={W / 2 + 20} y={legendY + 10} width={14} height={14} rx="3" fill="white" stroke="#e8dcc8" strokeWidth="1" />
+          <text x={W / 2 + 40} y={legendY + 22} fontSize="11" fill="#6b5d4f">
             Immediate (counterparty)
           </text>
         </svg>

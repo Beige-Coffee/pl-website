@@ -7,11 +7,11 @@ import { VL_SECTIONS } from "../visual-lightning/data/vl-sections";
 import { useVLProgress } from "../visual-lightning/hooks/use-vl-progress";
 
 /** The set of sections that have real content (not stubs). */
-const ACTIVE_SECTIONS = new Set(["1", "2", "3", "4", "5", "6", "7", "8"]);
+const ACTIVE_SECTIONS = new Set(["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"]);
 
 function isSectionUnlocked(sectionId: string, completedSections: string[]): boolean {
   if (!ACTIVE_SECTIONS.has(sectionId)) return false;
-  if (sectionId === "1") return true;
+  if (sectionId === "0") return true;
   const prevId = String(parseInt(sectionId, 10) - 1);
   return completedSections.includes(prevId);
 }
@@ -21,12 +21,12 @@ export default function VisualLightningPage() {
   const [, setLocation] = useLocation();
   const { completedSections, markComplete } = useVLProgress();
 
-  const sectionId = params.sectionId || "1";
+  const sectionId = params.sectionId || "0";
   const section = VL_SECTIONS.find((s) => s.id === sectionId) || VL_SECTIONS[0];
 
   const handleNavigate = useCallback(
     (id: string) => {
-      setLocation(id === "1" ? "/visual-lightning" : `/visual-lightning/${id}`);
+      setLocation(id === "0" ? "/visual-lightning" : `/visual-lightning/${id}`);
       window.scrollTo(0, 0);
     },
     [setLocation],

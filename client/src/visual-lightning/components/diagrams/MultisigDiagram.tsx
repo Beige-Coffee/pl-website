@@ -71,7 +71,7 @@ export function MultisigDiagram() {
   const tooltip = hovered ? TOOLTIPS[hovered] : null;
 
   return (
-    <div ref={containerRef} className="vl-card-3d relative my-6 select-none">
+    <div ref={containerRef} className="vl-card-3d relative my-6 select-none" style={{ maxWidth: 760, margin: "0 auto" }}>
       <div className="vl-card-3d-inner p-4" style={{ overflow: "visible" }}>
         <svg
           viewBox="0 0 720 320"

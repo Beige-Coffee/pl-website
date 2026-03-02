@@ -97,6 +97,30 @@ const MESSAGES = [
   },
 ];
 
+// ── Message fields (shown in expanded card for current message) ──
+const MSG_FIELDS: { label: string; value: string }[][] = [
+  [ // commitment_signed (Alice → Bob)
+    { label: "channel_id", value: "AliceBob1" },
+    { label: "signature", value: "alice_funding_sig" },
+    { label: "num_htlcs", value: "0" },
+  ],
+  [ // revoke_and_ack (Bob → Alice)
+    { label: "channel_id", value: "AliceBob1" },
+    { label: "per_commitment_secret", value: "bob_secret_1" },
+    { label: "next_per_commitment_point", value: "bob_point_3" },
+  ],
+  [ // commitment_signed (Bob → Alice)
+    { label: "channel_id", value: "AliceBob1" },
+    { label: "signature", value: "bob_funding_sig" },
+    { label: "num_htlcs", value: "0" },
+  ],
+  [ // revoke_and_ack (Alice → Bob)
+    { label: "channel_id", value: "AliceBob1" },
+    { label: "per_commitment_secret", value: "alice_secret_1" },
+    { label: "next_per_commitment_point", value: "alice_point_3" },
+  ],
+];
+
 // ── Card states per step ──
 const ALICE_OLD: ("active" | "revoked")[] = [
   "active", "active", "active", "active", "revoked",
@@ -199,14 +223,31 @@ export function StateUpdateDiagram() {
   const titleY = 50;
   const oldCardsY = 68;
   const firstMsgY = oldCardsY + cardH + 32; // 162
-  const msgSpacing = 42;
 
   // How many messages visible
   const numMsgs = Math.min(step, 4);
-  const lastMsgY = numMsgs > 0 ? firstMsgY + (numMsgs - 1) * msgSpacing : 0;
 
-  // New cards: below the last message
-  const newCardsY = numMsgs > 0 ? lastMsgY + 42 : 0;
+  // Field card dimensions (all messages have 3 fields)
+  const fRowH = 15;
+  const fHeaderH = 22;
+  const fCardH = fHeaderH + 3 * fRowH + 6; // 73
+  const fCardW = 228;
+  const collapsedMsgSpacing = 28;
+
+  // Compute message Y positions dynamically
+  const msgYPositions: number[] = [];
+  for (let i = 0; i < numMsgs; i++) {
+    if (i === 0) {
+      msgYPositions.push(firstMsgY);
+    } else {
+      msgYPositions.push(msgYPositions[i - 1] + collapsedMsgSpacing);
+    }
+  }
+
+  // New cards: below the last message's expanded card
+  const newCardsY = numMsgs > 0
+    ? msgYPositions[numMsgs - 1] + 6 + fCardH + 14
+    : 0;
 
   // Caption
   const captionY = step === 0
@@ -223,6 +264,7 @@ export function StateUpdateDiagram() {
     y: number,
     owner: string,
     ownerAmt: string,
+    otherName: string,
     otherAmt: string,
     state: "active" | "revoked" | "new",
   ) => {
@@ -233,6 +275,18 @@ export function StateUpdateDiagram() {
     const dashArray = isRevoked ? "4 2" : undefined;
     const opacity = isRevoked ? 0.55 : 1;
     const ownerShort = owner.replace("'s TX", "");
+
+    // BOLT 3: sort outputs by value ascending (lower balance first)
+    const ownerVal = parseFloat(ownerAmt);
+    const otherVal = parseFloat(otherAmt);
+    const ownerFirst = ownerVal <= otherVal;
+
+    const row1Name = ownerFirst ? ownerShort : otherName;
+    const row1Amt = ownerFirst ? ownerAmt : otherAmt;
+    const row1Color = ownerFirst ? GOLD : TEXT_MUTED;
+    const row2Name = ownerFirst ? otherName : ownerShort;
+    const row2Amt = ownerFirst ? otherAmt : ownerAmt;
+    const row2Color = ownerFirst ? TEXT_MUTED : GOLD;
 
     return (
       <g {...hoverProps(id)} style={{ opacity }}>
@@ -264,18 +318,18 @@ export function StateUpdateDiagram() {
             &#10003;
           </text>
         )}
-        {/* Balances */}
+        {/* Balances (sorted: lower value first per BOLT 3) */}
         <text x={x + 10} y={y + 36} fontSize="10" fill={TEXT_MUTED} style={noPtr}>
-          {ownerShort}:
+          {row1Name}:
         </text>
-        <text x={x + 66} y={y + 36} fontSize="10" fontWeight="600" fontFamily={mono} fill={GOLD} style={noPtr}>
-          {ownerAmt} BTC
+        <text x={x + 66} y={y + 36} fontSize="10" fontWeight="600" fontFamily={mono} fill={row1Color} style={noPtr}>
+          {row1Amt} BTC
         </text>
         <text x={x + 10} y={y + 51} fontSize="10" fill={TEXT_MUTED} style={noPtr}>
-          Other:
+          {row2Name}:
         </text>
-        <text x={x + 66} y={y + 51} fontSize="10" fontWeight="600" fontFamily={mono} fill={TEXT_MUTED} style={noPtr}>
-          {otherAmt} BTC
+        <text x={x + 66} y={y + 51} fontSize="10" fontWeight="600" fontFamily={mono} fill={row2Color} style={noPtr}>
+          {row2Amt} BTC
         </text>
         {/* X cross for revoked */}
         {isRevoked && (
@@ -300,15 +354,19 @@ export function StateUpdateDiagram() {
   const renderMsg = (
     msg: typeof MESSAGES[number],
     index: number,
+    y: number,
     isCurrent: boolean,
   ) => {
-    const y = firstMsgY + index * msgSpacing;
     const fromX = msg.fromAlice ? arrowLeft : arrowRight;
     const toX = msg.fromAlice ? arrowRight : arrowLeft;
     const dir = toX > fromX ? 1 : -1;
     const alpha = isCurrent ? 1 : 0.3;
     const pillW = 150;
     const pillH = 18;
+
+    const fields = MSG_FIELDS[index];
+    const fCardX = arrowMid - fCardW / 2;
+    const fCardTopY = y + 6;
 
     return (
       <g key={msg.id} {...hoverProps(msg.id)} style={{ opacity: alpha, transition: "opacity 0.3s ease" }}>
@@ -324,35 +382,66 @@ export function StateUpdateDiagram() {
           points={`${toX - dir * 9},${y - 4.5} ${toX - dir * 9},${y + 4.5} ${toX},${y}`}
           fill={msg.color}
         />
-        {/* Label pill */}
-        <rect
-          x={arrowMid - pillW / 2} y={y - pillH - 2}
-          width={pillW} height={pillH} rx={5}
-          fill="white" stroke={`${msg.color}44`} strokeWidth="0.75"
-          style={noPtr}
-        />
-        <text
-          x={arrowMid} y={y - pillH / 2 + 2}
-          fontSize="10" fontWeight="600" fontFamily={mono}
-          fill={msg.color} textAnchor="middle" style={noPtr}
-        >
-          {msg.label}
-        </text>
-        {/* Detail text (current message only) */}
+        {/* Label pill (collapsed messages only — card header shows name for expanded) */}
+        {!isCurrent && (
+          <>
+            <rect
+              x={arrowMid - pillW / 2} y={y - pillH - 2}
+              width={pillW} height={pillH} rx={5}
+              fill="white" stroke={`${msg.color}44`}
+              strokeWidth={0.75}
+              style={noPtr}
+            />
+            <text
+              x={arrowMid} y={y - pillH / 2 + 2}
+              fontSize="10" fontWeight="600" fontFamily={mono}
+              fill={msg.color} textAnchor="middle" style={noPtr}
+            >
+              {msg.label}
+            </text>
+          </>
+        )}
+        {/* Expanded field card (current message only) */}
         {isCurrent && (
-          <text
-            x={arrowMid} y={y + 16}
-            fontSize="9" fill={TEXT_MUTED} textAnchor="middle" style={noPtr}
-          >
-            {msg.detail}
-          </text>
+          <g style={noPtr}>
+            {/* Card background */}
+            <rect x={fCardX} y={fCardTopY} width={fCardW} height={fCardH} rx={6}
+              fill="white" stroke={BORDER} strokeWidth="1" />
+            {/* Header bar */}
+            <rect x={fCardX} y={fCardTopY} width={fCardW} height={fHeaderH}
+              rx={6} fill={`${msg.color}08`} />
+            <rect x={fCardX} y={fCardTopY + fHeaderH - 6} width={fCardW} height={6}
+              fill={`${msg.color}08`} />
+            <line x1={fCardX + 4} y1={fCardTopY + fHeaderH}
+              x2={fCardX + fCardW - 4} y2={fCardTopY + fHeaderH}
+              stroke={BORDER} strokeWidth="0.5" />
+            <text x={fCardX + 8} y={fCardTopY + 15} fontSize="9.5" fontWeight="700"
+              fontFamily={mono} fill={msg.color}>
+              {msg.label}
+            </text>
+            {/* Field rows */}
+            {fields.map((f, fi) => {
+              const fy = fCardTopY + fHeaderH + 4 + fi * fRowH;
+              return (
+                <g key={f.label}>
+                  <text x={fCardX + 8} y={fy + 11} fontSize="8.5" fill={TEXT_MUTED} fontFamily={mono}>
+                    {f.label}:
+                  </text>
+                  <text x={fCardX + fCardW - 8} y={fy + 11} fontSize="8.5" fontWeight="600"
+                    fill={TEXT_DARK} fontFamily={mono} textAnchor="end">
+                    {f.value}
+                  </text>
+                </g>
+              );
+            })}
+          </g>
         )}
       </g>
     );
   };
 
   return (
-    <div ref={containerRef} className="vl-card-3d relative select-none">
+    <div ref={containerRef} className="vl-card-3d relative select-none" style={{ maxWidth: 680, margin: "0 auto" }}>
       <div className="vl-card-3d-inner" style={{ overflow: "visible" }}>
         <svg
           viewBox={`0 0 ${W} ${H}`}
@@ -387,30 +476,30 @@ export function StateUpdateDiagram() {
           </text>
 
           {/* ── Old TX cards (state changes per step) ── */}
-          {renderTxCard("alice-old-tx", aliceCardX, oldCardsY, "Alice's TX", "0.7", "0.3", ALICE_OLD[step])}
-          {renderTxCard("bob-old-tx", bobCardX, oldCardsY, "Bob's TX", "0.3", "0.7", BOB_OLD[step])}
+          {renderTxCard("alice-old-tx", aliceCardX, oldCardsY, "Alice's TX", "0.7", "Bob", "0.3", ALICE_OLD[step])}
+          {renderTxCard("bob-old-tx", bobCardX, oldCardsY, "Bob's TX", "0.3", "Alice", "0.7", BOB_OLD[step])}
 
           {/* ── Protocol messages (cumulative, building downward) ── */}
           {MESSAGES.slice(0, numMsgs).map((msg, i) =>
-            renderMsg(msg, i, i === numMsgs - 1)
+            renderMsg(msg, i, msgYPositions[i], i === numMsgs - 1)
           )}
 
           {/* ── New TX cards ── */}
           {/* Steps 1-2: only Bob's new TX (Alice hasn't received Bob's sig yet) */}
           {step >= 1 && step < 3 &&
-            renderTxCard("bob-new-tx", bobCardX, newCardsY, "Bob's TX", "0.4", "0.6", "new")
+            renderTxCard("bob-new-tx", bobCardX, newCardsY, "Bob's TX", "0.4", "Alice", "0.6", "new")
           }
           {/* Steps 3-4: both new TXs (step 4: both become "active") */}
           {step >= 3 && (
             <g>
               {renderTxCard(
                 "alice-new-tx", aliceCardX, newCardsY,
-                "Alice's TX", "0.6", "0.4",
+                "Alice's TX", "0.6", "Bob", "0.4",
                 step === 4 ? "active" : "new",
               )}
               {renderTxCard(
                 "bob-new-tx", bobCardX, newCardsY,
-                "Bob's TX", "0.4", "0.6",
+                "Bob's TX", "0.4", "Alice", "0.6",
                 step === 4 ? "active" : "new",
               )}
             </g>

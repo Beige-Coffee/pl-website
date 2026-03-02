@@ -51,6 +51,8 @@
   border-radius: 6px;
   padding: 2px 6px;
   font-size: 0.9em;
+  overflow-wrap: break-word;
+  word-break: break-all;
 }
 
 /* 3D floating card */
@@ -106,8 +108,8 @@
 .vl-split-layout {
   display: flex;
   flex-direction: row;
-  min-height: calc(100vh - 60px); /* leave room for bezel */
-  padding-bottom: 60px; /* space for fixed bezel */
+  min-height: calc(100vh - 96px); /* leave room for bezel */
+  padding-bottom: 96px; /* space for fixed bezel */
 }
 
 .vl-visual-panel {
@@ -119,13 +121,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px 16px 80px;
+  padding: 24px 12px 80px;
   box-sizing: border-box;
 }
 
 .vl-visual-panel-inner {
   width: 100%;
-  max-width: 700px;
   perspective: 1200px;
 }
 
@@ -153,7 +154,9 @@
 }
 
 .vl-text-panel-inner {
-  max-width: 640px;
+  max-width: none;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
 }
 
 /* ===== RESIZER HANDLE ===== */
@@ -172,16 +175,15 @@
 
 .vl-resizer-bar {
   width: 3px;
-  height: 30vh;
+  height: calc(100% - 200px);
   border-radius: 3px;
   background: var(--vl-border);
-  transition: background 0.15s ease, height 0.15s ease;
+  transition: background 0.15s ease;
 }
 
 .vl-resizer:hover .vl-resizer-bar,
 .vl-resizer-active .vl-resizer-bar {
   background: var(--vl-gold-500);
-  height: 40vh;
 }
 
 /* ===== FLOATING BACK BUTTON ===== */
@@ -218,7 +220,7 @@
   left: 0;
   right: 0;
   z-index: 40;
-  height: 60px;
+  height: 96px;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(8px);
   border-top: 1px solid var(--vl-border);
@@ -243,9 +245,9 @@
   top: 50%;
   left: 16px;
   right: 16px;
-  height: 2px;
+  height: 3px;
   background: var(--vl-border);
-  transform: translateY(-1px);
+  transform: translateY(-1.5px);
 }
 
 .vl-bezel-ticks {
@@ -266,18 +268,18 @@
 }
 
 .vl-bezel-tick-dot {
-  width: 12px;
-  height: 12px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
-  border: 2px solid var(--vl-border);
+  border: 2.5px solid var(--vl-border);
   background: white;
   transition: all 0.3s ease;
 }
 
 .vl-bezel-tick-label {
   position: absolute;
-  bottom: -18px;
-  font-size: 10px;
+  bottom: -20px;
+  font-size: 13px;
   color: var(--vl-text-muted);
   opacity: 0.4;
   white-space: nowrap;
@@ -330,8 +332,8 @@
 
 /* Active tick */
 .vl-bezel-tick-active .vl-bezel-tick-dot {
-  width: 16px;
-  height: 16px;
+  width: 22px;
+  height: 22px;
   background: var(--vl-gold-500);
   border-color: var(--vl-gold-500);
   box-shadow: 0 0 12px rgba(184, 134, 11, 0.4);
@@ -346,10 +348,10 @@
 /* Title label above the active tick */
 .vl-bezel-title {
   position: absolute;
-  bottom: calc(100% + 6px);
+  bottom: calc(100% + 8px);
   left: 50%;
   transform: translateX(-50%);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--vl-brown-900);
   white-space: nowrap;
@@ -382,31 +384,95 @@
   .vl-split-layout {
     flex-direction: column;
     min-height: auto;
+    padding-bottom: 80px;
   }
 
   .vl-visual-panel {
-    width: 100%;
-    min-width: 100%;
+    width: 100% !important;
+    min-width: 100% !important;
     position: relative;
     height: auto;
-    min-height: 280px;
-    padding: 24px 16px;
+    min-height: 0;
+    padding: 56px 8px 88px; /* bottom clears the 80px fixed bezel */
+  }
+
+  /* Let diagrams fill the available width on mobile */
+  .vl-visual-panel .vl-card-3d {
+    max-width: 100% !important;
+  }
+
+  /* Disable floating animation on mobile — causes jank */
+  .vl-visual-panel .vl-float {
+    animation: none;
+  }
+
+  .vl-resizer {
+    display: none;
   }
 
   .vl-text-panel {
     width: 100%;
-    padding: 24px 16px 80px;
+    padding: 24px 20px 80px;
   }
 
+  /* ── Bezel: scrollable dial ── */
   .vl-bezel {
+    height: 80px;
+    padding: 0;
     overflow-x: auto;
-    justify-content: flex-start;
     -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;          /* Firefox */
+  }
+
+  .vl-bezel::-webkit-scrollbar {
+    display: none;                  /* Chrome / Safari */
   }
 
   .vl-bezel-track {
-    min-width: 600px;
-    padding: 0 16px;
+    max-width: none;
+    padding: 0;
+  }
+
+  .vl-bezel-line {
+    display: none;
+  }
+
+  .vl-bezel-ticks {
+    /* width: auto overrides desktop width: 100% so the flex container
+       sizes to its content + padding, creating scrollable overflow */
+    width: auto;
+    justify-content: flex-start;
+    gap: 48px;
+    /* Padding so first/last tick can be scrolled to viewport center */
+    padding: 0 calc(50vw - 16px);
+  }
+
+  .vl-bezel-tick {
+    flex-shrink: 0;
+    will-change: transform, opacity;
+  }
+
+  .vl-bezel-tick-dot {
+    width: 16px;
+    height: 16px;
+    transition: width 0.2s ease, height 0.2s ease,
+                background 0.2s ease, border-color 0.2s ease,
+                box-shadow 0.2s ease;
+  }
+
+  .vl-bezel-tick-active .vl-bezel-tick-dot {
+    width: 24px;
+    height: 24px;
+  }
+
+  .vl-bezel-tick-label {
+    font-size: 11px;
+    bottom: -16px;
+  }
+
+  .vl-bezel-title {
+    font-size: 11px;
+    bottom: calc(100% + 4px);
   }
 
   .vl-back-button {
@@ -415,4 +481,9 @@
     width: 36px;
     height: 36px;
   }
+
+  /* Reduce heading sizes */
+  .vl-root h1 { font-size: 1.6rem; }
+  .vl-root h2 { font-size: 1.3rem; }
+  .vl-root h3 { font-size: 1.1rem; }
 }

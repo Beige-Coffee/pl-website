@@ -480,7 +480,7 @@ export default function AdminPage() {
                 { id: "ln-exercise-sort-outputs", label: "Sort Outputs", chapter: "Commitment Assembly" },
                 { id: "ln-exercise-commitment-tx", label: "Commit Tx", chapter: "Commitment Assembly" },
                 { id: "ln-exercise-finalize-commitment", label: "Finalize", chapter: "Commitment Finalization" },
-                { id: "offered-vs-received", label: "HTLC Types", chapter: "Introduction to HTLCs" },
+                { id: "htlc-preimage-purpose", label: "Preimage Flow", chapter: "Introduction to HTLCs" },
                 { id: "ln-exercise-offered-htlc-script", label: "Offered Script", chapter: "Offered HTLCs" },
                 { id: "ln-exercise-htlc-timeout-tx", label: "Timeout Tx", chapter: "Offered HTLCs" },
                 { id: "ln-exercise-finalize-htlc-timeout", label: "Timeout Final", chapter: "Offered HTLCs" },
