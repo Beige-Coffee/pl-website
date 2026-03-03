@@ -363,7 +363,7 @@ export const VL_SECTIONS: VLSectionDef[] = [
       },
       {
         type: "callout",
-        title: "The Key Insight",
+        title: "Asymmetric by Design",
         body: "The asymmetry is intentional. Your own output is delayed. Your counterparty's output is immediate. This delay is the window that makes the revocation penalty possible.",
         variant: "key-concept",
       },
@@ -498,7 +498,7 @@ export const VL_SECTIONS: VLSectionDef[] = [
       {
         type: "text",
         content:
-          "Bob responds with <code>revoke_and_ack</code>, which contains two critical fields: the <strong>per_commitment_secret</strong> for State 1 (enabling Alice to derive the revocation key for Bob's old TX) and the <strong>next_per_commitment_point</strong> for future states. He then sends his own <code>commitment_signed</code> with his funding signature on Alice's new TX.",
+          "Bob responds with <code>revoke_and_ack</code>, which contains two critical fields: <code>per_commitment_secret</code> for State 1 (enabling Alice to derive the revocation key for Bob's old TX) and <code>next_per_commitment_point</code> for the next commitment state. He then sends his own <code>commitment_signed</code> with his funding signature on Alice's new TX.",
       },
       {
         type: "text",
@@ -788,7 +788,7 @@ export const VL_SECTIONS: VLSectionDef[] = [
       {
         type: "text",
         content:
-          "The recipient who knows the preimage could claim on-chain by publishing their commitment TX and sweeping the HTLC output. But that closes the channel. Instead, they send <code>update_fulfill_htlc</code> containing the <strong>channel_id</strong>, <strong>htlc_id</strong>, and <strong>payment_preimage</strong> to prove they <em>could</em> claim on-chain. Both parties then remove the HTLC output and add the funds to the recipient's balance in the next commitment state.",
+          "The recipient who knows the preimage could claim on-chain by publishing their commitment TX and sweeping the HTLC output. But that closes the channel. Instead, they send <code>update_fulfill_htlc</code> containing the <code>channel_id</code>, <code>htlc_id</code>, and <code>payment_preimage</code> to prove they <em>could</em> claim on-chain. Both parties then remove the HTLC output and add the funds to the recipient's balance in the next commitment state.",
       },
       {
         type: "callout",
@@ -804,7 +804,7 @@ export const VL_SECTIONS: VLSectionDef[] = [
       {
         type: "text",
         content:
-          "BOLT 4 defines four failure reason categories, combined as bitmask flags. <strong>BADONION</strong> (0x8000): invalid onion version, HMAC, or key. <strong>PERM</strong> (0x4000): permanent failures that won't resolve on retry. <strong>NODE</strong> (0x2000): node-level failures. <strong>UPDATE</strong> (0x1000): payment parameter errors like insufficient fee, HTLC amount too small, or incorrect CLTV expiry. These can be combined (e.g., PERM | NODE = permanent node failure).",
+          "BOLT 4 defines four failure flags, combined as bitmask values. <code>BADONION</code> (<code>0x8000</code>): invalid onion version, HMAC, or key. <code>PERM</code> (<code>0x4000</code>): permanent failures that won't resolve on retry. <code>NODE</code> (<code>0x2000</code>): node-level failures. <code>UPDATE</code> (<code>0x1000</code>): payment parameter errors like insufficient fee, HTLC amount too small, or incorrect CLTV expiry. These can be combined (e.g., <code>PERM | NODE</code> = permanent node failure).",
       },
       {
         type: "quiz",
@@ -814,7 +814,7 @@ export const VL_SECTIONS: VLSectionDef[] = [
             question:
               "Why does the recipient send update_fulfill_htlc instead of claiming the HTLC on-chain?",
             options: [
-              "To keep the channel open \u2014 both parties remove the HTLC and update balances off-chain",
+              "To keep the channel open, allowing both parties to remove the HTLC and update balances off-chain",
               "Because on-chain claims are invalid",
               "Because the preimage can only be used off-chain",
               "To avoid paying mining fees to themselves",
