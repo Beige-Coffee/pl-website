@@ -400,7 +400,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const ALLOWED_ADMIN_IP = "108.236.117.225";
   const LOCALHOST_IPS = ["127.0.0.1", "::1", "::ffff:127.0.0.1"];
 
-  const QUIZ_ANSWER_KEY = [3, 0, 2, 2, 1, 0, 3, 0, 3, 1];
+  const QUIZ_ANSWER_KEYS: Record<string, number[]> = {
+    noise: [3, 0, 2, 2, 1, 0, 3, 0, 3, 1],
+    lightning: [1, 1, 1, 1, 1, 1, 2, 1, 2, 2],
+  };
   const QUIZ_PASS_THRESHOLD = 0.9;
   const REWARD_AMOUNT_SATS = parseInt(process.env.REWARD_AMOUNT_SATS || "21", 10);
   const REWARD_AMOUNT_MSATS = REWARD_AMOUNT_SATS * 1000;
@@ -476,6 +479,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "ln-exercise-get-commitment-keys": 0,
     "ln-exercise-finalize-commitment": 0,
     "ln-exercise-htlc-outputs": 0,
+    "ln-exercise-commitment-tx-htlc": 0,
     "ln-exercise-offered-htlc-script": 0,
     "ln-exercise-received-htlc-script": 0,
     "ln-exercise-htlc-timeout-tx": 0,
@@ -519,18 +523,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Reward already claimed" });
       }
 
-      const { answers } = req.body;
+      const { answers, quizId } = req.body;
       if (!answers || typeof answers !== "object") {
         return res.status(400).json({ error: "Missing quiz answers" });
       }
 
+      const answerKey = QUIZ_ANSWER_KEYS[quizId || "noise"] || QUIZ_ANSWER_KEYS["noise"];
+
       let correct = 0;
-      for (let i = 0; i < QUIZ_ANSWER_KEY.length; i++) {
-        if (answers[String(i)] === QUIZ_ANSWER_KEY[i]) {
+      for (let i = 0; i < answerKey.length; i++) {
+        if (answers[String(i)] === answerKey[i]) {
           correct++;
         }
       }
-      const score = correct / QUIZ_ANSWER_KEY.length;
+      const score = correct / answerKey.length;
       if (score < QUIZ_PASS_THRESHOLD) {
         return res.status(400).json({ error: `Score too low: ${Math.round(score * 100)}%. Need 90%+` });
       }
@@ -553,6 +559,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const k1 = generateK1();
       await storage.createWithdrawal(k1, user.id, String(REWARD_AMOUNT_MSATS));
+
+      if (user.lightningAddress) {
+        const result = await autoPayLightningAddress(user.lightningAddress, REWARD_AMOUNT_MSATS);
+        if (result.success) {
+          await storage.markWithdrawalClaimed(k1, result.invoice || "");
+          await storage.markWithdrawalPaid(k1, result.paymentIndex || "auto-pay");
+          await storage.setRewardClaimed(user.id);
+          return res.json({ k1, autoPaid: true, amountSats: REWARD_AMOUNT_SATS });
+        }
+        console.warn(`Quiz auto-pay failed for ${user.lightningAddress}: ${result.error}, falling back to QR`);
+      }
 
       const withdrawUrl = `${getBaseUrl(req)}/api/lnurl/withdraw/${k1}`;
       const lnurl = encodeLnurl(withdrawUrl);

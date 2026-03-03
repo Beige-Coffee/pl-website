@@ -146,15 +146,15 @@ const CHECKPOINT_QUESTIONS: Record<string, {
     explanation: "P2WSH commits to a script hash rather than the full script in the output. The actual script (witness script) is only revealed when the output is spent. This means that on-chain observers cannot see the complex HTLC conditions or revocation paths until a close occurs, providing some privacy. Additionally, the witness data doesn't count toward the traditional block size limit (it gets a 75% discount in weight), reducing fees for these complex scripts.",
   },
   "htlc-dust": {
-    question: "What makes an HTLC 'dust' in the context of commitment transactions?",
+    question: "What makes an HTLC 'dust' (trimmed) in the context of commitment transactions?",
     options: [
       "An HTLC is dust if its payment hash has already been revealed (preimage is known)",
-      "An HTLC is dust if it has been pending for more than 2016 blocks without being resolved",
-      "An HTLC is dust if its value is less than the dust limit plus the fee cost of the second-stage transaction needed to claim it",
-      "An HTLC is dust if it routes through more than 20 hops in the Lightning Network",
+      "An HTLC is always dust if its value is below 546 satoshis, regardless of the channel type or fee structure",
+      "For non-anchor channels, an HTLC is trimmed if its value minus the second-stage transaction fee falls below the dust limit. For anchor/zero-fee channels, only the dust limit itself matters",
+      "An HTLC is dust only if both channel parties explicitly agree to trim it during the commitment_signed exchange",
     ],
     answer: 2,
-    explanation: "An HTLC output requires a second-stage transaction (either HTLC-timeout or HTLC-success) to be claimed. This second-stage transaction has its own fee cost. If the HTLC amount is less than the dust limit plus that fee, the output would cost more to spend than it's worth. BOLT 3 calls these 'trimmed' HTLCs: they are tracked off-chain but not included as outputs in the commitment transaction. The value of trimmed HTLCs is added to the transaction fee instead.",
+    explanation: "An HTLC output requires a second-stage transaction (HTLC-timeout or HTLC-success) to be claimed. For non-anchor channels, this second-stage transaction has its own fee cost deducted from the HTLC amount. If the resulting value falls below the dust limit (e.g., 330 sats for P2WSH), the HTLC is 'trimmed' and its value is added to the commitment transaction fee instead. For anchor/zero-fee channels, the second-stage fee is zero (fees are handled later via CPFP), so an HTLC is trimmed only if its raw value is below the dust limit. BOLT 3 specifies these rules in the 'Trimmed Outputs' section.",
   },
   "htlc-timeout-vs-success": {
     question: "What is the key difference between an HTLC-timeout transaction and an HTLC-success transaction?",
@@ -468,20 +468,6 @@ const chapters: Chapter[] = [
     file: "/lightning_tutorial/6.6-offered-htlcs.md",
   },
   {
-    id: "get-htlc-commitment",
-    title: "Inspect HTLC Commitment",
-    section: "HTLCs",
-    kind: "md",
-    file: "/lightning_tutorial/6.7-get-htlc-commitment.md",
-  },
-  {
-    id: "get-htlc-timeout",
-    title: "Inspect HTLC Timeout",
-    section: "HTLCs",
-    kind: "md",
-    file: "/lightning_tutorial/6.8-get-htlc-timeout.md",
-  },
-  {
     id: "received-htlcs",
     title: "Received HTLCs",
     section: "HTLCs",
@@ -494,6 +480,20 @@ const chapters: Chapter[] = [
     section: "HTLCs",
     kind: "md",
     file: "/lightning_tutorial/6.3-htlc-fees-dust.md",
+  },
+  {
+    id: "get-htlc-commitment",
+    title: "Inspect HTLC Commitment",
+    section: "HTLCs",
+    kind: "md",
+    file: "/lightning_tutorial/6.7-get-htlc-commitment.md",
+  },
+  {
+    id: "get-htlc-timeout",
+    title: "Inspect HTLC Timeout",
+    section: "HTLCs",
+    kind: "md",
+    file: "/lightning_tutorial/6.8-get-htlc-timeout.md",
   },
   {
     id: "closing-channels",
@@ -550,9 +550,9 @@ const CHAPTER_REQUIREMENTS: Record<string, {
   "deriving-revocation-keys": { checkpoints: [], exercises: ["ln-exercise-revocation-pubkey", "ln-exercise-revocation-privkey"] },
   "commitment-secrets": { checkpoints: ["commitment-secret-algorithm"], exercises: ["ln-exercise-commitment-secret", "ln-exercise-per-commitment-point"] },
   "key-derivation": { checkpoints: [], exercises: ["ln-exercise-derive-pubkey", "ln-exercise-derive-privkey", "ln-exercise-get-commitment-keys"] },
-  "commitment-scripts": { checkpoints: [], exercises: ["ln-exercise-to-remote-script", "ln-exercise-to-local-script"] },
-  "obscured-commitment": { checkpoints: [], exercises: ["ln-exercise-obscure-factor", "ln-exercise-obscured-commitment"] },
-  "commitment-assembly": { checkpoints: [], exercises: ["ln-exercise-commitment-outputs", "ln-exercise-sort-outputs", "ln-exercise-commitment-tx"] },
+  "commitment-scripts": { checkpoints: ["static-remotekey"], exercises: ["ln-exercise-to-remote-script", "ln-exercise-to-local-script"] },
+  "obscured-commitment": { checkpoints: ["obscured-commitment"], exercises: ["ln-exercise-obscure-factor", "ln-exercise-obscured-commitment"] },
+  "commitment-assembly": { checkpoints: ["fee-deduction"], exercises: ["ln-exercise-commitment-outputs", "ln-exercise-sort-outputs", "ln-exercise-commitment-tx"] },
   "commitment-finalization": { checkpoints: [], exercises: ["ln-exercise-finalize-commitment"] },
   "get-commitment-tx": { checkpoints: [], exercises: ["gen-commitment"] },
   "routing-payments": { checkpoints: [], exercises: [] },
@@ -564,7 +564,7 @@ const CHAPTER_REQUIREMENTS: Record<string, {
   "get-htlc-commitment": { checkpoints: [], exercises: ["gen-htlc-commitment"] },
   "get-htlc-timeout": { checkpoints: [], exercises: ["gen-htlc-timeout"] },
   "received-htlcs": { checkpoints: ["htlc-timeout-vs-success"], exercises: ["ln-exercise-received-htlc-script", "ln-exercise-htlc-success-tx", "ln-exercise-finalize-htlc-success"] },
-  "htlc-fees-dust": { checkpoints: ["htlc-dust", "p2wsh-wrapping"], exercises: ["ln-exercise-htlc-outputs"] },
+  "htlc-fees-dust": { checkpoints: ["htlc-dust", "p2wsh-wrapping"], exercises: ["ln-exercise-htlc-outputs", "ln-exercise-commitment-tx-htlc"] },
   "closing-channels": { checkpoints: [], exercises: [] },
   "quiz": { checkpoints: [], exercises: [] },
   "pay-it-forward": { checkpoints: [], exercises: [] },
@@ -1510,6 +1510,7 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
                 sessionToken={auth.sessionToken}
                 emailVerified={auth.emailVerified}
                 pubkey={auth.pubkey}
+                lightningAddress={auth.lightningAddress}
                 onLoginRequest={() => setShowLoginModal(true)}
               />
             ) : (
@@ -2623,6 +2624,7 @@ function InteractiveQuiz({
   sessionToken,
   emailVerified,
   pubkey,
+  lightningAddress,
   onLoginRequest,
 }: {
   theme: "light" | "dark";
@@ -2631,6 +2633,7 @@ function InteractiveQuiz({
   sessionToken: string | null;
   emailVerified: boolean;
   pubkey: string | null;
+  lightningAddress: string | null;
   onLoginRequest: () => void;
 }) {
   const canClaimRewards = !!pubkey || emailVerified;
@@ -2653,6 +2656,7 @@ function InteractiveQuiz({
   const [withdrawalStatus, setWithdrawalStatus] = useState<string>("pending");
   const [rewardCreatedAt, setRewardCreatedAt] = useState<number | null>(null);
   const [countdown, setCountdown] = useState(300);
+  const [autoPaid, setAutoPaid] = useState(false);
 
   const dark = theme === "dark";
   const border = dark ? "border-[#2a3552]" : "border-border";
@@ -2669,7 +2673,7 @@ function InteractiveQuiz({
     });
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!authenticated) {
       onLoginRequest();
       return;
@@ -2681,6 +2685,13 @@ function InteractiveQuiz({
     setScore(correct);
     setSubmitted(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
+
+    // Auto-claim if passed and user has a lightning address
+    const pct = Math.round((correct / QUIZ_QUESTIONS.length) * 100);
+    if (pct >= 90 && lightningAddress && canClaimRewards && !rewardClaimed) {
+      // Small delay so the UI renders the congrats first
+      setTimeout(() => handleClaimReward(), 500);
+    }
   };
 
   const handleClaimReward = async () => {
@@ -2694,7 +2705,7 @@ function InteractiveQuiz({
           "Content-Type": "application/json",
           Authorization: `Bearer ${sessionToken}`,
         },
-        body: JSON.stringify({ answers: selections }),
+        body: JSON.stringify({ answers: selections, quizId: "lightning" }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -2702,12 +2713,19 @@ function InteractiveQuiz({
         setClaimingReward(false);
         return;
       }
-      setRewardK1(data.k1);
-      setRewardLnurl(data.lnurl);
-      setRewardAmountSats(data.amountSats);
-      setRewardCreatedAt(Date.now());
-      setWithdrawalStatus("pending");
-      setShowReward(true);
+      if (data.autoPaid) {
+        setAutoPaid(true);
+        setRewardAmountSats(data.amountSats);
+        setWithdrawalStatus("paid");
+        setShowReward(true);
+      } else {
+        setRewardK1(data.k1);
+        setRewardLnurl(data.lnurl);
+        setRewardAmountSats(data.amountSats);
+        setRewardCreatedAt(Date.now());
+        setWithdrawalStatus("pending");
+        setShowReward(true);
+      }
     } catch {
       setClaimError("Network error. Please try again.");
     }
@@ -2780,7 +2798,7 @@ function InteractiveQuiz({
   return (
     <div className="py-4" data-testid="container-interactive-quiz">
       <h1 className={`font-pixel text-2xl md:text-3xl mb-2 ${dark ? "text-slate-100" : "text-foreground"}`} data-testid="text-quiz-title">
-        Quiz: Lightning's Noise Protocol
+        Quiz: Lightning Payment Channels
       </h1>
       <p className={`text-xl md:text-2xl mb-4 ${textMuted}`}>
         {submitted
@@ -2809,7 +2827,7 @@ function InteractiveQuiz({
           </div>
           <div className={`text-xl md:text-2xl ${textColor}`} data-testid="text-quiz-result-score">
             {passed
-              ? `You passed with ${percentage}%! You've mastered Lightning's Noise Protocol.`
+              ? `You passed with ${percentage}%! You've mastered Lightning Payment Channels.`
               : `You scored ${percentage}%. You need 90% to pass. Review the incorrect answers below and try again!`}
           </div>
 
@@ -2833,7 +2851,7 @@ function InteractiveQuiz({
                 }`}
                 data-testid="button-claim-reward"
               >
-                {claimingReward ? "GENERATING QR..." : "CLAIM BITCOIN REWARD"}
+                {claimingReward ? (lightningAddress ? "SENDING SATS..." : "GENERATING QR...") : "CLAIM BITCOIN REWARD"}
               </button>
               {claimError && (
                 <div className="mt-2 text-sm text-red-400" data-testid="text-claim-error">
@@ -2849,15 +2867,15 @@ function InteractiveQuiz({
             </div>
           )}
 
-          {passed && showReward && rewardLnurl && (
+          {passed && showReward && (rewardLnurl || autoPaid) && (
             <div className="mt-6" data-testid="container-reward-qr">
-              {withdrawalStatus === "paid" ? (
+              {autoPaid || withdrawalStatus === "paid" ? (
                 <div>
                   <div className="font-pixel text-lg mb-2" style={{ color: "#FFD700" }}>
                     {rewardAmountSats} SATS SENT!
                   </div>
                   <div className={`text-lg ${textColor}`}>
-                    Payment complete. Enjoy your sats!
+                    {autoPaid ? `Sent to your lightning address. Enjoy your sats!` : `Payment complete. Enjoy your sats!`}
                   </div>
                 </div>
               ) : withdrawalStatus === "expired" ? (
@@ -3509,6 +3527,11 @@ function ChapterContent({
             const genCompleted = isTracked && completedCheckpoints.some(
               (c) => c.checkpointId === genId
             );
+            const completedIds = new Set(completedCheckpoints.map(c => c.checkpointId));
+            const getExerciseProgress = (exerciseId: string) => {
+              if (completedIds.has(exerciseId)) return { completed: true };
+              return undefined;
+            };
             return (
               <TxGenerator
                 config={genConfig}
@@ -3516,14 +3539,15 @@ function ChapterContent({
                 sessionToken={isTracked ? sessionToken : undefined}
                 isCompleted={genCompleted}
                 onCompleted={isTracked ? onCheckpointCompleted : undefined}
+                getProgress={getExerciseProgress}
               />
             );
           },
           "funding-diagram": () => {
             return <FundingTxDiagram theme={theme} />;
           },
-          "notebook-ref": ({ storageKey, label }: any) => {
-            return <NotebookRef storageKey={String(storageKey)} label={String(label || storageKey)} theme={theme} />;
+          "notebook-ref": ({ storagekey, label }: any) => {
+            return <NotebookRef storageKey={String(storagekey)} label={String(label || storagekey)} theme={theme} />;
           },
           "code-outro": ({ text }: any) => {
             if (tutorialMode !== "code") return null;

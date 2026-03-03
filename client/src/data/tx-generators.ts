@@ -34,6 +34,8 @@ export interface TxGeneratorConfig {
     key: string;            // pl-txnotebook-{key}
     parseLabel: string;     // Label in stdout to extract, e.g. "TXID"
   }>;
+  /** Exercise IDs that must be completed before this generator is unlocked. */
+  requiredExercises?: string[];
 }
 
 // ─── Shared Python preamble ──────────────────────────────────────────────────
@@ -379,13 +381,13 @@ BOB_SEED   = bytes([0x02] * 32)
 alice_keys = derive_channel_keys(ALICE_SEED)
 bob_keys   = derive_channel_keys(BOB_SEED)
 
-FUNDING_AMOUNT   = 10_000_000  # 0.1 BTC
-TO_LOCAL_AMOUNT  = 6_999_892 + 108   # Alice's balance (includes fee budget)
-TO_REMOTE_AMOUNT = 3_000_000   # Bob's balance
+FUNDING_AMOUNT   = 5_000_000  # 0.05 BTC
+TO_LOCAL_AMOUNT  = 4_987_640 + 10_860   # Alice's balance (includes fee budget)
+TO_REMOTE_AMOUNT = 500   # Bob's balance
 TO_SELF_DELAY    = 144
-DUST_LIMIT       = 546
-FEERATE_PER_KW   = 150
-COMMITMENT_NUMBER = 0
+DUST_LIMIT       = 355
+FEERATE_PER_KW   = 15_000
+COMMITMENT_NUMBER = 1
 
 # Derive per-commitment keys
 per_commitment_point = derive_per_commitment_point(ALICE_SEED, COMMITMENT_NUMBER)
@@ -436,7 +438,7 @@ function parsePythonOutput(stdout: string): Record<string, string> {
   return result;
 }
 
-const FUNDING_AMOUNT_BTC = 0.1; // 10,000,000 sats
+const FUNDING_AMOUNT_BTC = 0.05; // 5,000,000 sats
 
 /**
  * Funding transaction execute function.
@@ -569,10 +571,14 @@ const GEN_HTLC_COMMITMENT_CODE = `${PREAMBLE}
 ${CHANNEL_PARAMS}
 
 # HTLC parameters
-HTLC_AMOUNT = 2000       # sats
-CLTV_EXPIRY = 502
-payment_preimage = hashlib.sha256(b"ProgrammingLightning").digest()
-payment_hash = hashlib.sha256(payment_preimage).digest()
+HTLC_AMOUNT = 405_000
+CLTV_EXPIRY = 200
+payment_hash = hashlib.sha256(bytes(32)).digest()
+
+# Override channel params for HTLC commitment
+FEERATE_PER_KW = 1_117
+COMMITMENT_NUMBER = 2
+TO_LOCAL_AMOUNT = 4_593_500 + 1_000
 
 # The funding txid is required
 if not funding_txid_input or not funding_txid_input.strip():
@@ -643,10 +649,13 @@ const GEN_HTLC_TIMEOUT_CODE = `${PREAMBLE}
 ${CHANNEL_PARAMS}
 
 # HTLC parameters
-HTLC_AMOUNT = 2000
-CLTV_EXPIRY = 502
-payment_preimage = hashlib.sha256(b"ProgrammingLightning").digest()
-payment_hash = hashlib.sha256(payment_preimage).digest()
+HTLC_AMOUNT = 405_000         # HTLC output value on commitment tx (for signing)
+HTLC_TIMEOUT_AMOUNT = 404_000 # input to timeout tx builder
+CLTV_EXPIRY = 200
+payment_hash = hashlib.sha256(bytes(32)).digest()
+
+# Override feerate for HTLC timeout
+FEERATE_PER_KW = 1_117
 
 # Build offered HTLC script
 htlc_script = create_offered_htlc_script(
@@ -658,15 +667,13 @@ if not commitment_txid_input or not commitment_txid_input.strip():
     raise ValueError("HTLC Commitment Transaction ID is required. Open TOOLS > Transactions to find it.")
 commitment_txid = commitment_txid_input.strip()
 
-# Find HTLC output index (the HTLC is typically sorted by value)
-# In our case, HTLC is 2000 sats, to_remote is 3M, to_local is ~7M
-# Sorted by value: HTLC(2000) < to_remote(3M) < to_local(~7M) → index 0
-# But need to check the actual sorting
-htlc_output_index = 1  # HTLC output after sorting
+# Find HTLC output index
+# Sorted by value: to_remote(500) < HTLC(405,000) < to_local(4,593,500) → index 1
+htlc_output_index = 1
 
 # Build unsigned HTLC timeout tx
 unsigned_htlc_timeout = create_htlc_timeout_tx(
-    commitment_txid, htlc_output_index, HTLC_AMOUNT, CLTV_EXPIRY,
+    commitment_txid, htlc_output_index, HTLC_TIMEOUT_AMOUNT, CLTV_EXPIRY,
     revocation_pubkey, local_delayed_pubkey, TO_SELF_DELAY, FEERATE_PER_KW
 )
 
@@ -886,7 +893,7 @@ export const TX_GENERATORS: Record<string, TxGeneratorConfig> = {
   "gen-commitment": {
     id: "gen-commitment",
     title: "Generate Commitment (Refund) Transaction",
-    description: "Generates a signed commitment transaction that spends the funding output. This is Alice's first commitment transaction (commitment #0) with a to_local and to_remote output.",
+    description: "Generates a signed commitment transaction that spends the funding output. This is Alice's first commitment transaction (commitment #1) with a to_local and to_remote output.",
     type: "transaction",
     buttonLabel: "Generate Transaction",
     inputs: [
@@ -894,6 +901,7 @@ export const TX_GENERATORS: Record<string, TxGeneratorConfig> = {
         key: "funding_txid_input",
         label: "Funding Transaction ID",
         placeholder: "Paste your Funding TxID here",
+        autoFillFrom: "funding-txid",
       },
     ],
     pythonCode: GEN_COMMITMENT_CODE,
@@ -926,14 +934,14 @@ export const TX_GENERATORS: Record<string, TxGeneratorConfig> = {
   "gen-htlc-commitment": {
     id: "gen-htlc-commitment",
     title: "Generate HTLC Commitment Transaction",
-    description: "Generates a signed commitment transaction that includes an offered HTLC output (2,000 sats). This commitment has three outputs: to_remote, HTLC, and to_local.",
+    description: "Generates a signed commitment transaction that includes an offered HTLC output (405,000 sats). This commitment has three outputs: to_remote, HTLC, and to_local.",
     type: "transaction",
     buttonLabel: "Generate Transaction",
     inputs: [
       {
         key: "funding_txid_input",
         label: "Funding Transaction ID",
-        placeholder: "Auto-filled from Transactions notebook, or paste here",
+        placeholder: "Paste your Funding TxID here",
         autoFillFrom: "funding-txid",
       },
     ],
@@ -942,19 +950,24 @@ export const TX_GENERATORS: Record<string, TxGeneratorConfig> = {
       { key: "commitment-htlc-txid", parseLabel: "TXID" },
       { key: "commitment-htlc-txhex", parseLabel: "HEX" },
     ],
+    requiredExercises: [
+      "ln-exercise-commitment-tx",
+      "ln-exercise-htlc-outputs",
+      "ln-exercise-finalize-commitment",
+    ],
   },
 
   "gen-htlc-timeout": {
     id: "gen-htlc-timeout",
     title: "Generate HTLC Timeout Transaction",
-    description: "Generates a signed HTLC timeout transaction that spends the offered HTLC output from the commitment transaction. Alice can broadcast this after the CLTV expiry (block 502) to reclaim the HTLC funds.",
+    description: "Generates a signed HTLC timeout transaction that spends the offered HTLC output from the commitment transaction. Alice can broadcast this after the CLTV expiry (block 200) to reclaim the HTLC funds.",
     type: "transaction",
     buttonLabel: "Generate Transaction",
     inputs: [
       {
         key: "commitment_txid_input",
         label: "HTLC Commitment Transaction ID",
-        placeholder: "Auto-filled from Transactions notebook, or paste here",
+        placeholder: "Paste your HTLC Commitment TxID here",
         autoFillFrom: "commitment-htlc-txid",
       },
     ],
@@ -962,6 +975,10 @@ export const TX_GENERATORS: Record<string, TxGeneratorConfig> = {
     notebookSaves: [
       { key: "htlc-timeout-txid", parseLabel: "TXID" },
       { key: "htlc-timeout-txhex", parseLabel: "HEX" },
+    ],
+    requiredExercises: [
+      "ln-exercise-htlc-timeout-tx",
+      "ln-exercise-finalize-htlc-timeout",
     ],
   },
 

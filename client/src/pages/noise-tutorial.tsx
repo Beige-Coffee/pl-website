@@ -1041,6 +1041,7 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
                 sessionToken={auth.sessionToken}
                 emailVerified={auth.emailVerified}
                 pubkey={auth.pubkey}
+                lightningAddress={auth.lightningAddress}
                 onLoginRequest={() => setShowLoginModal(true)}
                 getProgress={progress.getProgress}
                 saveProgress={progress.saveProgress}
@@ -2089,6 +2090,7 @@ function InteractiveQuiz({
   sessionToken,
   emailVerified,
   pubkey,
+  lightningAddress,
   onLoginRequest,
   getProgress,
   saveProgress,
@@ -2099,6 +2101,7 @@ function InteractiveQuiz({
   sessionToken: string | null;
   emailVerified: boolean;
   pubkey: string | null;
+  lightningAddress: string | null;
   onLoginRequest: () => void;
   getProgress: (key: string) => string | null;
   saveProgress: (key: string, value: string, immediate?: boolean) => void;
@@ -2139,6 +2142,7 @@ function InteractiveQuiz({
   const [withdrawalStatus, setWithdrawalStatus] = useState<string>("pending");
   const [rewardCreatedAt, setRewardCreatedAt] = useState<number | null>(null);
   const [countdown, setCountdown] = useState(300);
+  const [autoPaid, setAutoPaid] = useState(false);
 
   const dark = theme === "dark";
   const border = dark ? "border-[#2a3552]" : "border-border";
@@ -2157,7 +2161,7 @@ function InteractiveQuiz({
     });
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!authenticated) {
       onLoginRequest();
       return;
@@ -2169,6 +2173,12 @@ function InteractiveQuiz({
     setScore(correct);
     setSubmitted(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
+
+    // Auto-claim if passed and user has a lightning address
+    const pct = Math.round((correct / QUIZ_QUESTIONS.length) * 100);
+    if (pct >= 90 && lightningAddress && canClaimRewards && !rewardClaimed) {
+      setTimeout(() => handleClaimReward(), 500);
+    }
   };
 
   const handleClaimReward = async () => {
@@ -2182,7 +2192,7 @@ function InteractiveQuiz({
           "Content-Type": "application/json",
           Authorization: `Bearer ${sessionToken}`,
         },
-        body: JSON.stringify({ answers: selections }),
+        body: JSON.stringify({ answers: selections, quizId: "noise" }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -2190,12 +2200,19 @@ function InteractiveQuiz({
         setClaimingReward(false);
         return;
       }
-      setRewardK1(data.k1);
-      setRewardLnurl(data.lnurl);
-      setRewardAmountSats(data.amountSats);
-      setRewardCreatedAt(Date.now());
-      setWithdrawalStatus("pending");
-      setShowReward(true);
+      if (data.autoPaid) {
+        setAutoPaid(true);
+        setRewardAmountSats(data.amountSats);
+        setWithdrawalStatus("paid");
+        setShowReward(true);
+      } else {
+        setRewardK1(data.k1);
+        setRewardLnurl(data.lnurl);
+        setRewardAmountSats(data.amountSats);
+        setRewardCreatedAt(Date.now());
+        setWithdrawalStatus("pending");
+        setShowReward(true);
+      }
     } catch {
       setClaimError("Network error. Please try again.");
     }
@@ -2321,7 +2338,7 @@ function InteractiveQuiz({
                 }`}
                 data-testid="button-claim-reward"
               >
-                {claimingReward ? "GENERATING QR..." : "CLAIM BITCOIN REWARD"}
+                {claimingReward ? (lightningAddress ? "SENDING SATS..." : "GENERATING QR...") : "CLAIM BITCOIN REWARD"}
               </button>
               {claimError && (
                 <div className="mt-2 text-sm text-red-400" data-testid="text-claim-error">
@@ -2337,15 +2354,15 @@ function InteractiveQuiz({
             </div>
           )}
 
-          {passed && showReward && rewardLnurl && (
+          {passed && showReward && (rewardLnurl || autoPaid) && (
             <div className="mt-6" data-testid="container-reward-qr">
-              {withdrawalStatus === "paid" ? (
+              {autoPaid || withdrawalStatus === "paid" ? (
                 <div>
                   <div className="font-pixel text-lg mb-2" style={{ color: "#FFD700" }}>
                     {rewardAmountSats} SATS SENT!
                   </div>
                   <div className={`text-lg ${textColor}`}>
-                    Payment complete. Enjoy your sats!
+                    {autoPaid ? `Sent to your lightning address. Enjoy your sats!` : `Payment complete. Enjoy your sats!`}
                   </div>
                 </div>
               ) : withdrawalStatus === "expired" ? (

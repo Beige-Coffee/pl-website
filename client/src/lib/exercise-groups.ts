@@ -424,13 +424,23 @@ export const EXERCISE_GROUPS: Record<string, ExerciseGroup> = {
     crossGroupDependencies: [],
   },
 
-  "scripts/htlc": {
-    id: "scripts/htlc",
-    label: "scripts/htlc.py",
+  "scripts/htlc-offered": {
+    id: "scripts/htlc-offered",
+    label: "scripts/htlc_offered.py",
     setupCode: SCRIPTS_HTLC_SETUP,
     preamble: SCRIPTS_HTLC_PREAMBLE,
     exerciseIds: [
       "ln-exercise-offered-htlc-script",
+    ],
+    crossGroupDependencies: [],
+  },
+
+  "scripts/htlc-received": {
+    id: "scripts/htlc-received",
+    label: "scripts/htlc_received.py",
+    setupCode: SCRIPTS_HTLC_SETUP,
+    preamble: SCRIPTS_HTLC_PREAMBLE,
+    exerciseIds: [
       "ln-exercise-received-htlc-script",
     ],
     crossGroupDependencies: [],
@@ -449,6 +459,7 @@ export const EXERCISE_GROUPS: Record<string, ExerciseGroup> = {
       "ln-exercise-commitment-tx",
       "ln-exercise-finalize-commitment",
       "ln-exercise-htlc-outputs",
+      "ln-exercise-commitment-tx-htlc",
     ],
     crossGroupDependencies: [
       // ChannelKeyManager class methods (student's version, all 5)
@@ -471,15 +482,40 @@ export const EXERCISE_GROUPS: Record<string, ExerciseGroup> = {
     ],
   },
 
-  "transactions/htlc": {
-    id: "transactions/htlc",
-    label: "transactions/htlc.py",
+  "transactions/htlc-offered": {
+    id: "transactions/htlc-offered",
+    label: "transactions/htlc_offered.py",
     setupCode: TRANSACTIONS_HTLC_SETUP,
     preamble: TRANSACTIONS_HTLC_PREAMBLE,
     exerciseIds: [
       "ln-exercise-htlc-timeout-tx",
-      "ln-exercise-htlc-success-tx",
       "ln-exercise-finalize-htlc-timeout",
+    ],
+    crossGroupDependencies: [
+      // ChannelKeyManager class methods (student's version, all 5)
+      "ln-exercise-channel-key-manager",
+      "ln-exercise-sign-input",
+      "ln-exercise-commitment-secret",
+      "ln-exercise-per-commitment-point",
+      "ln-exercise-get-commitment-keys",
+      // Key derivation functions (standalone)
+      "ln-exercise-revocation-pubkey",
+      "ln-exercise-derive-pubkey",
+      "ln-exercise-derive-privkey",
+      // Script functions (standalone)
+      "ln-exercise-to-local-script",
+      "ln-exercise-offered-htlc-script",
+      "ln-exercise-received-htlc-script",
+    ],
+  },
+
+  "transactions/htlc-received": {
+    id: "transactions/htlc-received",
+    label: "transactions/htlc_received.py",
+    setupCode: TRANSACTIONS_HTLC_SETUP,
+    preamble: TRANSACTIONS_HTLC_PREAMBLE,
+    exerciseIds: [
+      "ln-exercise-htlc-success-tx",
       "ln-exercise-finalize-htlc-success",
     ],
     crossGroupDependencies: [

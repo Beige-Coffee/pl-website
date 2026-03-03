@@ -118,7 +118,7 @@ def test_different_channel_index():
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-funding-script": {
     id: "ln-exercise-funding-script",
-    title: "Exercise 3: Create Funding Script",
+    title: "Exercise 2: Create Funding Script",
     description:
       "Create a 2-of-2 multisig funding script for a Lightning channel. The two public keys must be sorted lexicographically (as raw bytes) before being placed in the script, as required by BOLT 3. The script format is: <code>OP_2 &lt;key1&gt; &lt;key2&gt; OP_2 OP_CHECKMULTISIG</code>.",
     starterCode: `def create_funding_script(pubkey1: bytes, pubkey2: bytes) -> CScript:
@@ -187,7 +187,7 @@ def test_script_structure():
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-funding-tx": {
     id: "ln-exercise-funding-tx",
-    title: "Exercise 4: Create Funding Transaction",
+    title: "Exercise 3: Create Funding Transaction",
     description:
       "Build a funding transaction that spends from a given UTXO and creates a P2WSH output using the 2-of-2 multisig funding script. The output script is <code>OP_0 &lt;SHA256(funding_script)&gt;</code>.",
     starterCode: `def create_funding_tx(input_txid_hex: str, input_vout: int,
@@ -396,7 +396,7 @@ def test_sign_with_funding_key():
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-revocation-pubkey": {
     id: "ln-exercise-revocation-pubkey",
-    title: "Exercise 6: Derive Revocation Public Key",
+    title: "Exercise 5: Derive Revocation Public Key",
     description:
       "Derive a revocation public key from a revocation basepoint and a per-commitment point. The formula is: <code>revocation_pubkey = revocation_basepoint * SHA256(revocation_basepoint || per_commitment_point) + per_commitment_point * SHA256(per_commitment_point || revocation_basepoint)</code>.",
     starterCode: `def derive_revocation_pubkey(revocation_basepoint: bytes, per_commitment_point: bytes) -> bytes:
@@ -483,7 +483,7 @@ def test_uses_both_inputs():
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-revocation-privkey": {
     id: "ln-exercise-revocation-privkey",
-    title: "Exercise 7: Derive Revocation Private Key",
+    title: "Exercise 6: Derive Revocation Private Key",
     description:
       "Derive the revocation private key from the revocation basepoint secret and the per-commitment secret. The formula mirrors the public key derivation: <code>revocation_privkey = revocation_basepoint_secret * SHA256(revocation_basepoint || per_commitment_point) + per_commitment_secret * SHA256(per_commitment_point || revocation_basepoint)</code>, all mod n.",
     starterCode: `def derive_revocation_privkey(revocation_basepoint_secret: bytes,
@@ -727,7 +727,7 @@ def test_different_commitments():
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-get-commitment-keys": {
     id: "ln-exercise-get-commitment-keys",
-    title: "Get Commitment Keys",
+    title: "Exercise 9: Get Commitment Keys",
     description:
       "Derive all per-commitment keys for a given commitment number, assembling them into a CommitmentKeys object.",
     starterCode: `    def get_commitment_keys(self, commitment_number, remote_revocation_basepoint, remote_htlc_basepoint):
@@ -1235,7 +1235,7 @@ def test_sequence_upper_byte():
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-commitment-outputs": {
     id: "ln-exercise-commitment-outputs",
-    title: "Exercise 15: Create Commitment TX Outputs",
+    title: "Exercise 16: Create Commitment TX Outputs",
     description:
       "Create the commitment transaction outputs (<code>to_local</code> and <code>to_remote</code>) using keys from a <code>CommitmentKeys</code> object. Apply dust limit filtering and fee deduction from the <code>to_local</code> output.",
     starterCode: `def create_commitment_outputs(to_local_sat: int, to_remote_sat: int,
@@ -1327,7 +1327,7 @@ def test_dust_filtering():
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-sort-outputs": {
     id: "ln-exercise-sort-outputs",
-    title: "Exercise 16: Sort Outputs",
+    title: "Exercise 17: Sort Outputs",
     description:
       "Sort a list of commitment transaction output dictionaries per BIP 69 and BOLT 3: by value (ascending), then by script bytes (lexicographic), then by <code>cltv_expiry</code> (ascending).",
     starterCode: `def sort_outputs(outputs: list) -> list:
@@ -1397,7 +1397,7 @@ def test_none_cltv_treated_as_zero():
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-commitment-tx": {
     id: "ln-exercise-commitment-tx",
-    title: "Exercise 17: Create Commitment Transaction",
+    title: "Exercise 18: Create Commitment Transaction",
     description:
       "Assemble a complete unsigned commitment transaction with the funding input, obscured commitment number, and sorted outputs. Uses <code>create_commitment_outputs()</code> and <code>sort_outputs()</code> to build and order the outputs. The <code>offered_htlcs</code> and <code>received_htlcs</code> parameters are included for future use (ignore them for now).",
     starterCode: `def create_commitment_tx(funding_txid_hex: str, funding_vout: int,
@@ -1526,7 +1526,7 @@ def test_fee_applied():
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-finalize-commitment": {
     id: "ln-exercise-finalize-commitment",
-    title: "Exercise 18: Finalize Commitment Transaction",
+    title: "Exercise 19: Finalize Commitment Transaction",
     description:
       "Sign and finalize a commitment transaction using the <code>ChannelKeyManager</code>. Call <code>km.sign_input()</code> with <code>km.funding_key</code> to produce the local signature, then build the witness: <code>[empty, sig1, sig2, funding_script]</code>.",
     starterCode: `def finalize_commitment_tx(km, unsigned_tx: bytes,
@@ -1614,7 +1614,7 @@ def test_has_witness():
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-htlc-outputs": {
     id: "ln-exercise-htlc-outputs",
-    title: "Exercise 18: Create HTLC Outputs",
+    title: "Exercise 26: Create HTLC Outputs",
     description:
       "Create HTLC output dicts for commitment transactions. For each offered HTLC, wrap in an offered HTLC script (P2WSH). For each received HTLC, wrap in a received HTLC script (P2WSH). Returns a list of output dicts with <code>\"value\"</code>, <code>\"script\"</code>, and <code>\"cltv_expiry\"</code> keys.",
     starterCode: `def create_htlc_outputs(commitment_keys, offered_htlcs: list, received_htlcs: list) -> list:
@@ -1714,11 +1714,154 @@ def test_values_match():
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // EXERCISE 19b - Update Commitment Transaction for HTLCs
+  // ═══════════════════════════════════════════════════════════════════════════
+  "ln-exercise-commitment-tx-htlc": {
+    id: "ln-exercise-commitment-tx-htlc",
+    title: "Exercise 27: Update Commitment Transaction for HTLCs",
+    description:
+      "Update the <code>create_commitment_tx</code> function to include HTLC outputs. You'll modify the fee formula to account for HTLC weight, call <code>create_htlc_outputs()</code>, combine channel and HTLC outputs, and sort them together.",
+    starterCode: `def create_commitment_tx(funding_txid_hex, funding_vout, to_local_sat, to_remote_sat,
+                          commitment_keys, remote_payment_pubkey,
+                          opener_bp, accepter_bp, commitment_number, to_self_delay,
+                          dust_limit, feerate_per_kw,
+                          offered_htlcs=None, received_htlcs=None):
+    """
+    Create an unsigned commitment transaction WITH HTLC support.
+
+    This builds on the basic create_commitment_tx by adding HTLC outputs.
+
+    Updates needed:
+    1. Update fee: weight = 724 + 172 * num_htlcs
+    2. Create HTLC outputs using create_htlc_outputs()
+    3. Wrap channel outputs as dicts with "cltv_expiry": 0
+    4. Combine channel + HTLC output dicts, then sort
+    5. Extract CTxOut list from sorted dicts
+
+    Args:
+        Same as basic create_commitment_tx, but now
+        offered_htlcs and received_htlcs are used.
+
+    Returns:
+        CMutableTransaction: unsigned commitment transaction with HTLCs
+    """
+    # Count HTLCs for fee calculation
+    num_htlcs = len(offered_htlcs or []) + len(received_htlcs or [])
+
+    # TODO: Update fee formula to include HTLC weight
+    weight = 724  # + ???
+    fee = weight * feerate_per_kw // 1000
+
+    # Create channel outputs (to_local and to_remote)
+    channel_outputs = create_commitment_outputs(
+        to_local_sat, to_remote_sat, commitment_keys,
+        remote_payment_pubkey, to_self_delay, dust_limit, fee)
+
+    # TODO: Create HTLC outputs using create_htlc_outputs()
+
+    # TODO: Wrap channel outputs as dicts with "cltv_expiry": 0
+    # TODO: Combine with HTLC output dicts
+    # TODO: Sort all combined outputs
+
+    # TODO: Convert sorted dicts to CTxOut list
+    outputs = [CTxOut(d["value"], CScript(d["script"])) for d in channel_outputs]
+
+    txin = CMutableTxIn(COutPoint(lx(funding_txid_hex), funding_vout))
+    tx = CMutableTransaction([txin], outputs, nVersion=2)
+    set_obscured_commitment_number(tx, commitment_number, opener_bp, accepter_bp)
+    return tx
+`,
+    testCode: `
+import hashlib as _hl
+
+def test_htlc_output_count():
+    funding_txid = "8984484a580b825b9972d7adb15050b3ab624ccd731946b3eeddb92f4e7ef6be"
+    rev_pk = bytes.fromhex("0212a140cd0c6539d07cd08dfe09984dec3251ea808b892efeac3ede9402bf2b19")
+    delayed_pk = bytes.fromhex("03fd5960528dc152014952efdb702a88f71e3c1653b2314431701ec77e57fde83c")
+    remote_pk = bytes.fromhex("032c0b7cf95324a07d05398b240174dc0c2be444d96b159aa6c7f7b1e668680991")
+    opener_bp = bytes.fromhex("034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa")
+    accepter_bp = bytes.fromhex("032c0b7cf95324a07d05398b240174dc0c2be444d96b159aa6c7f7b1e668680991")
+    local_htlc = bytes.fromhex("030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e7")
+    remote_htlc = bytes.fromhex("0394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b")
+    ck = CommitmentKeys(bytes(33), rev_pk, delayed_pk, local_htlc, remote_htlc)
+    offered = [{"amount_sat": 2000, "payment_hash": _hl.sha256(bytes([0x02]*32)).digest(), "cltv_expiry": 500}]
+    tx = create_commitment_tx(funding_txid, 0, 6_998_000, 3_000_000, ck, remote_pk, opener_bp, accepter_bp, 42, 144, 546, 0, offered_htlcs=offered)
+    assert len(tx.vout) == 3, f"Expected 3 outputs (to_local + to_remote + 1 HTLC), got {len(tx.vout)}"
+
+def test_htlc_fee_formula():
+    funding_txid = "8984484a580b825b9972d7adb15050b3ab624ccd731946b3eeddb92f4e7ef6be"
+    rev_pk = bytes.fromhex("0212a140cd0c6539d07cd08dfe09984dec3251ea808b892efeac3ede9402bf2b19")
+    delayed_pk = bytes.fromhex("03fd5960528dc152014952efdb702a88f71e3c1653b2314431701ec77e57fde83c")
+    remote_pk = bytes.fromhex("032c0b7cf95324a07d05398b240174dc0c2be444d96b159aa6c7f7b1e668680991")
+    opener_bp = bytes.fromhex("034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa")
+    accepter_bp = bytes.fromhex("032c0b7cf95324a07d05398b240174dc0c2be444d96b159aa6c7f7b1e668680991")
+    local_htlc = bytes.fromhex("030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e7")
+    remote_htlc = bytes.fromhex("0394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b")
+    ck = CommitmentKeys(bytes(33), rev_pk, delayed_pk, local_htlc, remote_htlc)
+    offered = [{"amount_sat": 2000, "payment_hash": _hl.sha256(bytes([0x02]*32)).digest(), "cltv_expiry": 500}]
+    # to_local is 6,998,000 (7M minus offered HTLC of 2000, since HTLC comes from offerer's balance)
+    # feerate=1000 -> weight = 724 + 172*1 = 896, fee = 896
+    tx = create_commitment_tx(funding_txid, 0, 6_998_000, 3_000_000, ck, remote_pk, opener_bp, accepter_bp, 42, 144, 546, 1000, offered_htlcs=offered)
+    total_out = sum(o.nValue for o in tx.vout)
+    expected_fee = 896  # (724 + 172) * 1000 // 1000
+    # Total funding = to_local + to_remote + htlc_amounts = 6,998,000 + 3,000,000 + 2,000 = 10M
+    expected_total = 6_998_000 + 3_000_000 + 2000 - expected_fee
+    assert total_out == expected_total, f"Total output should be {expected_total} (10M - {expected_fee} fee), got {total_out}"
+
+def test_htlc_values_present():
+    funding_txid = "8984484a580b825b9972d7adb15050b3ab624ccd731946b3eeddb92f4e7ef6be"
+    rev_pk = bytes.fromhex("0212a140cd0c6539d07cd08dfe09984dec3251ea808b892efeac3ede9402bf2b19")
+    delayed_pk = bytes.fromhex("03fd5960528dc152014952efdb702a88f71e3c1653b2314431701ec77e57fde83c")
+    remote_pk = bytes.fromhex("032c0b7cf95324a07d05398b240174dc0c2be444d96b159aa6c7f7b1e668680991")
+    opener_bp = bytes.fromhex("034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa")
+    accepter_bp = bytes.fromhex("032c0b7cf95324a07d05398b240174dc0c2be444d96b159aa6c7f7b1e668680991")
+    local_htlc = bytes.fromhex("030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e7")
+    remote_htlc = bytes.fromhex("0394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b")
+    ck = CommitmentKeys(bytes(33), rev_pk, delayed_pk, local_htlc, remote_htlc)
+    offered = [{"amount_sat": 2000, "payment_hash": _hl.sha256(bytes([0x02]*32)).digest(), "cltv_expiry": 500}]
+    tx = create_commitment_tx(funding_txid, 0, 6_998_000, 3_000_000, ck, remote_pk, opener_bp, accepter_bp, 42, 144, 546, 0, offered_htlcs=offered)
+    values = sorted([o.nValue for o in tx.vout])
+    assert 2000 in values, f"HTLC output value (2000) should be in outputs, got {values}"
+    assert 3_000_000 in values, f"to_remote value should be in outputs, got {values}"
+`,
+    hints: {
+      conceptual:
+        "<p><strong>Goal:</strong> Update <code>create_commitment_tx</code> to include <strong>HTLC outputs</strong> alongside the existing to_local and to_remote outputs.<br><br><strong>Fee formula update:</strong> <code>weight = 724 + 172 * num_htlcs</code>. Each HTLC adds 172 weight units to the transaction.<br><br><strong>Key steps:</strong> Create HTLC outputs with <code>create_htlc_outputs()</code>, wrap the channel outputs as dicts with <code>\"cltv_expiry\": 0</code>, combine both lists, sort them all together with <code>sort_outputs()</code>, then extract the <code>CTxOut</code> objects.</p>",
+      steps:
+        '<ol><li>Update the fee formula: <code>weight = 724 + 172 * num_htlcs</code></li><li>Call <code>create_htlc_outputs(commitment_keys, offered_htlcs or [], received_htlcs or [])</code> to get HTLC output dicts</li><li>Wrap each channel output dict with <code>"cltv_expiry": 0</code> so it can be sorted alongside HTLC dicts</li><li>Combine the channel output dicts and HTLC output dicts into one list</li><li>Sort all combined outputs using <code>sort_outputs()</code></li><li>Convert each sorted dict to <code>CTxOut(d["value"], CScript(d["script"]))</code></li></ol>',
+      code: `def create_commitment_tx(funding_txid_hex, funding_vout, to_local_sat, to_remote_sat,
+                          commitment_keys, remote_payment_pubkey,
+                          opener_bp, accepter_bp, commitment_number, to_self_delay,
+                          dust_limit, feerate_per_kw,
+                          offered_htlcs=None, received_htlcs=None):
+    num_htlcs = len(offered_htlcs or []) + len(received_htlcs or [])
+    weight = 724 + 172 * num_htlcs
+    fee = weight * feerate_per_kw // 1000
+    channel_outputs = create_commitment_outputs(to_local_sat, to_remote_sat, commitment_keys,
+                                                remote_payment_pubkey, to_self_delay, dust_limit, fee)
+    htlc_outputs = create_htlc_outputs(commitment_keys, offered_htlcs or [], received_htlcs or [])
+    for d in channel_outputs:
+        d["cltv_expiry"] = 0
+    all_outputs = channel_outputs + htlc_outputs
+    sort_outputs(all_outputs)
+    outputs = [CTxOut(d["value"], CScript(d["script"])) for d in all_outputs]
+
+    txin = CMutableTxIn(COutPoint(lx(funding_txid_hex), funding_vout))
+    tx = CMutableTransaction([txin], outputs, nVersion=2)
+    set_obscured_commitment_number(tx, commitment_number, opener_bp, accepter_bp)
+    return tx`,
+    },
+    rewardSats: 21,
+    group: "transactions/commitment",
+    groupOrder: 8,
+  },
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // EXERCISE 20 -Create Offered HTLC Script
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-offered-htlc-script": {
     id: "ln-exercise-offered-htlc-script",
-    title: "Exercise 18: Create Offered HTLC Script",
+    title: "Exercise 20: Create Offered HTLC Script",
     description:
       "Create an offered HTLC output script per BOLT 3 using keys from a <code>CommitmentKeys</code> object. Use <code>commitment_keys.revocation_key</code>, <code>commitment_keys.local_htlc_key</code>, and <code>commitment_keys.remote_htlc_key</code>.",
     starterCode: `def create_offered_htlc_script(commitment_keys,
@@ -1732,13 +1875,15 @@ def test_values_match():
           OP_CHECKSIG
       OP_ELSE
           <remote_htlc_key> OP_SWAP OP_SIZE 32 OP_EQUAL
-          OP_IF
+          OP_NOTIF
+              OP_DROP 2 OP_SWAP <local_htlc_key> 2 OP_CHECKMULTISIG
+          OP_ELSE
               OP_HASH160 <RIPEMD160(payment_hash)> OP_EQUALVERIFY
               2 OP_SWAP <local_htlc_key> 2 OP_CHECKMULTISIG
-          OP_ELSE
-              OP_DROP 2 OP_SWAP <local_htlc_key> 2 OP_CHECKMULTISIG
           OP_ENDIF
       OP_ENDIF
+
+    Reference: https://github.com/lightning/bolts/blob/master/03-transactions.md#offered-htlc-outputs
 
     Use CScript with named opcodes. Extract keys from commitment_keys:
     - commitment_keys.revocation_key
@@ -1765,7 +1910,7 @@ def test_bolt3_vector():
     ck = CommitmentKeys(bytes(33), rev_pk, bytes(33), local_htlc, remote_htlc)
     preimage = bytes([0x02] * 32)
     payment_hash = hashlib.sha256(preimage).digest()
-    expected = bytes.fromhex("76a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c820120876475527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae67a914b43e1b38138a41b37f7cd9a1d274bc63e3a9b5d188ac6868")
+    expected = bytes.fromhex("76a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c820120876475527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae67a914b43e1b38138a41b37f7cd9a1d274bc63e3a9b5d188527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae6868")
     result = create_offered_htlc_script(ck, payment_hash)
     assert result == expected, f"Script mismatch.\\nExpected: {expected.hex()}\\nGot:      {result.hex()}"
 
@@ -1781,9 +1926,9 @@ def test_script_length():
 `,
     hints: {
       conceptual:
-        "<p><strong>Goal:</strong> Create the <strong>offered HTLC witness script</strong> per BOLT 3, which has three spending paths.<br><br><strong>How it works:</strong> The <strong>revocation path</strong> uses <code>OP_DUP OP_HASH160</code> to check for the HASH160 of the revocation key. The <strong>success path</strong> verifies the payment preimage using <code>OP_HASH160</code> with the RIPEMD160 of the payment hash, then uses 2-of-2 CHECKMULTISIG with the local and remote HTLC keys. The <strong>timeout path</strong> also uses CHECKMULTISIG but without a preimage check.<br><br><strong>Tools you will need:</strong> <code>hash160()</code> for the revocation key hash, <code>_ripemd160()</code> for the payment hash, and keys from <code>commitment_keys.revocation_key</code>, <code>commitment_keys.local_htlc_key</code>, and <code>commitment_keys.remote_htlc_key</code>.</p>",
+        "<p><strong>Goal:</strong> Create the <strong>offered HTLC witness script</strong> per BOLT 3, which has three spending paths.<br><br><strong>How it works:</strong> The <strong>revocation path</strong> uses <code>OP_DUP OP_HASH160</code> to check for the HASH160 of the revocation key. The inner condition uses <code>OP_NOTIF</code> (not <code>OP_IF</code>) to check the witness element size. The <strong>timeout path</strong> (under <code>OP_NOTIF</code>) uses <code>OP_DROP</code> then 2-of-2 CHECKMULTISIG. The <strong>preimage path</strong> (under <code>OP_ELSE</code>) verifies the payment preimage using <code>OP_HASH160</code> with the RIPEMD160 of the payment hash, then uses 2-of-2 CHECKMULTISIG.<br><br><strong>Tools you will need:</strong> <code>hash160()</code> for the revocation key hash, <code>_ripemd160()</code> for the payment hash, and keys from <code>commitment_keys.revocation_key</code>, <code>commitment_keys.local_htlc_key</code>, and <code>commitment_keys.remote_htlc_key</code>.<br><br>Reference: <a href='https://github.com/lightning/bolts/blob/master/03-transactions.md#offered-htlc-outputs'>BOLT 3 Offered HTLC Outputs</a></p>",
       steps:
-        '<ol><li>Compute the two hash values needed in the script: use <code>hash160()</code> on the revocation key, and <code>_ripemd160()</code> on the payment hash</li><li>Study the script template in the docstring carefully. The outer structure uses <code>OP_DUP</code>, <code>OP_HASH160</code>, the revocation key hash, and <code>OP_EQUAL</code> to check if the spending key matches. If yes, <code>OP_CHECKSIG</code>. If no, enter the <code>OP_ELSE</code> branch</li><li>In the ELSE branch, push the remote HTLC key, then use <code>OP_SWAP</code>, <code>OP_SIZE</code>, <code>32</code>, <code>OP_EQUAL</code> to check the witness element size. The 32-byte path (preimage) uses <code>OP_HASH160</code> with the payment RIPEMD hash and <code>OP_EQUALVERIFY</code>, followed by a 2-of-2 <code>OP_CHECKMULTISIG</code> with the local and remote HTLC keys. The 0-byte path (timeout) uses <code>OP_DROP</code> then the same CHECKMULTISIG pattern</li><li>Build the entire script as a single <code>CScript()</code> list, placing each opcode, key, and hash value from the docstring template in order</li></ol>',
+        '<ol><li>Compute the two hash values needed in the script: use <code>hash160()</code> on the revocation key, and <code>_ripemd160()</code> on the payment hash</li><li>Study the script template in the docstring carefully. The outer structure uses <code>OP_DUP</code>, <code>OP_HASH160</code>, the revocation key hash, and <code>OP_EQUAL</code> to check if the spending key matches. If yes, <code>OP_CHECKSIG</code>. If no, enter the <code>OP_ELSE</code> branch</li><li>In the ELSE branch, push the remote HTLC key, then use <code>OP_SWAP</code>, <code>OP_SIZE</code>, <code>32</code>, <code>OP_EQUAL</code> to check the witness element size. Use <code>OP_NOTIF</code> (not OP_IF) for the inner condition. The 0-byte path (timeout, under <code>OP_NOTIF</code>) uses <code>OP_DROP</code> then a 2-of-2 <code>OP_CHECKMULTISIG</code>. The 32-byte path (preimage, under <code>OP_ELSE</code>) uses <code>OP_HASH160</code> with the payment RIPEMD hash and <code>OP_EQUALVERIFY</code>, followed by a 2-of-2 <code>OP_CHECKMULTISIG</code></li><li>Build the entire script as a single <code>CScript()</code> list, placing each opcode, key, and hash value from the docstring template in order</li></ol>',
       code: `def create_offered_htlc_script(commitment_keys, payment_hash):
     rev_hash = hash160(commitment_keys.revocation_key)
     payment_ripemd = _ripemd160(payment_hash)
@@ -1793,17 +1938,17 @@ def test_script_length():
             OP_CHECKSIG,
         OP_ELSE,
             commitment_keys.remote_htlc_key, OP_SWAP, OP_SIZE, 32, OP_EQUAL,
-            OP_IF,
+            OP_NOTIF,
+                OP_DROP, 2, OP_SWAP, commitment_keys.local_htlc_key, 2, OP_CHECKMULTISIG,
+            OP_ELSE,
                 OP_HASH160, payment_ripemd, OP_EQUALVERIFY,
                 2, OP_SWAP, commitment_keys.local_htlc_key, 2, OP_CHECKMULTISIG,
-            OP_ELSE,
-                OP_DROP, 2, OP_SWAP, commitment_keys.local_htlc_key, 2, OP_CHECKMULTISIG,
             OP_ENDIF,
         OP_ENDIF,
     ])`,
     },
     rewardSats: 21,
-    group: "scripts/htlc",
+    group: "scripts/htlc-offered",
     groupOrder: 1,
   },
 
@@ -1812,7 +1957,7 @@ def test_script_length():
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-received-htlc-script": {
     id: "ln-exercise-received-htlc-script",
-    title: "Exercise 19: Create Received HTLC Script",
+    title: "Exercise 23: Create Received HTLC Script",
     description:
       "Create a received HTLC output script per BOLT 3 using keys from a <code>CommitmentKeys</code> object. Similar to offered HTLC but with an <code>OP_CHECKLOCKTIMEVERIFY</code> expiry for the timeout path.",
     starterCode: `def create_received_htlc_script(commitment_keys,
@@ -1822,8 +1967,7 @@ def test_script_length():
     Create a received HTLC script per BOLT 3.
 
     Similar to offered HTLC but the timeout branch uses
-    OP_CHECKLOCKTIMEVERIFY instead of OP_DROP for the timeout
-    case, and the preimage path verifies the payment hash.
+    OP_CHECKLOCKTIMEVERIFY and a single OP_CHECKSIG (not multisig).
 
     Script:
       OP_DUP OP_HASH160 <HASH160(revocation_key)> OP_EQUAL
@@ -1831,14 +1975,16 @@ def test_script_length():
           OP_CHECKSIG
       OP_ELSE
           <remote_htlc_key> OP_SWAP OP_SIZE 32 OP_EQUAL
-          OP_IF
-              OP_HASH160 <RIPEMD160(payment_hash)> OP_EQUALVERIFY
-              2 OP_SWAP <local_htlc_key> 2 OP_CHECKMULTISIG
-          OP_ELSE
+          OP_NOTIF
               OP_DROP <cltv_expiry> OP_CHECKLOCKTIMEVERIFY OP_DROP
               OP_CHECKSIG
+          OP_ELSE
+              OP_HASH160 <RIPEMD160(payment_hash)> OP_EQUALVERIFY
+              2 OP_SWAP <local_htlc_key> 2 OP_CHECKMULTISIG
           OP_ENDIF
       OP_ENDIF
+
+    Reference: https://github.com/lightning/bolts/blob/master/03-transactions.md#received-htlc-outputs
 
     Use commitment_keys.revocation_key, commitment_keys.local_htlc_key,
     and commitment_keys.remote_htlc_key.
@@ -1864,7 +2010,7 @@ def test_bolt3_vector():
     ck = CommitmentKeys(bytes(33), rev_pk, bytes(33), local_htlc, remote_htlc)
     preimage = bytes(32)  # HTLC #0
     payment_hash = hashlib.sha256(preimage).digest()
-    expected = bytes.fromhex("76a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c8201208763a914b8bcb07f6344b42ab04250c86a6e8b75d3fdbbc688527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae677502f401b175ac6868")
+    expected = bytes.fromhex("76a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c82012087647502f401b175ac67a914b8bcb07f6344b42ab04250c86a6e8b75d3fdbbc688527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae6868")
     result = create_received_htlc_script(ck, payment_hash, 500)
     assert result == expected, f"Script mismatch.\\nExpected: {expected.hex()}\\nGot:      {result.hex()}"
 
@@ -1880,9 +2026,9 @@ def test_script_returns_bytes():
 `,
     hints: {
       conceptual:
-        "<p><strong>Goal:</strong> Create the <strong>received HTLC witness script</strong> per BOLT 3. It is structurally similar to the offered HTLC script but differs in the timeout path.<br><br><strong>Key difference:</strong> Instead of <code>OP_DROP</code> followed by CHECKMULTISIG, the timeout path uses <code>OP_CHECKLOCKTIMEVERIFY</code> to enforce the <strong>CLTV expiry</strong>, followed by <code>OP_DROP</code> and <code>OP_CHECKSIG</code> (single signature, not multisig). The success path (preimage) still uses 2-of-2 CHECKMULTISIG.<br><br><strong>Tools you will need:</strong> The same <code>hash160()</code> and <code>_ripemd160()</code> helpers as the offered HTLC script. Extract keys from the <code>commitment_keys</code> object.</p>",
+        "<p><strong>Goal:</strong> Create the <strong>received HTLC witness script</strong> per BOLT 3. It is structurally similar to the offered HTLC script but differs in the timeout path.<br><br><strong>Key difference:</strong> Like the offered HTLC, the inner condition uses <code>OP_NOTIF</code>. The <strong>timeout path</strong> (under <code>OP_NOTIF</code>) uses <code>OP_DROP</code>, the CLTV expiry, <code>OP_CHECKLOCKTIMEVERIFY</code>, <code>OP_DROP</code>, and <code>OP_CHECKSIG</code> (single signature, not multisig). The <strong>preimage path</strong> (under <code>OP_ELSE</code>) still uses 2-of-2 CHECKMULTISIG.<br><br><strong>Tools you will need:</strong> The same <code>hash160()</code> and <code>_ripemd160()</code> helpers as the offered HTLC script. Extract keys from the <code>commitment_keys</code> object.<br><br>Reference: <a href='https://github.com/lightning/bolts/blob/master/03-transactions.md#received-htlc-outputs'>BOLT 3 Received HTLC Outputs</a></p>",
       steps:
-        '<ol><li>Compute the two hash values: use <code>hash160()</code> on the revocation key and <code>_ripemd160()</code> on the payment hash</li><li>The outer structure and success path are identical to the offered HTLC script: revocation check via <code>OP_DUP</code>/<code>OP_HASH160</code>/<code>OP_EQUAL</code>, then the preimage path uses 2-of-2 <code>OP_CHECKMULTISIG</code></li><li>The key difference is in the timeout path: instead of <code>OP_DROP</code> followed by CHECKMULTISIG, use <code>OP_DROP</code>, the <code>cltv_expiry</code> integer, <code>OP_CHECKLOCKTIMEVERIFY</code>, <code>OP_DROP</code>, then <code>OP_CHECKSIG</code> (single sig, not multisig). Pass the expiry integer directly in the <code>CScript</code> list</li><li>Build the entire script as a single <code>CScript()</code> list following the docstring template exactly</li></ol>',
+        '<ol><li>Compute the two hash values: use <code>hash160()</code> on the revocation key and <code>_ripemd160()</code> on the payment hash</li><li>The outer structure is identical to the offered HTLC script: revocation check via <code>OP_DUP</code>/<code>OP_HASH160</code>/<code>OP_EQUAL</code>, then <code>OP_CHECKSIG</code> for the revocation path</li><li>In the ELSE branch, use <code>OP_NOTIF</code> (not OP_IF) for the inner condition, just like the offered HTLC. The <strong>timeout path</strong> (under <code>OP_NOTIF</code>) uses <code>OP_DROP</code>, the <code>cltv_expiry</code> integer, <code>OP_CHECKLOCKTIMEVERIFY</code>, <code>OP_DROP</code>, then <code>OP_CHECKSIG</code> (single sig, not multisig). Pass the expiry integer directly in the <code>CScript</code> list. The <strong>preimage path</strong> (under <code>OP_ELSE</code>) uses 2-of-2 <code>OP_CHECKMULTISIG</code></li><li>Build the entire script as a single <code>CScript()</code> list following the docstring template exactly</li></ol>',
       code: `def create_received_htlc_script(commitment_keys, payment_hash, cltv_expiry):
     rev_hash = hash160(commitment_keys.revocation_key)
     payment_ripemd = _ripemd160(payment_hash)
@@ -1892,19 +2038,19 @@ def test_script_returns_bytes():
             OP_CHECKSIG,
         OP_ELSE,
             commitment_keys.remote_htlc_key, OP_SWAP, OP_SIZE, 32, OP_EQUAL,
-            OP_IF,
-                OP_HASH160, payment_ripemd, OP_EQUALVERIFY,
-                2, OP_SWAP, commitment_keys.local_htlc_key, 2, OP_CHECKMULTISIG,
-            OP_ELSE,
+            OP_NOTIF,
                 OP_DROP, cltv_expiry, OP_CHECKLOCKTIMEVERIFY, OP_DROP,
                 OP_CHECKSIG,
+            OP_ELSE,
+                OP_HASH160, payment_ripemd, OP_EQUALVERIFY,
+                2, OP_SWAP, commitment_keys.local_htlc_key, 2, OP_CHECKMULTISIG,
             OP_ENDIF,
         OP_ENDIF,
     ])`,
     },
     rewardSats: 21,
-    group: "scripts/htlc",
-    groupOrder: 2,
+    group: "scripts/htlc-received",
+    groupOrder: 1,
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1912,17 +2058,17 @@ def test_script_returns_bytes():
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-htlc-timeout-tx": {
     id: "ln-exercise-htlc-timeout-tx",
-    title: "Exercise 20: Create HTLC Timeout Transaction",
+    title: "Exercise 21: Create HTLC Timeout Transaction",
     description:
       "Create an unsigned HTLC timeout transaction that spends an offered HTLC output from a commitment transaction. The output is a P2WSH of the <code>to_local</code> script, using keys from <code>CommitmentKeys</code>.",
-    starterCode: `def create_htlc_timeout_tx(commitment_txid_hex: str, htlc_output_index: int,
+    starterCode: `def create_htlc_timeout_tx(commitment_txid: bytes, htlc_output_index: int,
                             htlc_amount_sat: int, cltv_expiry: int,
                             commitment_keys,
-                            to_self_delay: int, feerate_per_kw: int) -> str:
+                            to_self_delay: int, feerate_per_kw: int) -> CMutableTransaction:
     """
     Create an unsigned HTLC timeout transaction.
 
-    Version 2, nLockTime = cltv_expiry, input sequence = 0.
+    nVersion=2, nLockTime = cltv_expiry, input nSequence = 0.
     Single output: P2WSH of to_local_script.
     Output value = htlc_amount_sat - fee (fee = 663 * feerate_per_kw / 1000).
 
@@ -1930,7 +2076,7 @@ def test_script_returns_bytes():
     commitment_keys.local_delayed_payment_key for the to_local script.
 
     Args:
-        commitment_txid_hex: txid of the commitment tx
+        commitment_txid: txid bytes (already in internal byte order)
         htlc_output_index: which output is the HTLC
         htlc_amount_sat: HTLC amount in satoshis
         cltv_expiry: CLTV locktime for this HTLC
@@ -1939,41 +2085,36 @@ def test_script_returns_bytes():
         feerate_per_kw: fee rate
 
     Returns:
-        str: hex of unsigned HTLC timeout transaction
+        CMutableTransaction: unsigned HTLC timeout transaction
     """
     # === YOUR CODE HERE ===
     pass
 `,
     testCode: `
-import struct
-
 def test_basic_structure():
-    commitment_txid = "2b887d4c1c59cd605144a1e2f971d168437db453f841f2fefb2c164f28ff84ab"
+    commitment_txid = lx("2b887d4c1c59cd605144a1e2f971d168437db453f841f2fefb2c164f28ff84ab")
     rev_pk = bytes.fromhex("0212a140cd0c6539d07cd08dfe09984dec3251ea808b892efeac3ede9402bf2b19")
     delayed_pk = bytes.fromhex("03fd5960528dc152014952efdb702a88f71e3c1653b2314431701ec77e57fde83c")
     ck = CommitmentKeys(bytes(33), rev_pk, delayed_pk, bytes(33), bytes(33))
-    result = create_htlc_timeout_tx(commitment_txid, 1, 2000, 502, ck, 144, 0)
-    assert isinstance(result, str), "Must return hex string"
-    tx = bytes.fromhex(result)
-    assert struct.unpack('<I', tx[0:4])[0] == 2, "Version must be 2"
-    assert struct.unpack('<I', tx[-4:])[0] == 502, "Locktime must be cltv_expiry"
+    tx = create_htlc_timeout_tx(commitment_txid, 1, 2000, 502, ck, 144, 0)
+    assert hasattr(tx, 'nLockTime'), "Must return a CMutableTransaction"
+    assert tx.nVersion == 2, "Version must be 2"
+    assert tx.nLockTime == 502, "Locktime must be cltv_expiry"
 
 def test_output_value_no_fee():
-    commitment_txid = "2b887d4c1c59cd605144a1e2f971d168437db453f841f2fefb2c164f28ff84ab"
+    commitment_txid = lx("2b887d4c1c59cd605144a1e2f971d168437db453f841f2fefb2c164f28ff84ab")
     rev_pk = bytes.fromhex("0212a140cd0c6539d07cd08dfe09984dec3251ea808b892efeac3ede9402bf2b19")
     delayed_pk = bytes.fromhex("03fd5960528dc152014952efdb702a88f71e3c1653b2314431701ec77e57fde83c")
     ck = CommitmentKeys(bytes(33), rev_pk, delayed_pk, bytes(33), bytes(33))
-    result = create_htlc_timeout_tx(commitment_txid, 1, 2000, 502, ck, 144, 0)
-    tx = bytes.fromhex(result)
-    out_value = struct.unpack('<q', tx[47:55])[0]
-    assert out_value == 2000, f"Output value must be 2000 with zero fee, got {out_value}"
+    tx = create_htlc_timeout_tx(commitment_txid, 1, 2000, 502, ck, 144, 0)
+    assert tx.vout[0].nValue == 2000, f"Output value must be 2000 with zero fee, got {tx.vout[0].nValue}"
 `,
     hints: {
       conceptual:
-        "<p><strong>Goal:</strong> Build an unsigned <strong>HTLC timeout transaction</strong>. This transaction spends an offered HTLC output from the commitment transaction, and its single output is a P2WSH of the to_local script (allowing revocation or delayed spending).<br><br><strong>Fee formula:</strong> <code>fee = 663 * feerate_per_kw // 1000</code> (fixed weight of 663). Set <code>nLockTime</code> to the <code>cltv_expiry</code> and input <code>nSequence</code> to 0.<br><br><strong>Tools you will need:</strong> <code>create_to_local_script()</code> with keys from <code>commitment_keys</code> to build the output witness script, <code>COutPoint</code> with <code>lx()</code> for the input, and <code>CMutableTransaction</code> to assemble the transaction.</p>",
+        "<p><strong>Goal:</strong> Build an unsigned <strong>HTLC timeout transaction</strong>. This transaction spends an offered HTLC output from the commitment transaction, and its single output is a P2WSH of the to_local script (allowing revocation or delayed spending).<br><br><strong>Fee formula:</strong> <code>fee = 663 * feerate_per_kw // 1000</code> (fixed weight of 663). Set <code>nLockTime</code> to the <code>cltv_expiry</code> and input <code>nSequence</code> to 0.<br><br><strong>Tools you will need:</strong> <code>create_to_local_script()</code> with keys from <code>commitment_keys</code> to build the output witness script, <code>COutPoint</code> for the input, and <code>CMutableTransaction</code> to assemble the transaction.</p>",
       steps:
-        '<ol><li>Compute the fee using the weight constant 663: <code>fee = 663 * feerate_per_kw // 1000</code>. Subtract the fee from the HTLC amount to get the output value</li><li>Build the to_local witness script using <code>create_to_local_script()</code> with the revocation key and local delayed payment key from <code>commitment_keys</code>, plus the delay value</li><li>Wrap as P2WSH: <code>CScript()</code> with <code>OP_0</code> and the <code>hashlib.sha256()</code> hash of the witness script bytes</li><li>Create the input using <code>CTxIn()</code> with a <code>COutPoint</code> referencing the commitment txid (use <code>lx()</code> to convert) and the HTLC output index. Set <code>nSequence=0</code></li><li>Create the output using <code>CTxOut()</code> with the computed value and the P2WSH script</li><li>Build a <code>CMutableTransaction</code> with the input and output. Set <code>nLockTime</code> to the CLTV expiry. Return <code>.serialize().hex()</code></li></ol>',
-      code: `def create_htlc_timeout_tx(commitment_txid_hex, htlc_output_index, htlc_amount_sat,
+        '<ol><li>Compute the fee using the weight constant 663: <code>fee = 663 * feerate_per_kw // 1000</code>. Subtract the fee from the HTLC amount to get the output value</li><li>Build the to_local witness script using <code>create_to_local_script()</code> with the revocation key and local delayed payment key from <code>commitment_keys</code>, plus the delay value</li><li>Wrap as P2WSH: <code>CScript()</code> with <code>OP_0</code> and the <code>hashlib.sha256()</code> hash of the witness script bytes</li><li>Create the input using <code>CTxIn()</code> with a <code>COutPoint</code> referencing the commitment txid and the HTLC output index. Set <code>nSequence=0</code></li><li>Create the output using <code>CTxOut()</code> with the computed value and the P2WSH script</li><li>Build and return a <code>CMutableTransaction</code> with the input and output. Set <code>nLockTime</code> to the CLTV expiry</li></ol>',
+      code: `def create_htlc_timeout_tx(commitment_txid, htlc_output_index, htlc_amount_sat,
                             cltv_expiry, commitment_keys,
                             to_self_delay, feerate_per_kw):
     fee = 663 * feerate_per_kw // 1000
@@ -1981,13 +2122,12 @@ def test_output_value_no_fee():
     ws = create_to_local_script(commitment_keys.revocation_key, commitment_keys.local_delayed_payment_key, to_self_delay)
     p2wsh = CScript([OP_0, hashlib.sha256(bytes(ws)).digest()])
 
-    txin = CTxIn(COutPoint(lx(commitment_txid_hex), htlc_output_index), nSequence=0)
+    txin = CTxIn(COutPoint(commitment_txid, htlc_output_index), nSequence=0)
     txout = CTxOut(output_value, p2wsh)
-    tx = CMutableTransaction([txin], [txout], nLockTime=cltv_expiry)
-    return tx.serialize().hex()`,
+    return CMutableTransaction([txin], [txout], nLockTime=cltv_expiry, nVersion=2)`,
     },
     rewardSats: 21,
-    group: "transactions/htlc",
+    group: "transactions/htlc-offered",
     groupOrder: 1,
   },
 
@@ -1996,17 +2136,17 @@ def test_output_value_no_fee():
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-htlc-success-tx": {
     id: "ln-exercise-htlc-success-tx",
-    title: "Exercise 21: Create HTLC Success Transaction",
+    title: "Exercise 24: Create HTLC Success Transaction",
     description:
       "Create an unsigned HTLC success transaction that spends a received HTLC output. The output is a P2WSH of the <code>to_local</code> script, using keys from <code>CommitmentKeys</code>. <code>nLockTime</code> is 0 and <code>nSequence</code> is 0.",
-    starterCode: `def create_htlc_success_tx(commitment_txid_hex: str, htlc_output_index: int,
+    starterCode: `def create_htlc_success_tx(commitment_txid: bytes, htlc_output_index: int,
                             htlc_amount_sat: int,
                             commitment_keys,
-                            to_self_delay: int, feerate_per_kw: int) -> str:
+                            to_self_delay: int, feerate_per_kw: int) -> CMutableTransaction:
     """
     Create an unsigned HTLC success transaction.
 
-    Version 2, nLockTime = 0, input sequence = 0.
+    nVersion=2, nLockTime = 0, input nSequence = 0.
     Single output: P2WSH of to_local_script.
     Output value = htlc_amount_sat - fee (fee = 703 * feerate_per_kw / 1000).
 
@@ -2014,7 +2154,7 @@ def test_output_value_no_fee():
     commitment_keys.local_delayed_payment_key for the to_local script.
 
     Args:
-        commitment_txid_hex: txid of the commitment tx
+        commitment_txid: txid bytes (already in internal byte order)
         htlc_output_index: which output is the HTLC
         htlc_amount_sat: HTLC amount in satoshis
         commitment_keys: CommitmentKeys object with derived keys
@@ -2022,51 +2162,45 @@ def test_output_value_no_fee():
         feerate_per_kw: fee rate
 
     Returns:
-        str: hex of unsigned HTLC success transaction
+        CMutableTransaction: unsigned HTLC success transaction
     """
     # === YOUR CODE HERE ===
     pass
 `,
     testCode: `
-import struct
-
 def test_basic_structure():
-    commitment_txid = "2b887d4c1c59cd605144a1e2f971d168437db453f841f2fefb2c164f28ff84ab"
+    commitment_txid = lx("2b887d4c1c59cd605144a1e2f971d168437db453f841f2fefb2c164f28ff84ab")
     rev_pk = bytes.fromhex("0212a140cd0c6539d07cd08dfe09984dec3251ea808b892efeac3ede9402bf2b19")
     delayed_pk = bytes.fromhex("03fd5960528dc152014952efdb702a88f71e3c1653b2314431701ec77e57fde83c")
     ck = CommitmentKeys(bytes(33), rev_pk, delayed_pk, bytes(33), bytes(33))
-    result = create_htlc_success_tx(commitment_txid, 0, 1000, ck, 144, 0)
-    assert isinstance(result, str), "Must return hex string"
-    tx = bytes.fromhex(result)
-    assert struct.unpack('<I', tx[0:4])[0] == 2, "Version must be 2"
-    assert struct.unpack('<I', tx[-4:])[0] == 0, "Locktime must be 0"
+    tx = create_htlc_success_tx(commitment_txid, 0, 1000, ck, 144, 0)
+    assert hasattr(tx, 'nLockTime'), "Must return a CMutableTransaction"
+    assert tx.nVersion == 2, "Version must be 2"
+    assert tx.nLockTime == 0, "Locktime must be 0"
 
 def test_output_value_no_fee():
-    commitment_txid = "2b887d4c1c59cd605144a1e2f971d168437db453f841f2fefb2c164f28ff84ab"
+    commitment_txid = lx("2b887d4c1c59cd605144a1e2f971d168437db453f841f2fefb2c164f28ff84ab")
     rev_pk = bytes.fromhex("0212a140cd0c6539d07cd08dfe09984dec3251ea808b892efeac3ede9402bf2b19")
     delayed_pk = bytes.fromhex("03fd5960528dc152014952efdb702a88f71e3c1653b2314431701ec77e57fde83c")
     ck = CommitmentKeys(bytes(33), rev_pk, delayed_pk, bytes(33), bytes(33))
-    result = create_htlc_success_tx(commitment_txid, 0, 1000, ck, 144, 0)
-    tx = bytes.fromhex(result)
-    out_value = struct.unpack('<q', tx[47:55])[0]
-    assert out_value == 1000, f"Output value must be 1000 with zero fee, got {out_value}"
+    tx = create_htlc_success_tx(commitment_txid, 0, 1000, ck, 144, 0)
+    assert tx.vout[0].nValue == 1000, f"Output value must be 1000 with zero fee, got {tx.vout[0].nValue}"
 
 def test_p2wsh_output():
-    commitment_txid = "2b887d4c1c59cd605144a1e2f971d168437db453f841f2fefb2c164f28ff84ab"
+    commitment_txid = lx("2b887d4c1c59cd605144a1e2f971d168437db453f841f2fefb2c164f28ff84ab")
     rev_pk = bytes.fromhex("0212a140cd0c6539d07cd08dfe09984dec3251ea808b892efeac3ede9402bf2b19")
     delayed_pk = bytes.fromhex("03fd5960528dc152014952efdb702a88f71e3c1653b2314431701ec77e57fde83c")
     ck = CommitmentKeys(bytes(33), rev_pk, delayed_pk, bytes(33), bytes(33))
-    result = create_htlc_success_tx(commitment_txid, 0, 1000, ck, 144, 0)
-    tx = bytes.fromhex(result)
-    script_len = tx[55]
-    assert script_len == 34, f"Script must be 34 bytes (P2WSH), got {script_len}"
+    tx = create_htlc_success_tx(commitment_txid, 0, 1000, ck, 144, 0)
+    script_bytes = bytes(tx.vout[0].scriptPubKey)
+    assert len(script_bytes) == 34, f"Script must be 34 bytes (P2WSH), got {len(script_bytes)}"
 `,
     hints: {
       conceptual:
         "<p><strong>Goal:</strong> Build an unsigned <strong>HTLC success transaction</strong>. This is nearly identical to the HTLC timeout transaction with two differences.<br><br><strong>Key differences from timeout:</strong> <code>nLockTime</code> is <strong>0</strong> (since success is not time-locked) and the fee weight constant is <strong>703</strong> instead of 663: <code>fee = 703 * feerate_per_kw // 1000</code>.<br><br><strong>Tools you will need:</strong> The same <code>create_to_local_script()</code> and P2WSH wrapping pattern as the timeout transaction, with keys from <code>commitment_keys</code>. It spends a received HTLC output and creates a P2WSH output locked to the to_local script.</p>",
       steps:
-        '<ol><li>Compute the fee using weight constant 703: <code>fee = 703 * feerate_per_kw // 1000</code>. Subtract from the HTLC amount to get the output value</li><li>Build the to_local witness script using <code>create_to_local_script()</code> with the revocation key and local delayed payment key from <code>commitment_keys</code>, plus the delay value</li><li>Wrap as P2WSH: <code>CScript()</code> with <code>OP_0</code> and the <code>hashlib.sha256()</code> hash of the witness script bytes</li><li>Create the input using <code>CTxIn()</code> with a <code>COutPoint</code> referencing the commitment txid (use <code>lx()</code>) and the HTLC output index. Set <code>nSequence=0</code></li><li>Create the output using <code>CTxOut()</code> with the computed value and P2WSH script</li><li>Build a <code>CMutableTransaction</code> with the input and output. <code>nLockTime</code> defaults to 0. Return <code>.serialize().hex()</code></li></ol>',
-      code: `def create_htlc_success_tx(commitment_txid_hex, htlc_output_index, htlc_amount_sat,
+        '<ol><li>Compute the fee using weight constant 703: <code>fee = 703 * feerate_per_kw // 1000</code>. Subtract from the HTLC amount to get the output value</li><li>Build the to_local witness script using <code>create_to_local_script()</code> with the revocation key and local delayed payment key from <code>commitment_keys</code>, plus the delay value</li><li>Wrap as P2WSH: <code>CScript()</code> with <code>OP_0</code> and the <code>hashlib.sha256()</code> hash of the witness script bytes</li><li>Create the input using <code>CTxIn()</code> with a <code>COutPoint</code> referencing the commitment txid and the HTLC output index. Set <code>nSequence=0</code></li><li>Create the output using <code>CTxOut()</code> with the computed value and P2WSH script</li><li>Build and return a <code>CMutableTransaction</code> with the input and output. <code>nLockTime</code> defaults to 0</li></ol>',
+      code: `def create_htlc_success_tx(commitment_txid, htlc_output_index, htlc_amount_sat,
                             commitment_keys,
                             to_self_delay, feerate_per_kw):
     fee = 703 * feerate_per_kw // 1000
@@ -2074,14 +2208,13 @@ def test_p2wsh_output():
     ws = create_to_local_script(commitment_keys.revocation_key, commitment_keys.local_delayed_payment_key, to_self_delay)
     p2wsh = CScript([OP_0, hashlib.sha256(bytes(ws)).digest()])
 
-    txin = CTxIn(COutPoint(lx(commitment_txid_hex), htlc_output_index), nSequence=0)
+    txin = CTxIn(COutPoint(commitment_txid, htlc_output_index), nSequence=0)
     txout = CTxOut(output_value, p2wsh)
-    tx = CMutableTransaction([txin], [txout])
-    return tx.serialize().hex()`,
+    return CMutableTransaction([txin], [txout], nVersion=2)`,
     },
     rewardSats: 21,
-    group: "transactions/htlc",
-    groupOrder: 2,
+    group: "transactions/htlc-received",
+    groupOrder: 1,
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -2093,10 +2226,10 @@ def test_p2wsh_output():
     description:
       "Sign and finalize an HTLC timeout transaction using <code>ChannelKeyManager</code>. Derive the local HTLC private key with <code>derive_privkey(km.htlc_basepoint_secret, commitment_keys.per_commitment_point)</code>, then sign with <code>km.sign_input()</code>. Witness: <code>[empty, remote_sig, local_sig, empty, htlc_script]</code>.",
     starterCode: `def finalize_htlc_timeout(km, commitment_keys,
-                          unsigned_tx_hex: str,
+                          unsigned_tx,
                           htlc_script: bytes,
                           htlc_amount: int,
-                          remote_htlc_signature: bytes) -> str:
+                          remote_htlc_signature: bytes) -> CMutableTransaction:
     """
     Sign and finalize an HTLC timeout transaction.
 
@@ -2104,38 +2237,39 @@ def test_p2wsh_output():
     1. Derive local HTLC private key:
        derive_privkey(km.htlc_basepoint_secret,
                       commitment_keys.per_commitment_point)
-    2. Sign with km.sign_input() using the derived key
+    2. Sign with km.sign_input() using unsigned_tx.serialize()
+       and the derived key
     3. Build witness: [empty, remote_sig, local_sig, empty, htlc_script]
        - First empty: OP_0 dummy for CHECKMULTISIG bug
        - Second empty: selects the timeout path
-    4. Attach witness using CScriptWitness/CTxInWitness/CTxWitness
+    4. Attach witness to unsigned_tx using CScriptWitness/CTxInWitness/CTxWitness
 
     Args:
         km: ChannelKeyManager
         commitment_keys: CommitmentKeys with per_commitment_point
-        unsigned_tx_hex: hex of unsigned HTLC timeout tx
+        unsigned_tx: CMutableTransaction (already deserialized)
         htlc_script: the offered HTLC witness script
         htlc_amount: satoshi value of the HTLC output
         remote_htlc_signature: counterparty's DER sig + SIGHASH_ALL
 
     Returns:
-        str: hex of signed segwit HTLC timeout transaction
+        CMutableTransaction: signed HTLC timeout transaction with witness
     """
     # === YOUR CODE HERE ===
     pass
 `,
     testCode: `
-def test_returns_string():
+def test_returns_tx():
     seed = bytes([0x01] * 32)
     km = ChannelKeyManager(seed)
     per_cp = bytes.fromhex("025f7117a78150fe2ef97db7cfc83bd57b2e2c0d0dd25eaf467a4a1c2a45ce1486")
     ck = CommitmentKeys(per_cp, bytes(33), bytes(33), bytes(33), bytes(33))
-    unsigned_tx = "0200000001bef67e4e2fb9ddeeb3461973cd4c62abb35050b1add772995b820b584a48848901000000000000000001d0070000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80ef6010000"
+    unsigned_tx = CMutableTransaction.deserialize(bytes.fromhex("0200000001bef67e4e2fb9ddeeb3461973cd4c62abb35050b1add772995b820b584a48848901000000000000000001d0070000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80ef6010000"))
     htlc_script = bytes.fromhex("76a91414011f7254d96b819c76986c277d115efce6f7b58763ac6702c800b175210214ccb63e0b1bcf27ca2c6c73e16f3d6a036a33a2b81e62ba5d78f66b4a19fc2fac68")
     remote_sig = bytes.fromhex("3045022100c3127b33dcc741dd6b05b1e63cbd1a9a7d816f37af9b6756fa2376b056f032370220408b96279808fe57eb7e463710804cdf4f108388bc5cf722d8c848d2c7f9f3b001")
     result = finalize_htlc_timeout(km, ck, unsigned_tx, htlc_script, 2000, remote_sig)
-    assert isinstance(result, str), "Must return hex string"
-    signed = bytes.fromhex(result)
+    assert hasattr(result, 'wit'), "Must return a CMutableTransaction"
+    signed = result.serialize()
     assert signed[4:6] == b'\\x00\\x01', "Must include segwit marker (0x00, 0x01)"
 
 def test_witness_items():
@@ -2143,38 +2277,36 @@ def test_witness_items():
     km = ChannelKeyManager(seed)
     per_cp = bytes.fromhex("025f7117a78150fe2ef97db7cfc83bd57b2e2c0d0dd25eaf467a4a1c2a45ce1486")
     ck = CommitmentKeys(per_cp, bytes(33), bytes(33), bytes(33), bytes(33))
-    unsigned_tx = "0200000001bef67e4e2fb9ddeeb3461973cd4c62abb35050b1add772995b820b584a48848901000000000000000001d0070000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80ef6010000"
+    unsigned_tx = CMutableTransaction.deserialize(bytes.fromhex("0200000001bef67e4e2fb9ddeeb3461973cd4c62abb35050b1add772995b820b584a48848901000000000000000001d0070000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80ef6010000"))
     htlc_script = bytes.fromhex("76a91414011f7254d96b819c76986c277d115efce6f7b58763ac6702c800b175210214ccb63e0b1bcf27ca2c6c73e16f3d6a036a33a2b81e62ba5d78f66b4a19fc2fac68")
     remote_sig = bytes.fromhex("3045022100c3127b33dcc741dd6b05b1e63cbd1a9a7d816f37af9b6756fa2376b056f032370220408b96279808fe57eb7e463710804cdf4f108388bc5cf722d8c848d2c7f9f3b001")
     result = finalize_htlc_timeout(km, ck, unsigned_tx, htlc_script, 2000, remote_sig)
-    signed = bytes.fromhex(result)
+    assert result is not None, "Must return a CMutableTransaction (got None)"
+    signed = result.serialize()
     assert b'\\x05' in signed, "Witness must have 5 items"
 `,
     hints: {
       conceptual:
         "<p><strong>Goal:</strong> Sign and finalize an <strong>HTLC timeout transaction</strong>.<br><br><strong>How it works:</strong> Derive the per-commitment HTLC private key using <code>derive_privkey()</code> with <code>km.htlc_basepoint_secret</code> and <code>commitment_keys.per_commitment_point</code>. Sign with <code>km.sign_input()</code> using that derived key. The witness has <strong>5 items</strong>: <code>[empty (CHECKMULTISIG dummy), remote_sig, local_sig, empty (selects timeout path since it's 0 bytes), htlc_script]</code>.<br><br><strong>Tools you will need:</strong> <code>derive_privkey()</code> for key derivation, <code>km.sign_input()</code> for signing, and <code>CScriptWitness</code>, <code>CTxInWitness</code>, <code>CTxWitness</code> to construct and attach the witness.</p>",
       steps:
-        '<ol><li>Derive the local HTLC private key using <code>derive_privkey()</code> with <code>km.htlc_basepoint_secret</code> and the per-commitment point from <code>commitment_keys</code></li><li>Convert the hex to bytes with <code>bytes.fromhex()</code>, then sign input 0 using <code>km.sign_input()</code> with the HTLC script wrapped in <code>CScript()</code>, the HTLC amount, and the derived private key</li><li>Deserialize the transaction bytes with <code>CTransaction.deserialize()</code></li><li>Build the witness using <code>CScriptWitness()</code> with 5 items: empty bytes (CHECKMULTISIG dummy), remote signature, local signature, empty bytes (0-length selects the timeout path), and the HTLC script</li><li>Wrap in <code>CTxInWitness()</code> and <code>CTxWitness()</code>. Create a mutable copy with <code>CMutableTransaction.from_tx()</code>, attach the witness to <code>.wit</code>, and return <code>.serialize().hex()</code></li></ol>',
-      code: `def finalize_htlc_timeout(km, commitment_keys, unsigned_tx_hex, htlc_script,
+        '<ol><li>Derive the local HTLC private key using <code>derive_privkey()</code> with <code>km.htlc_basepoint_secret</code> and the per-commitment point from <code>commitment_keys</code></li><li>Sign input 0 using <code>km.sign_input()</code> with <code>unsigned_tx.serialize()</code>, the HTLC script wrapped in <code>CScript()</code>, the HTLC amount, and the derived private key</li><li>Build the witness using <code>CScriptWitness()</code> with 5 items: empty bytes (CHECKMULTISIG dummy), remote signature, local signature, empty bytes (0-length selects the timeout path), and the HTLC script</li><li>Wrap in <code>CTxInWitness()</code> and <code>CTxWitness()</code>. Attach the witness to <code>unsigned_tx.wit</code> and return <code>unsigned_tx</code></li></ol>',
+      code: `def finalize_htlc_timeout(km, commitment_keys, unsigned_tx, htlc_script,
                           htlc_amount, remote_htlc_signature):
     local_htlc_privkey = derive_privkey(km.htlc_basepoint_secret,
                                          commitment_keys.per_commitment_point)
-    tx_bytes = bytes.fromhex(unsigned_tx_hex)
-    local_sig = km.sign_input(tx_bytes, 0, CScript(htlc_script), htlc_amount,
-                               local_htlc_privkey)
+    local_sig = km.sign_input(unsigned_tx.serialize(), 0, CScript(htlc_script),
+                               htlc_amount, local_htlc_privkey)
 
-    tx = CTransaction.deserialize(tx_bytes)
     witness = CScriptWitness([b'', remote_htlc_signature, local_sig, b'', htlc_script])
     in_witness = CTxInWitness(witness)
     tx_witness = CTxWitness([in_witness])
 
-    mtx = CMutableTransaction.from_tx(tx)
-    mtx.wit = tx_witness
-    return mtx.serialize().hex()`,
+    unsigned_tx.wit = tx_witness
+    return unsigned_tx`,
     },
     rewardSats: 21,
-    group: "transactions/htlc",
-    groupOrder: 3,
+    group: "transactions/htlc-offered",
+    groupOrder: 2,
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -2182,15 +2314,15 @@ def test_witness_items():
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-finalize-htlc-success": {
     id: "ln-exercise-finalize-htlc-success",
-    title: "Exercise 23: Finalize HTLC Success Transaction",
+    title: "Exercise 25: Finalize HTLC Success Transaction",
     description:
       "Sign and finalize an HTLC success transaction using <code>ChannelKeyManager</code>. Same signing pattern as the HTLC timeout exercise, but the witness includes the <code>payment_preimage</code> instead of an empty element: <code>[empty, remote_sig, local_sig, preimage, htlc_script]</code>.",
     starterCode: `def finalize_htlc_success(km, commitment_keys,
-                          unsigned_tx_hex: str,
+                          unsigned_tx,
                           htlc_script: bytes,
                           htlc_amount: int,
                           remote_htlc_signature: bytes,
-                          payment_preimage: bytes) -> str:
+                          payment_preimage: bytes) -> CMutableTransaction:
     """
     Sign and finalize an HTLC success transaction.
 
@@ -2198,40 +2330,41 @@ def test_witness_items():
     1. Derive local HTLC private key:
        derive_privkey(km.htlc_basepoint_secret,
                       commitment_keys.per_commitment_point)
-    2. Sign with km.sign_input() using the derived key
+    2. Sign with km.sign_input() using unsigned_tx.serialize()
+       and the derived key
     3. Build witness: [empty, remote_sig, local_sig, preimage, htlc_script]
        - empty: OP_0 dummy for CHECKMULTISIG bug
        - preimage: 32-byte payment preimage (selects success path)
-    4. Attach witness using CScriptWitness/CTxInWitness/CTxWitness
+    4. Attach witness to unsigned_tx using CScriptWitness/CTxInWitness/CTxWitness
 
     Args:
         km: ChannelKeyManager
         commitment_keys: CommitmentKeys with per_commitment_point
-        unsigned_tx_hex: hex of unsigned HTLC success tx
+        unsigned_tx: CMutableTransaction (already deserialized)
         htlc_script: the received HTLC witness script
         htlc_amount: satoshi value of the HTLC output
         remote_htlc_signature: counterparty's DER sig + SIGHASH_ALL
         payment_preimage: 32-byte preimage that hashes to payment_hash
 
     Returns:
-        str: hex of signed segwit HTLC success transaction
+        CMutableTransaction: signed HTLC success transaction with witness
     """
     # === YOUR CODE HERE ===
     pass
 `,
     testCode: `
-def test_returns_string():
+def test_returns_tx():
     seed = bytes([0x01] * 32)
     km = ChannelKeyManager(seed)
     per_cp = bytes.fromhex("025f7117a78150fe2ef97db7cfc83bd57b2e2c0d0dd25eaf467a4a1c2a45ce1486")
     ck = CommitmentKeys(per_cp, bytes(33), bytes(33), bytes(33), bytes(33))
-    unsigned_tx = "0200000001bef67e4e2fb9ddeeb3461973cd4c62abb35050b1add772995b820b584a48848901000000000000000001d0070000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e00000000"
+    unsigned_tx = CMutableTransaction.deserialize(bytes.fromhex("0200000001bef67e4e2fb9ddeeb3461973cd4c62abb35050b1add772995b820b584a48848901000000000000000001d0070000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e00000000"))
     htlc_script = bytes.fromhex("76a91414011f7254d96b819c76986c277d115efce6f7b58763ac6702c800b175210214ccb63e0b1bcf27ca2c6c73e16f3d6a036a33a2b81e62ba5d78f66b4a19fc2fac68")
     remote_sig = bytes.fromhex("3045022100c3127b33dcc741dd6b05b1e63cbd1a9a7d816f37af9b6756fa2376b056f032370220408b96279808fe57eb7e463710804cdf4f108388bc5cf722d8c848d2c7f9f3b001")
     preimage = bytes(32)
     result = finalize_htlc_success(km, ck, unsigned_tx, htlc_script, 2000, remote_sig, preimage)
-    assert isinstance(result, str), "Must return hex string"
-    signed = bytes.fromhex(result)
+    assert hasattr(result, 'wit'), "Must return a CMutableTransaction"
+    signed = result.serialize()
     assert signed[4:6] == b'\\x00\\x01', "Must include segwit marker"
 
 def test_witness_contains_preimage():
@@ -2239,12 +2372,13 @@ def test_witness_contains_preimage():
     km = ChannelKeyManager(seed)
     per_cp = bytes.fromhex("025f7117a78150fe2ef97db7cfc83bd57b2e2c0d0dd25eaf467a4a1c2a45ce1486")
     ck = CommitmentKeys(per_cp, bytes(33), bytes(33), bytes(33), bytes(33))
-    unsigned_tx = "0200000001bef67e4e2fb9ddeeb3461973cd4c62abb35050b1add772995b820b584a48848901000000000000000001d0070000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e00000000"
+    unsigned_tx = CMutableTransaction.deserialize(bytes.fromhex("0200000001bef67e4e2fb9ddeeb3461973cd4c62abb35050b1add772995b820b584a48848901000000000000000001d0070000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e00000000"))
     htlc_script = bytes.fromhex("76a91414011f7254d96b819c76986c277d115efce6f7b58763ac6702c800b175210214ccb63e0b1bcf27ca2c6c73e16f3d6a036a33a2b81e62ba5d78f66b4a19fc2fac68")
     remote_sig = bytes.fromhex("3045022100c3127b33dcc741dd6b05b1e63cbd1a9a7d816f37af9b6756fa2376b056f032370220408b96279808fe57eb7e463710804cdf4f108388bc5cf722d8c848d2c7f9f3b001")
     preimage = bytes.fromhex("0102030405060708091011121314151617181920212223242526272829303132")
     result = finalize_htlc_success(km, ck, unsigned_tx, htlc_script, 2000, remote_sig, preimage)
-    signed = bytes.fromhex(result)
+    assert result is not None, "Must return a CMutableTransaction (got None)"
+    signed = result.serialize()
     assert b'\\x05' in signed, "Witness must have 5 items"
     assert preimage in signed, "Witness must contain the payment preimage"
 `,
@@ -2252,27 +2386,24 @@ def test_witness_contains_preimage():
       conceptual:
         "<p><strong>Goal:</strong> Sign and finalize an <strong>HTLC success transaction</strong>. The process is identical to the HTLC timeout finalization except for one witness element.<br><br><strong>Key difference:</strong> Instead of empty bytes for the path selector, you provide the 32-byte <code>payment_preimage</code>. Because the preimage is exactly 32 bytes, the <strong>OP_SIZE</strong> check in the HTLC script evaluates to true, directing execution to the success (preimage) path.<br><br><strong>Tools you will need:</strong> The same key derivation (<code>derive_privkey()</code>) and signing (<code>km.sign_input()</code>) pattern as the timeout version, plus <code>CScriptWitness</code>, <code>CTxInWitness</code>, and <code>CTxWitness</code> for the witness.</p>",
       steps:
-        '<ol><li>Derive the local HTLC private key using <code>derive_privkey()</code> with <code>km.htlc_basepoint_secret</code> and the per-commitment point from <code>commitment_keys</code></li><li>Convert the hex to bytes with <code>bytes.fromhex()</code>, then sign input 0 using <code>km.sign_input()</code> with the HTLC script wrapped in <code>CScript()</code>, the HTLC amount, and the derived private key</li><li>Deserialize the transaction bytes with <code>CTransaction.deserialize()</code></li><li>Build the witness using <code>CScriptWitness()</code> with 5 items: empty bytes (CHECKMULTISIG dummy), remote signature, local signature, the <code>payment_preimage</code> (32 bytes selects the success path via <code>OP_SIZE</code>), and the HTLC script</li><li>Wrap in <code>CTxInWitness()</code> and <code>CTxWitness()</code>. Create a mutable copy with <code>CMutableTransaction.from_tx()</code>, attach the witness to <code>.wit</code>, and return <code>.serialize().hex()</code></li></ol>',
-      code: `def finalize_htlc_success(km, commitment_keys, unsigned_tx_hex, htlc_script,
+        '<ol><li>Derive the local HTLC private key using <code>derive_privkey()</code> with <code>km.htlc_basepoint_secret</code> and the per-commitment point from <code>commitment_keys</code></li><li>Sign input 0 using <code>km.sign_input()</code> with <code>unsigned_tx.serialize()</code>, the HTLC script wrapped in <code>CScript()</code>, the HTLC amount, and the derived private key</li><li>Build the witness using <code>CScriptWitness()</code> with 5 items: empty bytes (CHECKMULTISIG dummy), remote signature, local signature, the <code>payment_preimage</code> (32 bytes selects the success path via <code>OP_SIZE</code>), and the HTLC script</li><li>Wrap in <code>CTxInWitness()</code> and <code>CTxWitness()</code>. Attach the witness to <code>unsigned_tx.wit</code> and return <code>unsigned_tx</code></li></ol>',
+      code: `def finalize_htlc_success(km, commitment_keys, unsigned_tx, htlc_script,
                           htlc_amount, remote_htlc_signature, payment_preimage):
     local_htlc_privkey = derive_privkey(km.htlc_basepoint_secret,
                                          commitment_keys.per_commitment_point)
-    tx_bytes = bytes.fromhex(unsigned_tx_hex)
-    local_sig = km.sign_input(tx_bytes, 0, CScript(htlc_script), htlc_amount,
-                               local_htlc_privkey)
+    local_sig = km.sign_input(unsigned_tx.serialize(), 0, CScript(htlc_script),
+                               htlc_amount, local_htlc_privkey)
 
-    tx = CTransaction.deserialize(tx_bytes)
     witness = CScriptWitness([b'', remote_htlc_signature, local_sig, payment_preimage, htlc_script])
     in_witness = CTxInWitness(witness)
     tx_witness = CTxWitness([in_witness])
 
-    mtx = CMutableTransaction.from_tx(tx)
-    mtx.wit = tx_witness
-    return mtx.serialize().hex()`,
+    unsigned_tx.wit = tx_witness
+    return unsigned_tx`,
     },
     rewardSats: 21,
-    group: "transactions/htlc",
-    groupOrder: 4,
+    group: "transactions/htlc-received",
+    groupOrder: 2,
   },
 
 };

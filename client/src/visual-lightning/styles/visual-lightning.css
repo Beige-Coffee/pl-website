@@ -130,6 +130,11 @@
   perspective: 1200px;
 }
 
+/* Let diagrams scale up to fill the visual panel on large screens */
+.vl-visual-panel .vl-card-3d {
+  max-width: 100% !important;
+}
+
 /* Strip card chrome from diagrams when inside the visual panel */
 .vl-visual-panel .vl-card-3d-inner {
   border: none;

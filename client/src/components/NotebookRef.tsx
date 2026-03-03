@@ -23,10 +23,38 @@ export default function NotebookRef({ storageKey, label, theme }: NotebookRefPro
 
   useEffect(() => {
     refresh();
+
+    // Listen for our custom event (same-tab updates from TxGenerator)
     const handler = () => refresh();
     window.addEventListener("tx-notebook-updated", handler);
-    return () => window.removeEventListener("tx-notebook-updated", handler);
-  }, [refresh]);
+
+    // Listen for cross-tab localStorage changes
+    const storageHandler = (e: StorageEvent) => {
+      if (e.key === STORAGE_PREFIX + storageKey) refresh();
+    };
+    window.addEventListener("storage", storageHandler);
+
+    // Re-read when tab regains focus (catches SPA navigation misses)
+    const visHandler = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    document.addEventListener("visibilitychange", visHandler);
+
+    // Poll every 2s as fallback while value is null
+    const interval = setInterval(() => {
+      try {
+        const val = localStorage.getItem(STORAGE_PREFIX + storageKey);
+        if (val !== null) setValue(val);
+      } catch {}
+    }, 2000);
+
+    return () => {
+      window.removeEventListener("tx-notebook-updated", handler);
+      window.removeEventListener("storage", storageHandler);
+      document.removeEventListener("visibilitychange", visHandler);
+      clearInterval(interval);
+    };
+  }, [refresh, storageKey]);
 
   const handleCopy = useCallback(() => {
     if (!value) return;

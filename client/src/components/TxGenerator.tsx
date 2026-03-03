@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { runPythonCode } from "../lib/pyodide-runner";
 import type { TxGeneratorConfig } from "../data/tx-generators";
+import { LIGHTNING_EXERCISES } from "../data/lightning-exercises";
 
 const STORAGE_PREFIX = "pl-txnotebook-";
 
@@ -15,6 +16,7 @@ interface TxGeneratorProps {
   sessionToken?: string | null;
   isCompleted?: boolean;
   onCompleted?: (id: string, amountSats?: number) => void;
+  getProgress?: (exerciseId: string) => { completed: boolean } | undefined;
 }
 
 /** Parse stdout lines in format "LABEL: value" */
@@ -29,9 +31,15 @@ function parseOutput(stdout: string): Record<string, string> {
   return result;
 }
 
-export default function TxGenerator({ config, theme, sessionToken, isCompleted, onCompleted }: TxGeneratorProps) {
+export default function TxGenerator({ config, theme, sessionToken, isCompleted, onCompleted, getProgress }: TxGeneratorProps) {
   const dark = theme === "dark";
   const isUtility = config.type === "utility";
+
+  // Check if all required exercises are completed
+  const missingExercises = config.requiredExercises?.filter(
+    (id) => !getProgress?.(id)?.completed
+  ) ?? [];
+  const prerequisitesMet = missingExercises.length === 0;
 
   const [inputs, setInputs] = useState<Record<string, string>>({});
   const [running, setRunning] = useState(false);
@@ -265,6 +273,31 @@ export default function TxGenerator({ config, theme, sessionToken, isCompleted, 
       <div className="px-4 py-3">
         <p className={`text-base mb-3 leading-relaxed ${mutedText}`} dangerouslySetInnerHTML={{ __html: config.description }} />
 
+        {/* Locked state: prerequisites not met */}
+        {!prerequisitesMet ? (
+          <div className={`opacity-60 border ${panelBorder} ${outputBg} px-4 py-4`}>
+            <p className={`text-sm font-semibold mb-2 ${mutedText}`}>
+              Complete the following exercises to unlock this generator:
+            </p>
+            <ul className={`text-sm ${mutedText} list-disc list-inside space-y-1`}>
+              {missingExercises.map((id) => {
+                const exercise = LIGHTNING_EXERCISES[id];
+                return (
+                  <li key={id}>{exercise?.title || id}</li>
+                );
+              })}
+            </ul>
+            <button
+              disabled
+              className={`mt-3 font-semibold text-sm px-5 py-2.5 border-2 opacity-40 cursor-not-allowed
+                ${dark ? "border-slate-600 bg-[#0f1930] text-slate-500" : "border-[#d4c9a8] bg-[#f0e8d8] text-black/30"}`}
+              style={sansFont}
+            >
+              {config.buttonLabel}
+            </button>
+          </div>
+        ) : (
+        <>
         {/* Input fields */}
         {config.inputs.length > 0 && (
           <div className="space-y-2 mb-3">
@@ -379,6 +412,8 @@ export default function TxGenerator({ config, theme, sessionToken, isCompleted, 
               </div>
             )}
           </div>
+        )}
+        </>
         )}
       </div>
     </div>
