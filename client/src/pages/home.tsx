@@ -203,7 +203,7 @@ export default function Home() {
                           READ
                         </span>
                       </TooltipTrigger>
-                      <TooltipContent side="right" align="start" className="bg-card text-foreground border-4 border-border text-lg px-4 py-3 pixel-shadow max-w-xs rounded-none">
+                      <TooltipContent side="right" align="start" className="bg-card text-foreground border-4 border-border text-lg px-4 py-3 pixel-shadow max-w-xs rounded-none font-sans">
                         Coming soon
                       </TooltipContent>
                     </Tooltip>
@@ -216,7 +216,7 @@ export default function Home() {
                           CODE
                         </button>
                       </TooltipTrigger>
-                      <TooltipContent side="right" align="start" className="bg-card text-foreground border-4 border-border text-lg px-4 py-3 pixel-shadow max-w-xs rounded-none">
+                      <TooltipContent side="right" align="start" className="bg-card text-foreground border-4 border-border text-lg px-4 py-3 pixel-shadow max-w-xs rounded-none font-sans">
                         Same content plus hands-on coding exercises where you build key parts of the protocol.
                       </TooltipContent>
                     </Tooltip>
@@ -286,7 +286,7 @@ export default function Home() {
                           READ
                         </Link>
                       </TooltipTrigger>
-                      <TooltipContent side="right" align="start" className="bg-card text-foreground border-4 border-border text-lg px-4 py-3 pixel-shadow max-w-xs rounded-none">
+                      <TooltipContent side="right" align="start" className="bg-card text-foreground border-4 border-border text-lg px-4 py-3 pixel-shadow max-w-xs rounded-none font-sans">
                         Deep dive into how Lightning works with checkpoint quizzes. No programming required.
                       </TooltipContent>
                     </Tooltip>
@@ -300,7 +300,7 @@ export default function Home() {
                           CODE
                         </Link>
                       </TooltipTrigger>
-                      <TooltipContent side="right" align="start" className="bg-card text-foreground border-4 border-border text-lg px-4 py-3 pixel-shadow max-w-xs rounded-none">
+                      <TooltipContent side="right" align="start" className="bg-card text-foreground border-4 border-border text-lg px-4 py-3 pixel-shadow max-w-xs rounded-none font-sans">
                         Same content plus hands-on coding exercises where you build key parts of the protocol.
                       </TooltipContent>
                     </Tooltip>
