@@ -288,6 +288,10 @@ export default function CheckpointQuestion({
   }, [completedButUnclaimed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-claim reward via lightning address when correct answer is submitted
+  const willAutoPay = submitted && correct && !autoPaid && !autoPaySending && !claiming
+    && !rewardK1 && (!alreadyCompleted || completedButUnclaimed)
+    && canClaimRewards && !!lightningAddress && !!sessionToken;
+
   useEffect(() => {
     if (
       submitted &&
@@ -303,7 +307,7 @@ export default function CheckpointQuestion({
     ) {
       handleClaimReward("address");
     }
-  }, [submitted, correct]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [submitted, correct, lightningAddress]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (alreadyCompleted && !rewardLnurl && !completedButUnclaimed) {
     return (
@@ -461,7 +465,7 @@ export default function CheckpointQuestion({
             </div>
           )}
 
-          {!rewardLnurl && (!alreadyCompleted || completedButUnclaimed) && !autoPaid && !autoPaySending && !claiming && !showClaimChoice && (
+          {!rewardLnurl && (!alreadyCompleted || completedButUnclaimed) && !autoPaid && !autoPaySending && !claiming && !showClaimChoice && !willAutoPay && (
             <div>
               {authenticated && !canClaimRewards && (
                 <div className={`border-2 ${dark ? "border-[#2a3552] bg-[#0b1220]" : "border-border bg-background"} p-3 mb-3`}>

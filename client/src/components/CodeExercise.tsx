@@ -626,7 +626,7 @@ export default function CodeExercise({
     ) {
       handleClaimReward("address");
     }
-  }, [allPassed]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [allPassed, lightningAddress]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Auto-pay for already-completed but unclaimed exercises ──────────────
   const completedButUnclaimed = alreadyCompleted && (!claimInfo || claimInfo.amountSats === 0);
