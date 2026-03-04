@@ -469,13 +469,13 @@ export function CommitmentPairDiagram() {
           })()}
 
           {/* Legend */}
-          <rect x={W / 2 - 170} y={legendY} width={340} height={34} rx="8" fill="#fefdfb" stroke="#e8dcc8" strokeWidth="0.75" />
-          <rect x={W / 2 - 152} y={legendY + 10} width={14} height={14} rx="3" fill="#fdf8e8" stroke="#d4a038" strokeWidth="1" strokeDasharray="3 1.5" />
-          <text x={W / 2 - 132} y={legendY + 22} fontSize="11" fill="#6b5d4f">
+          <rect x={W / 2 - 210} y={legendY} width={420} height={34} rx="8" fill="#fefdfb" stroke="#e8dcc8" strokeWidth="0.75" />
+          <rect x={W / 2 - 190} y={legendY + 10} width={14} height={14} rx="3" fill="#fdf8e8" stroke="#d4a038" strokeWidth="1" strokeDasharray="3 1.5" />
+          <text x={W / 2 - 170} y={legendY + 22} fontSize="11" fill="#6b5d4f">
             Delayed (your own)
           </text>
-          <rect x={W / 2 + 20} y={legendY + 10} width={14} height={14} rx="3" fill="white" stroke="#e8dcc8" strokeWidth="1" />
-          <text x={W / 2 + 40} y={legendY + 22} fontSize="11" fill="#6b5d4f">
+          <rect x={W / 2 + 18} y={legendY + 10} width={14} height={14} rx="3" fill="white" stroke="#e8dcc8" strokeWidth="1" />
+          <text x={W / 2 + 38} y={legendY + 22} fontSize="11" fill="#6b5d4f">
             Immediate (counterparty)
           </text>
         </svg>

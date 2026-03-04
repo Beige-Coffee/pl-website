@@ -201,6 +201,37 @@ export default function AdminPage() {
     });
   };
 
+  const [resetBanner, setResetBanner] = useState<string | null>(null);
+
+  const resetCheckpoint = async (userId: string, checkpointId?: string) => {
+    const msg = checkpointId
+      ? `Reset checkpoint "${checkpointId}" for this user?`
+      : "Reset ALL checkpoints for this user? This cannot be undone.";
+    if (!confirm(msg)) return;
+    setResetBanner(null);
+    try {
+      const res = await fetch("/api/admin/reset-checkpoints", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: storedPassword, userId, checkpointId }),
+      });
+      if (res.ok) {
+        setData((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            checkpointCompletions: checkpointId
+              ? prev.checkpointCompletions.filter(c => !(c.userId === userId && c.checkpointId === checkpointId))
+              : prev.checkpointCompletions.filter(c => c.userId !== userId),
+          };
+        });
+        if (!checkpointId) {
+          setResetBanner("/lightning-tutorial?fresh=1");
+        }
+      }
+    } catch {}
+  };
+
   const toggleReveal = (donationId: string) => {
     setRevealedMessages((prev) => {
       const next = new Set(prev);
@@ -866,13 +897,31 @@ export default function AdminPage() {
                           {selInfo?.email && <div className="text-xs text-foreground/40" style={{ fontFamily: sansFont }}>{selInfo.email}</div>}
                           <div className="text-xs text-foreground/30 font-mono mt-0.5">{sel}</div>
                         </div>
-                        <div className="text-right">
-                          <div className={`font-pixel text-lg ${selTotal === CHECKPOINT_ORDER.length ? "text-green-600" : ""}`}>
-                            {selTotal}/{CHECKPOINT_ORDER.length}
+                        <div className="text-right flex items-center gap-3">
+                          <div>
+                            <div className={`font-pixel text-lg ${selTotal === CHECKPOINT_ORDER.length ? "text-green-600" : ""}`}>
+                              {selTotal}/{CHECKPOINT_ORDER.length}
+                            </div>
+                            <div className="font-pixel text-[9px] text-foreground/40">CHECKPOINTS</div>
                           </div>
-                          <div className="font-pixel text-[9px] text-foreground/40">CHECKPOINTS</div>
+                          {selTotal > 0 && (
+                            <button
+                              onClick={() => sel && resetCheckpoint(sel)}
+                              className="font-pixel text-[9px] px-2 py-1 bg-red-500/10 text-red-600 border border-red-500/30 hover:bg-red-500/20 transition-colors cursor-pointer"
+                            >
+                              RESET ALL
+                            </button>
+                          )}
                         </div>
                       </div>
+
+                      {resetBanner && (
+                        <div className="mb-3 p-2 bg-green-500/10 border border-green-500/30 text-sm" style={{ fontFamily: sansFont }}>
+                          <span className="text-green-600 font-semibold">Reset complete.</span>{" "}
+                          Open tutorial with fresh cache:{" "}
+                          <a href={resetBanner} target="_blank" rel="noopener noreferrer" className="underline text-blue-600">{resetBanner}</a>
+                        </div>
+                      )}
 
                       {/* Checkpoint list */}
                       <div className="space-y-1.5" style={{ fontFamily: sansFont }}>
@@ -894,6 +943,15 @@ export default function AdminPage() {
                                   <br/>
                                   {new Date(date).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
                                 </div>
+                              )}
+                              {done && (
+                                <button
+                                  onClick={() => sel && resetCheckpoint(sel, cp.id)}
+                                  className="text-[10px] px-1.5 py-0.5 text-red-500/60 hover:text-red-600 hover:bg-red-500/10 border border-transparent hover:border-red-500/30 transition-colors cursor-pointer"
+                                  title={`Reset ${cp.id}`}
+                                >
+                                  ✕
+                                </button>
                               )}
                             </div>
                           );

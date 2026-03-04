@@ -82,7 +82,7 @@ export function TransactionDiagram({ data }: TransactionDiagramProps) {
   const viewBoxH = cardH + 24;
 
   return (
-    <div ref={containerRef} className="vl-card-3d relative my-6 select-none" style={{ maxWidth: 680, margin: "0 auto" }}>
+    <div ref={containerRef} className="vl-card-3d relative my-6 select-none" style={{ maxWidth: 680, margin: "0 auto", padding: "0 12%" }}>
       <div className="vl-card-3d-inner" style={{ overflow: "visible" }}>
         <svg
           viewBox={`0 0 ${viewBoxW} ${viewBoxH}`}

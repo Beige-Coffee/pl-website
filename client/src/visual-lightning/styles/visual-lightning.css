@@ -119,19 +119,35 @@
   top: 0;
   height: 100vh;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   padding: 24px 12px 80px;
   box-sizing: border-box;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--vl-border) transparent;
+}
+
+.vl-visual-panel::-webkit-scrollbar {
+  width: 4px;
+}
+.vl-visual-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+.vl-visual-panel::-webkit-scrollbar-thumb {
+  background: var(--vl-border);
+  border-radius: 2px;
 }
 
 .vl-visual-panel-inner {
   width: 100%;
   perspective: 1200px;
+  margin: auto 0;
 }
 
-/* Let diagrams scale up to fill the visual panel on large screens */
+/* Diagrams fill their panel width, capped by component maxWidth */
 .vl-visual-panel .vl-card-3d {
+  width: 100% !important;
   max-width: 100% !important;
 }
 

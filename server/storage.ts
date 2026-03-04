@@ -37,6 +37,8 @@ export interface IStorage {
   cancelPendingWithdrawals(userId: string): Promise<void>;
   hasCompletedCheckpoint(userId: string, checkpointId: string): Promise<boolean>;
   markCheckpointCompleted(userId: string, checkpointId: string): Promise<void>;
+  deleteCheckpointCompletion(userId: string, checkpointId: string): Promise<void>;
+  deleteAllCheckpointCompletions(userId: string): Promise<void>;
   getCompletedCheckpoints(userId: string): Promise<{ checkpointId: string; amountSats: number; paidAt: string }[]>;
   getPaidWithdrawalForCheckpoint(userId: string, checkpointId: string): Promise<LnurlWithdrawal | undefined>;
   cancelPendingWithdrawalsForCheckpoint(userId: string, checkpointId: string): Promise<void>;
@@ -51,6 +53,7 @@ export interface IStorage {
   markDonationSpam(id: string): Promise<void>;
   getUserProgress(userId: string): Promise<Record<string, string>>;
   setUserProgress(userId: string, key: string, value: string): Promise<void>;
+  deleteAllUserProgress(userId: string): Promise<void>;
   createFeedback(data: InsertFeedback): Promise<Feedback>;
   setFeedbackGithubUrl(id: string, url: string): Promise<void>;
 }
@@ -216,6 +219,16 @@ export class DatabaseStorage implements IStorage {
       .onConflictDoNothing({ target: [checkpointCompletions.userId, checkpointCompletions.checkpointId] });
   }
 
+  async deleteCheckpointCompletion(userId: string, checkpointId: string): Promise<void> {
+    await db.delete(checkpointCompletions)
+      .where(and(eq(checkpointCompletions.userId, userId), eq(checkpointCompletions.checkpointId, checkpointId)));
+  }
+
+  async deleteAllCheckpointCompletions(userId: string): Promise<void> {
+    await db.delete(checkpointCompletions)
+      .where(eq(checkpointCompletions.userId, userId));
+  }
+
   async getCompletedCheckpoints(userId: string): Promise<{ checkpointId: string; amountSats: number; paidAt: string }[]> {
     // Get all completions from the checkpointCompletions table
     const completions = await db.select({
@@ -264,17 +277,6 @@ export class DatabaseStorage implements IStorage {
         amountSats: paid?.amountSats ?? 0,
         paidAt: paid?.paidAt ?? c.createdAt.toISOString(),
       });
-    }
-
-    // Include any paid withdrawals not yet in completions table (legacy data)
-    for (const [cpId, paid] of paidMap) {
-      if (!seen.has(cpId)) {
-        results.push({
-          checkpointId: cpId,
-          amountSats: paid.amountSats,
-          paidAt: paid.paidAt,
-        });
-      }
     }
 
     return results;
@@ -391,6 +393,10 @@ export class DatabaseStorage implements IStorage {
         target: [userProgress.userId, userProgress.key],
         set: { value, updatedAt: new Date() },
       });
+  }
+
+  async deleteAllUserProgress(userId: string): Promise<void> {
+    await db.delete(userProgress).where(eq(userProgress.userId, userId));
   }
 
   async createFeedback(data: InsertFeedback): Promise<Feedback> {

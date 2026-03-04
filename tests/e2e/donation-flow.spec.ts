@@ -1,46 +1,33 @@
 import { test, expect } from "@playwright/test";
+import { navigateToChapter } from "./helpers";
 
 test.describe("Donation flow", () => {
-  test("donation page loads", async ({ page }) => {
-    // Navigate to the donate/pay-it-forward section
+  test("Pay It Forward chapter loads", async ({ page }) => {
     await page.goto("/lightning-tutorial");
-    await page.waitForTimeout(2000);
+    await expect(page.getByTestId("button-sidebar-collapse")).toBeVisible({ timeout: 10_000 });
 
-    const donateLink = page.locator(
-      'a:has-text("Pay It Forward"), a:has-text("Donate"), a:has-text("donate")'
-    );
-    if (await donateLink.count() > 0) {
-      await donateLink.first().click();
-      await page.waitForTimeout(3000);
+    await navigateToChapter(page, "pay-it-forward");
 
-      // Should see donation-related content
-      const donationContent = page.locator(
-        '[class*="donation"], [class*="donate"], input[type="number"]'
-      );
-      if (await donationContent.count() > 0) {
-        await expect(donationContent.first()).toBeVisible();
-      }
-    }
+    // Should render the donation/pay-it-forward content
+    const article = page.getByTestId("container-article");
+    await expect(article).toBeVisible();
+    const text = await article.innerText();
+    expect(text.length).toBeGreaterThan(50);
   });
 
-  test("donation wall displays", async ({ page }) => {
-    await page.goto("/lightning-tutorial");
-    await page.waitForTimeout(2000);
+  test("donation wall or donation content renders", async ({ page }) => {
+    await page.goto("/lightning-tutorial?chapter=pay-it-forward");
+    await expect(page.getByTestId("container-article")).toBeVisible({ timeout: 10_000 });
 
-    const donateLink = page.locator(
-      'a:has-text("Pay It Forward"), a:has-text("Donate"), a:has-text("donate")'
-    );
-    if (await donateLink.count() > 0) {
-      await donateLink.first().click();
-      await page.waitForTimeout(3000);
-
-      // Look for donation wall/list
-      const wall = page.locator(
-        '[class*="wall"], [class*="donation-list"], [class*="donors"]'
-      );
-      if (await wall.count() > 0) {
-        await expect(wall.first()).toBeVisible();
-      }
-    }
+    // The pay-it-forward section should have some donation-related UI
+    const article = page.getByTestId("container-article");
+    const text = await article.innerText();
+    // Should mention donations, sats, or pay it forward
+    const hasDonationContent =
+      text.toLowerCase().includes("donat") ||
+      text.toLowerCase().includes("sat") ||
+      text.toLowerCase().includes("pay it forward") ||
+      text.toLowerCase().includes("lightning");
+    expect(hasDonationContent).toBe(true);
   });
 });

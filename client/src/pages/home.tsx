@@ -198,16 +198,14 @@ export default function Home() {
                   <div className="flex flex-row md:flex-col gap-2 shrink-0">
                     <Tooltip delayDuration={0}>
                       <TooltipTrigger asChild>
-                        <Link
-                          href="/lightning-tutorial"
-                          onClick={handleReadClick}
-                          className="bg-primary text-foreground px-6 py-2.5 font-pixel text-sm border-2 border-border hover:bg-primary/80 transition-colors pixel-shadow active:translate-x-[2px] active:translate-y-[2px] active:shadow-none text-center flex-1 md:flex-none"
+                        <span
+                          className="bg-muted text-muted-foreground px-6 py-2.5 font-pixel text-sm border-2 border-muted-foreground/30 cursor-not-allowed pixel-shadow text-center flex-1 md:flex-none opacity-75"
                         >
                           READ
-                        </Link>
+                        </span>
                       </TooltipTrigger>
-                      <TooltipContent side="bottom" className="bg-card text-foreground border-4 border-border text-base px-3 py-2 pixel-shadow max-w-xs rounded-none">
-                        Deep dive into how Lightning works with checkpoint quizzes. No programming required.
+                      <TooltipContent side="right" align="start" className="bg-card text-foreground border-4 border-border text-lg px-4 py-3 pixel-shadow max-w-xs rounded-none">
+                        Coming soon
                       </TooltipContent>
                     </Tooltip>
                     <Tooltip delayDuration={0}>
@@ -219,7 +217,7 @@ export default function Home() {
                           CODE
                         </button>
                       </TooltipTrigger>
-                      <TooltipContent side="bottom" className="bg-card text-foreground border-4 border-border text-base px-3 py-2 pixel-shadow max-w-xs rounded-none">
+                      <TooltipContent side="right" align="start" className="bg-card text-foreground border-4 border-border text-lg px-4 py-3 pixel-shadow max-w-xs rounded-none">
                         Same content plus hands-on coding exercises where you build key parts of the protocol.
                       </TooltipContent>
                     </Tooltip>
@@ -289,7 +287,7 @@ export default function Home() {
                           READ
                         </Link>
                       </TooltipTrigger>
-                      <TooltipContent side="bottom" className="bg-card text-foreground border-4 border-border text-base px-3 py-2 pixel-shadow max-w-xs rounded-none">
+                      <TooltipContent side="right" align="start" className="bg-card text-foreground border-4 border-border text-lg px-4 py-3 pixel-shadow max-w-xs rounded-none">
                         Deep dive into how Lightning works with checkpoint quizzes. No programming required.
                       </TooltipContent>
                     </Tooltip>
@@ -303,7 +301,7 @@ export default function Home() {
                           CODE
                         </Link>
                       </TooltipTrigger>
-                      <TooltipContent side="bottom" className="bg-card text-foreground border-4 border-border text-base px-3 py-2 pixel-shadow max-w-xs rounded-none">
+                      <TooltipContent side="right" align="start" className="bg-card text-foreground border-4 border-border text-lg px-4 py-3 pixel-shadow max-w-xs rounded-none">
                         Same content plus hands-on coding exercises where you build key parts of the protocol.
                       </TooltipContent>
                     </Tooltip>

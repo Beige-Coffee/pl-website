@@ -29,7 +29,7 @@ import { preloadWorker } from "../lib/pyodide-runner";
 import { PanelStateContext, usePanelStateProvider, usePanelState } from "../hooks/use-panel-state";
 
 // --- Checkpoint questions embedded inline in tutorial chapters ---
-const CHECKPOINT_QUESTIONS: Record<string, {
+export const CHECKPOINT_QUESTIONS: Record<string, {
   question: string;
   options: string[];
   answer: number;
@@ -271,7 +271,7 @@ type Chapter = {
   file?: string;
 };
 
-const chapters: Chapter[] = [
+export const chapters: Chapter[] = [
   {
     id: "intro",
     title: "Intro to Payment Channels",
@@ -472,28 +472,28 @@ const chapters: Chapter[] = [
     title: "Received HTLCs",
     section: "HTLCs",
     kind: "md",
-    file: "/lightning_tutorial/6.2-received-htlcs.md",
+    file: "/lightning_tutorial/6.7-received-htlcs.md",
   },
   {
     id: "htlc-fees-dust",
     title: "HTLC Commitment Outputs",
     section: "HTLCs",
     kind: "md",
-    file: "/lightning_tutorial/6.3-htlc-fees-dust.md",
+    file: "/lightning_tutorial/6.8-htlc-fees-dust.md",
   },
   {
     id: "get-htlc-commitment",
     title: "Inspect HTLC Commitment",
     section: "HTLCs",
     kind: "md",
-    file: "/lightning_tutorial/6.7-get-htlc-commitment.md",
+    file: "/lightning_tutorial/6.9-get-htlc-commitment.md",
   },
   {
     id: "get-htlc-timeout",
     title: "Inspect HTLC Timeout",
     section: "HTLCs",
     kind: "md",
-    file: "/lightning_tutorial/6.8-get-htlc-timeout.md",
+    file: "/lightning_tutorial/6.10-get-htlc-timeout.md",
   },
   {
     id: "closing-channels",
@@ -517,7 +517,7 @@ const chapters: Chapter[] = [
   },
 ];
 
-const sectionOrder: Chapter["section"][] = [
+export const sectionOrder: Chapter["section"][] = [
   "Introduction",
   "Keys & Derivation",
   "Payment Channels",
@@ -529,7 +529,7 @@ const sectionOrder: Chapter["section"][] = [
   "Pay It Forward",
 ];
 
-const CHAPTER_REQUIREMENTS: Record<string, {
+export const CHAPTER_REQUIREMENTS: Record<string, {
   checkpoints: string[];
   exercises: string[];
 }> = {
@@ -947,6 +947,25 @@ function ProfileDropdown({
 }
 
 function LightningTutorialShell({ activeId }: { activeId: string }) {
+  // ?fresh=1 clears all tutorial caches and reloads with a clean slate
+  useState(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("fresh") === "1") {
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.startsWith("pl-checkpoint-") || key.startsWith("pl-exercise-") || key === "pl-auth-cache" || key === "pl-progress-cache")) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach(k => localStorage.removeItem(k));
+      params.delete("fresh");
+      const clean = params.toString();
+      window.location.replace(window.location.pathname + (clean ? `?${clean}` : ""));
+    }
+  });
+
   const [location, setLocation] = useLocation();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const auth = useAuth();

@@ -111,11 +111,97 @@ h1{font-family:'Press Start 2P',monospace;font-size:14px;color:${color};margin:0
 p{font-size:18px;color:#1a1a1a;line-height:1.6;margin:0 0 24px;}
 a{display:inline-block;background:#FFD700;color:#000;font-family:'Press Start 2P',monospace;font-size:11px;padding:14px 28px;text-decoration:none;border:2px solid #b8860b;}
 a:hover{opacity:0.9;}</style></head>
-<body><div class="box"><div class="icon">${icon}</div>
+<body>${success ? '<script>try{localStorage.removeItem("pl-auth-cache")}catch(e){}</script>' : ''}
+<div class="box"><div class="icon">${icon}</div>
 <h1>${success ? "VERIFIED" : "ERROR"}</h1>
 <p>${message}</p>
-<a href="/noise-tutorial">BACK TO TUTORIAL</a></div></body></html>`;
+<a href="/">BACK TO HOME</a></div></body></html>`;
 }
+
+// Checkpoint questions — server-side answer key (index of correct option)
+// Exported for content integrity tests
+export const CHECKPOINT_ANSWER_KEY: Record<string, number> = {
+  "pubkey-compression": 1,
+  "hash-preimage": 2,
+  "ecdh-security": 1,
+  "hkdf-purpose": 0,
+  "nonce-reuse": 2,
+  "setup-wrong-key": 1,
+  "act2-both-ephemeral": 3,
+  "act3-nonce-one": 2,
+  "message-length-limit": 0,
+  // Coding exercise IDs — answer 0 means "all tests passed"
+  "exercise-generate-keypair": 0,
+  "exercise-ecdh": 0,
+  "exercise-hkdf": 0,
+  "exercise-init-state": 0,
+  "exercise-act1-initiator": 0,
+  "exercise-act1-responder": 0,
+  "exercise-act2-responder": 0,
+  "exercise-act2-initiator": 0,
+  "exercise-act3-initiator": 0,
+  "exercise-encrypt": 0,
+  "exercise-decrypt": 0,
+  "exercise-key-rotation": 0,
+  // Lightning tutorial drag-drop exercise (client validates matches, always sends 0)
+  "course-tools-match": 0,
+  // Lightning tutorial checkpoint questions
+  "channel-fairness": 1,
+  "payment-channels-scaling": 1,
+  "asymmetric-commits": 1,
+  "funding-multisig": 1,
+  "pubkey-sorting": 1,
+  "bip32-derivation": 1,
+  "revocation-purpose": 2,
+  "revocation-key-construction": 1,
+  "revocation-secret-exchange": 1,
+  "commitment-secret-algorithm": 1,
+  "csv-purpose": 1,
+  "obscured-commitment": 2,
+  "p2wsh-wrapping": 1,
+  "htlc-dust": 2,
+  "htlc-timeout-vs-success": 1,
+  "htlc-preimage-purpose": 1,
+  "offered-vs-received": 1,
+  "witness-structure": 2,
+  "fee-deduction": 1,
+  "static-remotekey": 2,
+  // Checkpoint group IDs (answer 0 = all questions correct)
+  "crypto-review": 0,
+  // Exercise IDs (answer 0 = tests passed)
+  "ln-exercise-channel-key-manager": 0,
+  "ln-exercise-funding-script": 0,
+  "ln-exercise-funding-tx": 0,
+  "ln-exercise-sign-input": 0,
+  "ln-exercise-revocation-pubkey": 0,
+  "ln-exercise-revocation-privkey": 0,
+  "ln-exercise-commitment-secret": 0,
+  "ln-exercise-per-commitment-point": 0,
+  "ln-exercise-derive-pubkey": 0,
+  "ln-exercise-derive-privkey": 0,
+  "ln-exercise-to-remote-script": 0,
+  "ln-exercise-to-local-script": 0,
+  "ln-exercise-obscure-factor": 0,
+  "ln-exercise-obscured-commitment": 0,
+  "ln-exercise-commitment-outputs": 0,
+  "ln-exercise-sort-outputs": 0,
+  "ln-exercise-commitment-tx": 0,
+  "ln-exercise-get-commitment-keys": 0,
+  "ln-exercise-finalize-commitment": 0,
+  "ln-exercise-htlc-outputs": 0,
+  "ln-exercise-commitment-tx-htlc": 0,
+  "ln-exercise-offered-htlc-script": 0,
+  "ln-exercise-received-htlc-script": 0,
+  "ln-exercise-htlc-timeout-tx": 0,
+  "ln-exercise-htlc-success-tx": 0,
+  "ln-exercise-finalize-htlc-timeout": 0,
+  "ln-exercise-finalize-htlc-success": 0,
+  // TX Generator IDs (answer 0 = successful generation)
+  "gen-funding": 0,
+  "gen-commitment": 0,
+  "gen-htlc-commitment": 0,
+  "gen-htlc-timeout": 0,
+};
 
 export async function registerRoutes(app: Express): Promise<Server> {
 
@@ -409,89 +495,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const REWARD_AMOUNT_MSATS = REWARD_AMOUNT_SATS * 1000;
   const WITHDRAWAL_TTL_MS = 5 * 60 * 1000;
 
-  // Checkpoint questions — server-side answer key (index of correct option)
-  const CHECKPOINT_ANSWER_KEY: Record<string, number> = {
-    "pubkey-compression": 1,
-    "hash-preimage": 2,
-    "ecdh-security": 1,
-    "hkdf-purpose": 0,
-    "nonce-reuse": 2,
-    "setup-wrong-key": 1,
-    "act2-both-ephemeral": 3,
-    "act3-nonce-one": 2,
-    "message-length-limit": 0,
-    // Coding exercise IDs — answer 0 means "all tests passed"
-    "exercise-generate-keypair": 0,
-    "exercise-ecdh": 0,
-    "exercise-hkdf": 0,
-    "exercise-init-state": 0,
-    "exercise-act1-initiator": 0,
-    "exercise-act1-responder": 0,
-    "exercise-act2-responder": 0,
-    "exercise-act2-initiator": 0,
-    "exercise-act3-initiator": 0,
-    "exercise-encrypt": 0,
-    "exercise-decrypt": 0,
-    "exercise-key-rotation": 0,
-    // Lightning tutorial drag-drop exercise (client validates matches, always sends 0)
-    "course-tools-match": 0,
-    // Lightning tutorial checkpoint questions
-    "channel-fairness": 1,
-    "payment-channels-scaling": 1,
-    "asymmetric-commits": 1,
-    "funding-multisig": 1,
-    "pubkey-sorting": 1,
-    "bip32-derivation": 1,
-    "revocation-purpose": 2,
-    "revocation-key-construction": 1,
-    "revocation-secret-exchange": 1,
-    "commitment-secret-algorithm": 1,
-    "csv-purpose": 1,
-    "obscured-commitment": 2,
-    "p2wsh-wrapping": 1,
-    "htlc-dust": 2,
-    "htlc-timeout-vs-success": 1,
-    "htlc-preimage-purpose": 1,
-    "offered-vs-received": 1,
-    "witness-structure": 2,
-    "fee-deduction": 1,
-    "static-remotekey": 2,
-    // Checkpoint group IDs (answer 0 = all questions correct)
-    "crypto-review": 0,
-    // Exercise IDs (answer 0 = tests passed)
-    "ln-exercise-channel-key-manager": 0,
-    "ln-exercise-funding-script": 0,
-    "ln-exercise-funding-tx": 0,
-    "ln-exercise-sign-input": 0,
-    "ln-exercise-revocation-pubkey": 0,
-    "ln-exercise-revocation-privkey": 0,
-    "ln-exercise-commitment-secret": 0,
-    "ln-exercise-per-commitment-point": 0,
-    "ln-exercise-derive-pubkey": 0,
-    "ln-exercise-derive-privkey": 0,
-    "ln-exercise-to-remote-script": 0,
-    "ln-exercise-to-local-script": 0,
-    "ln-exercise-obscure-factor": 0,
-    "ln-exercise-obscured-commitment": 0,
-    "ln-exercise-commitment-outputs": 0,
-    "ln-exercise-sort-outputs": 0,
-    "ln-exercise-commitment-tx": 0,
-    "ln-exercise-get-commitment-keys": 0,
-    "ln-exercise-finalize-commitment": 0,
-    "ln-exercise-htlc-outputs": 0,
-    "ln-exercise-commitment-tx-htlc": 0,
-    "ln-exercise-offered-htlc-script": 0,
-    "ln-exercise-received-htlc-script": 0,
-    "ln-exercise-htlc-timeout-tx": 0,
-    "ln-exercise-htlc-success-tx": 0,
-    "ln-exercise-finalize-htlc-timeout": 0,
-    "ln-exercise-finalize-htlc-success": 0,
-    // TX Generator IDs (answer 0 = successful generation)
-    "gen-funding": 0,
-    "gen-commitment": 0,
-    "gen-htlc-commitment": 0,
-    "gen-htlc-timeout": 0,
-  };
   const CHECKPOINT_REWARD_SATS = parseInt(process.env.CHECKPOINT_REWARD_SATS || "21", 10);
   const CHECKPOINT_REWARD_MSATS = CHECKPOINT_REWARD_SATS * 1000;
 
@@ -694,6 +697,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.get("/api/checkpoint/status", async (req: Request, res: Response) => {
+    res.set("Cache-Control", "no-store");
     try {
       const user = await getAuthUser(req);
       if (!user) {
@@ -710,6 +714,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // --- User progress (sync quiz/code across devices) ---
 
   app.get("/api/progress", async (req: Request, res: Response) => {
+    res.set("Cache-Control", "no-store");
     try {
       const user = await getAuthUser(req);
       if (!user) return res.status(401).json({ error: "Not authenticated" });
@@ -1303,6 +1308,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err: any) {
       console.error("[admin] Error marking donation as spam:", err.message);
       return res.status(500).json({ error: "Failed to update donation" });
+    }
+  });
+
+  app.post("/api/admin/reset-checkpoints", async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    if (ip !== ALLOWED_ADMIN_IP && !LOCALHOST_IPS.includes(ip)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+    if (!adminLimiter.check(ip)) {
+      return res.status(429).json({ error: "Too many attempts, try again later" });
+    }
+    const { password, userId, checkpointId } = req.body;
+    const adminPw = process.env.ADMIN_PASSWORD;
+    if (!adminPw || !password || password !== adminPw) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    if (!userId || typeof userId !== "string") {
+      return res.status(400).json({ error: "Missing userId" });
+    }
+    try {
+      if (checkpointId && typeof checkpointId === "string") {
+        await storage.deleteCheckpointCompletion(userId, checkpointId);
+      } else {
+        await storage.deleteAllCheckpointCompletions(userId);
+        await storage.deleteAllUserProgress(userId);
+      }
+      return res.json({ success: true });
+    } catch (err: any) {
+      console.error("[admin] Error resetting checkpoints:", err.message);
+      return res.status(500).json({ error: "Failed to reset checkpoints" });
     }
   });
 

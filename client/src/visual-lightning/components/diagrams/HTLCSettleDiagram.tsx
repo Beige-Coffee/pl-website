@@ -114,7 +114,7 @@ export function HTLCSettleDiagram() {
 
   const noPtr = { pointerEvents: "none" as const };
   const tooltip = hovered ? TOOLTIPS[hovered] : null;
-  const H = step === 0 ? 466 : 556;
+  const H = step === 0 ? 466 : 612;
 
   // Message card renderer
   function renderMsgCard(
@@ -354,7 +354,7 @@ export function HTLCSettleDiagram() {
 
               {/* === Row 1: update_fail_htlc === */}
               {(() => {
-                const rowY = nodeY + nodeR + 24;
+                const rowY = nodeY + nodeR + 46;
                 const cardW = 176;
                 const cardH = 52;
                 return (
@@ -397,7 +397,7 @@ export function HTLCSettleDiagram() {
 
               {/* === Row 2: update_fail_malformed_htlc === */}
               {(() => {
-                const rowY = nodeY + nodeR + 100;
+                const rowY = nodeY + nodeR + 128;
                 const cardW = 192;
                 const cardH = 52;
                 return (
@@ -436,10 +436,10 @@ export function HTLCSettleDiagram() {
 
               {/* === Failure Reasons Panel === */}
               {(() => {
-                const panelY = nodeY + nodeR + 172;
+                const panelY = nodeY + nodeR + 210;
                 const panelW = 480;
                 const panelX = (W - panelW) / 2;
-                const panelH = 132;
+                const panelH = 150;
                 const isH = hovered === "failure-reasons";
                 const rowH = 22;
                 const headerH = 28;

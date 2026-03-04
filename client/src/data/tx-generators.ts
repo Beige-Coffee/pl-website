@@ -382,11 +382,11 @@ alice_keys = derive_channel_keys(ALICE_SEED)
 bob_keys   = derive_channel_keys(BOB_SEED)
 
 FUNDING_AMOUNT   = 5_000_000  # 0.05 BTC
-TO_LOCAL_AMOUNT  = 4_987_640 + 10_860   # Alice's balance (includes fee budget)
+TO_LOCAL_AMOUNT  = 4_998_500 + 1_000   # Alice's balance (includes fee budget)
 TO_REMOTE_AMOUNT = 500   # Bob's balance
 TO_SELF_DELAY    = 144
 DUST_LIMIT       = 355
-FEERATE_PER_KW   = 15_000
+FEERATE_PER_KW   = 1_382
 COMMITMENT_NUMBER = 1
 
 # Derive per-commitment keys

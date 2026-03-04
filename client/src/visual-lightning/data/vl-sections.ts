@@ -62,7 +62,7 @@ export const VL_SECTIONS: VLSectionDef[] = [
           },
           {
             id: "s0-q2",
-            question: "What is the witness field used for in SegWit transactions?",
+            question: "What is the purpose of the witness field in a Bitcoin transaction?",
             options: [
               "Storing the recipient's address",
               "Holding signature and proof data",

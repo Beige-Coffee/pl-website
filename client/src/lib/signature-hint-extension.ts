@@ -48,10 +48,12 @@ const hintField = StateField.define<HintState>({
     // If doc changed, map the paren position so it tracks correctly
     if (tr.docChanged && value.tooltip) {
       const newParenPos = tr.changes.mapPos(value.parenPos, 1);
+      const cursorPos = tr.state.selection.main.head;
+      const lineStart = tr.state.doc.lineAt(cursorPos).from;
       return {
         ...value,
         parenPos: newParenPos,
-        tooltip: { ...value.tooltip, pos: newParenPos },
+        tooltip: { ...value.tooltip, pos: lineStart },
       };
     }
     return value;
@@ -115,7 +117,7 @@ function createTooltipDOM(info: SignatureInfo): Tooltip["create"] {
       dom.appendChild(paramsDiv);
     }
 
-    return { dom, offset: { x: 0, y: -4 } };
+    return { dom, offset: { x: 0, y: -8 } };
   };
 }
 
@@ -194,10 +196,11 @@ const sigHintListener = EditorView.updateListener.of((update) => {
       // Try static registry (synchronous)
       const info = lookupSignature(funcName);
       if (info) {
+        const lineStart = state.doc.lineAt(cursorPos).from;
         view.dispatch({
           effects: setHint.of({
             tooltip: {
-              pos: absParenPos,
+              pos: lineStart,
               above: true,
               create: createTooltipDOM(info),
             },
@@ -216,10 +219,11 @@ const sigHintListener = EditorView.updateListener.of((update) => {
         if (current.tooltip) return;
         const cursor = view.state.selection.main.head;
         if (cursor <= absParenPos) return;
+        const pyLineStart = view.state.doc.lineAt(cursor).from;
         view.dispatch({
           effects: setHint.of({
             tooltip: {
-              pos: absParenPos,
+              pos: pyLineStart,
               above: true,
               create: createTooltipDOM(pyInfo),
             },
@@ -268,6 +272,7 @@ const hintTheme = EditorView.baseTheme({
     backgroundColor: "#1e1e2e",
     color: "#d4d4d4",
     boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
+    transform: "translateY(-1.5em)",
   },
   ".cm-sig-hint-sig": {
     fontFamily: "monospace",
