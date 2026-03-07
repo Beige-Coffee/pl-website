@@ -27,6 +27,7 @@ import { TX_GENERATORS } from "../data/tx-generators";
 import { Tooltip, TooltipTrigger, TooltipContent } from "../components/ui/tooltip";
 import { preloadWorker } from "../lib/pyodide-runner";
 import { PanelStateContext, usePanelStateProvider, usePanelState } from "../hooks/use-panel-state";
+import { useIsMobile } from "../hooks/use-mobile";
 
 // --- Checkpoint questions embedded inline in tutorial chapters ---
 export const CHECKPOINT_QUESTIONS: Record<string, {
@@ -968,6 +969,7 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
 
   const [location, setLocation] = useLocation();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const isMobile = useIsMobile();
   const auth = useAuth();
   const { authenticated, loading: authLoading, logout, loginWithToken, setLightningAddress } = auth;
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -1041,6 +1043,7 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
 
   const [fileBrowserOpen, setFileBrowserOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
+  const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
   const toolsRef = useRef<HTMLDivElement>(null);
 
   const activeIndex = idxOf(activeId);
@@ -1205,7 +1208,7 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
 
   // Panel state for content-compressing side panels
   const panelState = usePanelStateProvider();
-  const panelPadding = panelState.activePanel ? panelState.panelWidth : 0;
+  const panelPadding = isMobile ? 0 : (panelState.activePanel ? panelState.panelWidth : 0);
   const panelTransition = panelState.isDragging ? "none" : "padding-right 300ms cubic-bezier(0.4, 0, 0.2, 1)";
 
   return (
@@ -1218,7 +1221,7 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
         <div className="flex items-center gap-2 md:gap-3">
           <button
             type="button"
-            className={`md:hidden font-pixel text-xs border-2 ${theme === "dark" ? "border-[#2a3552] bg-[#0f1930] hover:bg-[#132043]" : "border-border bg-card hover:bg-secondary"} px-2 py-1.5 transition-colors`}
+            className={`md:hidden font-pixel text-xs border-2 ${theme === "dark" ? "border-[#2a3552] bg-[#0f1930] hover:bg-[#132043]" : "border-border bg-card hover:bg-secondary"} px-2 py-2 transition-colors`}
             onClick={() => setMobileNavOpen((v) => !v)}
             data-testid="button-sidebar-toggle"
           >
@@ -1258,7 +1261,7 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
           <button
             type="button"
             onClick={() => setTheme((v) => (v === "dark" ? "light" : "dark"))}
-            className={`p-2 transition-colors ${theme === "dark" ? "text-slate-300 hover:text-slate-100" : "text-foreground/70 hover:text-foreground"}`}
+            className={`p-2 md:p-2 transition-colors ${theme === "dark" ? "text-slate-300 hover:text-slate-100" : "text-foreground/70 hover:text-foreground"}`}
             aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
             data-testid="button-theme-toggle"
           >
@@ -1335,13 +1338,14 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
       <div
         className="mx-auto w-full max-w-7xl grid gap-0"
         style={{
-          gridTemplateColumns: sidebarCollapsed ? `60px minmax(0, 1fr)` : `360px minmax(0, 1fr)`,
+          gridTemplateColumns: isMobile ? '1fr' : (sidebarCollapsed ? `60px minmax(0, 1fr)` : `360px minmax(0, 1fr)`),
         }}
       >
         {mobileNavOpen && (
           <div
             className="md:hidden fixed inset-0 bg-black/50 z-40"
             onClick={() => setMobileNavOpen(false)}
+            data-testid="overlay-mobile-nav"
           />
         )}
         <aside
@@ -1513,7 +1517,7 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
           </div>
         </aside>
 
-        <main className="p-5 md:p-10">
+        <main className="p-3 sm:p-5 md:p-10">
           <div className="mx-auto w-full max-w-[1200px]">
           <article
             className="noise-article mx-auto w-full max-w-[1100px]"
@@ -1639,6 +1643,62 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
               </>
             )}
           </div>
+
+          {/* Mobile TOOLS FAB */}
+          {isMobile && (
+            <div className="fixed bottom-4 right-4 z-50">
+              {mobileToolsOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setMobileToolsOpen(false)} />
+                  <div className={`absolute bottom-14 right-0 z-50 border-2 rounded shadow-xl min-w-[180px] ${
+                    theme === "dark"
+                      ? "bg-[#0b1220] border-[#2a3552]"
+                      : "bg-[#fdf9f2] border-[#d4c9a8]"
+                  }`} data-testid="container-mobile-tools-menu">
+                    <div className="grid gap-1 p-2">
+                      {[
+                        { label: "Scratchpad", panelId: "scratchpad" as const, testId: "button-mobile-tool-scratchpad" },
+                        { label: "Bitcoin Node", panelId: "node" as const, testId: "button-mobile-tool-node" },
+                        { label: "Files", panelId: null, testId: "button-mobile-tool-files" },
+                        { label: "Transactions", panelId: "notebook" as const, testId: "button-mobile-tool-notebook" },
+                      ].map((item) => (
+                        <button
+                          key={item.label}
+                          data-testid={item.testId}
+                          onClick={() => {
+                            if (item.panelId) {
+                              panelState.switchPanel(item.panelId);
+                            } else {
+                              setFileBrowserOpen(true);
+                            }
+                            setMobileToolsOpen(false);
+                          }}
+                          className={`w-full text-left border-2 px-3 py-3 min-h-[44px] transition-colors cursor-pointer ${
+                            theme === "dark"
+                              ? "bg-[#0f1930] border-[#2a3552] text-slate-100 hover:bg-[#132043]"
+                              : "bg-card border-[#d4c9a8] text-foreground hover:bg-secondary"
+                          }`}
+                        >
+                          <div className="text-[16px] leading-snug" style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>{item.label}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+              <button
+                onClick={() => setMobileToolsOpen((o) => !o)}
+                className={`w-12 h-12 rounded-full border-2 shadow-lg flex items-center justify-center font-pixel text-[10px] ${
+                  theme === "dark"
+                    ? "bg-[#0f1930] border-[#FFD700] text-[#FFD700]"
+                    : "bg-[#fdf9f2] border-[#b8860b] text-[#9a7200]"
+                }`}
+                data-testid="button-mobile-tools-toggle"
+              >
+                {mobileToolsOpen ? "X" : "\u2699"}
+              </button>
+            </div>
+          )}
 
           <Scratchpad theme={theme} />
           <NodeTerminal theme={theme} sessionToken={auth.sessionToken} authenticated={authenticated} />

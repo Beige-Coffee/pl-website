@@ -6,6 +6,7 @@ import { oneDark } from "@codemirror/theme-one-dark";
 import { syntaxHighlighting, defaultHighlightStyle } from "@codemirror/language";
 import { EXERCISE_GROUPS, LN_MODULE_DISPLAY_CODE, type ExerciseGroup } from "../lib/exercise-groups";
 import { LIGHTNING_EXERCISES } from "../data/lightning-exercises";
+import { useIsMobile } from "../hooks/use-mobile";
 
 // ─── Search highlight for CodeMirror ─────────────────────────────────────────
 
@@ -165,6 +166,7 @@ export default function ExerciseFileBrowser({
   onClose,
 }: ExerciseFileBrowserProps) {
   const dark = theme === "dark";
+  const isMobile = useIsMobile();
   const fileTree = useMemo(() => buildFileTree(), []);
   const currentGroupId = useMemo(
     () => getGroupForExercise(currentExerciseId),
@@ -441,40 +443,86 @@ export default function ExerciseFileBrowser({
     );
   };
 
+  // Build flat list of all groups for mobile dropdown
+  const allGroups = useMemo(() => {
+    const groups: Array<{ id: string; label: string }> = [{ id: "__ln__", label: "ln.py" }];
+    for (const dir of DIR_ORDER) {
+      for (const group of fileTree[dir] || []) {
+        groups.push({ id: group.id, label: group.label });
+      }
+    }
+    return groups;
+  }, [fileTree]);
+
   return (
     <div className="fixed inset-0 z-[9998] flex items-center justify-center" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className={`absolute inset-0 ${dark ? "bg-black/70" : "bg-black/40"} backdrop-blur-sm`} />
-      <div className={`relative w-[95vw] h-[90vh] flex border-2 ${borderColor} ${panelBg} shadow-2xl overflow-hidden`}>
+      <div className={`relative ${isMobile ? "w-full h-full" : "w-[95vw] h-[90vh]"} flex ${isMobile ? "flex-col" : ""} border-2 ${borderColor} ${panelBg} shadow-2xl overflow-hidden`}>
 
-        {/* Activity bar (narrow icon strip) */}
-        <div className={`w-10 shrink-0 ${activityBarBg} border-r ${borderColor} flex flex-col items-center pt-2 gap-1`}>
-          <button
-            type="button"
-            onClick={() => setSidebarMode("files")}
-            className={`p-2 transition-colors cursor-pointer ${
-              sidebarMode === "files"
-                ? `${goldText} ${dark ? "border-l-2 border-l-[#FFD700]" : "border-l-2 border-l-[#9a7200]"}`
-                : `${textMuted} ${dark ? "hover:text-slate-200" : "hover:text-black/70"} border-l-2 border-l-transparent`
-            }`}
-            title="Explorer"
-          >
-            <FileIcon size={20} />
-          </button>
-          <button
-            type="button"
-            onClick={() => setSidebarMode("search")}
-            className={`p-2 transition-colors cursor-pointer ${
-              sidebarMode === "search"
-                ? `${goldText} ${dark ? "border-l-2 border-l-[#FFD700]" : "border-l-2 border-l-[#9a7200]"}`
-                : `${textMuted} ${dark ? "hover:text-slate-200" : "hover:text-black/70"} border-l-2 border-l-transparent`
-            }`}
-            title="Search"
-          >
-            <SearchIcon size={20} />
-          </button>
-        </div>
+        {/* Mobile: compact header with dropdown */}
+        {isMobile && (
+          <div className={`flex items-center gap-2 px-3 py-2 border-b ${borderColor} shrink-0`}>
+            <select
+              value={selectedGroupId}
+              onChange={(e) => setSelectedGroupId(e.target.value)}
+              className={`flex-1 text-sm border px-2 py-2 min-h-[44px] ${
+                dark
+                  ? "bg-[#0f1930] border-[#2a3552] text-slate-200"
+                  : "bg-white border-[#d4c9a8] text-foreground"
+              }`}
+              style={{ ...sansFont, fontSize: "16px" }}
+              data-testid="select-mobile-file-browser"
+            >
+              {allGroups.map((g) => (
+                <option key={g.id} value={g.id}>{g.label}</option>
+              ))}
+            </select>
+            <button
+              onClick={onClose}
+              className={`font-pixel text-xs px-3 py-2 min-h-[44px] border transition-all cursor-pointer ${
+                dark
+                  ? "border-[#2a3552] text-slate-400 hover:text-slate-200 hover:bg-[#132043]"
+                  : "border-[#d4c9a8] text-black/50 hover:text-black hover:bg-[#e8dcc8]"
+              }`}
+              data-testid="button-mobile-file-browser-close"
+            >
+              CLOSE
+            </button>
+          </div>
+        )}
 
-        {/* Sidebar panel (files or search) */}
+        {/* Desktop: Activity bar (narrow icon strip) */}
+        {!isMobile && (
+          <div className={`w-10 shrink-0 ${activityBarBg} border-r ${borderColor} flex flex-col items-center pt-2 gap-1`}>
+            <button
+              type="button"
+              onClick={() => setSidebarMode("files")}
+              className={`p-2 transition-colors cursor-pointer ${
+                sidebarMode === "files"
+                  ? `${goldText} ${dark ? "border-l-2 border-l-[#FFD700]" : "border-l-2 border-l-[#9a7200]"}`
+                  : `${textMuted} ${dark ? "hover:text-slate-200" : "hover:text-black/70"} border-l-2 border-l-transparent`
+              }`}
+              title="Explorer"
+            >
+              <FileIcon size={20} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setSidebarMode("search")}
+              className={`p-2 transition-colors cursor-pointer ${
+                sidebarMode === "search"
+                  ? `${goldText} ${dark ? "border-l-2 border-l-[#FFD700]" : "border-l-2 border-l-[#9a7200]"}`
+                  : `${textMuted} ${dark ? "hover:text-slate-200" : "hover:text-black/70"} border-l-2 border-l-transparent`
+              }`}
+              title="Search"
+            >
+              <SearchIcon size={20} />
+            </button>
+          </div>
+        )}
+
+        {/* Desktop: Sidebar panel (files or search) */}
+        {!isMobile && (
         <div className={`w-72 shrink-0 border-r ${borderColor} ${sidebarBg} flex flex-col overflow-hidden`}>
 
           {/* ── Files view ──────────────────────────────────────────── */}
@@ -649,10 +697,12 @@ export default function ExerciseFileBrowser({
             </>
           )}
         </div>
+        )}
 
         {/* Content - code view */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          {/* File header */}
+          {/* File header (desktop only — mobile uses the compact header above) */}
+          {!isMobile && (
           <div className={`px-4 py-2.5 border-b ${borderColor} flex items-center justify-between shrink-0`}>
             <div className="flex items-center gap-3">
               <span className={`text-base font-semibold ${dark ? "text-slate-200" : "text-black/80"}`} style={sansFont}>
@@ -683,6 +733,7 @@ export default function ExerciseFileBrowser({
               CLOSE
             </button>
           </div>
+          )}
 
           {/* Exercise tabs within file (hidden for ln.py) */}
           {selectedGroup && !isLnModule && (

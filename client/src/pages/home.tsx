@@ -7,60 +7,17 @@ import { useAuth } from "../hooks/use-auth";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
 export default function Home() {
-  const [showMobileWarning, setShowMobileWarning] = useState(false);
   const [showCodeModal, setShowCodeModal] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [, navigate] = useLocation();
   const { authenticated, logout, loginWithToken, email, pubkey } = useAuth();
 
-  const checkMobile = () => {
-    if (window.innerWidth < 768) {
-      setShowMobileWarning(true);
-      return true;
-    }
-    return false;
-  };
-
-  const handleReadClick = (e: React.MouseEvent) => {
-    if (checkMobile()) e.preventDefault();
-  };
-
   const handleCodeClick = () => {
-    if (!checkMobile()) setShowCodeModal(true);
-  };
-
-  const handleNoiseClick = (e: React.MouseEvent) => {
-    if (checkMobile()) e.preventDefault();
+    setShowCodeModal(true);
   };
 
   return (
     <div className="min-h-screen flex flex-col relative z-10">
-      {/* Mobile Warning Modal */}
-      {showMobileWarning && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-card border-4 border-border p-6 pixel-shadow max-w-sm w-full relative">
-            <button
-              onClick={() => setShowMobileWarning(false)}
-              className="absolute top-2 right-2 font-pixel text-xl hover:text-primary"
-            >
-              X
-            </button>
-            <h3 className="font-pixel text-xl mb-4 text-center">Desktop Only</h3>
-            <p className="font-mono text-center mb-6">
-              Please note: This course is designed for desktop browsers and doesn't currently support mobile devices.
-            </p>
-            <div className="flex justify-center">
-              <button
-                onClick={() => setShowMobileWarning(false)}
-                className="bg-primary text-foreground px-4 py-2 font-pixel text-sm border-2 border-border hover:bg-primary/80 transition-colors"
-              >
-                GOT IT
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Code Language Modal */}
       {showCodeModal && (
         <div
@@ -280,7 +237,6 @@ export default function Home() {
                       <TooltipTrigger asChild>
                         <Link
                           href="/noise-tutorial"
-                          onClick={handleNoiseClick}
                           className="bg-primary text-foreground px-6 py-2.5 font-pixel text-sm border-2 border-border hover:bg-primary/80 transition-colors pixel-shadow active:translate-x-[2px] active:translate-y-[2px] active:shadow-none text-center flex-1 md:flex-none"
                         >
                           READ
@@ -294,7 +250,6 @@ export default function Home() {
                       <TooltipTrigger asChild>
                         <Link
                           href="/noise-tutorial"
-                          onClick={handleNoiseClick}
                           className="bg-foreground text-background px-6 py-2.5 font-pixel text-sm border-2 border-border hover:bg-foreground/80 transition-colors pixel-shadow active:translate-x-[2px] active:translate-y-[2px] active:shadow-none text-center flex-1 md:flex-none"
                         >
                           CODE

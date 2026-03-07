@@ -127,11 +127,11 @@ export default function Learn() {
 
                 {/* Text — right side, vertically centered */}
                 <div className="p-6 md:p-8 flex flex-col justify-center min-h-0">
-                  <h2 className="font-pixel text-lg md:text-xl group-hover:text-primary transition-colors">
+                  <h2 className="font-pixel text-xl md:text-2xl group-hover:text-primary transition-colors">
                     {resource.title}
                   </h2>
                   <p
-                    className="text-sm md:text-base text-foreground/70 mt-3 leading-relaxed"
+                    className="text-base md:text-lg text-foreground/70 mt-3 leading-relaxed"
                     style={{
                       fontFamily:
                         'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',

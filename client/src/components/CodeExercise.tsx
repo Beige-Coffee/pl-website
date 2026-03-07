@@ -17,6 +17,8 @@ import { signatureHints } from "../lib/signature-hint-extension";
 import { cleanErrorMessage } from "../lib/error-cleanup";
 import { QRCodeSVG } from "qrcode.react";
 import ExerciseFileBrowser from "./ExerciseFileBrowser";
+import { useIsMobile } from "../hooks/use-mobile";
+import MobileKeyboardToolbar from "./MobileKeyboardToolbar";
 
 // ─── Light Mode Syntax Highlighting ──────────────────────────────────────────
 
@@ -180,6 +182,9 @@ export default function CodeExercise({
   futureExercises,
 }: CodeExerciseProps) {
   const dark = theme === "dark";
+  const isMobile = useIsMobile();
+  const [mobileTab, setMobileTab] = useState<"code" | "output" | "hints">("code");
+  const [editorFocused, setEditorFocused] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const storageKey = `pl-exercise-${exerciseId}`;
@@ -442,11 +447,9 @@ export default function CodeExercise({
     const { code: fullFile, editableFrom, editableTo } = assembleFullFile(getStudentCode());
 
     const extensions = [
-      lineNumbers(),
-      highlightActiveLineGutter(),
+      ...(isMobile ? [] : [lineNumbers(), highlightActiveLineGutter(), foldGutter(), rectangularSelection(), crosshairCursor()]),
       highlightSpecialChars(),
       history(),
-      foldGutter(),
       drawSelection(),
       dropCursor(),
       EditorState.allowMultipleSelections.of(true),
@@ -461,8 +464,7 @@ export default function CodeExercise({
         override: [pyodideCompleteSource, wordCompleteSource],
       }),
       signatureHints(),
-      rectangularSelection(),
-      crosshairCursor(),
+      ...(isMobile ? [EditorView.lineWrapping] : []),
       highlightActiveLine(),
       highlightSelectionMatches(),
       keymap.of([
@@ -470,7 +472,7 @@ export default function CodeExercise({
         ...completionKeymap,
         ...searchKeymap,
         ...historyKeymap,
-        ...foldKeymap,
+        ...(isMobile ? [] : foldKeymap),
         ...lintKeymap,
       ]),
       python(),
@@ -505,23 +507,29 @@ export default function CodeExercise({
       }),
       EditorView.theme({
         "&": {
-          fontSize: "14px",
+          fontSize: isMobile ? "16px" : "14px",
           border: dark ? "1px solid rgba(255,255,255,0.15)" : "1px solid rgba(0,0,0,0.15)",
-          borderRadius: "8px",
+          borderRadius: isMobile ? "0px" : "8px",
           overflow: "hidden",
           ...(expanded ? { display: "flex", flexDirection: "column", height: "100%" } : {}),
         },
-        ".cm-scroller": { overflow: "auto", maxHeight: expanded ? "none" : "500px", ...(expanded ? { flex: "1", minHeight: "0" } : {}) },
+        ".cm-scroller": { overflow: "auto", maxHeight: expanded ? "none" : (isMobile ? "50dvh" : "500px"), ...(expanded ? { flex: "1", minHeight: "0" } : {}) },
         ".cm-gutters": {
           backgroundColor: dark ? "#1e1e2e" : "#f5f0e8",
           borderRight: dark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.08)",
+          ...(isMobile ? { display: "none" } : {}),
         },
         ".cm-readonly-line": {
         },
-        ".cm-panels": { fontSize: "14px" },
-        ".cm-search": { fontSize: "14px" },
-        ".cm-search input, .cm-search button, .cm-search label": { fontSize: "14px" },
+        ".cm-panels": { fontSize: isMobile ? "16px" : "14px" },
+        ".cm-search": { fontSize: isMobile ? "16px" : "14px" },
+        ".cm-search input, .cm-search button, .cm-search label": { fontSize: isMobile ? "16px" : "14px" },
       }),
+      // Track editor focus/blur for mobile keyboard toolbar
+      ...(isMobile ? [EditorView.domEventHandlers({
+        focus: () => { setEditorFocused(true); return false; },
+        blur: () => { setEditorFocused(false); return false; },
+      })] : []),
     ];
 
     const state = EditorState.create({
@@ -548,7 +556,12 @@ export default function CodeExercise({
       view.destroy();
       viewRef.current = null;
     };
-  }, [dark, expanded]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [dark, expanded, isMobile]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Auto-switch to output tab on mobile when tests complete ─────────────
+  useEffect(() => {
+    if (isMobile && (results || runError)) setMobileTab("output");
+  }, [results, runError, isMobile]);
 
   // ── Reward polling (same as CheckpointQuestion) ──────────────────────────
 
@@ -832,14 +845,35 @@ export default function CodeExercise({
   const goldBorder = dark ? "border-[#FFD700]" : "border-[#b8860b]";
   const greenText = dark ? "text-green-400" : "text-green-700";
 
+  // ── Mobile tab bar helper ─────────────────────────────────────────────────
+  const mobileTabBar = isMobile ? (
+    <div className={`flex border-b ${cardBorder}`} data-testid="container-mobile-tab-bar">
+      {(["code", "output", "hints"] as const).map((tab) => (
+        <button
+          key={tab}
+          type="button"
+          onClick={() => setMobileTab(tab)}
+          data-testid={`button-mobile-tab-${tab}`}
+          className={`flex-1 py-3 font-pixel text-xs min-h-[44px] transition-colors ${
+            mobileTab === tab
+              ? `${goldText} ${dark ? "border-b-2 border-[#FFD700]" : "border-b-2 border-[#b8860b]"}`
+              : `${textMuted} ${dark ? "hover:text-slate-200" : "hover:text-foreground"}`
+          }`}
+        >
+          {tab.toUpperCase()}
+        </button>
+      ))}
+    </div>
+  ) : null;
+
   const exerciseContent = (
-    <div className={expanded ? "flex flex-col flex-1 min-h-0" : `my-4 border-2 ${completedDisplay ? goldBorder : cardBorder} ${cardBg} p-5`}>
+    <div className={expanded ? "flex flex-col flex-1 min-h-0" : `my-4 border-2 ${completedDisplay ? goldBorder : cardBorder} ${cardBg} ${isMobile ? "p-3" : "p-5"}`}>
       {/* Description + Expand button */}
       <div className="flex items-start gap-3 mb-3">
         <div className={`text-lg md:text-[19px] ${textMuted} leading-relaxed flex-1 [&_code]:bg-amber-100/60 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-[0.88em] [&_code]:font-mono`} style={sansFont}
           dangerouslySetInnerHTML={{ __html: data.description }}
         />
-        {!expanded && (
+        {!expanded && !isMobile && (
           <div className="relative">
             <button
               onClick={() => setExpanded(true)}
@@ -873,6 +907,11 @@ export default function CodeExercise({
         )}
       </div>
 
+      {/* Mobile tab bar */}
+      {isMobile && mobileTabBar}
+
+      {/* ── CODE tab (or always on desktop) ── */}
+      {(!isMobile || mobileTab === "code") && <>
       {/* File browser button (shown when group context is available) */}
       {(fileLabel || (priorInGroupExercises && priorInGroupExercises.length > 0) || (crossGroupExercises && crossGroupExercises.length > 0) || (classMethodExercises && classMethodExercises.length > 0) || preamble) && (
         <div className="mb-2">
@@ -943,7 +982,7 @@ export default function CodeExercise({
         <button
           onClick={handleRunTests}
           disabled={running}
-          className={`font-pixel text-xs border-2 px-5 py-2.5 transition-all ${
+          className={`font-pixel text-xs border-2 ${isMobile ? "px-4 py-3 min-h-[44px] text-sm" : "px-5 py-2.5"} transition-all ${
             running
               ? "opacity-50 cursor-not-allowed border-[#2a3552] bg-[#0f1930] text-slate-500"
               : `${goldBorder} bg-[#FFD700] !text-[#000000] hover:bg-[#FFC800] active:scale-95 cursor-pointer`
@@ -961,7 +1000,7 @@ export default function CodeExercise({
 
         <button
           onClick={handleReset}
-          className={`font-pixel text-xs border-2 px-5 py-2.5 transition-all ${
+          className={`font-pixel text-xs border-2 ${isMobile ? "px-4 py-3 min-h-[44px] text-sm" : "px-5 py-2.5"} transition-all ${
             dark
               ? "border-[#2a3552] bg-[#0f1930] text-slate-400 hover:text-slate-200 hover:bg-[#132043]"
               : "border-border bg-background text-foreground/60 hover:text-foreground hover:bg-secondary"
@@ -971,6 +1010,12 @@ export default function CodeExercise({
         </button>
       </div>
 
+      {/* Mobile keyboard toolbar */}
+      {isMobile && <MobileKeyboardToolbar editorView={viewRef.current} visible={editorFocused} />}
+      </>}
+
+      {/* ── OUTPUT tab (or always on desktop) ── */}
+      {(!isMobile || mobileTab === "output") && <>
       {/* Test Results */}
       {runError && (
         <div className={`mb-3 px-3 py-2 border ${dark ? "border-red-500/30" : "border-red-300"} ${dark ? "bg-red-500/10" : "bg-red-50"}`} style={sansFont}>
@@ -1009,6 +1054,10 @@ export default function CodeExercise({
         );
       })()}
 
+      </>}
+
+      {/* ── HINTS tab (or always on desktop) ── */}
+      {(!isMobile || mobileTab === "hints") && <>
       {/* Hints — inline tabs */}
       <div className="mb-3" style={sansFont}>
         <div className="flex items-center gap-1.5 flex-wrap">
@@ -1069,8 +1118,10 @@ export default function CodeExercise({
                     key={i}
                     className="relative"
                     data-testid={`code-block-${i}`}
-                    onMouseEnter={() => setHoveredBlock(i)}
-                    onMouseLeave={() => setHoveredBlock(null)}
+                    {...(isMobile
+                      ? { onClick: () => setHoveredBlock(hoveredBlock === i ? null : i) }
+                      : { onMouseEnter: () => setHoveredBlock(i), onMouseLeave: () => setHoveredBlock(null) }
+                    )}
                   >
                     <pre
                       className={`text-sm font-mono whitespace-pre m-0 px-3 py-0 leading-snug cursor-default transition-colors ${
@@ -1102,7 +1153,10 @@ export default function CodeExercise({
           </div>
         )}
       </div>
+      </>}
 
+      {/* ── Reward/Completed (OUTPUT tab on mobile, always on desktop) ── */}
+      {(!isMobile || mobileTab === "output") && <>
       {/* Reward Section */}
       {allPassed && !completedDisplay && (
         <div className="mt-4">
@@ -1183,7 +1237,7 @@ export default function CodeExercise({
                 SCAN TO CLAIM {rewardAmountSats} SATS
               </div>
               <div className={`inline-block border-4 ${dark ? "border-[#2a3552]" : "border-border"} ${dark ? "bg-[#0b1220]" : "bg-background"} p-4`}>
-                <QRCodeSVG value={rewardLnurl} size={200} level="M" bgColor="#ffffff" fgColor="#000000" />
+                <QRCodeSVG value={rewardLnurl} size={isMobile ? 160 : 200} level="M" bgColor="#ffffff" fgColor="#000000" />
               </div>
               <div className={`mt-3 font-mono text-sm ${countdown <= 60 ? "text-red-400" : textMuted}`}>
                 Expires in {formatCountdown(countdown)}
@@ -1288,7 +1342,7 @@ export default function CodeExercise({
                     SCAN TO CLAIM {rewardAmountSats} SATS
                   </div>
                   <div className={`inline-block border-4 ${dark ? "border-[#2a3552]" : "border-border"} ${dark ? "bg-[#0b1220]" : "bg-background"} p-4`}>
-                    <QRCodeSVG value={rewardLnurl} size={200} level="M" bgColor="#ffffff" fgColor="#000000" />
+                    <QRCodeSVG value={rewardLnurl} size={isMobile ? 160 : 200} level="M" bgColor="#ffffff" fgColor="#000000" />
                   </div>
                   <div className={`mt-3 font-mono text-sm ${countdown <= 60 ? "text-red-400" : textMuted}`}>
                     Expires in {formatCountdown(countdown)}
@@ -1299,6 +1353,7 @@ export default function CodeExercise({
           )}
         </div>
       )}
+      </>}
     </div>
   );
 
@@ -1321,7 +1376,7 @@ export default function CodeExercise({
         </div>
         <div className="fixed inset-0 z-[9999] flex items-start justify-center" onClick={(e) => { if (e.target === e.currentTarget) setExpanded(false); }}>
           <div className={`absolute inset-0 ${dark ? "bg-black/80" : "bg-black/50"} backdrop-blur-sm`} />
-          <div className={`relative w-full max-w-6xl mx-4 my-4 h-[calc(100vh-32px)] overflow-y-auto border-2 flex flex-col ${completedDisplay ? goldBorder : cardBorder} ${cardBg} p-6`}>
+          <div className={`relative w-full ${isMobile ? "mx-0 my-0 h-[100dvh] rounded-none p-3" : "max-w-6xl mx-4 my-4 h-[calc(100vh-32px)] p-6"} overflow-y-auto border-2 flex flex-col ${completedDisplay ? goldBorder : cardBorder} ${cardBg}`}>
             <button
               onClick={() => setExpanded(false)}
               className={`absolute top-3 right-3 font-pixel text-xs border-2 px-3 py-1.5 transition-all z-10 ${

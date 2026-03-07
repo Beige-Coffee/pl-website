@@ -14,11 +14,11 @@ interface FeedbackWidgetProps {
 type Step = "form" | "submitting" | "done";
 type Category = "bug" | "confusing" | "suggestion" | "other";
 
-const CATEGORIES: { value: Category; label: string; icon: string }[] = [
-  { value: "bug", label: "Bug", icon: "\uD83D\uDC1B" },
-  { value: "confusing", label: "Confusing", icon: "\uD83D\uDE15" },
-  { value: "suggestion", label: "Suggestion", icon: "\uD83D\uDCA1" },
-  { value: "other", label: "Other", icon: "\uD83D\uDCAC" },
+const CATEGORIES: { value: Category; label: string }[] = [
+  { value: "bug", label: "BUG" },
+  { value: "confusing", label: "CONFUSING" },
+  { value: "suggestion", label: "SUGGESTION" },
+  { value: "other", label: "OTHER" },
 ];
 
 export default function FeedbackWidget({ theme, chapterTitle, exerciseId, sessionToken }: FeedbackWidgetProps) {
@@ -113,7 +113,11 @@ export default function FeedbackWidget({ theme, chapterTitle, exerciseId, sessio
 
   const canSubmit = category && message.trim().length > 0 && step === "form";
 
-  const iconTop = dragY ?? (typeof window !== "undefined" ? window.innerHeight - 80 : 700);
+  // Default position: offset higher on mobile to avoid overlap with TOOLS FAB
+  const defaultTop = typeof window !== "undefined"
+    ? window.innerWidth < 768 ? window.innerHeight - 140 : window.innerHeight - 80
+    : 700;
+  const iconTop = dragY ?? defaultTop;
 
   return (
     <>
@@ -155,7 +159,7 @@ export default function FeedbackWidget({ theme, chapterTitle, exerciseId, sessio
             <DialogTitle className="font-pixel text-base" style={{ color: dark ? "#FFD700" : "#7a5600" }}>
               {step === "done" ? "THANK YOU" : "SEND FEEDBACK"}
             </DialogTitle>
-            <DialogDescription className={`font-sans text-sm ${dark ? "text-slate-400" : "text-foreground/60"}`}>
+            <DialogDescription className={`font-sans text-sm ${dark ? "text-slate-400" : "text-[#5a4a30]"}`}>
               {step === "done"
                 ? "Your feedback helps us improve!"
                 : "Help improve Programming Lightning."}
@@ -170,17 +174,17 @@ export default function FeedbackWidget({ theme, chapterTitle, exerciseId, sessio
                     key={cat.value}
                     onClick={() => setCategory(cat.value)}
                     data-testid={`button-category-${cat.value}`}
-                    className={`border-2 px-4 py-3 text-base font-sans transition-all cursor-pointer ${
+                    className={`border-2 px-4 py-3 font-pixel text-sm transition-all cursor-pointer ${
                       category === cat.value
                         ? dark
                           ? "border-[#FFD700] text-[#FFD700] bg-[#FFD700]/10"
                           : "border-[#b8860b] text-[#7a5600] bg-[#b8860b]/10"
                         : dark
-                          ? "border-[#2a3552] text-slate-300 hover:border-slate-500"
-                          : "border-[#d4c9a8] text-foreground/70 hover:border-[#b8a880]"
+                          ? "border-[#2a3552] text-slate-200 hover:border-slate-500"
+                          : "border-[#d4c9a8] text-[#7a5600] hover:border-[#b8a880]"
                     }`}
+                    style={{ color: category === cat.value ? undefined : (dark ? undefined : "#7a5600") }}
                   >
-                    <span className="mr-1.5">{cat.icon}</span>
                     {cat.label}
                   </button>
                 ))}
@@ -199,7 +203,7 @@ export default function FeedbackWidget({ theme, chapterTitle, exerciseId, sessio
                       : "bg-white border-[#d4c9a8] text-foreground placeholder:text-foreground/30 focus:border-[#b8860b]/50"
                   }`}
                 />
-                <span className={`absolute bottom-2 right-3 text-[10px] font-sans ${dark ? "text-slate-600" : "text-foreground/30"}`}>
+                <span className={`absolute bottom-2 right-3 text-[10px] font-sans ${dark ? "text-slate-600" : "text-[#8a7a60]"}`}>
                   {message.length}/5000
                 </span>
               </div>
@@ -213,7 +217,9 @@ export default function FeedbackWidget({ theme, chapterTitle, exerciseId, sessio
                     ? dark
                       ? "border-[#FFD700] bg-[#FFD700] !text-[#000000] hover:bg-[#FFC800] cursor-pointer active:scale-95"
                       : "border-[#b8860b] bg-[#b8860b] text-white hover:bg-[#9a7200] cursor-pointer active:scale-95"
-                    : "opacity-40 cursor-not-allowed border-[#2a3552] bg-transparent text-slate-500"
+                    : dark
+                      ? "opacity-40 cursor-not-allowed border-[#2a3552] bg-transparent text-slate-500"
+                      : "opacity-40 cursor-not-allowed border-[#d4c9a8] bg-transparent text-[#8a7a60]"
                 }`}
               >
                 {step === "submitting" ? (

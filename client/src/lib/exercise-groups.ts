@@ -330,7 +330,7 @@ const KEYS_COMMITMENT_PREAMBLE = `from ln import pubkey_to_point, point_to_pubke
 
 const SCRIPTS_FUNDING_PREAMBLE = `from bitcoin.core.script import CScript, OP_2, OP_CHECKMULTISIG`;
 
-const TRANSACTIONS_FUNDING_PREAMBLE = `from bitcoin.core import CMutableTransaction, CTxIn, CTxOut, COutPoint, lx
+const TRANSACTIONS_FUNDING_PREAMBLE = `from bitcoin.core import CMutableTransaction, CTxIn, CTxOut, COutPoint
 from bitcoin.core.script import CScript, OP_0
 import hashlib`;
 
@@ -344,7 +344,7 @@ const SCRIPTS_HTLC_PREAMBLE = `from bitcoin.core.script import (
 )
 from ln import hash160, CommitmentKeys`;
 
-const TRANSACTIONS_COMMITMENT_PREAMBLE = `from bitcoin.core import CMutableTransaction, CMutableTxIn, CTxIn, CTxOut, COutPoint, lx, CTransaction, CTxWitness, CTxInWitness, CScriptWitness
+const TRANSACTIONS_COMMITMENT_PREAMBLE = `from bitcoin.core import CMutableTransaction, CMutableTxIn, CTxIn, CTxOut, COutPoint, CTransaction, CTxWitness, CTxInWitness, CScriptWitness
 from bitcoin.core.script import CScript, OP_0, OP_IF, OP_ELSE, OP_ENDIF, OP_CHECKSIG, OP_CHECKSEQUENCEVERIFY, OP_DROP, SignatureHash, SIGHASH_ALL, SIGVERSION_WITNESS_V0
 from ln import hash160, CommitmentKeys
 import hashlib, struct`;

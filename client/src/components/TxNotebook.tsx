@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { usePanelState } from "../hooks/use-panel-state";
+import { useIsMobile } from "../hooks/use-mobile";
+import { Drawer, DrawerContent, DrawerTitle } from "./ui/drawer";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -77,6 +79,7 @@ const MIN_WIDTH = 300;
 
 export default function TxNotebook({ theme }: TxNotebookProps) {
   const dark = theme === "dark";
+  const isMobile = useIsMobile();
   const panel = usePanelState();
   const [isOpenRaw, setIsOpenRaw] = useState(false);
   const [values, setValues] = useState<Record<FieldKey, string>>(loadAll);
@@ -169,6 +172,53 @@ export default function TxNotebook({ theme }: TxNotebookProps) {
     return null;
   }
 
+  // ── Shared body content ────────────────────────────────────────────────
+
+  const bodyContent = (
+    <div className="flex-1 overflow-y-auto px-4 py-4 space-y-0" style={sansFont}>
+      {SECTIONS.map((section, sIdx) => (
+        <div key={section.key}>
+          {section.fields.map((field) => (
+            <div key={field.key} className="mb-3">
+              <label className={`block text-sm font-semibold mb-1 ${labelColor}`}>
+                {field.label}:
+              </label>
+              <textarea
+                value={values[field.key]}
+                onChange={(e) => handleChange(field.key, e.target.value)}
+                rows={field.key.endsWith("-txhex") ? 3 : 2}
+                spellCheck={false}
+                placeholder={field.key.endsWith("-txhex") ? "Paste hex here..." : "Paste ID here..."}
+                style={{ ...sansFont, ...(isMobile ? { fontSize: "16px" } : {}) }}
+                className={`w-full text-sm resize-none border ${inputBorder} ${inputBg} ${inputText} px-2.5 py-2 focus:outline-none focus:ring-1 ${
+                  dark ? "focus:ring-[#FFD700]/30 placeholder:text-slate-600" : "focus:ring-[#b8860b]/30 placeholder:text-black/25"
+                }`}
+              />
+            </div>
+          ))}
+          {sIdx < SECTIONS.length - 1 && (
+            <hr className={`my-4 border-t ${dividerColor}`} />
+          )}
+        </div>
+      ))}
+    </div>
+  );
+
+  // ── Mobile: Drawer ─────────────────────────────────────────────────────
+
+  if (isMobile) {
+    return (
+      <Drawer open={isOpen} onOpenChange={(open) => setIsOpen(open)}>
+        <DrawerContent className={`max-h-[85dvh] flex flex-col ${panelBg}`} data-testid="drawer-tx-notebook">
+          <DrawerTitle className={`font-pixel text-xs ${goldText} px-4 pt-2`}>TRANSACTIONS</DrawerTitle>
+          {bodyContent}
+        </DrawerContent>
+      </Drawer>
+    );
+  }
+
+  // ── Desktop: Fixed side panel ──────────────────────────────────────────
+
   return (
     <div
       className={`fixed top-[68px] right-0 h-[calc(100vh-68px)] z-40 hidden lg:flex border-l-2 ${panelBorder} ${panelBg} shadow-2xl`}
@@ -202,34 +252,7 @@ export default function TxNotebook({ theme }: TxNotebookProps) {
           </button>
         </div>
 
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-0" style={sansFont}>
-          {SECTIONS.map((section, sIdx) => (
-            <div key={section.key}>
-              {section.fields.map((field, fIdx) => (
-                <div key={field.key} className="mb-3">
-                  <label className={`block text-sm font-semibold mb-1 ${labelColor}`}>
-                    {field.label}:
-                  </label>
-                  <textarea
-                    value={values[field.key]}
-                    onChange={(e) => handleChange(field.key, e.target.value)}
-                    rows={field.key.endsWith("-txhex") ? 3 : 2}
-                    spellCheck={false}
-                    placeholder={field.key.endsWith("-txhex") ? "Paste hex here..." : "Paste ID here..."}
-                    style={sansFont}
-                    className={`w-full text-sm resize-none border ${inputBorder} ${inputBg} ${inputText} px-2.5 py-2 focus:outline-none focus:ring-1 ${
-                      dark ? "focus:ring-[#FFD700]/30 placeholder:text-slate-600" : "focus:ring-[#b8860b]/30 placeholder:text-black/25"
-                    }`}
-                  />
-                </div>
-              ))}
-              {sIdx < SECTIONS.length - 1 && (
-                <hr className={`my-4 border-t ${dividerColor}`} />
-              )}
-            </div>
-          ))}
-        </div>
+        {bodyContent}
       </div>
     </div>
   );

@@ -357,7 +357,7 @@
   }
 
   .noise-md img {
-    max-width: none;
+    max-width: 100%;
     height: auto;
   }
 
@@ -458,5 +458,13 @@
       opacity: 0;
       transform: translateY(-50%) rotate(0deg);
     }
+  }
+}
+
+/* Mobile-specific overrides */
+@media (max-width: 767px) {
+  .noise-md pre {
+    white-space: pre-wrap;
+    word-break: break-all;
   }
 }

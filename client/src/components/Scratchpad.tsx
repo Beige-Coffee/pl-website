@@ -11,6 +11,8 @@ import { runPythonCode, preloadWorker, type CodeRunResult } from "../lib/pyodide
 import { signatureHints } from "../lib/signature-hint-extension";
 import { cleanErrorMessage } from "../lib/error-cleanup";
 import { usePanelState } from "../hooks/use-panel-state";
+import { useIsMobile } from "../hooks/use-mobile";
+import { Drawer, DrawerContent, DrawerTitle } from "./ui/drawer";
 
 // ─── Light Mode Syntax Highlighting ──────────────────────────────────────────
 
@@ -72,6 +74,7 @@ interface ScratchpadProps {
 
 export default function Scratchpad({ theme }: ScratchpadProps) {
   const dark = theme === "dark";
+  const isMobile = useIsMobile();
   const panel = usePanelState();
 
   // State
@@ -415,7 +418,108 @@ export default function Scratchpad({ theme }: ScratchpadProps) {
     return null;
   }
 
-  // ── Panel (when open) ───────────────────────────────────────────────────
+  // ── Shared content ─────────────────────────────────────────────────────
+
+  const panelContent = (
+    <>
+      {/* Description */}
+      <div className={`px-3 py-2 border-b ${panelBorder} shrink-0`} style={sansFont}>
+        <div className={`text-[15px] leading-snug ${textMuted}`}>
+          Sandbox for experimenting with Python. Click <span className={`font-pixel text-[11px] ${goldText}`}>SEND TO SANDBOX</span> in any exercise to load sample inputs here.
+        </div>
+      </div>
+
+      {/* Editor area */}
+      <div
+        className="min-h-0 overflow-hidden"
+        style={{ flex: isMobile ? "1 0 0" : `${splitRatio} 0 0` }}
+      >
+        <div ref={editorRef} className="h-full overflow-auto" />
+      </div>
+
+      {/* Vertical drag handle (desktop only) */}
+      {!isMobile && (
+        <div
+          onMouseDown={handleSplitDragStart}
+          className={`shrink-0 h-[5px] cursor-row-resize transition-colors ${dragHandleColor}`}
+          title="Drag to resize editor/output"
+        />
+      )}
+
+      {/* Action buttons */}
+      <div className={`flex items-center gap-2 px-3 py-1.5 shrink-0`}>
+        <button
+          onClick={handleRun}
+          disabled={running}
+          className={`font-pixel text-[10px] border-2 px-4 ${isMobile ? "py-3 min-h-[44px]" : "py-1.5"} transition-all ${
+            running
+              ? "opacity-50 cursor-not-allowed border-[#2a3552] bg-[#0f1930] text-slate-500"
+              : `${goldBorder} bg-[#FFD700] text-black hover:bg-[#FFC800] active:scale-95 cursor-pointer`
+          }`}
+        >
+          {running ? (
+            <span className="flex items-center gap-2">
+              <span className="inline-block w-3 h-3 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+              {pyLoading ? "LOADING..." : "RUNNING..."}
+            </span>
+          ) : (
+            "RUN"
+          )}
+        </button>
+
+        <button
+          onClick={handleClear}
+          className={`font-pixel text-[10px] border-2 px-4 ${isMobile ? "py-3 min-h-[44px]" : "py-1.5"} transition-all cursor-pointer
+            ${dark
+              ? "border-[#2a3552] bg-[#0f1930] text-slate-400 hover:text-slate-200 hover:bg-[#132043]"
+              : "border-[#d4c9a8] bg-[#f0e8d8] text-black/50 hover:text-black hover:bg-[#e8dcc8]"
+            }`}
+        >
+          CLEAR
+        </button>
+
+        {!isMobile && (
+          <div className={`ml-auto font-pixel text-[9px] ${textMuted}`}>
+            Ctrl+Enter
+          </div>
+        )}
+      </div>
+
+      {/* Terminal output */}
+      <div
+        ref={outputRef}
+        className={`min-h-0 overflow-auto px-3 py-2 border-t ${panelBorder} ${terminalBg} text-sm leading-relaxed`}
+        style={{ flex: isMobile ? "1 0 0" : `${1 - splitRatio} 0 0`, ...sansFont }}
+      >
+        {!output && !error && !running && (
+          <div className="text-slate-500 italic text-xs">
+            Output will appear here...
+          </div>
+        )}
+        {output && (
+          <pre className="whitespace-pre-wrap m-0 text-slate-200" style={sansFont}>{output}</pre>
+        )}
+        {error && (
+          <pre className="whitespace-pre-wrap m-0 text-red-400 mt-1" style={sansFont}>{error}</pre>
+        )}
+      </div>
+    </>
+  );
+
+  // ── Mobile: Drawer ─────────────────────────────────────────────────────
+
+  if (isMobile) {
+    return (
+      <Drawer open={isOpen} onOpenChange={(open) => setIsOpen(open)}>
+        <DrawerContent className={`max-h-[85dvh] flex flex-col ${panelBg}`} data-testid="drawer-scratchpad">
+          <DrawerTitle className={`font-pixel text-xs ${goldText} px-4 pt-2`}>SCRATCHPAD</DrawerTitle>
+          {panelContent}
+        </DrawerContent>
+      </Drawer>
+    );
+  }
+
+  // ── Desktop: Fixed side panel ──────────────────────────────────────────
 
   return (
     <div
@@ -444,83 +548,7 @@ export default function Scratchpad({ theme }: ScratchpadProps) {
         </button>
       </div>
 
-      {/* Description */}
-      <div className={`px-3 py-2 border-b ${panelBorder} shrink-0`} style={sansFont}>
-        <div className={`text-[15px] leading-snug ${textMuted}`}>
-          Sandbox for experimenting with Python. Click <span className={`font-pixel text-[11px] ${goldText}`}>SEND TO SANDBOX</span> in any exercise to load sample inputs here.
-        </div>
-      </div>
-
-      {/* Editor area (flex portion controlled by splitRatio) */}
-      <div
-        className="min-h-0 overflow-hidden"
-        style={{ flex: `${splitRatio} 0 0` }}
-      >
-        <div ref={editorRef} className="h-full overflow-auto" />
-      </div>
-
-      {/* Vertical drag handle for editor/terminal split */}
-      <div
-        onMouseDown={handleSplitDragStart}
-        className={`shrink-0 h-[5px] cursor-row-resize transition-colors ${dragHandleColor}`}
-        title="Drag to resize editor/output"
-      />
-
-      {/* Action buttons */}
-      <div className={`flex items-center gap-2 px-3 py-1.5 shrink-0`}>
-        <button
-          onClick={handleRun}
-          disabled={running}
-          className={`font-pixel text-[10px] border-2 px-4 py-1.5 transition-all ${
-            running
-              ? "opacity-50 cursor-not-allowed border-[#2a3552] bg-[#0f1930] text-slate-500"
-              : `${goldBorder} bg-[#FFD700] text-black hover:bg-[#FFC800] active:scale-95 cursor-pointer`
-          }`}
-        >
-          {running ? (
-            <span className="flex items-center gap-2">
-              <span className="inline-block w-3 h-3 border-2 border-black/30 border-t-black rounded-full animate-spin" />
-              {pyLoading ? "LOADING..." : "RUNNING..."}
-            </span>
-          ) : (
-            "RUN"
-          )}
-        </button>
-
-        <button
-          onClick={handleClear}
-          className={`font-pixel text-[10px] border-2 px-4 py-1.5 transition-all cursor-pointer
-            ${dark
-              ? "border-[#2a3552] bg-[#0f1930] text-slate-400 hover:text-slate-200 hover:bg-[#132043]"
-              : "border-[#d4c9a8] bg-[#f0e8d8] text-black/50 hover:text-black hover:bg-[#e8dcc8]"
-            }`}
-        >
-          CLEAR
-        </button>
-
-        <div className={`ml-auto font-pixel text-[9px] ${textMuted}`}>
-          Ctrl+Enter
-        </div>
-      </div>
-
-      {/* Terminal output (remaining flex space) */}
-      <div
-        ref={outputRef}
-        className={`min-h-0 overflow-auto px-3 py-2 border-t ${panelBorder} ${terminalBg} text-sm leading-relaxed`}
-        style={{ flex: `${1 - splitRatio} 0 0`, ...sansFont }}
-      >
-        {!output && !error && !running && (
-          <div className="text-slate-500 italic text-xs">
-            Output will appear here...
-          </div>
-        )}
-        {output && (
-          <pre className="whitespace-pre-wrap m-0 text-slate-200" style={sansFont}>{output}</pre>
-        )}
-        {error && (
-          <pre className="whitespace-pre-wrap m-0 text-red-400 mt-1" style={sansFont}>{error}</pre>
-        )}
-      </div>
+      {panelContent}
     </div>
   );
 }

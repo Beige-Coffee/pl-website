@@ -1,4 +1,53 @@
-import { Page, expect } from "@playwright/test";
+import { Page, expect, type ViewportSize } from "@playwright/test";
+
+// ── Mobile viewport & helpers ──
+
+export const MOBILE_VIEWPORT: ViewportSize = { width: 390, height: 844 };
+
+/**
+ * Open the mobile sidebar by clicking the MENU button.
+ * Waits for the overlay to appear.
+ */
+export async function openMobileSidebar(page: Page) {
+  await page.getByTestId("button-sidebar-toggle").click();
+  await page.getByTestId("overlay-mobile-nav").waitFor({ state: "visible" });
+  await page.waitForTimeout(300);
+}
+
+/**
+ * Navigate to a chapter on mobile by opening the sidebar first.
+ */
+export async function navigateToChapterMobile(page: Page, chapterId: string) {
+  await openMobileSidebar(page);
+  await page.getByTestId(`button-chapter-${chapterId}`).click();
+  await page.getByTestId("container-article").waitFor({ state: "visible" });
+  await page.waitForTimeout(500);
+}
+
+/**
+ * Open the mobile TOOLS FAB popover.
+ */
+export async function openMobileToolsFAB(page: Page) {
+  await page.getByTestId("button-mobile-tools-toggle").click();
+  await page.getByTestId("container-mobile-tools-menu").waitFor({ state: "visible" });
+  await page.waitForTimeout(300);
+}
+
+/**
+ * Select a tab on the mobile exercise tab bar.
+ */
+export async function selectMobileTab(page: Page, tab: "code" | "output" | "hints") {
+  await page.getByTestId(`button-mobile-tab-${tab}`).click();
+  await page.waitForTimeout(200);
+}
+
+/**
+ * Assert the page is in mobile layout (sidebar toggle visible, collapse button not).
+ */
+export async function assertMobileLayout(page: Page) {
+  await expect(page.getByTestId("button-sidebar-collapse")).not.toBeVisible();
+  await expect(page.getByTestId("button-sidebar-toggle")).toBeVisible();
+}
 
 /**
  * Navigate to a specific chapter by clicking its sidebar button.

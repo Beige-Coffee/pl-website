@@ -189,10 +189,10 @@ def test_script_structure():
     id: "ln-exercise-funding-tx",
     title: "Exercise 3: Create Funding Transaction",
     description:
-      "Build a funding transaction that spends from a given UTXO and creates a P2WSH output using the 2-of-2 multisig funding script. The output script is <code>OP_0 &lt;SHA256(funding_script)&gt;</code>.",
-    starterCode: `def create_funding_tx(input_txid_hex: str, input_vout: int,
+      "Build a funding transaction that spends from a given UTXO and creates a P2WSH output using the 2-of-2 multisig funding script. The output script is <code>OP_0 &lt;SHA256(funding_script)&gt;</code>. Returns a <code>CMutableTransaction</code>.",
+    starterCode: `def create_funding_tx(input_txid: bytes, input_vout: int,
                       funding_amount: int,
-                      pubkey1: bytes, pubkey2: bytes) -> str:
+                      pubkey1: bytes, pubkey2: bytes) -> CMutableTransaction:
     """
     Create a funding transaction (unsigned, no witness).
 
@@ -202,21 +202,19 @@ def test_script_structure():
     - nVersion = 2 (required for BIP 68 relative timelocks)
 
     Use these python-bitcoinlib types:
-    - CTxIn(COutPoint(lx(txid_hex), vout)) for the input
+    - CTxIn(COutPoint(txid_bytes, vout)) for the input
     - CTxOut(amount, script) for the output
     - CMutableTransaction([inputs], [outputs]) for the transaction
 
-    lx() converts a hex string to bytes in internal (little-endian) order.
-
     Args:
-        input_txid_hex: transaction ID hex string (big-endian display order)
+        input_txid: 32-byte transaction ID (internal byte order)
         input_vout: output index of the UTXO
         funding_amount: amount in satoshis for the funding output
         pubkey1: 33-byte compressed public key
         pubkey2: 33-byte compressed public key
 
     Returns:
-        str: hex-encoded raw transaction
+        CMutableTransaction: unsigned funding transaction
     """
     # === YOUR CODE HERE ===
     pass
@@ -225,27 +223,24 @@ def test_script_structure():
 import hashlib
 
 def test_bolt3_funding_tx():
-    input_txid = "8984484a580b825b9972d7adb15050b3ab624ccd731946b3eeddb92f4e7ef6be"
+    input_txid = bytes.fromhex("8984484a580b825b9972d7adb15050b3ab624ccd731946b3eeddb92f4e7ef6be")[::-1]
     pk1 = bytes.fromhex("023da092f6980e58d2c037173180e9a465476026ee50f96695963e8efe436f54eb")
     pk2 = bytes.fromhex("030e9f7b623d2ccc7c9bd44d66d5ce21ce504c0acf6385a132cec6d3c39fa711c1")
-    result = create_funding_tx(input_txid, 0, 500000, pk1, pk2)
-    tx_bytes = bytes.fromhex(result)
-    import struct
-    version = struct.unpack_from("<I", tx_bytes, 0)[0]
-    assert version == 2, f"Transaction version must be 2, got {version}"
-    reversed_txid = bytes.fromhex(input_txid)[::-1]
-    assert reversed_txid.hex() in result, "Input must reference the correct txid"
-    amount_bytes = struct.pack("<q", 500000)
-    assert amount_bytes.hex() in result, f"Output must contain 500000 sats"
-    locktime = struct.unpack_from("<I", tx_bytes, len(tx_bytes) - 4)[0]
-    assert locktime == 0, f"Locktime must be 0, got {locktime}"
+    tx = create_funding_tx(input_txid, 0, 500000, pk1, pk2)
+    assert isinstance(tx, CMutableTransaction), f"Must return CMutableTransaction, got {type(tx).__name__}"
+    assert tx.nVersion == 2, f"Transaction version must be 2, got {tx.nVersion}"
+    assert tx.vin[0].prevout.hash == input_txid, "Input must reference the correct txid"
+    assert tx.vin[0].prevout.n == 0, "Input must spend output index 0"
+    assert len(tx.vout) == 1, f"Expected 1 output, got {len(tx.vout)}"
+    assert tx.vout[0].nValue == 500000, f"Output must contain 500000 sats, got {tx.vout[0].nValue}"
+    assert tx.nLockTime == 0, f"Locktime must be 0, got {tx.nLockTime}"
 
-def test_returns_string():
-    input_txid = "8984484a580b825b9972d7adb15050b3ab624ccd731946b3eeddb92f4e7ef6be"
+def test_returns_tx():
+    input_txid = bytes.fromhex("8984484a580b825b9972d7adb15050b3ab624ccd731946b3eeddb92f4e7ef6be")[::-1]
     pk1 = bytes.fromhex("023da092f6980e58d2c037173180e9a465476026ee50f96695963e8efe436f54eb")
     pk2 = bytes.fromhex("030e9f7b623d2ccc7c9bd44d66d5ce21ce504c0acf6385a132cec6d3c39fa711c1")
-    result = create_funding_tx(input_txid, 0, 500000, pk1, pk2)
-    assert isinstance(result, str), "Must return a hex string"
+    tx = create_funding_tx(input_txid, 0, 500000, pk1, pk2)
+    assert isinstance(tx, CMutableTransaction), "Must return CMutableTransaction"
 
 def test_p2wsh_output():
     pk1 = bytes.fromhex("023da092f6980e58d2c037173180e9a465476026ee50f96695963e8efe436f54eb")
@@ -253,26 +248,25 @@ def test_p2wsh_output():
     funding_script = b'\\x52' + b'\\x21' + min(pk1, pk2) + b'\\x21' + max(pk1, pk2) + b'\\x52' + b'\\xae'
     script_hash = hashlib.sha256(funding_script).digest()
     expected_spk = b'\\x00\\x20' + script_hash
-    result = create_funding_tx("8984484a580b825b9972d7adb15050b3ab624ccd731946b3eeddb92f4e7ef6be", 0, 500000, pk1, pk2)
-    tx_bytes = bytes.fromhex(result)
-    # Find the scriptPubKey in the output
-    assert expected_spk.hex() in result, "Transaction must contain correct P2WSH scriptPubKey"
+    input_txid = bytes.fromhex("8984484a580b825b9972d7adb15050b3ab624ccd731946b3eeddb92f4e7ef6be")[::-1]
+    tx = create_funding_tx(input_txid, 0, 500000, pk1, pk2)
+    assert bytes(tx.vout[0].scriptPubKey) == expected_spk, "Transaction must contain correct P2WSH scriptPubKey"
 `,
     hints: {
       conceptual:
-        "<p>Your goal is to build a Bitcoin transaction with one input (the given UTXO) and one P2WSH output that locks funds into the 2-of-2 multisig. A P2WSH scriptPubKey is <code>OP_0</code> followed by the SHA256 hash of the witness script. Use <code>create_funding_script()</code> to get the witness script, <code>hashlib.sha256</code> to hash it, and python-bitcoinlib's transaction types (<code>CMutableTransaction</code>, <code>CTxIn</code>, <code>CTxOut</code>, <code>COutPoint</code>) to assemble the transaction. The <code>lx()</code> helper converts a hex txid string to little-endian byte order. Set the transaction version to 2.</p>",
+        "<p>Your goal is to build a Bitcoin transaction with one input (the given UTXO) and one P2WSH output that locks funds into the 2-of-2 multisig. A P2WSH scriptPubKey is <code>OP_0</code> followed by the SHA256 hash of the witness script. Use <code>create_funding_script()</code> to get the witness script, <code>hashlib.sha256</code> to hash it, and python-bitcoinlib's transaction types (<code>CMutableTransaction</code>, <code>CTxIn</code>, <code>CTxOut</code>, <code>COutPoint</code>) to assemble the transaction. The <code>input_txid</code> is already in internal byte order, so pass it directly to <code>COutPoint</code>. Set the transaction version to 2.</p>",
       steps:
-        '<ol><li>Call <code>create_funding_script()</code> with both pubkeys to get the multisig witness script, then compute its SHA256 hash using <code>hashlib.sha256</code></li><li>Build a P2WSH scriptPubKey using <code>CScript</code> with <code>OP_0</code> and the 32-byte script hash</li><li>Create a transaction input using <code>CTxIn</code>. It takes a <code>COutPoint</code>, which wraps the txid (converted from hex to internal byte order with <code>lx()</code>) and the output index</li><li>Create a transaction output using <code>CTxOut</code>, which takes the satoshi amount and the P2WSH scriptPubKey</li><li>Assemble a <code>CMutableTransaction</code> with the input list and output list, and set <code>nVersion = 2</code></li><li>Serialize the transaction and return the hex string</li></ol>',
-      code: `def create_funding_tx(input_txid_hex, input_vout, funding_amount, pubkey1, pubkey2):
+        '<ol><li>Call <code>create_funding_script()</code> with both pubkeys to get the multisig witness script, then compute its SHA256 hash using <code>hashlib.sha256</code></li><li>Build a P2WSH scriptPubKey using <code>CScript</code> with <code>OP_0</code> and the 32-byte script hash</li><li>Create a transaction input using <code>CTxIn</code>. It takes a <code>COutPoint</code>, which wraps the txid bytes and the output index</li><li>Create a transaction output using <code>CTxOut</code>, which takes the satoshi amount and the P2WSH scriptPubKey</li><li>Assemble a <code>CMutableTransaction</code> with the input list and output list, and set <code>nVersion = 2</code></li><li>Return the <code>CMutableTransaction</code></li></ol>',
+      code: `def create_funding_tx(input_txid, input_vout, funding_amount, pubkey1, pubkey2):
     funding_script = create_funding_script(pubkey1, pubkey2)
     script_hash = hashlib.sha256(bytes(funding_script)).digest()
     p2wsh_script = CScript([OP_0, script_hash])
 
-    txin = CTxIn(COutPoint(lx(input_txid_hex), input_vout))
+    txin = CTxIn(COutPoint(input_txid, input_vout))
     txout = CTxOut(funding_amount, p2wsh_script)
     tx = CMutableTransaction([txin], [txout])
     tx.nVersion = 2
-    return tx.serialize().hex()`,
+    return tx`,
     },
     rewardSats: 21,
     group: "transactions/funding",
@@ -1400,7 +1394,7 @@ def test_none_cltv_treated_as_zero():
     title: "Exercise 18: Create Commitment Transaction",
     description:
       "Assemble a complete unsigned commitment transaction with the funding input, obscured commitment number, and sorted outputs. Uses <code>create_commitment_outputs()</code> and <code>sort_outputs()</code> to build and order the outputs. The <code>offered_htlcs</code> and <code>received_htlcs</code> parameters are included for future use (ignore them for now).",
-    starterCode: `def create_commitment_tx(funding_txid_hex: str, funding_vout: int,
+    starterCode: `def create_commitment_tx(funding_txid: bytes, funding_vout: int,
                           to_local_sat: int, to_remote_sat: int,
                           commitment_keys,
                           remote_payment_pubkey: bytes,
@@ -1429,7 +1423,7 @@ def test_none_cltv_treated_as_zero():
     7. Return the CMutableTransaction
 
     Args:
-        funding_txid_hex: funding txid (big-endian hex)
+        funding_txid: 32-byte funding txid (internal byte order)
         funding_vout: funding output index
         to_local_sat, to_remote_sat: balances in satoshis
         commitment_keys: CommitmentKeys object with derived keys
@@ -1450,8 +1444,7 @@ def test_none_cltv_treated_as_zero():
 `,
     testCode: `
 def test_structure():
-    from bitcoin.core import COutPoint, lx
-    funding_txid = "8984484a580b825b9972d7adb15050b3ab624ccd731946b3eeddb92f4e7ef6be"
+    funding_txid = bytes.fromhex("8984484a580b825b9972d7adb15050b3ab624ccd731946b3eeddb92f4e7ef6be")[::-1]
     rev_pk = bytes.fromhex("0212a140cd0c6539d07cd08dfe09984dec3251ea808b892efeac3ede9402bf2b19")
     delayed_pk = bytes.fromhex("03fd5960528dc152014952efdb702a88f71e3c1653b2314431701ec77e57fde83c")
     remote_pk = bytes.fromhex("032c0b7cf95324a07d05398b240174dc0c2be444d96b159aa6c7f7b1e668680991")
@@ -1464,7 +1457,7 @@ def test_structure():
     assert tx.nVersion == 2, f"nVersion should be 2, got {tx.nVersion}"
     # Single input spending the funding outpoint
     assert len(tx.vin) == 1, f"Expected 1 input, got {len(tx.vin)}"
-    assert tx.vin[0].prevout.hash == lx(funding_txid), "Input must spend the funding txid"
+    assert tx.vin[0].prevout.hash == funding_txid, "Input must spend the funding txid"
     assert tx.vin[0].prevout.n == 0, "Input must spend vout 0"
     # Two outputs (feerate=0 so no fees deducted, both above dust)
     assert len(tx.vout) == 2, f"Expected 2 outputs, got {len(tx.vout)}"
@@ -1481,7 +1474,7 @@ def test_structure():
     assert tx.vin[0].nSequence == expected_sequence, f"nSequence mismatch: expected {expected_sequence:#x}, got {tx.vin[0].nSequence:#x}"
 
 def test_fee_applied():
-    funding_txid = "8984484a580b825b9972d7adb15050b3ab624ccd731946b3eeddb92f4e7ef6be"
+    funding_txid = bytes.fromhex("8984484a580b825b9972d7adb15050b3ab624ccd731946b3eeddb92f4e7ef6be")[::-1]
     rev_pk = bytes.fromhex("0212a140cd0c6539d07cd08dfe09984dec3251ea808b892efeac3ede9402bf2b19")
     delayed_pk = bytes.fromhex("03fd5960528dc152014952efdb702a88f71e3c1653b2314431701ec77e57fde83c")
     remote_pk = bytes.fromhex("032c0b7cf95324a07d05398b240174dc0c2be444d96b159aa6c7f7b1e668680991")
@@ -1498,8 +1491,8 @@ def test_fee_applied():
       conceptual:
         "<p><strong>Goal:</strong> Assemble a complete <strong>unsigned commitment transaction</strong>. This combines a funding input, obscured commitment number in nLockTime/nSequence, and channel outputs (to_local and to_remote). Ignore the HTLC parameters for now.<br><br><strong>Fee formula:</strong> <code>weight = 724</code> (the base weight of a commitment transaction with no HTLCs), and <code>fee = weight * feerate_per_kw // 1000</code>.<br><br><strong>Key details:</strong> Use <code>create_commitment_outputs()</code> to build the output dicts, sort them with <code>sort_outputs()</code>, then convert each sorted dict into a <code>CTxOut</code> for the final transaction. Use <code>set_obscured_commitment_number()</code> to encode the commitment number into the transaction. BOLT 3 specifies <code>nVersion=2</code> for commitment transactions.</p>",
       steps:
-        '<ol><li>Compute the fee: <code>weight = 724</code>, <code>fee = weight * feerate_per_kw // 1000</code></li><li>Create channel output dicts using <code>create_commitment_outputs()</code>, passing the balances, commitment keys, remote payment pubkey, delay, dust limit, and fee</li><li>Sort the output dicts using <code>sort_outputs()</code></li><li>Convert each sorted dict into a <code>CTxOut(d[\"value\"], CScript(d[\"script\"]))</code></li><li>Build a <code>CMutableTxIn</code> using <code>COutPoint(lx(funding_txid_hex), funding_vout)</code></li><li>Construct a <code>CMutableTransaction</code> with <code>nVersion=2</code></li><li>Call <code>set_obscured_commitment_number(tx, ...)</code> to set the nLockTime and nSequence</li><li>Return the <code>CMutableTransaction</code></li></ol>',
-      code: `def create_commitment_tx(funding_txid_hex, funding_vout, to_local_sat, to_remote_sat,
+        '<ol><li>Compute the fee: <code>weight = 724</code>, <code>fee = weight * feerate_per_kw // 1000</code></li><li>Create channel output dicts using <code>create_commitment_outputs()</code>, passing the balances, commitment keys, remote payment pubkey, delay, dust limit, and fee</li><li>Sort the output dicts using <code>sort_outputs()</code></li><li>Convert each sorted dict into a <code>CTxOut(d[\"value\"], CScript(d[\"script\"]))</code></li><li>Build a <code>CMutableTxIn</code> using <code>COutPoint(funding_txid, funding_vout)</code></li><li>Construct a <code>CMutableTransaction</code> with <code>nVersion=2</code></li><li>Call <code>set_obscured_commitment_number(tx, ...)</code> to set the nLockTime and nSequence</li><li>Return the <code>CMutableTransaction</code></li></ol>',
+      code: `def create_commitment_tx(funding_txid, funding_vout, to_local_sat, to_remote_sat,
                           commitment_keys, remote_payment_pubkey,
                           opener_bp, accepter_bp, commitment_number, to_self_delay,
                           dust_limit, feerate_per_kw,
@@ -1511,7 +1504,7 @@ def test_fee_applied():
     sort_outputs(channel_outputs)
     outputs = [CTxOut(d["value"], CScript(d["script"])) for d in channel_outputs]
 
-    txin = CMutableTxIn(COutPoint(lx(funding_txid_hex), funding_vout))
+    txin = CMutableTxIn(COutPoint(funding_txid, funding_vout))
     tx = CMutableTransaction([txin], outputs, nVersion=2)
     set_obscured_commitment_number(tx, commitment_number, opener_bp, accepter_bp)
     return tx`,
@@ -1721,7 +1714,7 @@ def test_values_match():
     title: "Exercise 27: Update Commitment Transaction for HTLCs",
     description:
       "Update the <code>create_commitment_tx</code> function to include HTLC outputs. You'll modify the fee formula to account for HTLC weight, call <code>create_htlc_outputs()</code>, combine channel and HTLC outputs, and sort them together.",
-    starterCode: `def create_commitment_tx(funding_txid_hex, funding_vout, to_local_sat, to_remote_sat,
+    starterCode: `def create_commitment_tx(funding_txid, funding_vout, to_local_sat, to_remote_sat,
                           commitment_keys, remote_payment_pubkey,
                           opener_bp, accepter_bp, commitment_number, to_self_delay,
                           dust_limit, feerate_per_kw,
@@ -1766,7 +1759,7 @@ def test_values_match():
     # TODO: Convert sorted dicts to CTxOut list
     outputs = [CTxOut(d["value"], CScript(d["script"])) for d in channel_outputs]
 
-    txin = CMutableTxIn(COutPoint(lx(funding_txid_hex), funding_vout))
+    txin = CMutableTxIn(COutPoint(funding_txid, funding_vout))
     tx = CMutableTransaction([txin], outputs, nVersion=2)
     set_obscured_commitment_number(tx, commitment_number, opener_bp, accepter_bp)
     return tx
@@ -1775,7 +1768,7 @@ def test_values_match():
 import hashlib as _hl
 
 def test_htlc_output_count():
-    funding_txid = "8984484a580b825b9972d7adb15050b3ab624ccd731946b3eeddb92f4e7ef6be"
+    funding_txid = bytes.fromhex("8984484a580b825b9972d7adb15050b3ab624ccd731946b3eeddb92f4e7ef6be")[::-1]
     rev_pk = bytes.fromhex("0212a140cd0c6539d07cd08dfe09984dec3251ea808b892efeac3ede9402bf2b19")
     delayed_pk = bytes.fromhex("03fd5960528dc152014952efdb702a88f71e3c1653b2314431701ec77e57fde83c")
     remote_pk = bytes.fromhex("032c0b7cf95324a07d05398b240174dc0c2be444d96b159aa6c7f7b1e668680991")
@@ -1789,7 +1782,7 @@ def test_htlc_output_count():
     assert len(tx.vout) == 3, f"Expected 3 outputs (to_local + to_remote + 1 HTLC), got {len(tx.vout)}"
 
 def test_htlc_fee_formula():
-    funding_txid = "8984484a580b825b9972d7adb15050b3ab624ccd731946b3eeddb92f4e7ef6be"
+    funding_txid = bytes.fromhex("8984484a580b825b9972d7adb15050b3ab624ccd731946b3eeddb92f4e7ef6be")[::-1]
     rev_pk = bytes.fromhex("0212a140cd0c6539d07cd08dfe09984dec3251ea808b892efeac3ede9402bf2b19")
     delayed_pk = bytes.fromhex("03fd5960528dc152014952efdb702a88f71e3c1653b2314431701ec77e57fde83c")
     remote_pk = bytes.fromhex("032c0b7cf95324a07d05398b240174dc0c2be444d96b159aa6c7f7b1e668680991")
@@ -1809,7 +1802,7 @@ def test_htlc_fee_formula():
     assert total_out == expected_total, f"Total output should be {expected_total} (10M - {expected_fee} fee), got {total_out}"
 
 def test_htlc_values_present():
-    funding_txid = "8984484a580b825b9972d7adb15050b3ab624ccd731946b3eeddb92f4e7ef6be"
+    funding_txid = bytes.fromhex("8984484a580b825b9972d7adb15050b3ab624ccd731946b3eeddb92f4e7ef6be")[::-1]
     rev_pk = bytes.fromhex("0212a140cd0c6539d07cd08dfe09984dec3251ea808b892efeac3ede9402bf2b19")
     delayed_pk = bytes.fromhex("03fd5960528dc152014952efdb702a88f71e3c1653b2314431701ec77e57fde83c")
     remote_pk = bytes.fromhex("032c0b7cf95324a07d05398b240174dc0c2be444d96b159aa6c7f7b1e668680991")
@@ -1829,7 +1822,7 @@ def test_htlc_values_present():
         "<p><strong>Goal:</strong> Update <code>create_commitment_tx</code> to include <strong>HTLC outputs</strong> alongside the existing to_local and to_remote outputs.<br><br><strong>Fee formula update:</strong> <code>weight = 724 + 172 * num_htlcs</code>. Each HTLC adds 172 weight units to the transaction.<br><br><strong>Key steps:</strong> Create HTLC outputs with <code>create_htlc_outputs()</code>, wrap the channel outputs as dicts with <code>\"cltv_expiry\": 0</code>, combine both lists, sort them all together with <code>sort_outputs()</code>, then extract the <code>CTxOut</code> objects.</p>",
       steps:
         '<ol><li>Update the fee formula: <code>weight = 724 + 172 * num_htlcs</code></li><li>Call <code>create_htlc_outputs(commitment_keys, offered_htlcs or [], received_htlcs or [])</code> to get HTLC output dicts</li><li>Wrap each channel output dict with <code>"cltv_expiry": 0</code> so it can be sorted alongside HTLC dicts</li><li>Combine the channel output dicts and HTLC output dicts into one list</li><li>Sort all combined outputs using <code>sort_outputs()</code></li><li>Convert each sorted dict to <code>CTxOut(d["value"], CScript(d["script"]))</code></li></ol>',
-      code: `def create_commitment_tx(funding_txid_hex, funding_vout, to_local_sat, to_remote_sat,
+      code: `def create_commitment_tx(funding_txid, funding_vout, to_local_sat, to_remote_sat,
                           commitment_keys, remote_payment_pubkey,
                           opener_bp, accepter_bp, commitment_number, to_self_delay,
                           dust_limit, feerate_per_kw,
@@ -1846,7 +1839,7 @@ def test_htlc_values_present():
     sort_outputs(all_outputs)
     outputs = [CTxOut(d["value"], CScript(d["script"])) for d in all_outputs]
 
-    txin = CMutableTxIn(COutPoint(lx(funding_txid_hex), funding_vout))
+    txin = CMutableTxIn(COutPoint(funding_txid, funding_vout))
     tx = CMutableTransaction([txin], outputs, nVersion=2)
     set_obscured_commitment_number(tx, commitment_number, opener_bp, accepter_bp)
     return tx`,

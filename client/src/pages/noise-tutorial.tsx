@@ -16,9 +16,11 @@ import { CollapsibleItem, CollapsibleGroup } from "../components/CollapsibleSect
 import { CODE_EXERCISES } from "../data/code-exercises";
 import { Tooltip, TooltipTrigger, TooltipContent } from "../components/ui/tooltip";
 import FeedbackWidget from "../components/FeedbackWidget";
+import { PanelStateContext, usePanelStateProvider } from "../hooks/use-panel-state";
+import { useIsMobile } from "../hooks/use-mobile";
 
 // --- Checkpoint questions embedded inline in tutorial chapters ---
-const CHECKPOINT_QUESTIONS: Record<string, {
+export const CHECKPOINT_QUESTIONS: Record<string, {
   question: string;
   options: string[];
   answer: number;
@@ -133,7 +135,7 @@ type Chapter = {
   file?: string;
 };
 
-const chapters: Chapter[] = [
+export const chapters: Chapter[] = [
   {
     id: "intro",
     title: "Lightning's Noise Protocol: A Deep Dive",
@@ -218,7 +220,7 @@ const chapters: Chapter[] = [
   },
 ];
 
-const sectionOrder: Chapter["section"][] = [
+export const sectionOrder: Chapter["section"][] = [
   "Introduction",
   "Foundations",
   "The Handshake",
@@ -227,7 +229,7 @@ const sectionOrder: Chapter["section"][] = [
   "Pay It Forward",
 ];
 
-const CHAPTER_REQUIREMENTS: Record<string, {
+export const CHAPTER_REQUIREMENTS: Record<string, {
   checkpoints: string[];
   exercises: string[];
 }> = {
@@ -623,6 +625,7 @@ function ProfileDropdown({
 function NoiseTutorialShell({ activeId }: { activeId: string }) {
   const [location, setLocation] = useLocation();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const isMobile = useIsMobile();
   const auth = useAuth();
   const { authenticated, loading: authLoading, logout, loginWithToken, setLightningAddress } = auth;
   const progress = useProgress(auth.sessionToken);
@@ -744,13 +747,23 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
     }
   }, [sidebarCollapsed]);
 
+  // Panel state for scratchpad side panel
+  const panelState = usePanelStateProvider();
+  const panelPadding = isMobile ? 0 : (panelState.activePanel ? panelState.panelWidth : 0);
+  const panelTransition = panelState.isDragging ? "none" : "padding-right 300ms cubic-bezier(0.4, 0, 0.2, 1)";
+
   return (
-    <div className={`min-h-screen ${t.pageBg} ${t.pageText}`} data-theme={theme}>
+    <PanelStateContext.Provider value={panelState}>
+    <div
+      className={`min-h-screen ${t.pageBg} ${t.pageText}`}
+      data-theme={theme}
+      style={{ paddingRight: panelPadding, transition: panelTransition }}
+    >
       <div className={`w-full border-b-4 ${t.headerBorder} ${t.headerBg} px-2 py-2 md:px-4 md:py-3 flex items-center justify-between sticky top-0 z-50`}>
         <div className="flex items-center gap-2 md:gap-3">
           <button
             type="button"
-            className={`md:hidden font-pixel text-xs border-2 ${theme === "dark" ? "border-[#2a3552] bg-[#0f1930] hover:bg-[#132043]" : "border-border bg-card hover:bg-secondary"} px-2 py-1.5 transition-colors`}
+            className={`md:hidden font-pixel text-xs border-2 ${theme === "dark" ? "border-[#2a3552] bg-[#0f1930] hover:bg-[#132043]" : "border-border bg-card hover:bg-secondary"} px-2 py-2 transition-colors`}
             onClick={() => setMobileNavOpen((v) => !v)}
             data-testid="button-sidebar-toggle"
           >
@@ -866,7 +879,7 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
       <div
         className="mx-auto w-full max-w-7xl grid gap-0"
         style={{
-          gridTemplateColumns: sidebarCollapsed ? `60px minmax(0, 1fr)` : `360px minmax(0, 1fr)`,
+          gridTemplateColumns: isMobile ? '1fr' : (sidebarCollapsed ? `60px minmax(0, 1fr)` : `360px minmax(0, 1fr)`),
         }}
       >
         {mobileNavOpen && (
@@ -1025,7 +1038,7 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
           </div>
         </aside>
 
-        <main className="p-5 md:p-10">
+        <main className="p-3 sm:p-5 md:p-10">
           <div className="mx-auto w-full max-w-[1200px]">
           <article
             className="noise-article mx-auto w-full max-w-[1100px]"
@@ -1098,7 +1111,45 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
       </div>
 
       {tutorialMode === "code" && (
-        <Scratchpad theme={theme} />
+        <>
+          {/* Scratchpad button */}
+          <div
+            className={`fixed top-[78px] z-40 hidden lg:block border-2 rounded ${
+              theme === "dark"
+                ? "bg-[#0b1220] border-[#2a3552]"
+                : "bg-[#fdf9f2] border-[#d4c9a8]"
+            }`}
+            style={{ right: panelPadding + 16, transition: panelTransition, padding: "8px 10px" }}
+          >
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => panelState.switchPanel("scratchpad")}
+                  className={`flex items-center gap-2 font-pixel text-[14px] tracking-wide cursor-pointer ${
+                    theme === "dark"
+                      ? "text-slate-300 hover:text-slate-100"
+                      : "text-foreground/70 hover:text-foreground"
+                  }`}
+                >
+                  <span>SCRATCHPAD</span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent
+                side="left"
+                className={`max-w-[220px] text-sm leading-snug ${
+                  theme === "dark"
+                    ? "bg-[#1a2332] border-[#FFD700]/30 text-slate-200"
+                    : "bg-white border-[#b8860b]/30 text-foreground/80"
+                }`}
+                style={{ boxShadow: theme === "dark" ? "3px 3px 0 rgba(255,215,0,0.15)" : "3px 3px 0 rgba(0,0,0,0.08)" }}
+              >
+                Open the Python scratchpad to experiment with code and test inputs from exercises
+              </TooltipContent>
+            </Tooltip>
+          </div>
+
+          <Scratchpad theme={theme} />
+        </>
       )}
 
       <FeedbackWidget
@@ -1118,6 +1169,7 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
         />
       )}
     </div>
+    </PanelStateContext.Provider>
   );
 }
 

@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { usePanelState } from "../hooks/use-panel-state";
+import { useIsMobile } from "../hooks/use-mobile";
+import { Drawer, DrawerContent, DrawerTitle } from "./ui/drawer";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -67,6 +69,7 @@ interface NodeTerminalProps {
 
 export default function NodeTerminal({ theme, sessionToken, authenticated }: NodeTerminalProps) {
   const dark = theme === "dark";
+  const isMobile = useIsMobile();
   const panel = usePanelState();
 
   const [isOpenRaw, setIsOpenRaw] = useState(() => {
@@ -369,7 +372,103 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
     return null;
   }
 
-  // ── Panel ──────────────────────────────────────────────────────────────
+  // ── Shared terminal content ────────────────────────────────────────────
+
+  const terminalContent = (
+    <>
+      {/* Not authenticated */}
+      {!authenticated && (
+        <div className="flex-1 flex items-center justify-center px-6">
+          <div className={`text-center ${textMuted}`} style={sansFont}>
+            <div className={`font-pixel text-xs mb-3 ${goldText}`}>LOGIN REQUIRED</div>
+            <div className="text-sm">Sign in to use the Bitcoin node terminal.</div>
+          </div>
+        </div>
+      )}
+
+      {/* Terminal content */}
+      {authenticated && (
+        <>
+          {/* Output area */}
+          <div
+            ref={outputRef}
+            className="flex-1 min-h-0 overflow-auto px-3 py-2 font-mono text-sm leading-relaxed cursor-text"
+            style={{ fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace" }}
+            onClick={() => {
+              const sel = window.getSelection();
+              if (!sel || sel.isCollapsed) inputRef.current?.focus();
+            }}
+          >
+            {lines.map((line, i) => (
+              <div key={i} className="whitespace-pre-wrap">
+                {line.type === "cmd" && (
+                  <span>
+                    <span className={promptColor}>{PROMPT}</span>
+                    <span className={termText}>{line.text}</span>
+                  </span>
+                )}
+                {line.type === "output" && (
+                  <span className={termTextOutput}>
+                    {highlightJSON(line.text, dark)}
+                  </span>
+                )}
+                {line.type === "error" && (
+                  <span className={dark ? "text-red-400" : "text-red-600"}>{line.text}</span>
+                )}
+                {line.type === "info" && (
+                  <span className={`${infoColor} italic`}>{line.text}</span>
+                )}
+              </div>
+            ))}
+            {running && (
+              <div className={`${dark ? "text-slate-500" : "text-stone-400"} flex items-center gap-2`}>
+                <span className={`inline-block w-3 h-3 border-2 rounded-full animate-spin ${dark ? "border-slate-600 border-t-slate-300" : "border-stone-300 border-t-stone-500"}`} />
+                executing...
+              </div>
+            )}
+          </div>
+
+          {/* Input area */}
+          <div className={`shrink-0 border-t ${panelBorder} px-3 py-2 flex items-center gap-1`}
+            style={{ fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace" }}
+          >
+            <span className={`${promptColor} text-sm shrink-0`}>{PROMPT}</span>
+            <input
+              ref={inputRef}
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={running || provisioning || !nodeReady}
+              className={`flex-1 bg-transparent ${inputTextColor} outline-none border-none ${placeholderColor} disabled:opacity-40`}
+              style={{ fontSize: isMobile ? "16px" : "14px" }}
+              placeholder={nodeReady ? "type a command..." : "waiting for node..."}
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </div>
+        </>
+      )}
+    </>
+  );
+
+  // ── Mobile: Drawer ─────────────────────────────────────────────────────
+
+  if (isMobile) {
+    return (
+      <Drawer open={isOpen} onOpenChange={(open) => setIsOpen(open)}>
+        <DrawerContent className={`max-h-[85dvh] flex flex-col ${panelBg}`} data-testid="drawer-node-terminal">
+          <DrawerTitle className={`font-pixel text-xs ${goldText} px-4 pt-2 flex items-center gap-2`}>
+            Bitcoin Node
+            {provisioning && <span className="inline-block w-3 h-3 border-2 border-[#FFD700]/30 border-t-[#FFD700] rounded-full animate-spin" />}
+          </DrawerTitle>
+          {terminalContent}
+        </DrawerContent>
+      </Drawer>
+    );
+  }
+
+  // ── Desktop: Fixed side panel ──────────────────────────────────────────
 
   return (
     <div
@@ -410,16 +509,6 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
           </button>
         </div>
       </div>
-
-      {/* Not authenticated */}
-      {!authenticated && (
-        <div className="flex-1 flex items-center justify-center px-6">
-          <div className={`text-center ${textMuted}`} style={sansFont}>
-            <div className={`font-pixel text-xs mb-3 ${goldText}`}>LOGIN REQUIRED</div>
-            <div className="text-sm">Sign in to use the Bitcoin node terminal.</div>
-          </div>
-        </div>
-      )}
 
       {/* Help overlay */}
       {showHelp && (
@@ -469,69 +558,7 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
         </div>
       )}
 
-      {/* Terminal content */}
-      {authenticated && (
-        <>
-          {/* Output area */}
-          <div
-            ref={outputRef}
-            className="flex-1 min-h-0 overflow-auto px-3 py-2 font-mono text-sm leading-relaxed cursor-text"
-            style={{ fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace" }}
-            onClick={() => {
-              // Only focus input if user didn't drag-select text
-              const sel = window.getSelection();
-              if (!sel || sel.isCollapsed) inputRef.current?.focus();
-            }}
-          >
-            {lines.map((line, i) => (
-              <div key={i} className="whitespace-pre-wrap">
-                {line.type === "cmd" && (
-                  <span>
-                    <span className={promptColor}>{PROMPT}</span>
-                    <span className={termText}>{line.text}</span>
-                  </span>
-                )}
-                {line.type === "output" && (
-                  <span className={termTextOutput}>
-                    {highlightJSON(line.text, dark)}
-                  </span>
-                )}
-                {line.type === "error" && (
-                  <span className={dark ? "text-red-400" : "text-red-600"}>{line.text}</span>
-                )}
-                {line.type === "info" && (
-                  <span className={`${infoColor} italic`}>{line.text}</span>
-                )}
-              </div>
-            ))}
-            {running && (
-              <div className={`${dark ? "text-slate-500" : "text-stone-400"} flex items-center gap-2`}>
-                <span className={`inline-block w-3 h-3 border-2 rounded-full animate-spin ${dark ? "border-slate-600 border-t-slate-300" : "border-stone-300 border-t-stone-500"}`} />
-                executing...
-              </div>
-            )}
-          </div>
-
-          {/* Input area */}
-          <div className={`shrink-0 border-t ${panelBorder} px-3 py-2 flex items-center gap-1`}
-            style={{ fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace" }}
-          >
-            <span className={`${promptColor} text-sm shrink-0`}>{PROMPT}</span>
-            <input
-              ref={inputRef}
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              disabled={running || provisioning || !nodeReady}
-              className={`flex-1 bg-transparent ${inputTextColor} text-sm outline-none border-none ${placeholderColor} disabled:opacity-40`}
-              placeholder={nodeReady ? "type a command..." : "waiting for node..."}
-              autoComplete="off"
-              spellCheck={false}
-            />
-          </div>
-        </>
-      )}
+      {terminalContent}
     </div>
   );
 }

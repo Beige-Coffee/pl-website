@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from "react";
 import { QRCodeSVG } from "qrcode.react";
+import { useIsMobile } from "../hooks/use-mobile";
 
 interface CheckpointQuestionProps {
   checkpointId: string;
@@ -59,6 +60,7 @@ export default function CheckpointQuestion({
   onOpenProfile,
 }: CheckpointQuestionProps) {
   const dark = theme === "dark";
+  const isMobile = useIsMobile();
   const canClaimRewards = !!pubkey || emailVerified;
 
   const userSuffix = sessionToken ? `-${sessionToken.slice(0, 8)}` : "";
@@ -570,7 +572,7 @@ export default function CheckpointQuestion({
                   <div className={`inline-block border-4 ${dark ? "border-[#2a3552]" : "border-border"} ${dark ? "bg-[#0b1220]" : "bg-background"} p-4`}>
                     <QRCodeSVG
                       value={rewardLnurl}
-                      size={200}
+                      size={isMobile ? 160 : 200}
                       level="M"
                       bgColor="#ffffff"
                       fgColor="#000000"
