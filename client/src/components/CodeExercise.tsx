@@ -11,7 +11,7 @@ import { closeBrackets, closeBracketsKeymap, autocompletion, completionKeymap } 
 // pythonLanguage import kept for potential future use
 // import { pythonLanguage } from "@codemirror/lang-python";
 import { lintKeymap } from "@codemirror/lint";
-import { runPythonTests, type TestResult } from "../lib/pyodide-runner";
+import { runPythonTests, type TestResult, subscribeToPyodideStatus, type PyodideLoadingPhase } from "../lib/pyodide-runner";
 import { createPyodideCompletionSource, createWordCompletionSource, preloadCompletionContext, invalidateCompletionCache } from "../lib/pyodide-completions";
 import { signatureHints } from "../lib/signature-hint-extension";
 import { cleanErrorMessage } from "../lib/error-cleanup";
@@ -112,6 +112,35 @@ const readOnlyDecoPlugin = ViewPlugin.fromClass(
   { decorations: (v) => v.decorations }
 );
 
+// ─── Error Explanations ─────────────────────────────────────────────────────
+
+function getErrorExplanation(error: string): string | null {
+  if (/NameError: name '(\w+)' is not defined/.test(error)) {
+    const varName = error.match(/NameError: name '(\w+)' is not defined/)?.[1];
+    return `You're using a variable \`${varName}\` that hasn't been created yet. Check for typos or missing assignments.`;
+  }
+  if (/TypeError:.*argument/.test(error) || /TypeError:.*takes/.test(error)) {
+    return "You're passing the wrong number or type of arguments to a function. Check the expected parameter types.";
+  }
+  if (/IndentationError/.test(error)) {
+    return "Python requires consistent indentation. Make sure your code blocks use the same number of spaces.";
+  }
+  if (/AssertionError|AssertionError/.test(error)) {
+    return "A test assertion failed. Check the expected vs actual values below.";
+  }
+  if (/SyntaxError/.test(error)) {
+    return "There's a syntax error in your code. Check for missing colons, parentheses, or quotes.";
+  }
+  if (/AttributeError: '(\w+)' object has no attribute '(\w+)'/.test(error)) {
+    const m = error.match(/AttributeError: '(\w+)' object has no attribute '(\w+)'/);
+    return `The \`${m?.[1]}\` object doesn't have an attribute called \`${m?.[2]}\`. Check your spelling or whether the attribute was defined.`;
+  }
+  if (/TypeError:.*not subscriptable/.test(error)) {
+    return "You're trying to use indexing on a value that doesn't support it (e.g., None or an integer).";
+  }
+  return null;
+}
+
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 export interface CodeBlock {
@@ -192,6 +221,9 @@ export default function CodeExercise({
   // Whether this exercise has group context (read-only region above)
   const hasGroupContext = !!preamble;
 
+  // Stable ref for handleRunTests so the keymap doesn't go stale
+  const handleRunTestsRef = useRef<() => void>(() => {});
+
   const [expanded, setExpanded] = useState(false);
   const hydratedRef = useRef(false);
 
@@ -237,7 +269,13 @@ export default function CodeExercise({
   const [running, setRunning] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
   const [pyodideLoading, setPyodideLoading] = useState(false);
+  const [pyodidePhase, setPyodidePhase] = useState<PyodideLoadingPhase>("idle");
   const [allPassed, setAllPassed] = useState(false);
+
+  // Subscribe to Pyodide loading status
+  useEffect(() => {
+    return subscribeToPyodideStatus(setPyodidePhase);
+  }, []);
 
   // Reward state (mirrors CheckpointQuestion)
   const [claiming, setClaiming] = useState(false);
@@ -478,7 +516,11 @@ export default function CodeExercise({
       python(),
       indentUnit.of("    "),
       EditorState.tabSize.of(4),
-      keymap.of([...defaultKeymap, indentWithTab]),
+      keymap.of([
+        { key: "Ctrl-Enter", mac: "Cmd-Enter", run: () => { handleRunTestsRef.current(); return true; } },
+        ...defaultKeymap,
+        indentWithTab,
+      ]),
       // Editable range tracking + restriction (only when group context exists)
       ...(hasGroupContext ? [
         editableRangeField,
@@ -712,6 +754,9 @@ export default function CodeExercise({
       if (ctx) preloadCompletionContext(ctx);
     }
   }, [running, data.testCode, assembleTestCode, assembleContext, setupCode, preamble, crossGroupExercises, classMethodExercises, priorInGroupExercises, hasGroupContext]);
+
+  // Keep ref in sync so the keymap closure is never stale
+  handleRunTestsRef.current = handleRunTests;
 
   // ── Claim reward ─────────────────────────────────────────────────────────
 
@@ -991,7 +1036,13 @@ export default function CodeExercise({
           {running ? (
             <span className="flex items-center gap-2">
               <span className="inline-block w-3 h-3 border-2 border-black/30 border-t-black rounded-full animate-spin" />
-              {pyodideLoading ? "LOADING PYTHON..." : "RUNNING..."}
+              {pyodideLoading && pyodidePhase === "downloading"
+                ? "DOWNLOADING PYTHON..."
+                : pyodideLoading && pyodidePhase === "installing"
+                  ? "INSTALLING PACKAGES..."
+                  : pyodideLoading
+                    ? "LOADING PYTHON..."
+                    : "RUNNING..."}
             </span>
           ) : (
             "RUN TESTS"
@@ -999,7 +1050,11 @@ export default function CodeExercise({
         </button>
 
         <button
-          onClick={handleReset}
+          onClick={() => {
+            if (window.confirm("Reset to starter code? Your changes will be lost.")) {
+              handleReset();
+            }
+          }}
           className={`font-pixel text-xs border-2 ${isMobile ? "px-4 py-3 min-h-[44px] text-sm" : "px-5 py-2.5"} transition-all ${
             dark
               ? "border-[#2a3552] bg-[#0f1930] text-slate-400 hover:text-slate-200 hover:bg-[#132043]"
@@ -1017,11 +1072,19 @@ export default function CodeExercise({
       {/* ── OUTPUT tab (or always on desktop) ── */}
       {(!isMobile || mobileTab === "output") && <>
       {/* Test Results */}
-      {runError && (
-        <div className={`mb-3 px-3 py-2 border ${dark ? "border-red-500/30" : "border-red-300"} ${dark ? "bg-red-500/10" : "bg-red-50"}`} style={sansFont}>
-          <pre className={`text-sm whitespace-pre-wrap m-0 ${dark ? "text-red-300" : "text-red-700"}`} style={sansFont}>{runError}</pre>
-        </div>
-      )}
+      {runError && (() => {
+        const explanation = getErrorExplanation(runError);
+        return (
+          <div className={`mb-3 px-3 py-2 border ${dark ? "border-red-500/30" : "border-red-300"} ${dark ? "bg-red-500/10" : "bg-red-50"}`} style={sansFont}>
+            {explanation && (
+              <div className={`text-sm mb-2 ${dark ? "text-amber-300" : "text-amber-700"}`} style={sansFont}>
+                {explanation}
+              </div>
+            )}
+            <pre className={`text-sm whitespace-pre-wrap m-0 ${dark ? "text-red-300" : "text-red-700"}`} style={sansFont}>{runError}</pre>
+          </div>
+        );
+      })()}
 
       {results && (() => {
         const allTestsPassed = results.length > 0 && results.every((r) => r.passed);
@@ -1029,7 +1092,17 @@ export default function CodeExercise({
         return (
           <div className="mb-3" style={sansFont}>
             {allTestsPassed ? (
-              <div className={`text-base font-semibold ${greenText}`}>Passed!</div>
+              <div>
+                <div className={`text-base font-semibold ${greenText}`}>
+                  {results.length}/{results.length} passed
+                </div>
+                {results.map((r, i) => (
+                  <div key={i} className="flex items-baseline gap-1.5 text-sm py-0.5">
+                    <span className="text-green-400 font-bold shrink-0">{"\u2713"}</span>
+                    <span className={greenText}>{r.name.replace(/^test_/, "").replace(/_/g, " ")}</span>
+                  </div>
+                ))}
+              </div>
             ) : (
               <>
                 <div className={`text-sm font-semibold ${textMuted} mb-1`}>

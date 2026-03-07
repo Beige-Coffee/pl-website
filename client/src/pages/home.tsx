@@ -1,16 +1,37 @@
 import { Link, useLocation } from "wouter";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import lightningBolt from "@assets/generated_images/a_pixel_art_lightning_bolt_icon..png";
 import xkLogo from "/xk-logo.png";
 import LoginModal from "../components/LoginModal";
 import { useAuth } from "../hooks/use-auth";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { chapters as lightningChapters } from "./lightning-tutorial";
+import { chapters as noiseChapters } from "./noise-tutorial";
 
 export default function Home() {
   const [showCodeModal, setShowCodeModal] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showContinue, setShowContinue] = useState(false);
   const [, navigate] = useLocation();
   const { authenticated, logout, loginWithToken, email, pubkey } = useAuth();
+
+  // "Continue Where You Left Off" — read last chapters from localStorage
+  const continueData = useMemo(() => {
+    try {
+      const lnChapterId = localStorage.getItem("pl-lightning-last-chapter");
+      const noiseChapterId = localStorage.getItem("pl-noise-last-chapter");
+      const items: { course: string; chapterId: string; chapterTitle: string; path: string }[] = [];
+      if (lnChapterId) {
+        const ch = lightningChapters.find((c) => c.id === lnChapterId);
+        if (ch) items.push({ course: "Intro to Payment Channels", chapterId: lnChapterId, chapterTitle: ch.title, path: `/lightning-tutorial/${lnChapterId}` });
+      }
+      if (noiseChapterId) {
+        const ch = noiseChapters.find((c) => c.id === noiseChapterId);
+        if (ch) items.push({ course: "Noise Protocol", chapterId: noiseChapterId, chapterTitle: ch.title, path: `/noise-tutorial/${noiseChapterId}` });
+      }
+      return items;
+    } catch { return []; }
+  }, []);
 
   const handleCodeClick = () => {
     setShowCodeModal(true);
@@ -92,35 +113,74 @@ export default function Home() {
       )}
 
       {/* Top Banner */}
-      <div className="w-full border-b-4 border-border bg-card p-2 flex items-center justify-end gap-6 pixel-shadow relative z-50">
-        <Link href="/learn" className="font-pixel text-sm md:text-base hover:text-primary transition-colors border-b-4 border-transparent hover:border-primary pb-1">
-          LEARN
-        </Link>
-        <Link href="/about" data-testid="link-about" className="font-pixel text-sm md:text-base hover:text-primary transition-colors border-b-4 border-transparent hover:border-primary pb-1">
-          ABOUT
-        </Link>
-        {authenticated ? (
-          <button
-            type="button"
-            onClick={logout}
-            className="font-pixel text-sm md:text-base hover:text-primary transition-colors border-b-4 border-transparent hover:border-primary pb-1"
-            title={email || pubkey ? `Logged in as ${email || (pubkey?.slice(0, 8) + "...")}` : "Logged in"}
-          >
-            LOGOUT
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setShowLoginModal(true)}
-            className="font-pixel text-sm md:text-base hover:text-primary transition-colors border-b-4 border-transparent hover:border-primary pb-1"
-            data-testid="button-login"
-          >
-            LOGIN
-          </button>
-        )}
+      <div className="w-full border-b-4 border-border bg-card p-2 flex items-center justify-between pixel-shadow relative z-50">
+        <div className="flex items-center gap-4 md:gap-6">
+          <Link href="/learn" className="font-pixel text-sm md:text-base hover:text-primary transition-colors border-b-4 border-transparent hover:border-primary pb-1">
+            LEARN
+          </Link>
+          <Link href="/about" data-testid="link-about" className="font-pixel text-sm md:text-base hover:text-primary transition-colors border-b-4 border-transparent hover:border-primary pb-1">
+            ABOUT
+          </Link>
+          <a href="https://discord.gg/j2G7nK8EDh" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors border-b-4 border-transparent hover:border-primary pb-1" title="Discord">
+            <svg width="20" height="20" viewBox="0 0 71 55" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+              <path d="M60.1 4.9A58.5 58.5 0 0 0 45.4.2a.2.2 0 0 0-.2.1 40.8 40.8 0 0 0-1.8 3.7 54 54 0 0 0-16.2 0A37.3 37.3 0 0 0 25.4.3a.2.2 0 0 0-.2-.1A58.4 58.4 0 0 0 10.5 4.9a.2.2 0 0 0-.1.1C1.5 18.7-.9 32.2.3 45.5v.2a58.9 58.9 0 0 0 17.7 9a.2.2 0 0 0 .3-.1 42.1 42.1 0 0 0 3.6-5.9.2.2 0 0 0-.1-.3 38.8 38.8 0 0 1-5.5-2.6.2.2 0 0 1 0-.4l1.1-.9a.2.2 0 0 1 .2 0 42 42 0 0 0 35.6 0 .2.2 0 0 1 .2 0l1.1.9a.2.2 0 0 1 0 .3 36.4 36.4 0 0 1-5.5 2.7.2.2 0 0 0-.1.3 47.3 47.3 0 0 0 3.6 5.9.2.2 0 0 0 .3.1A58.7 58.7 0 0 0 70.5 45.7v-.2c1.4-15-2.3-28-9.8-39.5a.2.2 0 0 0-.1-.1ZM23.7 37.3c-3.4 0-6.3-3.2-6.3-7s2.8-7 6.3-7 6.4 3.1 6.3 7-2.8 7-6.3 7Zm23.2 0c-3.4 0-6.3-3.2-6.3-7s2.8-7 6.3-7 6.4 3.1 6.3 7-2.8 7-6.3 7Z" />
+            </svg>
+          </a>
+        </div>
+        <div className="flex items-center gap-4 md:gap-6">
+          {authenticated ? (
+            <button
+              type="button"
+              onClick={logout}
+              className="font-pixel text-sm md:text-base hover:text-primary transition-colors border-b-4 border-transparent hover:border-primary pb-1"
+              title={email || pubkey ? `Logged in as ${email || (pubkey?.slice(0, 8) + "...")}` : "Logged in"}
+            >
+              LOGOUT
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowLoginModal(true)}
+              className="font-pixel text-sm md:text-base hover:text-primary transition-colors border-b-4 border-transparent hover:border-primary pb-1"
+              data-testid="button-login"
+            >
+              LOGIN
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className="flex-1 flex flex-col items-center justify-start px-4 pt-8 md:pt-12 pb-8">
+      <div className="flex-1 flex flex-col items-center justify-start px-4 pt-8 md:pt-12 pb-8 relative">
+        {/* Continue Where You Left Off — floating button + popup */}
+        {authenticated && continueData.length > 0 && (
+          <div className="absolute top-2 left-4 z-20">
+            <button
+              onClick={() => setShowContinue((s) => !s)}
+              className="font-pixel text-[10px] text-foreground/60 hover:text-foreground transition-colors border-2 border-border bg-card px-2.5 py-1 hover:bg-secondary"
+            >
+              CONTINUE WHERE YOU LEFT OFF ▾
+            </button>
+            {showContinue && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowContinue(false)} />
+                <div className="absolute top-full left-0 mt-1 z-20 bg-card border-2 border-border shadow-md min-w-[220px]">
+                  {continueData.map((item) => (
+                    <Link
+                      key={item.path}
+                      href={item.path}
+                      className="flex items-center gap-2 px-3 py-2 hover:bg-secondary transition-colors text-sm border-b last:border-b-0 border-border"
+                      style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}
+                      onClick={() => setShowContinue(false)}
+                    >
+                      <span className="font-pixel text-[10px] text-foreground/50 shrink-0">{item.course === "Intro to Payment Channels" ? "LN" : "NOISE"}</span>
+                      <span className="font-semibold truncate">{item.chapterTitle}</span>
+                    </Link>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
         <header className="text-center mb-8 md:mb-10 w-full max-w-4xl">
           <h1 className="text-3xl md:text-5xl font-pixel leading-tight mb-4 text-shadow-retro">
             Programming<br />Lightning
@@ -131,6 +191,7 @@ export default function Home() {
         </header>
 
         <div className="w-full max-w-6xl space-y-4 md:space-y-5">
+
           {/* Course 1: Intro to Payment Channels */}
           <div>
             <div className="flex items-stretch gap-0">

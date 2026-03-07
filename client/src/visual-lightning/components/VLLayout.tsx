@@ -250,7 +250,7 @@ export function VLLayout({
   return (
     <div style={{ position: "relative" }}>
       {/* Floating back button */}
-      <Link href="/" className="vl-back-button" aria-label="Back to home">
+      <Link href="/learn" className="vl-back-button" aria-label="Back to Learn">
         <svg
           width="18"
           height="18"

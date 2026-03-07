@@ -39,11 +39,14 @@ const WORKER_SRC = [
   "async function initPyodide() {",
   "  if (readyPromise) return readyPromise;",
   "  readyPromise = (async () => {",
+  '    self.postMessage({ type: "loading", phase: "downloading" });',
   '    importScripts("https://cdn.jsdelivr.net/pyodide/v0.27.7/full/pyodide.js");',
   "    pyodide = await loadPyodide();",
+  '    self.postMessage({ type: "loading", phase: "installing" });',
   '    await pyodide.loadPackage("micropip");',
   '    const micropip = pyodide.pyimport("micropip");',
   '    await micropip.install(["cryptography", "ecdsa", "python-bitcoinlib"]);',
+  '    self.postMessage({ type: "loading", phase: "ready" });',
   "  })();",
   "  return readyPromise;",
   "}",
@@ -170,8 +173,26 @@ const workerURL = URL.createObjectURL(
 // Singleton runner
 // ---------------------------------------------------------------------------
 
+export type PyodideLoadingPhase = "idle" | "downloading" | "installing" | "ready";
+
 let worker: Worker | null = null;
 let messageId = 0;
+let currentPhase: PyodideLoadingPhase = "idle";
+const loadingListeners = new Set<(phase: PyodideLoadingPhase) => void>();
+
+/**
+ * Subscribe to Pyodide loading status changes.
+ * Returns an unsubscribe function.
+ */
+export function subscribeToPyodideStatus(
+  callback: (phase: PyodideLoadingPhase) => void
+): () => void {
+  loadingListeners.add(callback);
+  // Immediately fire with current state
+  callback(currentPhase);
+  return () => { loadingListeners.delete(callback); };
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const pending = new Map<
   number,
@@ -186,7 +207,12 @@ function getWorker(): Worker {
   if (!worker) {
     worker = new Worker(workerURL);
     worker.onmessage = (e) => {
-      const { id, type, results, message, output, error, items, signature } = e.data;
+      const { id, type, results, message, output, error, items, signature, phase } = e.data;
+      if (type === "loading") {
+        currentPhase = phase as PyodideLoadingPhase;
+        loadingListeners.forEach((cb) => cb(currentPhase));
+        return;
+      }
       const entry = pending.get(id);
       if (!entry) return;
       pending.delete(id);

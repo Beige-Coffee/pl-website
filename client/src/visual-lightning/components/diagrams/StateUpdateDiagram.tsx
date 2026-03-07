@@ -165,8 +165,8 @@ const CAPTIONS: [string, string][] = [
 // ── Caption line 2 colors per step ──
 const CAPTION_L2_COLORS = [GOLD, ALICE_CLR, BOB_CLR, BOB_CLR, GOLD];
 
-export function StateUpdateDiagram() {
-  const [step, setStep] = useState(0);
+export function StateUpdateDiagram({ initialStep = 0 }: { initialStep?: number } = {}) {
+  const [step, setStep] = useState(initialStep);
   const [hovered, setHovered] = useState<string | null>(null);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement>(null);

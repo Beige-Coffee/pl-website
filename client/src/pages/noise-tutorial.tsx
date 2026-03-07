@@ -659,6 +659,11 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
   const prev = chapters[activeIndex - 1];
   const next = chapters[activeIndex + 1];
 
+  // Save current chapter for "Continue Where You Left Off" on home page
+  useEffect(() => {
+    try { localStorage.setItem("pl-noise-last-chapter", activeId); } catch {}
+  }, [activeId]);
+
   const grouped = useMemo(() => {
     const bySection = new Map<Chapter["section"], Chapter[]>();
     for (const s of sectionOrder) bySection.set(s, []);

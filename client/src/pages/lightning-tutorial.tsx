@@ -21,6 +21,7 @@ import { LIGHTNING_EXERCISES } from "../data/lightning-exercises";
 import { getExerciseGroupContext } from "../lib/exercise-groups";
 import TxGenerator from "../components/TxGenerator";
 import FundingTxDiagram from "../components/FundingTxDiagram";
+import ScriptDebugger from "../components/ScriptDebugger/ScriptDebugger";
 import FeedbackWidget from "../components/FeedbackWidget";
 import NotebookRef from "../components/NotebookRef";
 import { TX_GENERATORS } from "../data/tx-generators";
@@ -179,6 +180,17 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
     answer: 1,
     explanation: "The receiver (Dianne) generates a random preimage and includes its hash in the invoice. The sender (Alice) locks funds along each hop using this hash. Payments settle in reverse: Dianne reveals the preimage to Bob to claim her funds, then Bob uses that same preimage to claim funds from Alice. This backward flow is what makes the payment atomic — either every hop gets the preimage and settles, or none do.",
   },
+  "htlc-atomicity": {
+    question: "In a multi-hop payment (Alice \u2192 Bob \u2192 Dianne), why must the same payment hash be used in every hop's HTLC?",
+    options: [
+      "It reduces the number of public keys that need to be exchanged between parties",
+      "It ensures atomicity: when Dianne reveals the preimage to Bob, Bob can immediately use it to claim from Alice",
+      "It allows Lightning nodes to route payments without knowing the preimage in advance",
+      "It makes the transaction smaller by reducing witness data size",
+    ],
+    answer: 1,
+    explanation: "Using the same payment hash at every hop is what makes Lightning payments atomic. When Dianne reveals the preimage to claim from Bob, Bob can immediately use that same preimage to claim from Alice, because Alice's HTLC uses the same hash. If different hashes were used, Bob would need a different preimage for Alice's HTLC, which Dianne wouldn't provide. The shared hash creates a chain reaction: once the preimage is revealed anywhere, it can unlock every HTLC along the route.",
+  },
   "offered-vs-received": {
     question: "From the commitment transaction holder's perspective, what distinguishes an 'offered' HTLC from a 'received' HTLC?",
     options: [
@@ -222,6 +234,50 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
     ],
     answer: 2,
     explanation: "Before `option_static_remotekey`, the to_remote output used a per-commitment derived key. This meant that if the remote party lost their channel state data, they couldn't spend their output because they wouldn't know which per-commitment point was used. With static remotekey (now mandatory in the spec), the to_remote output uses the payment_basepoint directly. This means the remote party can always recover their funds using their base private key alone, even without channel state. It's a major reliability improvement.",
+  },
+  "review-ecdh-bolt8": {
+    question: "Review: What does the Elliptic Curve Diffie-Hellman (ECDH) operation produce in BOLT 8?",
+    options: [
+      "A digital signature that authenticates the sender's identity",
+      "A shared secret between two parties, derived from their respective private and public keys",
+      "A new public/private key pair for encrypting messages",
+      "A hash of both parties' public keys used as a channel identifier",
+    ],
+    answer: 1,
+    explanation: "ECDH allows two parties to independently compute the same shared secret by combining their own private key with the other party's public key. In BOLT 8, this shared secret is used as input to HKDF to derive encryption keys for the transport layer. Neither party needs to reveal their private key, making it ideal for establishing secure communication channels.",
+  },
+  "review-funding-pubkey-sort": {
+    question: "Review: Why are the two pubkeys sorted lexicographically in the 2-of-2 funding script?",
+    options: [
+      "Sorting makes the script execute faster during validation",
+      "Both parties must independently produce the exact same script (since its hash determines the P2WSH address), and sorting provides a deterministic ordering",
+      "Bitcoin consensus rules require sorted keys in all multisig scripts",
+      "It prevents an attacker from substituting their own key into the script",
+    ],
+    answer: 1,
+    explanation: "The funding output is a P2WSH address, which means both parties must compute the same SHA256 hash of the witness script. If Alice and Bob used different key orderings, they would produce different script hashes and disagree on the funding address. Lexicographic sorting is a simple, deterministic rule both can follow independently.",
+  },
+  "review-funding-unilateral": {
+    question: "Review: Why can't Alice unilaterally spend the funding output?",
+    options: [
+      "The funding output is timelocked and cannot be spent until the channel closes",
+      "Alice's key is encrypted and she cannot access it without Bob's cooperation",
+      "The funding output is a 2-of-2 multisig, requiring both Alice's and Bob's signatures to spend",
+      "The Bitcoin network rejects transactions from a single party in a channel",
+    ],
+    answer: 2,
+    explanation: "The funding output uses a 2-of-2 multisig script, which requires valid signatures from both Alice and Bob to satisfy the spending conditions. This is the foundation of trustless channels: neither party can move funds alone, so they must cooperate on every state update. If one party goes offline, the other can broadcast their latest commitment transaction, which was pre-signed by both parties.",
+  },
+  "review-revoked-broadcast": {
+    question: "Review: What happens if Alice broadcasts a revoked (old) commitment transaction?",
+    options: [
+      "The transaction is rejected by the Bitcoin network as invalid",
+      "Alice's funds are frozen until she broadcasts the correct state",
+      "Bob can use the revocation key to claim ALL channel funds as a penalty",
+      "Both parties lose their funds and the channel is permanently closed",
+    ],
+    answer: 2,
+    explanation: "When Alice revoked that old state, she revealed her per-commitment secret to Bob. This allowed Bob to derive the revocation private key for Alice's old commitment. If Alice broadcasts it, her to_local output has a CSV delay, giving Bob time to detect the fraud and sweep all funds using the revocation key. This penalty mechanism makes cheating economically irrational.",
   },
   "channel-fairness": {
     question: "In the \"cut and choose\" fairness protocol, why is the cutter incentivized to split the cake evenly?",
@@ -540,26 +596,26 @@ export const CHAPTER_REQUIREMENTS: Record<string, {
   "keys-manager": { checkpoints: [], exercises: [] },
   "bip32-derivation": { checkpoints: ["bip32-derivation"], exercises: [] },
   "channel-keys": { checkpoints: [], exercises: ["ln-exercise-channel-key-manager"] },
-  "payment-channels-overview": { checkpoints: ["payment-channels-scaling"], exercises: [] },
+  "payment-channels-overview": { checkpoints: ["review-ecdh-bolt8", "payment-channels-scaling"], exercises: [] },
   "funding-script": { checkpoints: ["funding-multisig", "pubkey-sorting"], exercises: ["ln-exercise-funding-script"] },
   "funding-transaction": { checkpoints: [], exercises: ["ln-exercise-funding-tx", "gen-funding"] },
   "refund-transactions": { checkpoints: [], exercises: [] },
   "revocable-transactions": { checkpoints: ["asymmetric-commits"], exercises: [] },
   "signing": { checkpoints: [], exercises: ["ln-exercise-sign-input"] },
   "open-channel": { checkpoints: [], exercises: [] },
-  "revocation-keys": { checkpoints: ["revocation-purpose", "revocation-key-construction", "revocation-secret-exchange"], exercises: [] },
+  "revocation-keys": { checkpoints: ["review-funding-unilateral", "revocation-purpose", "revocation-key-construction", "revocation-secret-exchange"], exercises: [] },
   "deriving-revocation-keys": { checkpoints: [], exercises: ["ln-exercise-revocation-pubkey", "ln-exercise-revocation-privkey"] },
   "commitment-secrets": { checkpoints: ["commitment-secret-algorithm"], exercises: ["ln-exercise-commitment-secret", "ln-exercise-per-commitment-point"] },
   "key-derivation": { checkpoints: [], exercises: ["ln-exercise-derive-pubkey", "ln-exercise-derive-privkey", "ln-exercise-get-commitment-keys"] },
-  "commitment-scripts": { checkpoints: ["static-remotekey"], exercises: ["ln-exercise-to-remote-script", "ln-exercise-to-local-script"] },
+  "commitment-scripts": { checkpoints: ["review-funding-pubkey-sort", "static-remotekey", "csv-purpose"], exercises: ["ln-exercise-to-remote-script", "ln-exercise-to-local-script"] },
   "obscured-commitment": { checkpoints: ["obscured-commitment"], exercises: ["ln-exercise-obscure-factor", "ln-exercise-obscured-commitment"] },
   "commitment-assembly": { checkpoints: ["fee-deduction"], exercises: ["ln-exercise-commitment-outputs", "ln-exercise-sort-outputs", "ln-exercise-commitment-tx"] },
-  "commitment-finalization": { checkpoints: [], exercises: ["ln-exercise-finalize-commitment"] },
+  "commitment-finalization": { checkpoints: ["witness-structure"], exercises: ["ln-exercise-finalize-commitment"] },
   "get-commitment-tx": { checkpoints: [], exercises: ["gen-commitment"] },
   "routing-payments": { checkpoints: [], exercises: [] },
-  "htlc-introduction": { checkpoints: ["htlc-preimage-purpose"], exercises: [] },
+  "htlc-introduction": { checkpoints: ["review-revoked-broadcast", "htlc-preimage-purpose"], exercises: [] },
   "simple-htlc": { checkpoints: [], exercises: [] },
-  "htlcs-on-lightning": { checkpoints: [], exercises: [] },
+  "htlcs-on-lightning": { checkpoints: ["htlc-atomicity"], exercises: [] },
   "channel-state-updates": { checkpoints: [], exercises: [] },
   "offered-htlcs": { checkpoints: ["offered-vs-received"], exercises: ["ln-exercise-offered-htlc-script", "ln-exercise-htlc-timeout-tx", "ln-exercise-finalize-htlc-timeout"] },
   "get-htlc-commitment": { checkpoints: [], exercises: ["gen-htlc-commitment"] },
@@ -1002,6 +1058,11 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
   // (downloading + installing packages takes ~10-15s on first visit)
   useEffect(() => { preloadWorker(); }, []);
 
+  // Save current chapter for "Continue Where You Left Off" on home page
+  useEffect(() => {
+    try { localStorage.setItem("pl-lightning-last-chapter", activeId); } catch {}
+  }, [activeId]);
+
   // On mount: sync localStorage DragDrop completions to server + local state
   // so sidebar checkmarks appear immediately without navigating to each page
   const localSyncDone = useRef(false);
@@ -1045,6 +1106,24 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
   const [toolsOpen, setToolsOpen] = useState(false);
   const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
   const toolsRef = useRef<HTMLDivElement>(null);
+
+  // One-time tooltip for TOOLS button
+  const [toolsTooltipVisible, setToolsTooltipVisible] = useState(false);
+  useEffect(() => {
+    if (tutorialMode !== "code") return;
+    try {
+      if (localStorage.getItem("pl-tools-tooltip-shown")) return;
+    } catch { return; }
+    const timer = setTimeout(() => {
+      setToolsTooltipVisible(true);
+      const dismiss = setTimeout(() => {
+        setToolsTooltipVisible(false);
+        try { localStorage.setItem("pl-tools-tooltip-shown", "true"); } catch {}
+      }, 8000);
+      return () => clearTimeout(dismiss);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [tutorialMode]);
 
   const activeIndex = idxOf(activeId);
   const active = chapters[activeIndex] ?? chapters[0];
@@ -1093,6 +1172,9 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
       // Mark the outgoing chapter as visited this session
       visitedChaptersRef.current.add(prevChapterRef.current);
       prevChapterRef.current = activeId;
+
+      // Save last chapter for "Continue Where You Left Off"
+      try { localStorage.setItem("pl-lightning-last-chapter", activeId); } catch {}
 
       // Restore scroll if we visited this chapter earlier in the session
       const saved = visitedChaptersRef.current.has(activeId)
@@ -1600,7 +1682,13 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
             style={{ right: panelPadding + 16, transition: panelTransition, padding: "8px 10px" }}
           >
             <button
-              onClick={() => setToolsOpen((o) => !o)}
+              onClick={() => {
+                setToolsOpen((o) => !o);
+                if (toolsTooltipVisible) {
+                  setToolsTooltipVisible(false);
+                  try { localStorage.setItem("pl-tools-tooltip-shown", "true"); } catch {}
+                }
+              }}
               className={`flex items-center gap-2 font-pixel text-[14px] tracking-wide cursor-pointer ${
                 theme === "dark"
                   ? "text-slate-300 hover:text-slate-100"
@@ -1610,6 +1698,25 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
               <span>TOOLS</span>
               <span className={`text-[10px] transition-transform ${toolsOpen ? "" : "-rotate-90"}`}>&#9660;</span>
             </button>
+            {toolsTooltipVisible && (
+              <div
+                className={`absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-2 text-sm rounded border-2 shadow-lg whitespace-nowrap z-50 animate-in fade-in duration-300 ${
+                  theme === "dark"
+                    ? "bg-[#0f1930] border-[#FFD700] text-slate-200"
+                    : "bg-card border-[#b8860b] text-foreground"
+                }`}
+                style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}
+                onClick={() => {
+                  setToolsTooltipVisible(false);
+                  try { localStorage.setItem("pl-tools-tooltip-shown", "true"); } catch {}
+                }}
+              >
+                Use TOOLS to access your Scratchpad, Bitcoin Node, and Transactions
+                <div className={`absolute bottom-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-r-[6px] border-b-[6px] border-l-transparent border-r-transparent ${
+                  theme === "dark" ? "border-b-[#FFD700]" : "border-b-[#b8860b]"
+                }`} />
+              </div>
+            )}
             {toolsOpen && (
               <>
                 <div className={`h-[2px] mt-2 mb-2 ${theme === "dark" ? "bg-[#2a3552]" : "bg-[#d4c9a8]"}`} />
@@ -3624,6 +3731,10 @@ function ChapterContent({
           },
           "funding-diagram": () => {
             return <FundingTxDiagram theme={theme} />;
+          },
+          "script-debugger": ({ path }: any) => {
+            const validPath = path === "preimage" ? "preimage" : "timeout";
+            return <ScriptDebugger path={validPath} theme={theme} />;
           },
           "notebook-ref": ({ storagekey, label }: any) => {
             return <NotebookRef storageKey={String(storagekey)} label={String(label || storagekey)} theme={theme} />;
