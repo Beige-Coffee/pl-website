@@ -185,6 +185,7 @@ interface CodeExerciseProps {
   classMethodExercises?: Array<{ id: string; starterCode: string }>; // CKM class methods — after setupCode's class decl
   priorInGroupExercises?: Array<{ id: string; starterCode: string }>; // Same-group priors — after preamble
   futureExercises?: Array<{ id: string; starterCode: string }>;
+  tutorialType?: "lightning" | "noise";
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -209,6 +210,7 @@ export default function CodeExercise({
   classMethodExercises,
   priorInGroupExercises,
   futureExercises,
+  tutorialType,
 }: CodeExerciseProps) {
   const dark = theme === "dark";
   const isMobile = useIsMobile();
@@ -261,6 +263,7 @@ export default function CodeExercise({
 
   // Hint state: null = closed, "conceptual" | "steps" | "code" = which is open
   const [activeHint, setActiveHint] = useState<"conceptual" | "steps" | "code" | null>(null);
+  const [resetConfirm, setResetConfirm] = useState(false);
   const hintCodeRef = useRef<HTMLDivElement>(null);
   const hintViewRef = useRef<EditorView | null>(null);
 
@@ -1049,20 +1052,46 @@ export default function CodeExercise({
           )}
         </button>
 
-        <button
-          onClick={() => {
-            if (window.confirm("Reset to starter code? Your changes will be lost.")) {
-              handleReset();
-            }
-          }}
-          className={`font-pixel text-xs border-2 ${isMobile ? "px-4 py-3 min-h-[44px] text-sm" : "px-5 py-2.5"} transition-all ${
+        {resetConfirm ? (
+          <div className={`flex items-center gap-1.5 font-pixel text-xs border-2 ${isMobile ? "px-3 py-2 min-h-[44px] text-sm" : "px-3 py-1.5"} ${
             dark
-              ? "border-[#2a3552] bg-[#0f1930] text-slate-400 hover:text-slate-200 hover:bg-[#132043]"
-              : "border-border bg-background text-foreground/60 hover:text-foreground hover:bg-secondary"
-          }`}
-        >
-          RESET
-        </button>
+              ? "border-red-500/50 bg-red-950/30 text-red-300"
+              : "border-red-300 bg-red-50 text-red-700"
+          }`}>
+            <span className="mr-1">Reset?</span>
+            <button
+              onClick={() => { handleReset(); setResetConfirm(false); }}
+              className={`font-pixel text-xs px-2 py-0.5 border transition-colors ${
+                dark
+                  ? "border-red-500/50 bg-red-500/20 text-red-300 hover:bg-red-500/40"
+                  : "border-red-400 bg-red-100 text-red-700 hover:bg-red-200"
+              }`}
+            >
+              YES
+            </button>
+            <button
+              onClick={() => setResetConfirm(false)}
+              className={`font-pixel text-xs px-2 py-0.5 border transition-colors ${
+                dark
+                  ? "border-[#2a3552] bg-[#0f1930] text-slate-400 hover:text-slate-200"
+                  : "border-border bg-background text-foreground/60 hover:text-foreground"
+              }`}
+            >
+              NO
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setResetConfirm(true)}
+            className={`font-pixel text-xs border-2 ${isMobile ? "px-4 py-3 min-h-[44px] text-sm" : "px-5 py-2.5"} transition-all ${
+              dark
+                ? "border-[#2a3552] bg-[#0f1930] text-slate-400 hover:text-slate-200 hover:bg-[#132043]"
+                : "border-border bg-background text-foreground/60 hover:text-foreground hover:bg-secondary"
+            }`}
+          >
+            RESET
+          </button>
+        )}
       </div>
 
       {/* Mobile keyboard toolbar */}
@@ -1435,6 +1464,7 @@ export default function CodeExercise({
       currentExerciseId={exerciseId}
       theme={theme}
       onClose={() => setFileBrowserOpen(false)}
+      tutorialType={tutorialType}
     />
   ) : null;
 

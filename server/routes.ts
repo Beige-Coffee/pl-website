@@ -146,10 +146,6 @@ export const CHECKPOINT_ANSWER_KEY: Record<string, number> = {
   // Lightning tutorial drag-drop exercise (client validates matches, always sends 0)
   "course-tools-match": 0,
   // Lightning tutorial checkpoint questions
-  "review-ecdh-bolt8": 1,
-  "review-funding-pubkey-sort": 1,
-  "review-funding-unilateral": 2,
-  "review-revoked-broadcast": 2,
   "channel-fairness": 1,
   "payment-channels-scaling": 1,
   "asymmetric-commits": 1,
