@@ -436,7 +436,7 @@ export const chapters: Chapter[] = [
     title: "Channel Open",
     section: "Commitment Txs",
     kind: "md",
-    file: "/lightning_tutorial/3.5-open-channel.md",
+    file: "/lightning_tutorial/5.6-open-channel.md",
   },
   {
     id: "routing-payments",

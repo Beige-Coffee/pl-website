@@ -246,8 +246,8 @@ const SELF_COMPLETIONS: Record<string, Completion[]> = {
     { label: "commitment_seed", type: "property", detail: "Family 5 seed (no pubkey)" },
     // Methods
     { label: "sign_input", type: "function", detail: "Sign a transaction input" },
-    { label: "build_commitment_secret", type: "function", detail: "Derive per-commitment secret" },
-    { label: "derive_per_commitment_point", type: "function", detail: "Derive per-commitment point" },
+    { label: "build_commitment_secret", type: "function", detail: "Derive per-commitment secret from shachain index" },
+    { label: "derive_per_commitment_point", type: "function", detail: "Derive per-commitment point from commitment number" },
     { label: "get_commitment_keys", type: "function", detail: "Get all commitment keys for a state" },
   ],
 };

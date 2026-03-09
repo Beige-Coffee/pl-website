@@ -560,20 +560,20 @@ def test_pubkey_consistency():
     id: "ln-exercise-commitment-secret",
     title: "Exercise 7: Build Commitment Secret",
     description:
-      "Implement <code>ChannelKeyManager.build_commitment_secret()</code> using the shachain algorithm. For each of the 48 bits (from bit 47 down to bit 0), if the bit at position <code>i</code> in the commitment number is set, flip bit <code>i</code> in <code>self.commitment_seed</code> and hash with SHA256.",
-    starterCode: `    def build_commitment_secret(self, commitment_number: int) -> bytes:
+      "Implement <code>ChannelKeyManager.build_commitment_secret()</code> using the shachain algorithm. This method takes BOLT 3's descending <code>per_commitment_index</code>, not the ascending channel <code>commitment_number</code>. For each of the 48 bits (from bit 47 down to bit 0), if the bit at position <code>i</code> in the index is set, flip bit <code>i</code> in <code>self.commitment_seed</code> and hash with SHA256.",
+    starterCode: `    def build_commitment_secret(self, per_commitment_index: int) -> bytes:
         """
         Derive a per-commitment secret using the shachain algorithm (BOLT 3).
 
         Uses self.commitment_seed as the starting seed.
 
         For each bit position i from 47 down to 0:
-            If bit i of commitment_number is set (1):
+            If bit i of per_commitment_index is set (1):
                 - Flip bit i of the current value
                 - Hash the result with SHA256
 
         Args:
-            commitment_number: commitment index (0 to 2^48-1)
+            per_commitment_index: descending shachain index (0 to 2^48-1)
 
         Returns:
             bytes: 32-byte commitment secret
@@ -618,15 +618,15 @@ def test_deterministic():
 `,
     hints: {
       conceptual:
-        "<p><strong>Goal:</strong> Implement the <strong>shachain algorithm</strong> (BOLT 3), which derives per-commitment secrets from <code>self.commitment_seed</code>.<br><br><strong>How it works:</strong> The algorithm iterates through 48 bit positions (47 down to 0). For each position where the corresponding bit in the commitment number is set, it <strong>flips that bit</strong> in the working seed value and then <strong>hashes the result</strong> with <code>hashlib.sha256</code>.<br><br><strong>Tools you will need:</strong> A <code>bytearray</code> for the mutable working copy. Bit manipulation uses integer division and modulo to map bit position <code>i</code> to a byte index and bit within that byte.</p>",
+        "<p><strong>Goal:</strong> Implement the <strong>shachain algorithm</strong> (BOLT 3), which derives per-commitment secrets from <code>self.commitment_seed</code>.<br><br><strong>How it works:</strong> This method takes BOLT's descending <code>per_commitment_index</code>. The algorithm iterates through 48 bit positions (47 down to 0). For each position where the corresponding bit in the index is set, it <strong>flips that bit</strong> in the working seed value and then <strong>hashes the result</strong> with <code>hashlib.sha256</code>.<br><br><strong>Tools you will need:</strong> A <code>bytearray</code> for the mutable working copy. Bit manipulation uses integer division and modulo to map bit position <code>i</code> to a byte index and bit within that byte.</p>",
       steps:
-        '<ol><li>Make a mutable copy of <code>self.commitment_seed</code> using <code>bytearray()</code> (this is necessary because Python <code>bytes</code> objects are immutable, meaning you can\'t modify individual bytes in place. <code>bytearray</code> is the mutable version that allows bit flipping)</li><li>Loop through bit positions from 47 down to 0 using <code>range(47, -1, -1)</code></li><li>For each position <code>i</code>, figure out which byte and which bit within that byte you need to work with. Since the seed is an array of bytes (8 bits each), use <code>i // 8</code> to get the byte index and <code>i % 8</code> to get the bit position within that byte</li><li>Check if bit <code>i</code> is set in the commitment number using right-shift (<code>&gt;&gt;</code>) and bitwise AND (<code>&amp; 1</code>). If it is set, flip that bit in the seed using XOR (<code>^=</code>) with the bit mask <code>1 &lt;&lt; (i % 8)</code> at the byte index. Then immediately hash the entire seed with <code>hashlib.sha256().digest()</code> and wrap the result back in a <code>bytearray()</code> so you can continue mutating it</li><li>After processing all 48 bits, convert the result to immutable <code>bytes()</code> and return it</li></ol>',
-      code: `    def build_commitment_secret(self, commitment_number):
+        '<ol><li>Make a mutable copy of <code>self.commitment_seed</code> using <code>bytearray()</code> (this is necessary because Python <code>bytes</code> objects are immutable, meaning you can\'t modify individual bytes in place. <code>bytearray</code> is the mutable version that allows bit flipping)</li><li>Loop through bit positions from 47 down to 0 using <code>range(47, -1, -1)</code></li><li>For each position <code>i</code>, figure out which byte and which bit within that byte you need to work with. Since the seed is an array of bytes (8 bits each), use <code>i // 8</code> to get the byte index and <code>i % 8</code> to get the bit position within that byte</li><li>Check if bit <code>i</code> is set in <code>per_commitment_index</code> using right-shift (<code>&gt;&gt;</code>) and bitwise AND (<code>&amp; 1</code>). If it is set, flip that bit in the seed using XOR (<code>^=</code>) with the bit mask <code>1 &lt;&lt; (i % 8)</code> at the byte index. Then immediately hash the entire seed with <code>hashlib.sha256().digest()</code> and wrap the result back in a <code>bytearray()</code> so you can continue mutating it</li><li>After processing all 48 bits, convert the result to immutable <code>bytes()</code> and return it</li></ol>',
+      code: `    def build_commitment_secret(self, per_commitment_index):
         seed = bytearray(self.commitment_seed)
         for i in range(47, -1, -1):
             byte_index = i // 8
             bit_index = i % 8
-            if (commitment_number >> i) & 1:
+            if (per_commitment_index >> i) & 1:
                 seed[byte_index] ^= (1 << bit_index)
                 seed = bytearray(hashlib.sha256(bytes(seed)).digest())
         return bytes(seed)`,
@@ -643,16 +643,18 @@ def test_deterministic():
     id: "ln-exercise-per-commitment-point",
     title: "Exercise 8: Derive Per-Commitment Point",
     description:
-      "Implement <code>ChannelKeyManager.derive_per_commitment_point()</code>. The per-commitment point is the compressed public key corresponding to the per-commitment secret. Use <code>self.build_commitment_secret()</code> to get the secret, then convert it to a public key.",
+      "Implement <code>ChannelKeyManager.derive_per_commitment_point()</code>. This method takes the ascending <code>commitment_number</code>, converts it to BOLT 3's descending <code>per_commitment_index</code>, then derives the compressed public key corresponding to that secret.",
     starterCode: `    def derive_per_commitment_point(self, commitment_number: int) -> bytes:
         """
         Derive the per-commitment point for a given commitment number.
 
         The per-commitment point is the compressed public key of the
         per-commitment secret derived from self.build_commitment_secret().
+        BOLT 3's shachain counts backward, so convert:
+            per_commitment_index = (2^48 - 1) - commitment_number
 
         Args:
-            commitment_number: commitment number
+            commitment_number: ascending channel state number
 
         Returns:
             bytes: 33-byte compressed per-commitment point
@@ -679,21 +681,35 @@ def _p2p(secret):
     prefix = b'\\x02' if pt.y() % 2 == 0 else b'\\x03'
     return prefix + pt.x().to_bytes(32, 'big')
 
+MAX_INDEX = (1 << 48) - 1
+
+def _index_for_commitment(commitment_number):
+    return MAX_INDEX - commitment_number
+
 def test_returns_compressed_pubkey():
     seed = bytes([0x01] * 32)
     km = ChannelKeyManager(seed)
-    result = km.derive_per_commitment_point(281474976710655)
+    result = km.derive_per_commitment_point(0)
     assert len(result) == 33, f"Must be 33 bytes, got {len(result)}"
     assert result[0] in (2, 3), "Must start with 0x02 or 0x03"
 
-def test_matches_secret_pubkey():
+def test_commitment_zero_maps_to_max_index():
     seed = bytes([0x01] * 32)
     km = ChannelKeyManager(seed)
-    idx = 281474976710655
+    idx = _index_for_commitment(0)
     secret = _build_secret_ref(km.commitment_seed, idx)
     expected = _p2p(secret)
-    result = km.derive_per_commitment_point(idx)
-    assert result == expected, "Must equal pubkey of commitment secret"
+    result = km.derive_per_commitment_point(0)
+    assert result == expected, "Commitment number 0 must map to shachain index 2^48 - 1"
+
+def test_commitment_number_42():
+    seed = bytes([0x01] * 32)
+    km = ChannelKeyManager(seed)
+    commitment_number = 42
+    secret = _build_secret_ref(km.commitment_seed, _index_for_commitment(commitment_number))
+    expected = _p2p(secret)
+    result = km.derive_per_commitment_point(commitment_number)
+    assert result == expected, "Must derive the pubkey for the descending shachain index"
 
 def test_different_commitments():
     seed = bytes([0x01] * 32)
@@ -704,11 +720,13 @@ def test_different_commitments():
 `,
     hints: {
       conceptual:
-        "<p><strong>Goal:</strong> Derive the <strong>per-commitment point</strong> (a public key) for a given commitment number.<br><br><strong>How it works:</strong> This is a two-step process: first, use <code>self.build_commitment_secret()</code> to get the 32-byte per-commitment secret, then convert that secret to a compressed public key using <code>privkey_to_pubkey()</code>.<br><br><strong>Key details:</strong> The per-commitment point is used extensively in key derivation for commitment transactions. Each commitment number produces a unique point.</p>",
+        "<p><strong>Goal:</strong> Derive the <strong>per-commitment point</strong> (a public key) for a given commitment number.<br><br><strong>How it works:</strong> BOLT's shachain counts backward, while channel state numbers count upward from 0. So first convert <code>commitment_number</code> into the descending <code>per_commitment_index = (2^48 - 1) - commitment_number</code>. Then call <code>self.build_commitment_secret()</code> with that index to get the 32-byte per-commitment secret, and convert that secret to a compressed public key using <code>privkey_to_pubkey()</code>.<br><br><strong>Key details:</strong> The per-commitment point is used extensively in key derivation for commitment transactions. Each commitment number produces a unique point.</p>",
       steps:
-        '<ol><li>Call <code>self.build_commitment_secret()</code> with the commitment number to get the 32-byte per-commitment secret</li><li>Convert the secret to a 33-byte compressed public key using <code>privkey_to_pubkey()</code> and return the result</li></ol>',
+        '<ol><li>Compute <code>MAX_INDEX = (1 &lt;&lt; 48) - 1</code></li><li>Convert from channel state numbering to BOLT shachain numbering with <code>per_commitment_index = MAX_INDEX - commitment_number</code></li><li>Call <code>self.build_commitment_secret(per_commitment_index)</code> to get the 32-byte per-commitment secret</li><li>Convert the secret to a 33-byte compressed public key using <code>privkey_to_pubkey()</code> and return the result</li></ol>',
       code: `    def derive_per_commitment_point(self, commitment_number):
-        secret = self.build_commitment_secret(commitment_number)
+        MAX_INDEX = (1 << 48) - 1
+        per_commitment_index = MAX_INDEX - commitment_number
+        secret = self.build_commitment_secret(per_commitment_index)
         return privkey_to_pubkey(secret)`,
     },
     rewardSats: 21,
@@ -1486,6 +1504,19 @@ def test_fee_applied():
     values = sorted([o.nValue for o in tx.vout])
     assert 3_000_000 in values, "to_remote should be 3,000,000"
     assert (7_000_000 - 724) in values, f"to_local should be 7,000,000 - 724 = {7_000_000 - 724}, got {values}"
+
+def test_bolt3_unsigned_vector():
+    funding_txid = bytes.fromhex("8984484a580b825b9972d7adb15050b3ab624ccd731946b3eeddb92f4e7ef6be")[::-1]
+    per_cp = bytes.fromhex("025f7117a78150fe2ef97db7cfc83bd57b2e2c0d0dd25eaf467a4a1c2a45ce1486")
+    rev_pk = bytes.fromhex("0212a140cd0c6539d07cd08dfe09984dec3251ea808b892efeac3ede9402bf2b19")
+    delayed_pk = bytes.fromhex("03fd5960528dc152014952efdb702a88f71e3c1653b2314431701ec77e57fde83c")
+    remote_pk = bytes.fromhex("032c0b7cf95324a07d05398b240174dc0c2be444d96b159aa6c7f7b1e668680991")
+    opener_bp = bytes.fromhex("034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa")
+    accepter_bp = bytes.fromhex("032c0b7cf95324a07d05398b240174dc0c2be444d96b159aa6c7f7b1e668680991")
+    ck = CommitmentKeys(per_cp, rev_pk, delayed_pk, bytes(33), bytes(33))
+    tx = create_commitment_tx(funding_txid, 0, 7_000_000, 3_000_000, ck, remote_pk, opener_bp, accepter_bp, 42, 144, 546, 15_000)
+    expected_hex = "0200000001bef67e4e2fb9ddeeb3461973cd4c62abb35050b1add772995b820b584a488489000000000038b02b8002c0c62d0000000000160014cc1b07838e387deacd0e5232e1e8b49f4c29e48454a56a00000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e3e195220"
+    assert tx.serialize().hex() == expected_hex, "Unsigned commitment transaction should match the BOLT 3 vector"
 `,
     hints: {
       conceptual:
@@ -1552,27 +1583,25 @@ def test_fee_applied():
     pass
 `,
     testCode: `
-def test_returns_tx():
-    seed = bytes([0x01] * 32)
-    km = ChannelKeyManager(seed)
+def test_bolt3_vector():
+    km = ChannelKeyManager(bytes([0x01] * 32))
+    km.funding_key = bytes.fromhex("30ff4956bbdd3222d44cc5e8a1261dab1e07957bdac5ae88fe3261ef321f3749")
     unsigned_tx = bytes.fromhex("0200000001bef67e4e2fb9ddeeb3461973cd4c62abb35050b1add772995b820b584a488489000000000038b02b8002c0c62d0000000000160014cc1b07838e387deacd0e5232e1e8b49f4c29e48454a56a00000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e3e195220")
     funding_script = bytes.fromhex("5221023da092f6980e58d2c037173180e9a465476026ee50f96695963e8efe436f54eb21030e9f7b623d2ccc7c9bd44d66d5ce21ce504c0acf6385a132cec6d3c39fa711c152ae")
     remote_sig = bytes.fromhex("3045022100c3127b33dcc741dd6b05b1e63cbd1a9a7d816f37af9b6756fa2376b056f032370220408b96279808fe57eb7e463710804cdf4f108388bc5cf722d8c848d2c7f9f3b001")
     result = finalize_commitment_tx(km, unsigned_tx, funding_script, 10_000_000, remote_sig, True)
-    assert isinstance(result, CMutableTransaction), f"Must return CMutableTransaction, got {type(result).__name__}"
-    # Serialized signed tx should include segwit marker
-    signed_hex = result.serialize().hex()
-    assert "0001" in signed_hex[:12], "Must include segwit marker"
+    expected_hex = "02000000000101bef67e4e2fb9ddeeb3461973cd4c62abb35050b1add772995b820b584a488489000000000038b02b8002c0c62d0000000000160014cc1b07838e387deacd0e5232e1e8b49f4c29e48454a56a00000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e04004730440220616210b2cc4d3afb601013c373bbd8aac54febd9f15400379a8cb65ce7deca60022034236c010991beb7ff770510561ae8dc885b8d38d1947248c38f2ae05564714201483045022100c3127b33dcc741dd6b05b1e63cbd1a9a7d816f37af9b6756fa2376b056f032370220408b96279808fe57eb7e463710804cdf4f108388bc5cf722d8c848d2c7f9f3b001475221023da092f6980e58d2c037173180e9a465476026ee50f96695963e8efe436f54eb21030e9f7b623d2ccc7c9bd44d66d5ce21ce504c0acf6385a132cec6d3c39fa711c152ae3e195220"
+    assert result.serialize().hex() == expected_hex, "Finalized commitment transaction should match the BOLT 3 vector"
 
-def test_has_witness():
-    seed = bytes([0x01] * 32)
-    km = ChannelKeyManager(seed)
+def test_witness_order_respects_flag():
+    km = ChannelKeyManager(bytes([0x01] * 32))
+    km.funding_key = bytes.fromhex("30ff4956bbdd3222d44cc5e8a1261dab1e07957bdac5ae88fe3261ef321f3749")
     unsigned_tx = bytes.fromhex("0200000001bef67e4e2fb9ddeeb3461973cd4c62abb35050b1add772995b820b584a488489000000000038b02b8002c0c62d0000000000160014cc1b07838e387deacd0e5232e1e8b49f4c29e48454a56a00000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e3e195220")
     funding_script = bytes.fromhex("5221023da092f6980e58d2c037173180e9a465476026ee50f96695963e8efe436f54eb21030e9f7b623d2ccc7c9bd44d66d5ce21ce504c0acf6385a132cec6d3c39fa711c152ae")
     remote_sig = bytes.fromhex("3045022100c3127b33dcc741dd6b05b1e63cbd1a9a7d816f37af9b6756fa2376b056f032370220408b96279808fe57eb7e463710804cdf4f108388bc5cf722d8c848d2c7f9f3b001")
-    result = finalize_commitment_tx(km, unsigned_tx, funding_script, 10_000_000, remote_sig, True)
-    # Should have witness data - signed tx should be larger than unsigned
-    assert len(result.serialize()) > len(unsigned_tx), "Signed tx must be larger than unsigned"
+    result = finalize_commitment_tx(km, unsigned_tx, funding_script, 10_000_000, remote_sig, False)
+    signed = result.serialize()
+    assert signed[4:6] == b'\\x00\\x01', "Signed transaction must include the segwit marker"
 `,
     hints: {
       conceptual:
@@ -1683,6 +1712,35 @@ def test_values_match():
     result = create_htlc_outputs(ck, offered, received)
     values = sorted([d["value"] for d in result])
     assert values == [300000, 405000], f"Output values should match input amounts, got {values}"
+
+def test_bolt3_p2wsh_vectors():
+    rev_pk = bytes.fromhex("0212a140cd0c6539d07cd08dfe09984dec3251ea808b892efeac3ede9402bf2b19")
+    local_htlc = bytes.fromhex("030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e7")
+    remote_htlc = bytes.fromhex("0394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b")
+    per_cp = bytes.fromhex("025f7117a78150fe2ef97db7cfc83bd57b2e2c0d0dd25eaf467a4a1c2a45ce1486")
+    ck = CommitmentKeys(per_cp, rev_pk, bytes(33), local_htlc, remote_htlc)
+    offered = [
+        {"amount_sat": 2000, "payment_hash": _hl.sha256(bytes([0x02] * 32)).digest(), "cltv_expiry": 502},
+        {"amount_sat": 3000, "payment_hash": _hl.sha256(bytes([0x03] * 32)).digest(), "cltv_expiry": 503},
+    ]
+    received = [
+        {"amount_sat": 1000, "payment_hash": _hl.sha256(bytes(32)).digest(), "cltv_expiry": 500},
+        {"amount_sat": 2000, "payment_hash": _hl.sha256(bytes([0x01] * 32)).digest(), "cltv_expiry": 501},
+        {"amount_sat": 4000, "payment_hash": _hl.sha256(bytes([0x04] * 32)).digest(), "cltv_expiry": 504},
+    ]
+    result = create_htlc_outputs(ck, offered, received)
+    expected = [
+        (2000, 502, bytes.fromhex("0020403d394747cae42e98ff01734ad5c08f82ba123d3d9a620abda88989651e2ab5")),
+        (3000, 503, bytes.fromhex("0020c20b5d1f8584fd90443e7b7b720136174fa4b9333c261d04dbbd012635c0f419")),
+        (1000, 500, bytes.fromhex("002052bfef0479d7b293c27e0f1eb294bea154c63a3294ef092c19af51409bce0e2a")),
+        (2000, 501, bytes.fromhex("0020748eba944fedc8827f6b06bc44678f93c0f9e6078b35c6331ed31e75f8ce0c2d")),
+        (4000, 504, bytes.fromhex("00208c48d15160397c9731df9bc3b236656efb6665fbfe92b4a6878e88a499f741c4")),
+    ]
+    assert len(result) == 5, f"Expected 5 HTLC outputs, got {len(result)}"
+    for actual, (value, cltv_expiry, script) in zip(result, expected):
+        assert actual["value"] == value, f"Expected value {value}, got {actual['value']}"
+        assert actual["cltv_expiry"] == cltv_expiry, f"Expected cltv_expiry {cltv_expiry}, got {actual['cltv_expiry']}"
+        assert actual["script"] == script, f"Expected script {script.hex()}, got {actual['script'].hex()}"
 `,
     hints: {
       conceptual:
@@ -1713,7 +1771,7 @@ def test_values_match():
     id: "ln-exercise-commitment-tx-htlc",
     title: "Exercise 27: Update Commitment Transaction for HTLCs",
     description:
-      "Update the <code>create_commitment_tx</code> function to include HTLC outputs. You'll modify the fee formula to account for HTLC weight, call <code>create_htlc_outputs()</code>, combine channel and HTLC outputs, and sort them together.",
+      "Update the <code>create_commitment_tx</code> function to include HTLC outputs. Before adding them, trim any dust HTLCs using the correct second-stage fee threshold, then compute the commitment fee from the remaining untrimmed HTLCs, combine all outputs, and sort them together.",
     starterCode: `def create_commitment_tx(funding_txid, funding_vout, to_local_sat, to_remote_sat,
                           commitment_keys, remote_payment_pubkey,
                           opener_bp, accepter_bp, commitment_number, to_self_delay,
@@ -1725,11 +1783,15 @@ def test_values_match():
     This builds on the basic create_commitment_tx by adding HTLC outputs.
 
     Updates needed:
-    1. Update fee: weight = 724 + 172 * num_htlcs
-    2. Create HTLC outputs using create_htlc_outputs()
-    3. Wrap channel outputs as dicts with "cltv_expiry": 0
-    4. Combine channel + HTLC output dicts, then sort
-    5. Extract CTxOut list from sorted dicts
+    1. Trim dust HTLCs before building outputs
+       - offered dust threshold: dust_limit + 663 * feerate_per_kw // 1000
+       - received dust threshold: dust_limit + 703 * feerate_per_kw // 1000
+    2. Update fee using only untrimmed HTLCs:
+       weight = 724 + 172 * num_untrimmed_htlcs
+    3. Create HTLC outputs using create_htlc_outputs()
+    4. Wrap channel outputs as dicts with "cltv_expiry": 0
+    5. Combine channel + HTLC output dicts, then sort
+    6. Extract CTxOut list from sorted dicts
 
     Args:
         Same as basic create_commitment_tx, but now
@@ -1738,10 +1800,10 @@ def test_values_match():
     Returns:
         CMutableTransaction: unsigned commitment transaction with HTLCs
     """
-    # Count HTLCs for fee calculation
-    num_htlcs = len(offered_htlcs or []) + len(received_htlcs or [])
+    # TODO: Trim dust HTLCs first, then count only untrimmed HTLCs
+    num_htlcs = 0
 
-    # TODO: Update fee formula to include HTLC weight
+    # TODO: Update fee formula to include only untrimmed HTLC weight
     weight = 724  # + ???
     fee = weight * feerate_per_kw // 1000
 
@@ -1750,7 +1812,7 @@ def test_values_match():
         to_local_sat, to_remote_sat, commitment_keys,
         remote_payment_pubkey, to_self_delay, dust_limit, fee)
 
-    # TODO: Create HTLC outputs using create_htlc_outputs()
+    # TODO: Create HTLC outputs using create_htlc_outputs() on untrimmed HTLCs
 
     # TODO: Wrap channel outputs as dicts with "cltv_expiry": 0
     # TODO: Combine with HTLC output dicts
@@ -1801,6 +1863,58 @@ def test_htlc_fee_formula():
     expected_total = 6_998_000 + 3_000_000 + 2000 - expected_fee
     assert total_out == expected_total, f"Total output should be {expected_total} (10M - {expected_fee} fee), got {total_out}"
 
+def test_offered_dust_trimmed():
+    funding_txid = bytes.fromhex("8984484a580b825b9972d7adb15050b3ab624ccd731946b3eeddb92f4e7ef6be")[::-1]
+    rev_pk = bytes.fromhex("0212a140cd0c6539d07cd08dfe09984dec3251ea808b892efeac3ede9402bf2b19")
+    delayed_pk = bytes.fromhex("03fd5960528dc152014952efdb702a88f71e3c1653b2314431701ec77e57fde83c")
+    remote_pk = bytes.fromhex("032c0b7cf95324a07d05398b240174dc0c2be444d96b159aa6c7f7b1e668680991")
+    opener_bp = bytes.fromhex("034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa")
+    accepter_bp = bytes.fromhex("032c0b7cf95324a07d05398b240174dc0c2be444d96b159aa6c7f7b1e668680991")
+    local_htlc = bytes.fromhex("030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e7")
+    remote_htlc = bytes.fromhex("0394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b")
+    ck = CommitmentKeys(bytes(33), rev_pk, delayed_pk, local_htlc, remote_htlc)
+    offered = [{"amount_sat": 1208, "payment_hash": _hl.sha256(bytes([0x02] * 32)).digest(), "cltv_expiry": 500}]
+    tx = create_commitment_tx(funding_txid, 0, 6_998_792, 3_000_000, ck, remote_pk, opener_bp, accepter_bp, 42, 144, 546, 1000, offered_htlcs=offered)
+    values = sorted([o.nValue for o in tx.vout])
+    assert 1208 not in values, f"Dust offered HTLC should be trimmed, got outputs {values}"
+    assert len(tx.vout) == 2, f"Trimmed offered HTLC should leave only channel outputs, got {len(tx.vout)} outputs"
+
+def test_received_dust_trimmed():
+    funding_txid = bytes.fromhex("8984484a580b825b9972d7adb15050b3ab624ccd731946b3eeddb92f4e7ef6be")[::-1]
+    rev_pk = bytes.fromhex("0212a140cd0c6539d07cd08dfe09984dec3251ea808b892efeac3ede9402bf2b19")
+    delayed_pk = bytes.fromhex("03fd5960528dc152014952efdb702a88f71e3c1653b2314431701ec77e57fde83c")
+    remote_pk = bytes.fromhex("032c0b7cf95324a07d05398b240174dc0c2be444d96b159aa6c7f7b1e668680991")
+    opener_bp = bytes.fromhex("034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa")
+    accepter_bp = bytes.fromhex("032c0b7cf95324a07d05398b240174dc0c2be444d96b159aa6c7f7b1e668680991")
+    local_htlc = bytes.fromhex("030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e7")
+    remote_htlc = bytes.fromhex("0394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b")
+    ck = CommitmentKeys(bytes(33), rev_pk, delayed_pk, local_htlc, remote_htlc)
+    received = [{"amount_sat": 1248, "payment_hash": _hl.sha256(bytes(32)).digest(), "cltv_expiry": 500}]
+    tx = create_commitment_tx(funding_txid, 0, 6_998_752, 3_000_000, ck, remote_pk, opener_bp, accepter_bp, 42, 144, 546, 1000, received_htlcs=received)
+    values = sorted([o.nValue for o in tx.vout])
+    assert 1248 not in values, f"Dust received HTLC should be trimmed, got outputs {values}"
+    assert len(tx.vout) == 2, f"Trimmed received HTLC should leave only channel outputs, got {len(tx.vout)} outputs"
+
+def test_fee_counts_only_untrimmed_htlcs():
+    funding_txid = bytes.fromhex("8984484a580b825b9972d7adb15050b3ab624ccd731946b3eeddb92f4e7ef6be")[::-1]
+    rev_pk = bytes.fromhex("0212a140cd0c6539d07cd08dfe09984dec3251ea808b892efeac3ede9402bf2b19")
+    delayed_pk = bytes.fromhex("03fd5960528dc152014952efdb702a88f71e3c1653b2314431701ec77e57fde83c")
+    remote_pk = bytes.fromhex("032c0b7cf95324a07d05398b240174dc0c2be444d96b159aa6c7f7b1e668680991")
+    opener_bp = bytes.fromhex("034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa")
+    accepter_bp = bytes.fromhex("032c0b7cf95324a07d05398b240174dc0c2be444d96b159aa6c7f7b1e668680991")
+    local_htlc = bytes.fromhex("030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e7")
+    remote_htlc = bytes.fromhex("0394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b")
+    ck = CommitmentKeys(bytes(33), rev_pk, delayed_pk, local_htlc, remote_htlc)
+    offered = [{"amount_sat": 2000, "payment_hash": _hl.sha256(bytes([0x02] * 32)).digest(), "cltv_expiry": 500}]
+    received = [{"amount_sat": 1248, "payment_hash": _hl.sha256(bytes(32)).digest(), "cltv_expiry": 501}]
+    tx = create_commitment_tx(funding_txid, 0, 6_996_752, 3_000_000, ck, remote_pk, opener_bp, accepter_bp, 42, 144, 546, 1000, offered_htlcs=offered, received_htlcs=received)
+    values = sorted([o.nValue for o in tx.vout])
+    total_out = sum(o.nValue for o in tx.vout)
+    expected_fee = 896  # 724 + 172 * 1 untrimmed HTLC
+    expected_total = 6_996_752 + 3_000_000 + 2000 - expected_fee
+    assert 2000 in values and 1248 not in values, f"Only the untrimmed HTLC should remain, got {values}"
+    assert total_out == expected_total, f"Fee should count only untrimmed HTLCs, expected total {expected_total}, got {total_out}"
+
 def test_htlc_values_present():
     funding_txid = bytes.fromhex("8984484a580b825b9972d7adb15050b3ab624ccd731946b3eeddb92f4e7ef6be")[::-1]
     rev_pk = bytes.fromhex("0212a140cd0c6539d07cd08dfe09984dec3251ea808b892efeac3ede9402bf2b19")
@@ -1816,23 +1930,60 @@ def test_htlc_values_present():
     values = sorted([o.nValue for o in tx.vout])
     assert 2000 in values, f"HTLC output value (2000) should be in outputs, got {values}"
     assert 3_000_000 in values, f"to_remote value should be in outputs, got {values}"
+
+def test_bolt3_five_htlc_vector():
+    funding_txid = bytes.fromhex("8984484a580b825b9972d7adb15050b3ab624ccd731946b3eeddb92f4e7ef6be")[::-1]
+    per_cp = bytes.fromhex("025f7117a78150fe2ef97db7cfc83bd57b2e2c0d0dd25eaf467a4a1c2a45ce1486")
+    rev_pk = bytes.fromhex("0212a140cd0c6539d07cd08dfe09984dec3251ea808b892efeac3ede9402bf2b19")
+    delayed_pk = bytes.fromhex("03fd5960528dc152014952efdb702a88f71e3c1653b2314431701ec77e57fde83c")
+    remote_pk = bytes.fromhex("032c0b7cf95324a07d05398b240174dc0c2be444d96b159aa6c7f7b1e668680991")
+    opener_bp = bytes.fromhex("034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa")
+    accepter_bp = bytes.fromhex("032c0b7cf95324a07d05398b240174dc0c2be444d96b159aa6c7f7b1e668680991")
+    local_htlc = bytes.fromhex("030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e7")
+    remote_htlc = bytes.fromhex("0394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b")
+    funding_script = bytes.fromhex("5221023da092f6980e58d2c037173180e9a465476026ee50f96695963e8efe436f54eb21030e9f7b623d2ccc7c9bd44d66d5ce21ce504c0acf6385a132cec6d3c39fa711c152ae")
+    local_sig = bytes.fromhex("304402206fc2d1f10ea59951eefac0b4b7c396a3c3d87b71ff0b019796ef4535beaf36f902201765b0181e514d04f4c8ad75659d7037be26cdb3f8bb6f78fe61decef484c3ea01")
+    remote_sig = bytes.fromhex("3044022009b048187705a8cbc9ad73adbe5af148c3d012e1f067961486c822c7af08158c022006d66f3704cfab3eb2dc49dae24e4aa22a6910fc9b424007583204e3621af2e501")
+    ck = CommitmentKeys(per_cp, rev_pk, delayed_pk, local_htlc, remote_htlc)
+    offered = [
+        {"amount_sat": 2000, "payment_hash": _hl.sha256(bytes([0x02] * 32)).digest(), "cltv_expiry": 502},
+        {"amount_sat": 3000, "payment_hash": _hl.sha256(bytes([0x03] * 32)).digest(), "cltv_expiry": 503},
+    ]
+    received = [
+        {"amount_sat": 1000, "payment_hash": _hl.sha256(bytes(32)).digest(), "cltv_expiry": 500},
+        {"amount_sat": 2000, "payment_hash": _hl.sha256(bytes([0x01] * 32)).digest(), "cltv_expiry": 501},
+        {"amount_sat": 4000, "payment_hash": _hl.sha256(bytes([0x04] * 32)).digest(), "cltv_expiry": 504},
+    ]
+    tx = create_commitment_tx(funding_txid, 0, 6_988_000, 3_000_000, ck, remote_pk, opener_bp, accepter_bp, 42, 144, 546, 0, offered_htlcs=offered, received_htlcs=received)
+    witness = CScriptWitness([b'', local_sig, remote_sig, funding_script])
+    tx.wit = CTxWitness([CTxInWitness(witness)])
+    expected_hex = "02000000000101bef67e4e2fb9ddeeb3461973cd4c62abb35050b1add772995b820b584a488489000000000038b02b8007e80300000000000022002052bfef0479d7b293c27e0f1eb294bea154c63a3294ef092c19af51409bce0e2ad007000000000000220020403d394747cae42e98ff01734ad5c08f82ba123d3d9a620abda88989651e2ab5d007000000000000220020748eba944fedc8827f6b06bc44678f93c0f9e6078b35c6331ed31e75f8ce0c2db80b000000000000220020c20b5d1f8584fd90443e7b7b720136174fa4b9333c261d04dbbd012635c0f419a00f0000000000002200208c48d15160397c9731df9bc3b236656efb6665fbfe92b4a6878e88a499f741c4c0c62d0000000000160014cc1b07838e387deacd0e5232e1e8b49f4c29e484e0a06a00000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e040047304402206fc2d1f10ea59951eefac0b4b7c396a3c3d87b71ff0b019796ef4535beaf36f902201765b0181e514d04f4c8ad75659d7037be26cdb3f8bb6f78fe61decef484c3ea01473044022009b048187705a8cbc9ad73adbe5af148c3d012e1f067961486c822c7af08158c022006d66f3704cfab3eb2dc49dae24e4aa22a6910fc9b424007583204e3621af2e501475221023da092f6980e58d2c037173180e9a465476026ee50f96695963e8efe436f54eb21030e9f7b623d2ccc7c9bd44d66d5ce21ce504c0acf6385a132cec6d3c39fa711c152ae3e195220"
+    assert tx.serialize().hex() == expected_hex, "Commitment transaction with five HTLCs should match the BOLT 3 vector"
 `,
     hints: {
       conceptual:
-        "<p><strong>Goal:</strong> Update <code>create_commitment_tx</code> to include <strong>HTLC outputs</strong> alongside the existing to_local and to_remote outputs.<br><br><strong>Fee formula update:</strong> <code>weight = 724 + 172 * num_htlcs</code>. Each HTLC adds 172 weight units to the transaction.<br><br><strong>Key steps:</strong> Create HTLC outputs with <code>create_htlc_outputs()</code>, wrap the channel outputs as dicts with <code>\"cltv_expiry\": 0</code>, combine both lists, sort them all together with <code>sort_outputs()</code>, then extract the <code>CTxOut</code> objects.</p>",
+        "<p><strong>Goal:</strong> Update <code>create_commitment_tx</code> to include <strong>HTLC outputs</strong> alongside the existing to_local and to_remote outputs.<br><br><strong>Important rule:</strong> Do not include dust HTLCs. For non-anchor commitments, an <strong>offered</strong> HTLC is dust if <code>amount_sat &lt; dust_limit + 663 * feerate_per_kw // 1000</code>, and a <strong>received</strong> HTLC is dust if <code>amount_sat &lt; dust_limit + 703 * feerate_per_kw // 1000</code>.<br><br><strong>Fee formula update:</strong> <code>weight = 724 + 172 * num_untrimmed_htlcs</code>. Only HTLCs that survive trimming contribute to commitment weight.<br><br><strong>Key steps:</strong> Trim the HTLC lists first, create HTLC outputs from the untrimmed lists, wrap the channel outputs as dicts with <code>\"cltv_expiry\": 0</code>, combine both lists, sort them all together with <code>sort_outputs()</code>, then extract the <code>CTxOut</code> objects.</p>",
       steps:
-        '<ol><li>Update the fee formula: <code>weight = 724 + 172 * num_htlcs</code></li><li>Call <code>create_htlc_outputs(commitment_keys, offered_htlcs or [], received_htlcs or [])</code> to get HTLC output dicts</li><li>Wrap each channel output dict with <code>"cltv_expiry": 0</code> so it can be sorted alongside HTLC dicts</li><li>Combine the channel output dicts and HTLC output dicts into one list</li><li>Sort all combined outputs using <code>sort_outputs()</code></li><li>Convert each sorted dict to <code>CTxOut(d["value"], CScript(d["script"]))</code></li></ol>',
+        '<ol><li>Build <code>offered_untrimmed</code> by keeping only HTLCs where <code>amount_sat &gt;= dust_limit + 663 * feerate_per_kw // 1000</code></li><li>Build <code>received_untrimmed</code> by keeping only HTLCs where <code>amount_sat &gt;= dust_limit + 703 * feerate_per_kw // 1000</code></li><li>Count the untrimmed HTLCs and compute <code>weight = 724 + 172 * num_untrimmed_htlcs</code>, then <code>fee = weight * feerate_per_kw // 1000</code></li><li>Call <code>create_commitment_outputs()</code> for the channel outputs using that fee</li><li>Call <code>create_htlc_outputs(commitment_keys, offered_untrimmed, received_untrimmed)</code></li><li>Wrap each channel output dict with <code>"cltv_expiry": 0</code> so it can be sorted alongside HTLC dicts</li><li>Combine the channel output dicts and HTLC output dicts into one list</li><li>Sort all combined outputs using <code>sort_outputs()</code></li><li>Convert each sorted dict to <code>CTxOut(d["value"], CScript(d["script"]))</code></li></ol>',
       code: `def create_commitment_tx(funding_txid, funding_vout, to_local_sat, to_remote_sat,
                           commitment_keys, remote_payment_pubkey,
                           opener_bp, accepter_bp, commitment_number, to_self_delay,
                           dust_limit, feerate_per_kw,
                           offered_htlcs=None, received_htlcs=None):
-    num_htlcs = len(offered_htlcs or []) + len(received_htlcs or [])
+    offered_untrimmed = [
+        h for h in (offered_htlcs or [])
+        if h["amount_sat"] >= dust_limit + (663 * feerate_per_kw // 1000)
+    ]
+    received_untrimmed = [
+        h for h in (received_htlcs or [])
+        if h["amount_sat"] >= dust_limit + (703 * feerate_per_kw // 1000)
+    ]
+    num_htlcs = len(offered_untrimmed) + len(received_untrimmed)
     weight = 724 + 172 * num_htlcs
     fee = weight * feerate_per_kw // 1000
     channel_outputs = create_commitment_outputs(to_local_sat, to_remote_sat, commitment_keys,
                                                 remote_payment_pubkey, to_self_delay, dust_limit, fee)
-    htlc_outputs = create_htlc_outputs(commitment_keys, offered_htlcs or [], received_htlcs or [])
+    htlc_outputs = create_htlc_outputs(commitment_keys, offered_untrimmed, received_untrimmed)
     for d in channel_outputs:
         d["cltv_expiry"] = 0
     all_outputs = channel_outputs + htlc_outputs
@@ -2094,13 +2245,39 @@ def test_basic_structure():
     assert tx.nVersion == 2, "Version must be 2"
     assert tx.nLockTime == 502, "Locktime must be cltv_expiry"
 
-def test_output_value_no_fee():
+def test_bolt3_vector():
     commitment_txid = lx("2b887d4c1c59cd605144a1e2f971d168437db453f841f2fefb2c164f28ff84ab")
+    per_cp = bytes.fromhex("025f7117a78150fe2ef97db7cfc83bd57b2e2c0d0dd25eaf467a4a1c2a45ce1486")
     rev_pk = bytes.fromhex("0212a140cd0c6539d07cd08dfe09984dec3251ea808b892efeac3ede9402bf2b19")
     delayed_pk = bytes.fromhex("03fd5960528dc152014952efdb702a88f71e3c1653b2314431701ec77e57fde83c")
-    ck = CommitmentKeys(bytes(33), rev_pk, delayed_pk, bytes(33), bytes(33))
+    local_htlc = bytes.fromhex("030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e7")
+    remote_htlc = bytes.fromhex("0394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b")
+    htlc_script = bytes.fromhex("76a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c820120876475527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae67a914b43e1b38138a41b37f7cd9a1d274bc63e3a9b5d188ac6868")
+    remote_sig = bytes.fromhex("30440220649fe8b20e67e46cbb0d09b4acea87dbec001b39b08dee7bdd0b1f03922a8640022037c462dff79df501cecfdb12ea7f4de91f99230bb544726f6e04527b1f89600401")
+    local_sig = bytes.fromhex("3045022100803159dee7935dba4a1d36a61055ce8fd62caa528573cc221ae288515405a252022029c59e7cffce374fe860100a4a63787e105c3cf5156d40b12dd53ff55ac8cf3f01")
+    ck = CommitmentKeys(per_cp, rev_pk, delayed_pk, local_htlc, remote_htlc)
     tx = create_htlc_timeout_tx(commitment_txid, 1, 2000, 502, ck, 144, 0)
-    assert tx.vout[0].nValue == 2000, f"Output value must be 2000 with zero fee, got {tx.vout[0].nValue}"
+    witness = CScriptWitness([b'', remote_sig, local_sig, b'', htlc_script])
+    tx.wit = CTxWitness([CTxInWitness(witness)])
+    expected_hex = "02000000000101ab84ff284f162cfbfef241f853b47d4368d171f9e2a1445160cd591c4c7d882b01000000000000000001d0070000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e05004730440220649fe8b20e67e46cbb0d09b4acea87dbec001b39b08dee7bdd0b1f03922a8640022037c462dff79df501cecfdb12ea7f4de91f99230bb544726f6e04527b1f89600401483045022100803159dee7935dba4a1d36a61055ce8fd62caa528573cc221ae288515405a252022029c59e7cffce374fe860100a4a63787e105c3cf5156d40b12dd53ff55ac8cf3f01008576a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c820120876475527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae67a914b43e1b38138a41b37f7cd9a1d274bc63e3a9b5d188ac6868f6010000"
+    assert tx.serialize().hex() == expected_hex, "HTLC timeout transaction should match the BOLT 3 vector"
+
+def test_bolt3_vector_second_offered_htlc():
+    commitment_txid = lx("2b887d4c1c59cd605144a1e2f971d168437db453f841f2fefb2c164f28ff84ab")
+    per_cp = bytes.fromhex("025f7117a78150fe2ef97db7cfc83bd57b2e2c0d0dd25eaf467a4a1c2a45ce1486")
+    rev_pk = bytes.fromhex("0212a140cd0c6539d07cd08dfe09984dec3251ea808b892efeac3ede9402bf2b19")
+    delayed_pk = bytes.fromhex("03fd5960528dc152014952efdb702a88f71e3c1653b2314431701ec77e57fde83c")
+    local_htlc = bytes.fromhex("030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e7")
+    remote_htlc = bytes.fromhex("0394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b")
+    htlc_script = bytes.fromhex("76a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c820120876475527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae67a9148a486ff2e31d6158bf39e2608864d63fefd09d5b88ac6868")
+    remote_sig = bytes.fromhex("304402207bcbf4f60a9829b05d2dbab84ed593e0291836be715dc7db6b72a64caf646af802201e489a5a84f7c5cc130398b841d138d031a5137ac8f4c49c770a4959dc3c136301")
+    local_sig = bytes.fromhex("304402203121d9b9c055f354304b016a36662ee99e1110d9501cb271b087ddb6f382c2c80220549882f3f3b78d9c492de47543cb9a697cecc493174726146536c5954dac748701")
+    ck = CommitmentKeys(per_cp, rev_pk, delayed_pk, local_htlc, remote_htlc)
+    tx = create_htlc_timeout_tx(commitment_txid, 3, 3000, 503, ck, 144, 0)
+    witness = CScriptWitness([b'', remote_sig, local_sig, b'', htlc_script])
+    tx.wit = CTxWitness([CTxInWitness(witness)])
+    expected_hex = "02000000000101ab84ff284f162cfbfef241f853b47d4368d171f9e2a1445160cd591c4c7d882b03000000000000000001b80b0000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e050047304402207bcbf4f60a9829b05d2dbab84ed593e0291836be715dc7db6b72a64caf646af802201e489a5a84f7c5cc130398b841d138d031a5137ac8f4c49c770a4959dc3c13630147304402203121d9b9c055f354304b016a36662ee99e1110d9501cb271b087ddb6f382c2c80220549882f3f3b78d9c492de47543cb9a697cecc493174726146536c5954dac748701008576a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c820120876475527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae67a9148a486ff2e31d6158bf39e2608864d63fefd09d5b88ac6868f7010000"
+    assert tx.serialize().hex() == expected_hex, "Second offered HTLC timeout transaction should match the BOLT 3 vector"
 `,
     hints: {
       conceptual:
@@ -2171,22 +2348,59 @@ def test_basic_structure():
     assert tx.nVersion == 2, "Version must be 2"
     assert tx.nLockTime == 0, "Locktime must be 0"
 
-def test_output_value_no_fee():
+def test_bolt3_vector():
     commitment_txid = lx("2b887d4c1c59cd605144a1e2f971d168437db453f841f2fefb2c164f28ff84ab")
+    per_cp = bytes.fromhex("025f7117a78150fe2ef97db7cfc83bd57b2e2c0d0dd25eaf467a4a1c2a45ce1486")
     rev_pk = bytes.fromhex("0212a140cd0c6539d07cd08dfe09984dec3251ea808b892efeac3ede9402bf2b19")
     delayed_pk = bytes.fromhex("03fd5960528dc152014952efdb702a88f71e3c1653b2314431701ec77e57fde83c")
-    ck = CommitmentKeys(bytes(33), rev_pk, delayed_pk, bytes(33), bytes(33))
+    local_htlc = bytes.fromhex("030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e7")
+    remote_htlc = bytes.fromhex("0394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b")
+    htlc_script = bytes.fromhex("76a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c8201208763a914b8bcb07f6344b42ab04250c86a6e8b75d3fdbbc688527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae677502f401b175ac6868")
+    remote_sig = bytes.fromhex("3045022100d9e29616b8f3959f1d3d7f7ce893ffedcdc407717d0de8e37d808c91d3a7c50d022078c3033f6d00095c8720a4bc943c1b45727818c082e4e3ddbc6d3116435b624b01")
+    local_sig = bytes.fromhex("30440220636de5682ef0c5b61f124ec74e8aa2461a69777521d6998295dcea36bc3338110220165285594b23c50b28b82df200234566628a27bcd17f7f14404bd865354eb3ce01")
+    preimage = bytes(32)
+    ck = CommitmentKeys(per_cp, rev_pk, delayed_pk, local_htlc, remote_htlc)
     tx = create_htlc_success_tx(commitment_txid, 0, 1000, ck, 144, 0)
-    assert tx.vout[0].nValue == 1000, f"Output value must be 1000 with zero fee, got {tx.vout[0].nValue}"
+    witness = CScriptWitness([b'', remote_sig, local_sig, preimage, htlc_script])
+    tx.wit = CTxWitness([CTxInWitness(witness)])
+    expected_hex = "02000000000101ab84ff284f162cfbfef241f853b47d4368d171f9e2a1445160cd591c4c7d882b00000000000000000001e8030000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e0500483045022100d9e29616b8f3959f1d3d7f7ce893ffedcdc407717d0de8e37d808c91d3a7c50d022078c3033f6d00095c8720a4bc943c1b45727818c082e4e3ddbc6d3116435b624b014730440220636de5682ef0c5b61f124ec74e8aa2461a69777521d6998295dcea36bc3338110220165285594b23c50b28b82df200234566628a27bcd17f7f14404bd865354eb3ce012000000000000000000000000000000000000000000000000000000000000000008a76a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c8201208763a914b8bcb07f6344b42ab04250c86a6e8b75d3fdbbc688527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae677502f401b175ac686800000000"
+    assert tx.serialize().hex() == expected_hex, "HTLC success transaction should match the BOLT 3 vector"
 
-def test_p2wsh_output():
+def test_bolt3_vector_second_received_htlc():
     commitment_txid = lx("2b887d4c1c59cd605144a1e2f971d168437db453f841f2fefb2c164f28ff84ab")
+    per_cp = bytes.fromhex("025f7117a78150fe2ef97db7cfc83bd57b2e2c0d0dd25eaf467a4a1c2a45ce1486")
     rev_pk = bytes.fromhex("0212a140cd0c6539d07cd08dfe09984dec3251ea808b892efeac3ede9402bf2b19")
     delayed_pk = bytes.fromhex("03fd5960528dc152014952efdb702a88f71e3c1653b2314431701ec77e57fde83c")
-    ck = CommitmentKeys(bytes(33), rev_pk, delayed_pk, bytes(33), bytes(33))
-    tx = create_htlc_success_tx(commitment_txid, 0, 1000, ck, 144, 0)
-    script_bytes = bytes(tx.vout[0].scriptPubKey)
-    assert len(script_bytes) == 34, f"Script must be 34 bytes (P2WSH), got {len(script_bytes)}"
+    local_htlc = bytes.fromhex("030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e7")
+    remote_htlc = bytes.fromhex("0394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b")
+    htlc_script = bytes.fromhex("76a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c8201208763a9144b6b2e5444c2639cc0fb7bcea5afba3f3cdce23988527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae677502f501b175ac6868")
+    remote_sig = bytes.fromhex("30440220770fc321e97a19f38985f2e7732dd9fe08d16a2efa4bcbc0429400a447faf49102204d40b417f3113e1b0944ae0986f517564ab4acd3d190503faf97a6e420d4335201")
+    local_sig = bytes.fromhex("3045022100a437cc2ce77400ecde441b3398fea3c3ad8bdad8132be818227fe3c5b8345989022069d45e7fa0ae551ec37240845e2c561ceb2567eacf3076a6a43a502d05865faa01")
+    preimage = bytes([0x01] * 32)
+    ck = CommitmentKeys(per_cp, rev_pk, delayed_pk, local_htlc, remote_htlc)
+    tx = create_htlc_success_tx(commitment_txid, 2, 2000, ck, 144, 0)
+    witness = CScriptWitness([b'', remote_sig, local_sig, preimage, htlc_script])
+    tx.wit = CTxWitness([CTxInWitness(witness)])
+    expected_hex = "02000000000101ab84ff284f162cfbfef241f853b47d4368d171f9e2a1445160cd591c4c7d882b02000000000000000001d0070000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e05004730440220770fc321e97a19f38985f2e7732dd9fe08d16a2efa4bcbc0429400a447faf49102204d40b417f3113e1b0944ae0986f517564ab4acd3d190503faf97a6e420d4335201483045022100a437cc2ce77400ecde441b3398fea3c3ad8bdad8132be818227fe3c5b8345989022069d45e7fa0ae551ec37240845e2c561ceb2567eacf3076a6a43a502d05865faa012001010101010101010101010101010101010101010101010101010101010101018a76a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c8201208763a9144b6b2e5444c2639cc0fb7bcea5afba3f3cdce23988527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae677502f501b175ac686800000000"
+    assert tx.serialize().hex() == expected_hex, "Second received HTLC success transaction should match the BOLT 3 vector"
+
+def test_bolt3_vector_third_received_htlc():
+    commitment_txid = lx("2b887d4c1c59cd605144a1e2f971d168437db453f841f2fefb2c164f28ff84ab")
+    per_cp = bytes.fromhex("025f7117a78150fe2ef97db7cfc83bd57b2e2c0d0dd25eaf467a4a1c2a45ce1486")
+    rev_pk = bytes.fromhex("0212a140cd0c6539d07cd08dfe09984dec3251ea808b892efeac3ede9402bf2b19")
+    delayed_pk = bytes.fromhex("03fd5960528dc152014952efdb702a88f71e3c1653b2314431701ec77e57fde83c")
+    local_htlc = bytes.fromhex("030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e7")
+    remote_htlc = bytes.fromhex("0394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b")
+    htlc_script = bytes.fromhex("76a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c8201208763a91418bc1a114ccf9c052d3d23e28d3b0a9d1227434288527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae677502f801b175ac6868")
+    remote_sig = bytes.fromhex("3044022076dca5cb81ba7e466e349b7128cdba216d4d01659e29b96025b9524aaf0d1899022060de85697b88b21c749702b7d2cfa7dfeaa1f472c8f1d7d9c23f2bf968464b8701")
+    local_sig = bytes.fromhex("3045022100d9080f103cc92bac15ec42464a95f070c7fb6925014e673ee2ea1374d36a7f7502200c65294d22eb20d48564954d5afe04a385551919d8b2ddb4ae2459daaeee1d9501")
+    preimage = bytes([0x04] * 32)
+    ck = CommitmentKeys(per_cp, rev_pk, delayed_pk, local_htlc, remote_htlc)
+    tx = create_htlc_success_tx(commitment_txid, 4, 4000, ck, 144, 0)
+    witness = CScriptWitness([b'', remote_sig, local_sig, preimage, htlc_script])
+    tx.wit = CTxWitness([CTxInWitness(witness)])
+    expected_hex = "02000000000101ab84ff284f162cfbfef241f853b47d4368d171f9e2a1445160cd591c4c7d882b04000000000000000001a00f0000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e0500473044022076dca5cb81ba7e466e349b7128cdba216d4d01659e29b96025b9524aaf0d1899022060de85697b88b21c749702b7d2cfa7dfeaa1f472c8f1d7d9c23f2bf968464b8701483045022100d9080f103cc92bac15ec42464a95f070c7fb6925014e673ee2ea1374d36a7f7502200c65294d22eb20d48564954d5afe04a385551919d8b2ddb4ae2459daaeee1d95012004040404040404040404040404040404040404040404040404040404040404048a76a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c8201208763a91418bc1a114ccf9c052d3d23e28d3b0a9d1227434288527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae677502f801b175ac686800000000"
+    assert tx.serialize().hex() == expected_hex, "Third received HTLC success transaction should match the BOLT 3 vector"
 `,
     hints: {
       conceptual:
@@ -2252,31 +2466,41 @@ def test_p2wsh_output():
     pass
 `,
     testCode: `
-def test_returns_tx():
-    seed = bytes([0x01] * 32)
-    km = ChannelKeyManager(seed)
+def test_bolt3_vector():
+    km = ChannelKeyManager(bytes([0x01] * 32))
+    km.htlc_basepoint_secret = bytes.fromhex("bb13b121cdc357cd2e608b0aea294afca36e2b34cf958e2e6451a2f274694491")
     per_cp = bytes.fromhex("025f7117a78150fe2ef97db7cfc83bd57b2e2c0d0dd25eaf467a4a1c2a45ce1486")
     ck = CommitmentKeys(per_cp, bytes(33), bytes(33), bytes(33), bytes(33))
-    unsigned_tx = CMutableTransaction.deserialize(bytes.fromhex("0200000001bef67e4e2fb9ddeeb3461973cd4c62abb35050b1add772995b820b584a48848901000000000000000001d0070000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80ef6010000"))
-    htlc_script = bytes.fromhex("76a91414011f7254d96b819c76986c277d115efce6f7b58763ac6702c800b175210214ccb63e0b1bcf27ca2c6c73e16f3d6a036a33a2b81e62ba5d78f66b4a19fc2fac68")
-    remote_sig = bytes.fromhex("3045022100c3127b33dcc741dd6b05b1e63cbd1a9a7d816f37af9b6756fa2376b056f032370220408b96279808fe57eb7e463710804cdf4f108388bc5cf722d8c848d2c7f9f3b001")
+    unsigned_tx = CMutableTransaction.deserialize(bytes.fromhex("0200000001ab84ff284f162cfbfef241f853b47d4368d171f9e2a1445160cd591c4c7d882b01000000000000000001d0070000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80ef6010000"))
+    htlc_script = bytes.fromhex("76a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c820120876475527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae67a914b43e1b38138a41b37f7cd9a1d274bc63e3a9b5d188ac6868")
+    remote_sig = bytes.fromhex("30440220649fe8b20e67e46cbb0d09b4acea87dbec001b39b08dee7bdd0b1f03922a8640022037c462dff79df501cecfdb12ea7f4de91f99230bb544726f6e04527b1f89600401")
     result = finalize_htlc_timeout(km, ck, unsigned_tx, htlc_script, 2000, remote_sig)
-    assert hasattr(result, 'wit'), "Must return a CMutableTransaction"
-    signed = result.serialize()
-    assert signed[4:6] == b'\\x00\\x01', "Must include segwit marker (0x00, 0x01)"
+    expected_hex = "02000000000101ab84ff284f162cfbfef241f853b47d4368d171f9e2a1445160cd591c4c7d882b01000000000000000001d0070000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e05004730440220649fe8b20e67e46cbb0d09b4acea87dbec001b39b08dee7bdd0b1f03922a8640022037c462dff79df501cecfdb12ea7f4de91f99230bb544726f6e04527b1f89600401483045022100803159dee7935dba4a1d36a61055ce8fd62caa528573cc221ae288515405a252022029c59e7cffce374fe860100a4a63787e105c3cf5156d40b12dd53ff55ac8cf3f01008576a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c820120876475527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae67a914b43e1b38138a41b37f7cd9a1d274bc63e3a9b5d188ac6868f6010000"
+    assert result.serialize().hex() == expected_hex, "Finalized HTLC timeout transaction should match the BOLT 3 vector"
 
-def test_witness_items():
-    seed = bytes([0x01] * 32)
-    km = ChannelKeyManager(seed)
+def test_second_bolt3_timeout_vector():
+    km = ChannelKeyManager(bytes([0x01] * 32))
+    km.htlc_basepoint_secret = bytes.fromhex("bb13b121cdc357cd2e608b0aea294afca36e2b34cf958e2e6451a2f274694491")
     per_cp = bytes.fromhex("025f7117a78150fe2ef97db7cfc83bd57b2e2c0d0dd25eaf467a4a1c2a45ce1486")
     ck = CommitmentKeys(per_cp, bytes(33), bytes(33), bytes(33), bytes(33))
-    unsigned_tx = CMutableTransaction.deserialize(bytes.fromhex("0200000001bef67e4e2fb9ddeeb3461973cd4c62abb35050b1add772995b820b584a48848901000000000000000001d0070000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80ef6010000"))
-    htlc_script = bytes.fromhex("76a91414011f7254d96b819c76986c277d115efce6f7b58763ac6702c800b175210214ccb63e0b1bcf27ca2c6c73e16f3d6a036a33a2b81e62ba5d78f66b4a19fc2fac68")
-    remote_sig = bytes.fromhex("3045022100c3127b33dcc741dd6b05b1e63cbd1a9a7d816f37af9b6756fa2376b056f032370220408b96279808fe57eb7e463710804cdf4f108388bc5cf722d8c848d2c7f9f3b001")
+    unsigned_tx = CMutableTransaction.deserialize(bytes.fromhex("0200000001ab84ff284f162cfbfef241f853b47d4368d171f9e2a1445160cd591c4c7d882b03000000000000000001b80b0000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80ef7010000"))
+    htlc_script = bytes.fromhex("76a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c820120876475527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae67a9148a486ff2e31d6158bf39e2608864d63fefd09d5b88ac6868")
+    remote_sig = bytes.fromhex("304402207bcbf4f60a9829b05d2dbab84ed593e0291836be715dc7db6b72a64caf646af802201e489a5a84f7c5cc130398b841d138d031a5137ac8f4c49c770a4959dc3c136301")
+    result = finalize_htlc_timeout(km, ck, unsigned_tx, htlc_script, 3000, remote_sig)
+    expected_hex = "02000000000101ab84ff284f162cfbfef241f853b47d4368d171f9e2a1445160cd591c4c7d882b03000000000000000001b80b0000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e050047304402207bcbf4f60a9829b05d2dbab84ed593e0291836be715dc7db6b72a64caf646af802201e489a5a84f7c5cc130398b841d138d031a5137ac8f4c49c770a4959dc3c13630147304402203121d9b9c055f354304b016a36662ee99e1110d9501cb271b087ddb6f382c2c80220549882f3f3b78d9c492de47543cb9a697cecc493174726146536c5954dac748701008576a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c820120876475527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae67a9148a486ff2e31d6158bf39e2608864d63fefd09d5b88ac6868f7010000"
+    assert result.serialize().hex() == expected_hex, "Second finalized HTLC timeout transaction should match the BOLT 3 vector"
+
+def test_witness_shape():
+    km = ChannelKeyManager(bytes([0x01] * 32))
+    km.htlc_basepoint_secret = bytes.fromhex("bb13b121cdc357cd2e608b0aea294afca36e2b34cf958e2e6451a2f274694491")
+    per_cp = bytes.fromhex("025f7117a78150fe2ef97db7cfc83bd57b2e2c0d0dd25eaf467a4a1c2a45ce1486")
+    ck = CommitmentKeys(per_cp, bytes(33), bytes(33), bytes(33), bytes(33))
+    unsigned_tx = CMutableTransaction.deserialize(bytes.fromhex("0200000001ab84ff284f162cfbfef241f853b47d4368d171f9e2a1445160cd591c4c7d882b01000000000000000001d0070000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80ef6010000"))
+    htlc_script = bytes.fromhex("76a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c820120876475527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae67a914b43e1b38138a41b37f7cd9a1d274bc63e3a9b5d188ac6868")
+    remote_sig = bytes.fromhex("30440220649fe8b20e67e46cbb0d09b4acea87dbec001b39b08dee7bdd0b1f03922a8640022037c462dff79df501cecfdb12ea7f4de91f99230bb544726f6e04527b1f89600401")
     result = finalize_htlc_timeout(km, ck, unsigned_tx, htlc_script, 2000, remote_sig)
-    assert result is not None, "Must return a CMutableTransaction (got None)"
     signed = result.serialize()
-    assert b'\\x05' in signed, "Witness must have 5 items"
+    assert signed[4:6] == b'\\x00\\x01', "Signed timeout transaction must include the segwit marker"
 `,
     hints: {
       conceptual:
@@ -2346,34 +2570,57 @@ def test_witness_items():
     pass
 `,
     testCode: `
-def test_returns_tx():
-    seed = bytes([0x01] * 32)
-    km = ChannelKeyManager(seed)
+def test_bolt3_vector():
+    km = ChannelKeyManager(bytes([0x01] * 32))
+    km.htlc_basepoint_secret = bytes.fromhex("bb13b121cdc357cd2e608b0aea294afca36e2b34cf958e2e6451a2f274694491")
     per_cp = bytes.fromhex("025f7117a78150fe2ef97db7cfc83bd57b2e2c0d0dd25eaf467a4a1c2a45ce1486")
     ck = CommitmentKeys(per_cp, bytes(33), bytes(33), bytes(33), bytes(33))
-    unsigned_tx = CMutableTransaction.deserialize(bytes.fromhex("0200000001bef67e4e2fb9ddeeb3461973cd4c62abb35050b1add772995b820b584a48848901000000000000000001d0070000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e00000000"))
-    htlc_script = bytes.fromhex("76a91414011f7254d96b819c76986c277d115efce6f7b58763ac6702c800b175210214ccb63e0b1bcf27ca2c6c73e16f3d6a036a33a2b81e62ba5d78f66b4a19fc2fac68")
-    remote_sig = bytes.fromhex("3045022100c3127b33dcc741dd6b05b1e63cbd1a9a7d816f37af9b6756fa2376b056f032370220408b96279808fe57eb7e463710804cdf4f108388bc5cf722d8c848d2c7f9f3b001")
+    unsigned_tx = CMutableTransaction.deserialize(bytes.fromhex("0200000001ab84ff284f162cfbfef241f853b47d4368d171f9e2a1445160cd591c4c7d882b00000000000000000001e8030000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e00000000"))
+    htlc_script = bytes.fromhex("76a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c8201208763a914b8bcb07f6344b42ab04250c86a6e8b75d3fdbbc688527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae677502f401b175ac6868")
+    remote_sig = bytes.fromhex("3045022100d9e29616b8f3959f1d3d7f7ce893ffedcdc407717d0de8e37d808c91d3a7c50d022078c3033f6d00095c8720a4bc943c1b45727818c082e4e3ddbc6d3116435b624b01")
     preimage = bytes(32)
+    result = finalize_htlc_success(km, ck, unsigned_tx, htlc_script, 1000, remote_sig, preimage)
+    expected_hex = "02000000000101ab84ff284f162cfbfef241f853b47d4368d171f9e2a1445160cd591c4c7d882b00000000000000000001e8030000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e0500483045022100d9e29616b8f3959f1d3d7f7ce893ffedcdc407717d0de8e37d808c91d3a7c50d022078c3033f6d00095c8720a4bc943c1b45727818c082e4e3ddbc6d3116435b624b014730440220636de5682ef0c5b61f124ec74e8aa2461a69777521d6998295dcea36bc3338110220165285594b23c50b28b82df200234566628a27bcd17f7f14404bd865354eb3ce012000000000000000000000000000000000000000000000000000000000000000008a76a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c8201208763a914b8bcb07f6344b42ab04250c86a6e8b75d3fdbbc688527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae677502f401b175ac686800000000"
+    assert result.serialize().hex() == expected_hex, "Finalized HTLC success transaction should match the BOLT 3 vector"
+
+def test_second_bolt3_success_vector():
+    km = ChannelKeyManager(bytes([0x01] * 32))
+    km.htlc_basepoint_secret = bytes.fromhex("bb13b121cdc357cd2e608b0aea294afca36e2b34cf958e2e6451a2f274694491")
+    per_cp = bytes.fromhex("025f7117a78150fe2ef97db7cfc83bd57b2e2c0d0dd25eaf467a4a1c2a45ce1486")
+    ck = CommitmentKeys(per_cp, bytes(33), bytes(33), bytes(33), bytes(33))
+    unsigned_tx = CMutableTransaction.deserialize(bytes.fromhex("0200000001ab84ff284f162cfbfef241f853b47d4368d171f9e2a1445160cd591c4c7d882b02000000000000000001d0070000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e00000000"))
+    htlc_script = bytes.fromhex("76a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c8201208763a9144b6b2e5444c2639cc0fb7bcea5afba3f3cdce23988527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae677502f501b175ac6868")
+    remote_sig = bytes.fromhex("30440220770fc321e97a19f38985f2e7732dd9fe08d16a2efa4bcbc0429400a447faf49102204d40b417f3113e1b0944ae0986f517564ab4acd3d190503faf97a6e420d4335201")
+    preimage = bytes([0x01] * 32)
     result = finalize_htlc_success(km, ck, unsigned_tx, htlc_script, 2000, remote_sig, preimage)
-    assert hasattr(result, 'wit'), "Must return a CMutableTransaction"
-    signed = result.serialize()
-    assert signed[4:6] == b'\\x00\\x01', "Must include segwit marker"
+    expected_hex = "02000000000101ab84ff284f162cfbfef241f853b47d4368d171f9e2a1445160cd591c4c7d882b02000000000000000001d0070000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e05004730440220770fc321e97a19f38985f2e7732dd9fe08d16a2efa4bcbc0429400a447faf49102204d40b417f3113e1b0944ae0986f517564ab4acd3d190503faf97a6e420d4335201483045022100a437cc2ce77400ecde441b3398fea3c3ad8bdad8132be818227fe3c5b8345989022069d45e7fa0ae551ec37240845e2c561ceb2567eacf3076a6a43a502d05865faa012001010101010101010101010101010101010101010101010101010101010101018a76a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c8201208763a9144b6b2e5444c2639cc0fb7bcea5afba3f3cdce23988527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae677502f501b175ac686800000000"
+    assert result.serialize().hex() == expected_hex, "Second finalized HTLC success transaction should match the BOLT 3 vector"
+
+def test_third_bolt3_success_vector():
+    km = ChannelKeyManager(bytes([0x01] * 32))
+    km.htlc_basepoint_secret = bytes.fromhex("bb13b121cdc357cd2e608b0aea294afca36e2b34cf958e2e6451a2f274694491")
+    per_cp = bytes.fromhex("025f7117a78150fe2ef97db7cfc83bd57b2e2c0d0dd25eaf467a4a1c2a45ce1486")
+    ck = CommitmentKeys(per_cp, bytes(33), bytes(33), bytes(33), bytes(33))
+    unsigned_tx = CMutableTransaction.deserialize(bytes.fromhex("0200000001ab84ff284f162cfbfef241f853b47d4368d171f9e2a1445160cd591c4c7d882b04000000000000000001a00f0000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e00000000"))
+    htlc_script = bytes.fromhex("76a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c8201208763a91418bc1a114ccf9c052d3d23e28d3b0a9d1227434288527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae677502f801b175ac6868")
+    remote_sig = bytes.fromhex("3044022076dca5cb81ba7e466e349b7128cdba216d4d01659e29b96025b9524aaf0d1899022060de85697b88b21c749702b7d2cfa7dfeaa1f472c8f1d7d9c23f2bf968464b8701")
+    preimage = bytes([0x04] * 32)
+    result = finalize_htlc_success(km, ck, unsigned_tx, htlc_script, 4000, remote_sig, preimage)
+    expected_hex = "02000000000101ab84ff284f162cfbfef241f853b47d4368d171f9e2a1445160cd591c4c7d882b04000000000000000001a00f0000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e0500473044022076dca5cb81ba7e466e349b7128cdba216d4d01659e29b96025b9524aaf0d1899022060de85697b88b21c749702b7d2cfa7dfeaa1f472c8f1d7d9c23f2bf968464b8701483045022100d9080f103cc92bac15ec42464a95f070c7fb6925014e673ee2ea1374d36a7f7502200c65294d22eb20d48564954d5afe04a385551919d8b2ddb4ae2459daaeee1d95012004040404040404040404040404040404040404040404040404040404040404048a76a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c8201208763a91418bc1a114ccf9c052d3d23e28d3b0a9d1227434288527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae677502f801b175ac686800000000"
+    assert result.serialize().hex() == expected_hex, "Third finalized HTLC success transaction should match the BOLT 3 vector"
 
 def test_witness_contains_preimage():
-    seed = bytes([0x01] * 32)
-    km = ChannelKeyManager(seed)
+    km = ChannelKeyManager(bytes([0x01] * 32))
+    km.htlc_basepoint_secret = bytes.fromhex("bb13b121cdc357cd2e608b0aea294afca36e2b34cf958e2e6451a2f274694491")
     per_cp = bytes.fromhex("025f7117a78150fe2ef97db7cfc83bd57b2e2c0d0dd25eaf467a4a1c2a45ce1486")
     ck = CommitmentKeys(per_cp, bytes(33), bytes(33), bytes(33), bytes(33))
-    unsigned_tx = CMutableTransaction.deserialize(bytes.fromhex("0200000001bef67e4e2fb9ddeeb3461973cd4c62abb35050b1add772995b820b584a48848901000000000000000001d0070000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e00000000"))
-    htlc_script = bytes.fromhex("76a91414011f7254d96b819c76986c277d115efce6f7b58763ac6702c800b175210214ccb63e0b1bcf27ca2c6c73e16f3d6a036a33a2b81e62ba5d78f66b4a19fc2fac68")
-    remote_sig = bytes.fromhex("3045022100c3127b33dcc741dd6b05b1e63cbd1a9a7d816f37af9b6756fa2376b056f032370220408b96279808fe57eb7e463710804cdf4f108388bc5cf722d8c848d2c7f9f3b001")
-    preimage = bytes.fromhex("0102030405060708091011121314151617181920212223242526272829303132")
-    result = finalize_htlc_success(km, ck, unsigned_tx, htlc_script, 2000, remote_sig, preimage)
-    assert result is not None, "Must return a CMutableTransaction (got None)"
+    unsigned_tx = CMutableTransaction.deserialize(bytes.fromhex("0200000001ab84ff284f162cfbfef241f853b47d4368d171f9e2a1445160cd591c4c7d882b00000000000000000001e8030000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e00000000"))
+    htlc_script = bytes.fromhex("76a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c8201208763a914b8bcb07f6344b42ab04250c86a6e8b75d3fdbbc688527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae677502f401b175ac6868")
+    remote_sig = bytes.fromhex("3045022100d9e29616b8f3959f1d3d7f7ce893ffedcdc407717d0de8e37d808c91d3a7c50d022078c3033f6d00095c8720a4bc943c1b45727818c082e4e3ddbc6d3116435b624b01")
+    preimage = bytes(32)
+    result = finalize_htlc_success(km, ck, unsigned_tx, htlc_script, 1000, remote_sig, preimage)
     signed = result.serialize()
-    assert b'\\x05' in signed, "Witness must have 5 items"
-    assert preimage in signed, "Witness must contain the payment preimage"
+    assert signed[4:6] == b'\\x00\\x01', "Signed success transaction must include the segwit marker"
 `,
     hints: {
       conceptual:

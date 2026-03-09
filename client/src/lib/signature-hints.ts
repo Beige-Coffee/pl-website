@@ -235,18 +235,18 @@ const SIGNATURES: Record<string, SignatureInfo> = {
   // ── ChannelKeyManager methods ────────────────────────────────────────────
   ".build_commitment_secret": {
     name: "build_commitment_secret",
-    params: "(commitment_number)",
-    description: "Derive a 32-byte per-commitment secret using the shachain algorithm",
+    params: "(per_commitment_index)",
+    description: "Derive a 32-byte per-commitment secret using BOLT's descending shachain index",
     paramDetails: [
-      { name: "commitment_number", description: "Channel state index (int)" },
+      { name: "per_commitment_index", description: "Descending BOLT shachain index (int)" },
     ],
   },
   ".derive_per_commitment_point": {
     name: "derive_per_commitment_point",
     params: "(commitment_number)",
-    description: "Derive the per-commitment point (public key) for a given state",
+    description: "Derive the per-commitment point for a channel state by converting to the descending shachain index",
     paramDetails: [
-      { name: "commitment_number", description: "Channel state index (int)" },
+      { name: "commitment_number", description: "Ascending channel state number (int)" },
     ],
   },
   ".get_commitment_keys": {

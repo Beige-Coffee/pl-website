@@ -145,8 +145,18 @@ def derive_channel_keys(seed: bytes, index: int = 0) -> dict:
 
 # ── Per-Commitment Key Derivation ──
 
+def build_commitment_secret(seed, per_commitment_index):
+    commitment_seed = derive_ln_key(seed, 5, 0)
+    value = bytearray(commitment_seed)
+    for i in range(47, -1, -1):
+        if (per_commitment_index >> i) & 1:
+            value[i // 8] ^= (1 << (i % 8))
+            value = bytearray(hashlib.sha256(value).digest())
+    return bytes(value)
+
 def derive_per_commitment_point(seed, commitment_number):
-    per_commitment_secret = derive_ln_key(seed, 5, commitment_number)
+    per_commitment_index = ((1 << 48) - 1) - commitment_number
+    per_commitment_secret = build_commitment_secret(seed, per_commitment_index)
     return privkey_to_pubkey(per_commitment_secret)
 
 def derive_pubkey(basepoint, per_commitment_point):
@@ -400,10 +410,7 @@ local_delayed_pubkey = derive_pubkey(
     alice_keys['delayed_payment_base']['pubkey'],
     per_commitment_point
 )
-remote_payment_pubkey = derive_pubkey(
-    bob_keys['payment_base']['pubkey'],
-    per_commitment_point
-)
+remote_payment_pubkey = bob_keys['payment_base']['pubkey']
 local_htlc_pubkey = derive_pubkey(
     alice_keys['htlc_base']['pubkey'],
     per_commitment_point
