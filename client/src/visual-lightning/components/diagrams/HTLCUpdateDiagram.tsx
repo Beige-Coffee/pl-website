@@ -55,7 +55,7 @@ const TOOLTIPS: Record<string, { title: string; description: string }> = {
   "msg-revoke-1": {
     title: "revoke_and_ack (Bob \u2192 Alice)",
     description:
-      "Bob reveals his State 1 per_commitment_secret, allowing Alice to derive the revocation key for Bob's old TX. Also sends next_per_commitment_point.\n\nBob's old state is now revoked. It's now safe for Bob to forward the HTLC to Dianne.",
+      "Bob reveals his State 1 per_commitment_secret, allowing Alice to derive the revocation key for Bob's old TX. Also sends next_per_commitment_point.\n\nBob's old state is now revoked, but Alice's old state is still valid. Bob still must NOT forward the HTLC yet.",
   },
   "msg-commit-2": {
     title: "commitment_signed (Bob \u2192 Alice)",
@@ -65,17 +65,17 @@ const TOOLTIPS: Record<string, { title: string; description: string }> = {
   "msg-revoke-2": {
     title: "revoke_and_ack (Alice \u2192 Bob)",
     description:
-      "Alice reveals her State 1 per_commitment_secret, allowing Bob to derive the revocation key for Alice's old TX. Also sends next_per_commitment_point.\n\nBoth old states are now revoked. The HTLC is irrevocably committed.",
+      "Alice reveals her State 1 per_commitment_secret, allowing Bob to derive the revocation key for Alice's old TX. Also sends next_per_commitment_point.\n\nBoth old states are now revoked. The HTLC is irrevocably committed, and Bob can safely forward it.",
   },
   "htlc-offered": {
     title: "Offered HTLC (on Alice's TX)",
     description:
-      "Alice is offering this HTLC. Three spending paths:\n\u2022 Revocation: penalty if old state broadcast\n\u2022 Success: Bob reveals preimage R\n\u2022 Timeout: After block 200, Alice reclaims\n\nwitnessScript:\n  OP_IF\n    <revocation_pubkey>\n  OP_ELSE OP_IF\n    <payment_hash> OP_EQUAL\n    <remote_htlcpubkey> OP_CHECKSIG\n  OP_ELSE\n    <cltv_expiry> OP_CLTV OP_DROP\n    <local_htlcpubkey> OP_CHECKSIG\n  OP_ENDIF OP_ENDIF",
+      "Alice is offering this HTLC. This visual shows a simplified spending-path summary, not the exact BOLT 3 script.\n\nLogical paths:\n\u2022 Revocation: penalty if an old state is broadcast\n\u2022 Success: Bob can claim by learning preimage R\n\u2022 Timeout: after block 200, Alice can reclaim\n\nIn the real protocol, these paths are enforced by the full offered-HTLC witnessScript plus pre-signed second-stage HTLC transactions.",
   },
   "htlc-received": {
     title: "Received HTLC (on Bob's TX)",
     description:
-      "Bob is receiving this HTLC. Three spending paths:\n\u2022 Revocation: penalty if old state broadcast\n\u2022 Success: Bob reveals preimage R (after delay)\n\u2022 Timeout: After block 200, Alice reclaims\n\nwitnessScript:\n  OP_IF\n    <revocation_pubkey>\n  OP_ELSE OP_IF\n    <payment_hash> OP_EQUAL\n    <to_self_delay> OP_CSV\n    <local_htlcpubkey> OP_CHECKSIG\n  OP_ELSE\n    <cltv_expiry> OP_CLTV OP_DROP\n    <remote_htlcpubkey> OP_CHECKSIG\n  OP_ENDIF OP_ENDIF",
+      "Bob is receiving this HTLC. This visual shows a simplified spending-path summary, not the exact BOLT 3 script.\n\nLogical paths:\n\u2022 Revocation: penalty if an old state is broadcast\n\u2022 Success: Bob can claim with the preimage before expiry\n\u2022 Timeout: if the HTLC expires, Alice can reclaim\n\nIn the real protocol, the success path is completed with the full received-HTLC witnessScript plus a pre-signed HTLC-success transaction.",
   },
 };
 
@@ -168,9 +168,9 @@ const CAPTIONS: [string, string][] = [
   ["Each party holds the other\u2019s signature on their commitment TX", "No HTLC outputs yet"],
   ["Alice sends update_add_htlc \u2014 Bob stages the HTLC", "Bob must NOT forward until the HTLC is irrevocably committed"],
   ["Alice sends her signature for Bob\u2019s new TX (with HTLC)", "Bob now has a signed new TX, but hasn\u2019t revoked his old one"],
-  ["Bob reveals his State 1 per-commitment secret", "Bob can now safely forward the HTLC to Dianne"],
+  ["Bob reveals his State 1 per-commitment secret", "Bob\u2019s old state is revoked, but Alice\u2019s old state is still valid"],
   ["Bob sends his signature for Alice\u2019s new TX (with HTLC)", "Alice now has a signed new TX, but hasn\u2019t revoked hers yet"],
-  ["Both old states revoked \u2014 cheating means losing everything", "The HTLC is now safely enforceable on-chain"],
+  ["Both old states revoked \u2014 cheating means losing everything", "The HTLC is now irrevocably committed and safe to forward"],
 ];
 
 const CAPTION_L2_COLORS = [GOLD, BOB_CLR, ALICE_CLR, GREEN, BOB_CLR, GOLD];
@@ -386,7 +386,7 @@ export function HTLCUpdateDiagram() {
           />
           <text x={x + 12} y={y + 55} fontSize="9" fontWeight="600" fill={GOLD} style={noPtr}>HTLC:</text>
           <text x={x + 50} y={y + 55} fontSize="9" fontWeight="600" fontFamily={mono} fill={GOLD} style={noPtr}>0.405 BTC</text>
-          <text x={x + cardW - 14} y={y + 55} fontSize="7" fill={GREEN} fontWeight="600" textAnchor="end" style={noPtr}>hover for script</text>
+          <text x={x + cardW - 14} y={y + 55} fontSize="7" fill={GREEN} fontWeight="600" textAnchor="end" style={noPtr}>hover for paths</text>
         </g>
         {/* Row 3: higher balance */}
         <text x={x + 10} y={y + 74} fontSize="10" fill={TEXT_MUTED} style={noPtr}>{row3Name}:</text>

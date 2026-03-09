@@ -723,13 +723,13 @@ export const VL_SECTIONS: VLSectionDef[] = [
       {
         type: "callout",
         title: "When Can Bob Forward?",
-        body: "Bob must NOT forward the HTLC to Dianne until his old state is revoked. If he forwarded early and Alice broadcast her old commitment TX (without the HTLC), Bob would lose money. Once Bob sends revoke_and_ack, his old state is revoked and it's safe to forward.",
+        body: "Bob must NOT forward the HTLC to Dianne until the HTLC is irrevocably committed. Bob's own <code>revoke_and_ack</code> only revokes Bob's old state. Alice's old commitment is still valid until she later sends the final <code>revoke_and_ack</code>. If Bob forwarded earlier and Alice broadcast that old commitment TX (without the HTLC), Bob would lose money.",
         variant: "warning",
       },
       {
         type: "text",
         content:
-          "Step through the diagram to watch the five-message flow: <code>update_add_htlc</code>, two <code>commitment_signed</code> messages, and two <code>revoke_and_ack</code> messages. Hover over the HTLC output on each party's commitment TX to see the full witnessScript with its three spending paths.",
+          "Step through the diagram to watch the five-message flow: <code>update_add_htlc</code>, two <code>commitment_signed</code> messages, and two <code>revoke_and_ack</code> messages. Hover over the HTLC output on each party's commitment TX to see a simplified spending-path summary of the underlying witnessScript.",
       },
       {
         type: "quiz",
@@ -737,7 +737,7 @@ export const VL_SECTIONS: VLSectionDef[] = [
           {
             id: "s10-q1",
             question:
-              "Why must Bob wait to forward the HTLC until after sending revoke_and_ack?",
+              "Why must Bob wait until the HTLC is irrevocably committed before forwarding it?",
             options: [
               "Because Alice could broadcast her old commitment TX (without the HTLC) and Bob would lose funds",
               "Because the payment hash hasn't been verified yet",
@@ -746,7 +746,7 @@ export const VL_SECTIONS: VLSectionDef[] = [
             ],
             correctIndex: 0,
             explanation:
-              "If Bob forwards the HTLC before his old state is revoked, Alice could broadcast her old commitment TX that doesn't include the HTLC. Bob would have paid Dianne but have no way to claim from Alice. After revoking, Alice's old TX becomes dangerous for her to broadcast.",
+              "If Bob forwards before Alice revokes her old state, Alice could still broadcast the prior commitment TX that does not include the HTLC. Bob's own <code>revoke_and_ack</code> only revokes Bob's old state. The HTLC becomes safe to forward only after both old states are revoked.",
           },
           {
             id: "s10-q2",
@@ -857,7 +857,7 @@ export const VL_SECTIONS: VLSectionDef[] = [
       {
         type: "text",
         content:
-          "There are two ways to close a Lightning channel. A <strong>cooperative close</strong> happens when both parties agree on the final balances. They create a simple closing transaction together: no delays, no revocation paths, just a clean split. This is the best case: low fees, instant finality.",
+          "There are two ways to close a Lightning channel. A <strong>cooperative close</strong> happens when both parties agree on the final balances. They create a simple closing transaction together: no delays, no revocation paths, just a clean split. This is the best case: lower fees and no <code>to_self_delay</code> once the closing transaction confirms.",
       },
       {
         type: "text",
@@ -872,7 +872,7 @@ export const VL_SECTIONS: VLSectionDef[] = [
       {
         type: "callout",
         title: "Always Prefer Cooperative",
-        body: "A cooperative close is always preferred: lower fees, instant settlement, simpler transaction. Force close is the safety net that ensures you can always recover your funds, even if your counterparty disappears.",
+        body: "A cooperative close is always preferred: lower fees, simpler settlement, and no <code>to_self_delay</code>. Force close is the safety net that ensures you can always recover your funds, even if your counterparty disappears.",
         variant: "key-concept",
       },
       {
@@ -883,14 +883,14 @@ export const VL_SECTIONS: VLSectionDef[] = [
             question:
               "What is the key advantage of a cooperative close over a force close?",
             options: [
-              "No delays, lower fees, and immediate access to funds for both parties",
+              "No CSV delay, lower fees, and simpler access to funds once the close confirms",
               "It doesn't require an on-chain transaction",
               "It can close multiple channels at once",
               "It preserves the channel for future use",
             ],
             correctIndex: 0,
             explanation:
-              "A cooperative close is a single simple transaction with no delays. Both parties get their funds immediately. Force closes are complex, expensive, and the broadcaster must wait for the to_self_delay.",
+              "A cooperative close is a single simple transaction with no <code>to_self_delay</code> on either output. Both parties still need the closing transaction to confirm, but once it does, the funds are immediately spendable. Force closes are more complex and the broadcaster must wait through the delay on their own output.",
           },
           {
             id: "s12-q2",

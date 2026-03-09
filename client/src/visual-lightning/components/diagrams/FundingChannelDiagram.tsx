@@ -35,7 +35,7 @@ const TOOLTIPS: Record<string, { title: string; description: string }> = {
   "witness-0": {
     title: "Witness",
     description:
-      "The witness data will contain both Alice's and Bob's signatures when the funding transaction is broadcast.",
+      "This witness data authorizes whichever UTXOs are being spent into the funding transaction. For the single Alice input shown here, it would just prove Alice can spend that input. The 2-of-2 multisig witness appears later, when the funding output itself is spent by a commitment or closing transaction.",
   },
   "witness-script": {
     title: "Witness Script (Redeem Script)",

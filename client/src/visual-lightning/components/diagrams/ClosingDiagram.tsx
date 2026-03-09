@@ -20,12 +20,12 @@ const TOOLTIPS: Record<string, { title: string; description: string }> = {
   "coop-out-0": {
     title: "Bob's Output (P2WPKH)",
     description:
-      "Bob's agreed-upon share. A standard P2WPKH, immediately spendable. Cooperative closes produce the simplest possible settlement.\n\nWitness Script:\n  <bob_sig>\n  <bob_pubkey>",
+      "Bob's agreed-upon share. A standard P2WPKH, spendable as soon as the cooperative close confirms. Cooperative closes produce the simplest possible settlement.\n\nWhen Bob later spends it, the witness stack is:\n  <bob_sig>\n  <bob_pubkey>",
   },
   "coop-out-1": {
     title: "Alice's Output (P2WPKH)",
     description:
-      "Alice's agreed-upon share of the channel balance. A standard P2WPKH output, spendable immediately once the closing TX is confirmed. No scripts, no delays.\n\nWitness Script:\n  <alice_sig>\n  <alice_pubkey>",
+      "Alice's agreed-upon share of the channel balance. A standard P2WPKH output, spendable as soon as the closing TX confirms. No scripts, no delays.\n\nWhen Alice later spends it, the witness stack is:\n  <alice_sig>\n  <alice_pubkey>",
   },
   "coop-witness": {
     title: "Witness (Cooperative)",
@@ -40,7 +40,7 @@ const TOOLTIPS: Record<string, { title: string; description: string }> = {
   "force-out-0": {
     title: "to_remote — Bob's Output (P2WPKH)",
     description:
-      "The counterparty's balance. A simple P2WPKH, spendable immediately. Since Bob didn't choose to broadcast, he faces no penalty risk.\n\nWitness Script:\n  <bob_sig>\n  <bob_pubkey>",
+      "The counterparty's balance. A simple P2WPKH with no additional CSV delay. Once the commitment transaction confirms, Bob can spend it right away.\n\nWhen Bob later spends it, the witness stack is:\n  <bob_sig>\n  <bob_pubkey>",
   },
   "force-out-1": {
     title: "to_local — Alice's Delayed Output (P2WSH)",

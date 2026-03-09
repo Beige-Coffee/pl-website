@@ -87,7 +87,7 @@ export const SIMPLE_TX: TxDiagramData = {
     txid: {
       title: "Transaction ID (txid)",
       description:
-        "A SHA256 hash of the transaction data. Uniquely identifies this transaction on the blockchain.",
+        "A double-SHA256 of the serialized transaction data. For segwit transactions, the txid excludes witness data. It uniquely identifies this transaction on the blockchain.",
     },
     version: {
       title: "Transaction Version",
