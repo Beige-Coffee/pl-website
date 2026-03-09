@@ -992,11 +992,16 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
   const [tutorialMode] = useState<"read" | "code">(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
-      if (params.get("mode") === "code") {
-        localStorage.setItem("pl-tutorial-mode", "code");
+      const mode = params.get("mode");
+      if (mode === "code") {
+        localStorage.setItem("pl-ln-tutorial-mode", "code");
         return "code";
       }
-      const stored = localStorage.getItem("pl-tutorial-mode");
+      if (mode === "read") {
+        localStorage.removeItem("pl-ln-tutorial-mode");
+        return "read";
+      }
+      const stored = localStorage.getItem("pl-ln-tutorial-mode");
       if (stored === "code") return "code";
     }
     return "read";

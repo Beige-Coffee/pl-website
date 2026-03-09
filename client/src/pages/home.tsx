@@ -69,7 +69,7 @@ export default function Home() {
                   <li>Completely hosted on the Programming Lightning website with an enhanced, interactive learning experience.</li>
                 </ul>
                 <button
-                  onClick={() => { setShowCodeModal(false); navigate("/lightning-tutorial"); }}
+                  onClick={() => { setShowCodeModal(false); navigate("/lightning-tutorial?mode=code"); }}
                   className="w-full bg-primary text-foreground px-3 py-2 font-pixel text-sm border-2 border-border hover:bg-primary/80 transition-colors pixel-shadow active:translate-x-[2px] active:translate-y-[2px] active:shadow-none"
                 >
                   START IN PYTHON
@@ -297,7 +297,7 @@ export default function Home() {
                     <Tooltip delayDuration={0}>
                       <TooltipTrigger asChild>
                         <Link
-                          href="/noise-tutorial"
+                          href="/noise-tutorial?mode=read"
                           className="bg-primary text-foreground px-6 py-2.5 font-pixel text-sm border-2 border-border hover:bg-primary/80 transition-colors pixel-shadow active:translate-x-[2px] active:translate-y-[2px] active:shadow-none text-center flex-1 md:flex-none"
                         >
                           READ
