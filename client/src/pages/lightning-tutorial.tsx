@@ -2609,7 +2609,7 @@ function PayItForward({ theme }: { theme: "light" | "dark" }) {
   );
 }
 
-const QUIZ_QUESTIONS = [
+export const QUIZ_QUESTIONS = [
   {
     question: "What is the fundamental purpose of a 2-of-2 multisig in a Lightning funding transaction?",
     options: [

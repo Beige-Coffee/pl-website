@@ -7,6 +7,10 @@ vite.config.ts.*
 .env
 .local/
 
+# Generated test artifacts
+test-results/
+playwright-report/
+
 # Working documents (prompts, agent notes)
 AGENTS.md
 codex-*.md

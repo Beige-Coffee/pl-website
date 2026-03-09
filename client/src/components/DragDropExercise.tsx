@@ -16,12 +16,12 @@ interface DragDropExerciseProps {
   onOpenProfile?: () => void;
 }
 
-interface MatchItem {
+export interface MatchItem {
   label: string;
   definition: string;
 }
 
-const MATCH_DATA: MatchItem[] = [
+export const MATCH_DATA: MatchItem[] = [
   {
     label: "Scratchpad",
     definition:

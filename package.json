@@ -14,7 +14,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:lightning:audit": "vitest run tests/client/lightning-bolt-vector-coverage.test.ts tests/client/lightning-course-bolt-audit.test.ts",
     "test:e2e": "playwright test",
+    "test:e2e:lightning-course": "playwright test -c playwright.lightning-course.config.ts",
+    "test:e2e:lightning-course:local": "playwright test -c playwright.lightning-course.config.ts --project local-preflight",
+    "test:e2e:lightning-course:prod": "PW_LIGHTNING_COURSE_NO_WEBSERVER=1 playwright test -c playwright.lightning-course.config.ts --project production-course",
     "test:all": "vitest run && playwright test"
   },
   "notes": "removed framer motion dependency",
