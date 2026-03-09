@@ -504,7 +504,7 @@ export default function ScriptDebugger({
         }`}
       >
         <h3
-          className="font-sans text-sm font-semibold tracking-wide"
+          className="font-pixel text-sm tracking-wide"
           style={{ color: dark ? "#FFD700" : "#7a5600" }}
         >
           Script Debugger: {data.name}
