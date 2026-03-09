@@ -29,10 +29,7 @@ export const CODE_EXERCISES: Record<string, CodeExerciseData> = {
     title: "Exercise 1: Generate a secp256k1 Keypair",
     description:
       "Implement secp256k1 keypair generation - the foundation of all Diffie-Hellman operations in Lightning's Noise Protocol. Lightning uses secp256k1 (the same curve as Bitcoin). Return a 32-byte private key and a 33-byte compressed public key.",
-    starterCode: `from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
-
-def generate_keypair():
+    starterCode: `def generate_keypair():
     """
     Generate a random secp256k1 keypair.
 
@@ -131,10 +128,7 @@ def generate_keypair():
     title: "Exercise 2: Perform ECDH Key Exchange",
     description:
       "Implement the secp256k1 ECDH exchange as defined in BOLT 8. Given your 32-byte private key and a remote party's 33-byte compressed public key, compute the 32-byte shared secret. BOLT 8 defines ECDH as: compute the shared point, represent it in compressed format, then return its SHA-256 hash. This is the core operation behind every handshake token (ee, es, se, ss).",
-    starterCode: `from ecdsa import SigningKey, VerifyingKey, SECP256k1
-import hashlib
-
-def ecdh(local_private_key_bytes, remote_public_key_bytes):
+    starterCode: `def ecdh(local_private_key_bytes, remote_public_key_bytes):
     """
     Perform secp256k1 ECDH key exchange (BOLT 8 variant).
 
@@ -279,10 +273,7 @@ print("Match:", bolt8_secret_ab == bolt8_secret_ba)
     title: "Exercise 3: Implement HKDF (Key Derivation)",
     description:
       "Implement the Noise Protocol's variant of HKDF-SHA256. Given a salt (chaining key) and input key material, produce two 32-byte derived keys. Use only the hmac and hashlib modules  -  no high-level HKDF wrappers.",
-    starterCode: `import hmac
-import hashlib
-
-def hkdf_two_keys(salt, input_key_material):
+    starterCode: `def hkdf_two_keys(salt, input_key_material):
     """
     Noise Protocol's HKDF: extract-then-expand producing 2 x 32-byte keys.
 
@@ -397,9 +388,7 @@ def hkdf_two_keys(salt, input_key_material):
     title: "Exercise 4: Initialize the Handshake State",
     description:
       "Initialize the SymmetricState for the Noise XK handshake. Compute the initial handshake hash (h) and chaining key (ck) from the protocol name, then mix in the prologue and the responder's static public key.",
-    starterCode: `import hashlib
-
-def initialize_symmetric_state(responder_static_pubkey):
+    starterCode: `def initialize_symmetric_state(responder_static_pubkey):
     """
     Initialize the Noise XK handshake state.
 
@@ -534,30 +523,7 @@ print("Final ck:", ck.hex(), "(unchanged)")
     title: "Exercise 5: Act 1  -  Initiator Side",
     description:
       "Implement Act 1 of the XK handshake from Alice's (initiator) perspective. Mix the ephemeral public key into h, perform ECDH with the responder's static key (the 'es' token), derive a temporary key via HKDF, encrypt an empty payload, and produce the 50-byte Act 1 message.",
-    starterCode: `import hashlib
-import hmac
-from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
-from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
-
-def hkdf_two_keys(salt, ikm):
-    """HKDF helper  -  you implemented this in Exercise 3."""
-    temp_key = hmac.new(salt, ikm, hashlib.sha256).digest()
-    out1 = hmac.new(temp_key, b'\\x01', hashlib.sha256).digest()
-    out2 = hmac.new(temp_key, out1 + b'\\x02', hashlib.sha256).digest()
-    return (out1, out2)
-
-def ecdh(priv_bytes, pub_bytes):
-    """ECDH helper  -  you implemented this in Exercise 2."""
-    from ecdsa import SigningKey, VerifyingKey, SECP256k1
-    import hashlib
-    sk = SigningKey.from_string(priv_bytes, curve=SECP256k1)
-    vk = VerifyingKey.from_string(pub_bytes, curve=SECP256k1)
-    pt = vk.pubkey.point * sk.privkey.secret_multiplier
-    prefix = b'\\x02' if pt.y() % 2 == 0 else b'\\x03'
-    return hashlib.sha256(prefix + pt.x().to_bytes(32, 'big')).digest()
-
-def act_one_initiator(h, ck, e_priv, e_pub, rs_pub):
+    starterCode: `def act_one_initiator(h, ck, e_priv, e_pub, rs_pub):
     """
     Construct Act 1 message (initiator -> responder).
 
@@ -779,29 +745,7 @@ print("Length:", len(msg), "bytes (1 + 33 + 16 = 50)")
     title: "Exercise 6: Act 1  -  Responder Side",
     description:
       "Implement the responder's processing of Act 1. Parse the message, extract the initiator's ephemeral public key, perform the ECDH (using your static private key), derive the temporary key, and verify the authentication tag.",
-    starterCode: `import hashlib
-import hmac
-from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
-from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
-
-def hkdf_two_keys(salt, ikm):
-    temp_key = hmac.new(salt, ikm, hashlib.sha256).digest()
-    out1 = hmac.new(temp_key, b'\\x01', hashlib.sha256).digest()
-    out2 = hmac.new(temp_key, out1 + b'\\x02', hashlib.sha256).digest()
-    return (out1, out2)
-
-def ecdh(priv_bytes, pub_bytes):
-    """ECDH helper  -  you implemented this in Exercise 2."""
-    from ecdsa import SigningKey, VerifyingKey, SECP256k1
-    import hashlib
-    sk = SigningKey.from_string(priv_bytes, curve=SECP256k1)
-    vk = VerifyingKey.from_string(pub_bytes, curve=SECP256k1)
-    pt = vk.pubkey.point * sk.privkey.secret_multiplier
-    prefix = b'\\x02' if pt.y() % 2 == 0 else b'\\x03'
-    return hashlib.sha256(prefix + pt.x().to_bytes(32, 'big')).digest()
-
-def act_one_responder(h, ck, s_priv, message):
+    starterCode: `def act_one_responder(h, ck, s_priv, message):
     """
     Process Act 1 message (responder side).
 
@@ -1028,29 +972,7 @@ print("Tag verified successfully!")
     title: "Exercise 7: Act 2  -  Responder Side",
     description:
       "Implement Act 2 from the responder's perspective. Generate and send the responder's ephemeral public key, perform the 'ee' ECDH (ephemeral-ephemeral), derive a new temporary key, and encrypt an empty payload. This introduces forward secrecy.",
-    starterCode: `import hashlib
-import hmac
-from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
-from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
-
-def hkdf_two_keys(salt, ikm):
-    temp_key = hmac.new(salt, ikm, hashlib.sha256).digest()
-    out1 = hmac.new(temp_key, b'\\x01', hashlib.sha256).digest()
-    out2 = hmac.new(temp_key, out1 + b'\\x02', hashlib.sha256).digest()
-    return (out1, out2)
-
-def ecdh(priv_bytes, pub_bytes):
-    """ECDH helper  -  you implemented this in Exercise 2."""
-    from ecdsa import SigningKey, VerifyingKey, SECP256k1
-    import hashlib
-    sk = SigningKey.from_string(priv_bytes, curve=SECP256k1)
-    vk = VerifyingKey.from_string(pub_bytes, curve=SECP256k1)
-    pt = vk.pubkey.point * sk.privkey.secret_multiplier
-    prefix = b'\\x02' if pt.y() % 2 == 0 else b'\\x03'
-    return hashlib.sha256(prefix + pt.x().to_bytes(32, 'big')).digest()
-
-def act_two_responder(h, ck, e_priv, e_pub, re_pub):
+    starterCode: `def act_two_responder(h, ck, e_priv, e_pub, re_pub):
     """
     Construct Act 2 message (responder -> initiator).
 
@@ -1247,29 +1169,7 @@ print("Length:", len(msg), "bytes")
     title: "Exercise 8: Act 2  -  Initiator Side",
     description:
       "Implement the initiator's processing of Act 2. Parse the responder's message, extract their ephemeral public key, perform the 'ee' ECDH, derive the temporary key, and verify the tag.",
-    starterCode: `import hashlib
-import hmac
-from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
-from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
-
-def hkdf_two_keys(salt, ikm):
-    temp_key = hmac.new(salt, ikm, hashlib.sha256).digest()
-    out1 = hmac.new(temp_key, b'\\x01', hashlib.sha256).digest()
-    out2 = hmac.new(temp_key, out1 + b'\\x02', hashlib.sha256).digest()
-    return (out1, out2)
-
-def ecdh(priv_bytes, pub_bytes):
-    """ECDH helper  -  you implemented this in Exercise 2."""
-    from ecdsa import SigningKey, VerifyingKey, SECP256k1
-    import hashlib
-    sk = SigningKey.from_string(priv_bytes, curve=SECP256k1)
-    vk = VerifyingKey.from_string(pub_bytes, curve=SECP256k1)
-    pt = vk.pubkey.point * sk.privkey.secret_multiplier
-    prefix = b'\\x02' if pt.y() % 2 == 0 else b'\\x03'
-    return hashlib.sha256(prefix + pt.x().to_bytes(32, 'big')).digest()
-
-def act_two_initiator(h, ck, e_priv, message):
+    starterCode: `def act_two_initiator(h, ck, e_priv, message):
     """
     Process Act 2 message (initiator side).
 
@@ -1433,29 +1333,7 @@ print("  - Same temp_k (from ee ECDH)")
     title: "Exercise 9: Act 3  -  Identity Reveal & Key Split",
     description:
       "Implement Act 3 (BOLT 8), where the initiator reveals their identity by encrypting their static public key with temp_k2 at nonce=1 (since nonce=0 was used in Act 2). Then perform the final 'se' ECDH and derive the transport encryption keys via Split().",
-    starterCode: `import hashlib
-import hmac
-from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
-from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
-
-def hkdf_two_keys(salt, ikm):
-    temp_key = hmac.new(salt, ikm, hashlib.sha256).digest()
-    out1 = hmac.new(temp_key, b'\\x01', hashlib.sha256).digest()
-    out2 = hmac.new(temp_key, out1 + b'\\x02', hashlib.sha256).digest()
-    return (out1, out2)
-
-def ecdh(priv_bytes, pub_bytes):
-    """ECDH helper  -  you implemented this in Exercise 2."""
-    from ecdsa import SigningKey, VerifyingKey, SECP256k1
-    import hashlib
-    sk = SigningKey.from_string(priv_bytes, curve=SECP256k1)
-    vk = VerifyingKey.from_string(pub_bytes, curve=SECP256k1)
-    pt = vk.pubkey.point * sk.privkey.secret_multiplier
-    prefix = b'\\x02' if pt.y() % 2 == 0 else b'\\x03'
-    return hashlib.sha256(prefix + pt.x().to_bytes(32, 'big')).digest()
-
-def act_three_initiator(h, ck, temp_k2, s_priv, s_pub, re_pub):
+    starterCode: `def act_three_initiator(h, ck, temp_k2, s_priv, s_pub, re_pub):
     """
     Construct Act 3 message and derive transport keys (BOLT 8).
 
@@ -1705,74 +1583,98 @@ print("Handshake complete! Ready for encrypted transport.")
     id: "exercise-encrypt",
     title: "Exercise 10: Encrypt Transport Messages",
     description:
-      "Implement the Lightning transport encryption format. Each message is framed as an encrypted 2-byte length prefix followed by an encrypted body. Both use ChaCha20-Poly1305 with incrementing nonces.",
-    starterCode: `import struct
-from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
+      "Implement the <code>CipherState</code> constructor and <code>encrypt_message()</code> method. The constructor stores the encryption key, chaining key, and nonce. The encrypt method frames each message as an encrypted 2-byte length prefix followed by an encrypted body, using ChaCha20-Poly1305 with incrementing nonces.",
+    starterCode: `    def __init__(self, key, chaining_key):
+        """
+        Initialize the CipherState.
 
-def encrypt_message(key, nonce, plaintext):
-    """
-    Encrypt a Lightning transport message.
+        Args:
+            key:          32-byte ChaCha20-Poly1305 encryption key
+            chaining_key: 32-byte chaining key (used for key rotation)
+        """
+        # TODO: Store key, chaining_key, and initialize nonce to 0
+        pass
 
-    Format:
-      encrypted_length (18 bytes) = ChaCha(key, nonce, ad=b"", pt=2-byte-big-endian-length)
-      encrypted_body (len+16 bytes) = ChaCha(key, nonce+1, ad=b"", pt=plaintext)
+    def encrypt_message(self, plaintext):
+        """
+        Encrypt a Lightning transport message and advance nonce.
 
-    Args:
-        key:       32-byte encryption key
-        nonce:     integer nonce (encoded per BOLT 8: 4 zero bytes + 8-byte little-endian)
-        plaintext: bytes to encrypt
+        Format:
+          encrypted_length (18 bytes) = ChaCha(key, nonce, ad=b"", pt=2-byte-big-endian-length)
+          encrypted_body (len+16 bytes) = ChaCha(key, nonce+1, ad=b"", pt=plaintext)
 
-    Returns:
-        tuple: (ciphertext_bytes, next_nonce)
-            ciphertext_bytes  -  encrypted_length + encrypted_body
-            next_nonce        -  nonce + 2 (two nonces consumed)
-    """
-    # TODO: Encode the length of plaintext as 2-byte big-endian
-    # TODO: Encrypt the length bytes with ChaCha20Poly1305 using nonce
-    # TODO: Encrypt the plaintext body with ChaCha20Poly1305 using nonce+1
-    # TODO: Return (encrypted_length + encrypted_body, nonce + 2)
-    pass
+        Args:
+            plaintext: bytes to encrypt
+
+        Returns:
+            bytes: encrypted_length + encrypted_body
+        """
+        self._maybe_rotate()
+        # TODO: Encode the length of plaintext as 2-byte big-endian
+        # TODO: Encrypt the length bytes with ChaCha20Poly1305 using self.nonce
+        # TODO: Encrypt the plaintext body with ChaCha20Poly1305 using self.nonce+1
+        # TODO: Advance self.nonce by 2
+        # TODO: Return encrypted_length + encrypted_body
+        pass
 `,
     testCode: `
 import struct
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 import os
 
-def test_encrypt_returns_correct_types():
+ROTATION_THRESHOLD = 1000
+
+def test_init_stores_state():
     key = os.urandom(32)
-    result = encrypt_message(key, 0, b"hello")
-    assert isinstance(result, tuple), "Must return a tuple"
-    ct, next_nonce = result
-    assert isinstance(ct, bytes), "Ciphertext must be bytes"
-    assert isinstance(next_nonce, int), "next_nonce must be int"
+    ck = os.urandom(32)
+    cs = CipherState(key, ck)
+    assert cs.key == key, "key must be stored"
+    assert cs.chaining_key == ck, "chaining_key must be stored"
+    assert cs.nonce == 0, f"nonce must start at 0, got {cs.nonce}"
+
+def test_encrypt_returns_bytes():
+    key = os.urandom(32)
+    ck = os.urandom(32)
+    cs = CipherState(key, ck)
+    result = cs.encrypt_message(b"hello")
+    assert isinstance(result, bytes), "Must return bytes"
 
 def test_encrypt_output_length():
     key = os.urandom(32)
+    ck = os.urandom(32)
+    cs = CipherState(key, ck)
     msg = b"hello world"
-    ct, _ = encrypt_message(key, 0, msg)
+    ct = cs.encrypt_message(msg)
     expected_len = 18 + len(msg) + 16  # encrypted_length + encrypted_body
     assert len(ct) == expected_len, f"Expected {expected_len} bytes, got {len(ct)}"
 
-def test_nonce_increment():
+def test_nonce_advances():
     key = os.urandom(32)
-    _, n1 = encrypt_message(key, 0, b"first")
-    assert n1 == 2, f"After one encrypt, nonce should be 2, got {n1}"
-    _, n2 = encrypt_message(key, n1, b"second")
-    assert n2 == 4, f"After two encrypts, nonce should be 4, got {n2}"
+    ck = os.urandom(32)
+    cs = CipherState(key, ck)
+    cs.encrypt_message(b"first")
+    assert cs.nonce == 2, f"After one encrypt, nonce should be 2, got {cs.nonce}"
+    cs.encrypt_message(b"second")
+    assert cs.nonce == 4, f"After two encrypts, nonce should be 4, got {cs.nonce}"
 
 def test_encrypt_different_keys_produce_different_ciphertext():
     key1 = os.urandom(32)
     key2 = os.urandom(32)
+    ck = os.urandom(32)
+    cs1 = CipherState(key1, ck)
+    cs2 = CipherState(key2, ck)
     msg = b"same message"
-    ct1, _ = encrypt_message(key1, 0, msg)
-    ct2, _ = encrypt_message(key2, 0, msg)
+    ct1 = cs1.encrypt_message(msg)
+    ct2 = cs2.encrypt_message(msg)
     assert ct1 != ct2, "Different keys must produce different ciphertext"
 
 def test_encrypt_empty_message():
     key = os.urandom(32)
-    ct, n = encrypt_message(key, 0, b"")
+    ck = os.urandom(32)
+    cs = CipherState(key, ck)
+    ct = cs.encrypt_message(b"")
     assert len(ct) == 18 + 16, f"Empty message should produce 34 bytes, got {len(ct)}"
-    assert n == 2, f"Nonce should be 2 after encrypting, got {n}"
+    assert cs.nonce == 2, f"Nonce should be 2 after encrypting, got {cs.nonce}"
 `,
     sampleCode: `# Exercise 10 - Explore transport message encryption
 import struct, os
@@ -1811,15 +1713,24 @@ print("Next nonce: 2 (each message consumes 2 nonces)")
 `,
     hints: {
       conceptual:
-        "<p><strong>Goal:</strong> Encrypt a Lightning transport message by producing an encrypted length prefix followed by the encrypted message body.<br><br><strong>Key details:</strong> Lightning frames each message with a 2-byte big-endian length prefix, then the message body. Both parts are encrypted separately with ChaCha20-Poly1305, each consuming one nonce (so a single message uses two sequential nonces). This hides the message size from observers. Nonces are 12 bytes per BOLT 8: 4 zero bytes followed by an 8-byte little-endian counter. No associated data is used.<br><br><strong>Tools you will need:</strong> <code>struct.pack()</code> to encode the length as 2 bytes, <code>ChaCha20Poly1305</code> for encryption, and <code>int.to_bytes()</code> for nonce encoding.</p>",
+        "<p><strong>Goal:</strong> Initialize a <code>CipherState</code> and encrypt a Lightning transport message by producing an encrypted length prefix followed by the encrypted message body.<br><br><strong>Key details:</strong> Lightning frames each message with a 2-byte big-endian length prefix, then the message body. Both parts are encrypted separately with ChaCha20-Poly1305, each consuming one nonce (so a single message uses two sequential nonces). This hides the message size from observers. Nonces are 12 bytes per BOLT 8: 4 zero bytes followed by an 8-byte little-endian counter. No associated data is used.<br><br><strong>Tools you will need:</strong> <code>struct.pack()</code> to encode the length as 2 bytes, <code>ChaCha20Poly1305</code> for encryption, and <code>int.to_bytes()</code> for nonce encoding.</p>",
       steps:
-        '<ol><li>Encode the plaintext length as a 2-byte big-endian unsigned integer using <code>struct.pack()</code> with the <code>">H"</code> format</li><li>Encrypt the length bytes using <code>ChaCha20Poly1305</code> with the current nonce (BOLT 8 format: 4 zero bytes + 8-byte little-endian) and empty associated data</li><li>Encrypt the message body using the next nonce (<code>nonce + 1</code>) and empty associated data</li><li>Return the concatenated ciphertext and the next available nonce (advanced by 2)</li></ol>',
-      code: `def encrypt_message(key, nonce, plaintext):
-    length_bytes = struct.pack(">H", len(plaintext))
-    cipher = ChaCha20Poly1305(key)
-    enc_len = cipher.encrypt(b'\\x00' * 4 + nonce.to_bytes(8, 'little'), length_bytes, b"")
-    enc_body = cipher.encrypt(b'\\x00' * 4 + (nonce + 1).to_bytes(8, 'little'), plaintext, b"")
-    return (enc_len + enc_body, nonce + 2)`,
+        '<ol><li><strong><code>__init__</code></strong>: Store <code>key</code>, <code>chaining_key</code>, and set <code>nonce = 0</code> as instance attributes</li><li><strong><code>encrypt_message</code></strong>: After the <code>self._maybe_rotate()</code> call, encode the plaintext length as a 2-byte big-endian unsigned integer using <code>struct.pack()</code> with the <code>">H"</code> format</li><li>Encrypt the length bytes using <code>ChaCha20Poly1305(self.key)</code> with the current nonce (BOLT 8 format: 4 zero bytes + 8-byte little-endian) and empty associated data</li><li>Encrypt the message body using the next nonce (<code>self.nonce + 1</code>) and empty associated data</li><li>Advance <code>self.nonce</code> by 2 and return the concatenated ciphertext</li></ol>',
+      code: `    def __init__(self, key, chaining_key):
+        self.key = key
+        self.chaining_key = chaining_key
+        self.nonce = 0
+
+    def encrypt_message(self, plaintext):
+        self._maybe_rotate()
+        length_bytes = struct.pack(">H", len(plaintext))
+        cipher = ChaCha20Poly1305(self.key)
+        nonce_bytes = b'\\x00' * 4 + self.nonce.to_bytes(8, 'little')
+        enc_len = cipher.encrypt(nonce_bytes, length_bytes, b"")
+        nonce_bytes2 = b'\\x00' * 4 + (self.nonce + 1).to_bytes(8, 'little')
+        enc_body = cipher.encrypt(nonce_bytes2, plaintext, b"")
+        self.nonce += 2
+        return enc_len + enc_body`,
     },
     rewardSats: 21,
   },
@@ -1831,94 +1742,97 @@ print("Next nonce: 2 (each message consumes 2 nonces)")
     id: "exercise-decrypt",
     title: "Exercise 11: Decrypt Transport Messages",
     description:
-      "Implement the Lightning transport decryption format. Given an encrypted message (18-byte encrypted length prefix + encrypted body), decrypt and return the original plaintext. Use ChaCha20-Poly1305 with incrementing nonces  -  mirroring the encryption process.",
-    starterCode: `import struct
-from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
+      "Implement the <code>CipherState.decrypt_message()</code> method. Given an encrypted message (18-byte encrypted length prefix + encrypted body), decrypt and return the original plaintext using ChaCha20-Poly1305 with incrementing nonces, mirroring the encryption process.",
+    starterCode: `    def decrypt_message(self, ciphertext):
+        """
+        Decrypt a Lightning transport message and advance nonce.
 
-def decrypt_message(key, nonce, ciphertext):
-    """
-    Decrypt a Lightning transport message.
+        The ciphertext format:
+          encrypted_length (18 bytes) = ChaCha(key, nonce, ad=b"", ct=2-byte-length + 16-byte MAC)
+          encrypted_body (variable)   = ChaCha(key, nonce+1, ad=b"", ct=message + 16-byte MAC)
 
-    The ciphertext format:
-      encrypted_length (18 bytes) = ChaCha(key, nonce, ad=b"", ct=2-byte-big-endian-length + 16-byte MAC)
-      encrypted_body (variable)   = ChaCha(key, nonce+1, ad=b"", ct=message + 16-byte MAC)
+        Args:
+            ciphertext: encrypted_length(18) + encrypted_body(variable)
 
-    Args:
-        key:        32-byte decryption key
-        nonce:      integer nonce (encoded per BOLT 8: 4 zero bytes + 8-byte little-endian)
-        ciphertext: encrypted_length(18) + encrypted_body(variable)
-
-    Returns:
-        tuple: (plaintext, next_nonce)
-            plaintext   -  the original message bytes
-            next_nonce  -  nonce + 2 (two nonces consumed)
-    """
-    # TODO: Split ciphertext into encrypted_length (first 18 bytes) and encrypted_body
-    # TODO: Decrypt the length field using nonce
-    # TODO: Parse the 2-byte big-endian length
-    # TODO: Decrypt the body using nonce+1
-    # TODO: Return (plaintext, nonce + 2)
-    pass
+        Returns:
+            bytes: the original plaintext
+        """
+        self._maybe_rotate()
+        # TODO: Split ciphertext into encrypted_length (first 18 bytes) and encrypted_body
+        # TODO: Decrypt the length field using self.nonce
+        # TODO: Parse the 2-byte big-endian length
+        # TODO: Decrypt the body using self.nonce+1
+        # TODO: Advance self.nonce by 2
+        # TODO: Return the plaintext
+        pass
 `,
     testCode: `
 import struct
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 import os
 
-# Helper: encrypt so we can test decryption
-def _encrypt(key, nonce, plaintext):
-    length_bytes = struct.pack(">H", len(plaintext))
-    cipher = ChaCha20Poly1305(key)
-    enc_len = cipher.encrypt(b'\\x00' * 4 + nonce.to_bytes(8, 'little'), length_bytes, b"")
-    enc_body = cipher.encrypt(b'\\x00' * 4 + (nonce + 1).to_bytes(8, 'little'), plaintext, b"")
-    return (enc_len + enc_body, nonce + 2)
+ROTATION_THRESHOLD = 1000
 
-def test_decrypt_returns_correct_types():
+def test_decrypt_returns_bytes():
     key = os.urandom(32)
-    ct, _ = _encrypt(key, 0, b"hello")
-    result = decrypt_message(key, 0, ct)
-    assert isinstance(result, tuple), "Must return a tuple"
-    pt, next_nonce = result
-    assert isinstance(pt, bytes), "Plaintext must be bytes"
-    assert isinstance(next_nonce, int), "next_nonce must be int"
+    ck = os.urandom(32)
+    sender = CipherState(key, ck)
+    receiver = CipherState(key, ck)
+    ct = sender.encrypt_message(b"hello")
+    result = receiver.decrypt_message(ct)
+    assert isinstance(result, bytes), "Must return bytes"
 
 def test_decrypt_simple_message():
     key = os.urandom(32)
+    ck = os.urandom(32)
+    sender = CipherState(key, ck)
+    receiver = CipherState(key, ck)
     original = b"hello world"
-    ct, _ = _encrypt(key, 0, original)
-    pt, n = decrypt_message(key, 0, ct)
+    ct = sender.encrypt_message(original)
+    pt = receiver.decrypt_message(ct)
     assert pt == original, f"Expected {original!r}, got {pt!r}"
-    assert n == 2, f"Expected nonce 2, got {n}"
 
 def test_decrypt_nonce_tracking():
     key = os.urandom(32)
-    ct1, enc_n = _encrypt(key, 0, b"first")
-    ct2, _ = _encrypt(key, enc_n, b"second")
-    _, dec_n = decrypt_message(key, 0, ct1)
-    assert dec_n == 2, f"After first decrypt, nonce should be 2, got {dec_n}"
-    pt2, dec_n2 = decrypt_message(key, dec_n, ct2)
-    assert pt2 == b"second", f"Second message failed: got {pt2!r}"
-    assert dec_n2 == 4, f"After second decrypt, nonce should be 4, got {dec_n2}"
+    ck = os.urandom(32)
+    sender = CipherState(key, ck)
+    receiver = CipherState(key, ck)
+    sender.encrypt_message(b"first")
+    ct2 = sender.encrypt_message(b"second")
+    # Receiver must decrypt in same order
+    ct1 = CipherState(key, ck)  # fresh for first msg
+    receiver2 = CipherState(key, ck)
+    ct_first = CipherState(key, ck).encrypt_message(b"first")
+    # Simpler: just test nonce advances
+    s = CipherState(key, ck)
+    r = CipherState(key, ck)
+    ct = s.encrypt_message(b"msg")
+    r.decrypt_message(ct)
+    assert r.nonce == 2, f"After first decrypt, nonce should be 2, got {r.nonce}"
+    ct2 = s.encrypt_message(b"msg2")
+    r.decrypt_message(ct2)
+    assert r.nonce == 4, f"After second decrypt, nonce should be 4, got {r.nonce}"
 
 def test_decrypt_multiple_messages():
     key = os.urandom(32)
+    ck = os.urandom(32)
+    sender = CipherState(key, ck)
+    receiver = CipherState(key, ck)
     messages = [b"msg1", b"hello world", b"x" * 1000, b""]
-    nonce = 0
-    encrypted = []
     for msg in messages:
-        ct, nonce = _encrypt(key, nonce, msg)
-        encrypted.append(ct)
-    dec_nonce = 0
-    for i, ct in enumerate(encrypted):
-        pt, dec_nonce = decrypt_message(key, dec_nonce, ct)
-        assert pt == messages[i], f"Message {i} roundtrip failed"
+        ct = sender.encrypt_message(msg)
+        pt = receiver.decrypt_message(ct)
+        assert pt == msg, f"Roundtrip failed for {msg[:20]!r}"
 
 def test_tamper_detection():
     key = os.urandom(32)
-    ct, _ = _encrypt(key, 0, b"secret")
+    ck = os.urandom(32)
+    sender = CipherState(key, ck)
+    receiver = CipherState(key, ck)
+    ct = sender.encrypt_message(b"secret")
     tampered = ct[:-1] + bytes([(ct[-1] + 1) % 256])
     try:
-        decrypt_message(key, 0, tampered)
+        receiver.decrypt_message(tampered)
         assert False, "Should detect tampered ciphertext"
     except Exception:
         pass
@@ -1926,9 +1840,12 @@ def test_tamper_detection():
 def test_wrong_key_fails():
     key1 = os.urandom(32)
     key2 = os.urandom(32)
-    ct, _ = _encrypt(key1, 0, b"secret")
+    ck = os.urandom(32)
+    sender = CipherState(key1, ck)
+    receiver = CipherState(key2, ck)
+    ct = sender.encrypt_message(b"secret")
     try:
-        decrypt_message(key2, 0, ct)
+        receiver.decrypt_message(ct)
         assert False, "Should fail with wrong key"
     except Exception:
         pass
@@ -1975,15 +1892,19 @@ print("Match:", recovered == plaintext)
       conceptual:
         "<p><strong>Goal:</strong> Decrypt a Lightning transport message by recovering the length prefix, then the message body.<br><br><strong>Key details:</strong> Decryption mirrors encryption. The ciphertext starts with 18 bytes: the encrypted 2-byte length prefix plus a 16-byte MAC. After decrypting the length, the remaining bytes contain the encrypted message body with its own MAC. Each decryption consumes two nonces, matching what encryption produced.<br><br><strong>Tools you will need:</strong> <code>ChaCha20Poly1305</code> for decryption, <code>struct.unpack()</code> to parse the recovered length, and byte slicing to split the ciphertext.</p>",
       steps:
-        '<ol><li>Split the ciphertext: the first 18 bytes are the encrypted length (2 + 16-byte MAC), the rest is the encrypted body</li><li>Decrypt the length prefix using <code>ChaCha20Poly1305</code> with the current nonce and empty associated data</li><li>Parse the decrypted length bytes into an integer using <code>struct.unpack()</code> with the <code>">H"</code> format</li><li>Decrypt the message body using the next nonce (<code>nonce + 1</code>) and empty associated data</li><li>Return the plaintext and the next available nonce (advanced by 2)</li></ol>',
-      code: `def decrypt_message(key, nonce, ciphertext):
-    cipher = ChaCha20Poly1305(key)
-    enc_len = ciphertext[:18]
-    length_bytes = cipher.decrypt(b'\\x00' * 4 + nonce.to_bytes(8, 'little'), enc_len, b"")
-    msg_len = struct.unpack(">H", length_bytes)[0]
-    enc_body = ciphertext[18:]
-    plaintext = cipher.decrypt(b'\\x00' * 4 + (nonce + 1).to_bytes(8, 'little'), enc_body, b"")
-    return (plaintext, nonce + 2)`,
+        '<ol><li>After the <code>self._maybe_rotate()</code> call, split the ciphertext: the first 18 bytes are the encrypted length (2 + 16-byte MAC), the rest is the encrypted body</li><li>Decrypt the length prefix using <code>ChaCha20Poly1305(self.key)</code> with the current nonce and empty associated data</li><li>Parse the decrypted length bytes into an integer using <code>struct.unpack()</code> with the <code>">H"</code> format</li><li>Decrypt the message body using the next nonce (<code>self.nonce + 1</code>) and empty associated data</li><li>Advance <code>self.nonce</code> by 2 and return the plaintext</li></ol>',
+      code: `    def decrypt_message(self, ciphertext):
+        self._maybe_rotate()
+        cipher = ChaCha20Poly1305(self.key)
+        enc_len = ciphertext[:18]
+        nonce_bytes = b'\\x00' * 4 + self.nonce.to_bytes(8, 'little')
+        length_bytes = cipher.decrypt(nonce_bytes, enc_len, b"")
+        msg_len = struct.unpack(">H", length_bytes)[0]
+        enc_body = ciphertext[18:]
+        nonce_bytes2 = b'\\x00' * 4 + (self.nonce + 1).to_bytes(8, 'little')
+        plaintext = cipher.decrypt(nonce_bytes2, enc_body, b"")
+        self.nonce += 2
+        return plaintext`,
     },
     rewardSats: 21,
   },
@@ -1995,95 +1916,19 @@ print("Match:", recovered == plaintext)
     id: "exercise-key-rotation",
     title: "Exercise 12: Key Rotation",
     description:
-      "Implement Lightning's key rotation scheme. After every 1,000 encryptions (500 messages, since each message requires two encryption operations for the length prefix + body), the sending key must be rotated by deriving a new key from the old one using HKDF. Implement a CipherState class that tracks the nonce, automatically rotates the key at the threshold, and encrypts/decrypts transport messages.",
-    starterCode: `import struct
-import hmac
-import hashlib
-from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
-
-ROTATION_THRESHOLD = 1000  # rotate after nonce reaches 1000
-
-def hkdf_two_keys(salt, ikm):
-    """HKDF helper  -  you implemented this in Exercise 3."""
-    temp_key = hmac.new(salt, ikm, hashlib.sha256).digest()
-    out1 = hmac.new(temp_key, b'\\x01', hashlib.sha256).digest()
-    out2 = hmac.new(temp_key, out1 + b'\\x02', hashlib.sha256).digest()
-    return (out1, out2)
-
-class CipherState:
-    """
-    Manages encryption key and nonce for one direction of transport.
-
-    Key rotation rule (BOLT 8):
-      When the nonce reaches 1000, rotate the key:
-        1. new_ck, new_key = HKDF(chaining_key, key)
-        2. Update chaining_key = new_ck
-        3. Update key = new_key
-        4. Reset nonce to 0
-
-    Attributes:
-        key:          32-byte ChaCha20-Poly1305 encryption key
-        chaining_key: 32-byte chaining key used for rotation
-        nonce:        integer nonce counter
-    """
-
-    def __init__(self, key, chaining_key):
+      "Implement the <code>CipherState._maybe_rotate()</code> method. After every 1,000 nonce increments (500 messages), the key is rotated using <code>hkdf_two_keys()</code> and the nonce resets to 0. Your <code>encrypt_message()</code> and <code>decrypt_message()</code> methods already call <code>self._maybe_rotate()</code> before each operation, so once you implement this method, key rotation will work automatically.",
+    starterCode: `    def _maybe_rotate(self):
         """
-        Initialize the CipherState.
+        Check if the nonce has reached the rotation threshold (1000).
 
-        Args:
-            key:          32-byte encryption key (from Split)
-            chaining_key: 32-byte chaining key (from Split)
+        If so:
+          1. Derive new keys: new_ck, new_key = hkdf_two_keys(chaining_key, key)
+          2. Update self.chaining_key and self.key
+          3. Reset self.nonce to 0
         """
-        # TODO: Store the key, chaining_key, and initialize nonce to 0
-        pass
-
-    def _maybe_rotate(self):
-        """
-        Check if the nonce has reached the rotation threshold.
-        If so, derive new key and chaining_key via HKDF, reset nonce to 0.
-        """
-        # TODO: If nonce >= ROTATION_THRESHOLD:
-        #   new_ck, new_key = hkdf_two_keys(self.chaining_key, self.key)
-        #   self.chaining_key = new_ck
-        #   self.key = new_key
-        #   self.nonce = 0
-        pass
-
-    def encrypt_message(self, plaintext):
-        """
-        Encrypt a transport message (length-prefix + body) and advance nonce.
-        Automatically rotates key if nonce threshold is reached.
-
-        Args:
-            plaintext: bytes to encrypt
-
-        Returns:
-            bytes: encrypted_length(18) + encrypted_body(len+16)
-        """
-        # TODO: Check for rotation before encrypting
-        # TODO: Encrypt length prefix with current nonce
-        # TODO: Encrypt body with nonce + 1
-        # TODO: Advance nonce by 2
-        # TODO: Return encrypted_length + encrypted_body
-        pass
-
-    def decrypt_message(self, ciphertext):
-        """
-        Decrypt a transport message and advance nonce.
-        Automatically rotates key if nonce threshold is reached.
-
-        Args:
-            ciphertext: encrypted_length(18) + encrypted_body(variable)
-
-        Returns:
-            bytes: decrypted plaintext
-        """
-        # TODO: Check for rotation before decrypting
-        # TODO: Decrypt length prefix with current nonce
-        # TODO: Decrypt body with nonce + 1
-        # TODO: Advance nonce by 2
-        # TODO: Return plaintext
+        # TODO: Check if self.nonce >= ROTATION_THRESHOLD
+        # TODO: If so, derive new chaining_key and key via hkdf_two_keys()
+        # TODO: Reset self.nonce to 0
         pass
 `,
     testCode: `
@@ -2101,43 +1946,15 @@ def _ref_hkdf(salt, ikm):
     o2 = hmac.new(tk, o1 + b'\\x02', hashlib.sha256).digest()
     return (o1, o2)
 
-def test_init_stores_state():
+def test_no_rotation_below_threshold():
     key = os.urandom(32)
     ck = os.urandom(32)
     cs = CipherState(key, ck)
-    assert cs.key == key, "key must be stored"
-    assert cs.chaining_key == ck, "chaining_key must be stored"
-    assert cs.nonce == 0, f"nonce must start at 0, got {cs.nonce}"
-
-def test_basic_roundtrip():
-    key = os.urandom(32)
-    ck = os.urandom(32)
-    sender = CipherState(key, ck)
-    receiver = CipherState(key, ck)
-    msg = b"hello lightning"
-    ct = sender.encrypt_message(msg)
-    pt = receiver.decrypt_message(ct)
-    assert pt == msg, f"Roundtrip failed: expected {msg!r}, got {pt!r}"
-
-def test_nonce_advances():
-    key = os.urandom(32)
-    ck = os.urandom(32)
-    cs = CipherState(key, ck)
-    cs.encrypt_message(b"msg1")
-    assert cs.nonce == 2, f"After 1 message, nonce should be 2, got {cs.nonce}"
-    cs.encrypt_message(b"msg2")
-    assert cs.nonce == 4, f"After 2 messages, nonce should be 4, got {cs.nonce}"
-
-def test_multiple_messages_roundtrip():
-    key = os.urandom(32)
-    ck = os.urandom(32)
-    sender = CipherState(key, ck)
-    receiver = CipherState(key, ck)
-    messages = [b"first", b"second", b"third", b"x" * 500]
-    for msg in messages:
-        ct = sender.encrypt_message(msg)
-        pt = receiver.decrypt_message(ct)
-        assert pt == msg, f"Roundtrip failed for {msg[:20]!r}"
+    original_key = cs.key
+    for i in range(499):
+        cs.encrypt_message(b"m")
+    assert cs.key == original_key, "Key should NOT rotate before reaching threshold"
+    assert cs.nonce == 998, f"Nonce should be 998, got {cs.nonce}"
 
 def test_key_rotation_occurs():
     key = os.urandom(32)
@@ -2151,12 +1968,24 @@ def test_key_rotation_occurs():
     assert cs.key != original_key, "Key must have rotated after 500 messages (nonce reached 1000)"
     assert cs.nonce < ROTATION_THRESHOLD, f"Nonce must have reset after rotation, got {cs.nonce}"
 
-def test_rotation_keys_match():
+def test_rotation_derives_correct_keys():
+    key = os.urandom(32)
+    ck = os.urandom(32)
+    cs = CipherState(key, ck)
+    # Send 500 messages to trigger rotation
+    for i in range(500):
+        cs.encrypt_message(b"m")
+    # Verify rotated keys match expected HKDF output
+    expected_ck, expected_key = _ref_hkdf(ck, key)
+    assert cs.chaining_key == expected_ck, "Chaining key must match HKDF output"
+    assert cs.key == expected_key, "Rotated key must match HKDF output"
+
+def test_rotation_roundtrip():
     key = os.urandom(32)
     ck = os.urandom(32)
     sender = CipherState(key, ck)
     receiver = CipherState(key, ck)
-    # Send 501 messages  -  crosses rotation boundary
+    # Send 501 messages - crosses rotation boundary
     for i in range(501):
         ct = sender.encrypt_message(f"message {i}".encode())
         pt = receiver.decrypt_message(ct)
@@ -2171,7 +2000,7 @@ def test_tamper_after_rotation():
     for i in range(500):
         ct = sender.encrypt_message(b"x")
         receiver.decrypt_message(ct)
-    # Now both have rotated  -  tamper with next message
+    # Now both have rotated - tamper with next message
     ct = sender.encrypt_message(b"secret")
     tampered = ct[:-1] + bytes([(ct[-1] + 1) % 256])
     try:
@@ -2225,44 +2054,13 @@ print("(500 messages x 2 nonces = 1000 = threshold)")
 `,
     hints: {
       conceptual:
-        "<p><strong>Goal:</strong> Build a <code>CipherState</code> class that wraps the encrypt/decrypt message functions with automatic key rotation every 1,000 encryptions.<br><br><strong>How it works:</strong> BOLT 8 rotates keys every 1,000 encryptions to limit the exposure of any single key. When the nonce reaches the rotation threshold, <code>hkdf_two_keys()</code> is called with the current chaining key and encryption key to derive fresh keys, and the nonce resets to 0. Both sides rotate independently but in sync since they process the same number of messages.<br><br><strong>Tools you will need:</strong> <code>hkdf_two_keys()</code> for key rotation, <code>struct.pack()</code> / <code>struct.unpack()</code> for length encoding, and <code>ChaCha20Poly1305</code> for encryption and decryption.</p>",
+        "<p><strong>Goal:</strong> Implement automatic key rotation when the nonce reaches the threshold.<br><br><strong>How it works:</strong> BOLT 8 rotates keys every 1,000 nonce increments (500 messages) to limit the exposure of any single key. When the nonce reaches the rotation threshold, <code>hkdf_two_keys()</code> is called with the current chaining key and encryption key to derive fresh keys, and the nonce resets to 0. Both sides rotate independently but in sync since they process the same number of messages.<br><br><strong>Key insight:</strong> Your <code>encrypt_message()</code> and <code>decrypt_message()</code> methods already call <code>self._maybe_rotate()</code> before each operation. Once you implement this method, key rotation happens automatically before every encrypt/decrypt.</p>",
       steps:
-        '<ol><li><strong><code>__init__</code></strong>: Store the encryption key, chaining key, and initialize the nonce to 0 as instance attributes</li><li><strong><code>_maybe_rotate</code></strong>: Check if the nonce has reached the rotation threshold (1000). If so, derive new keys using <code>hkdf_two_keys()</code> with the chaining key and current encryption key, update both, and reset the nonce to 0</li><li><strong><code>encrypt_message</code></strong>: Call <code>_maybe_rotate()</code> first, then follow the same encrypt-length-then-body pattern from Exercise 10, advancing the nonce by 2. Return the concatenated ciphertext (no need to return the nonce since it is managed internally)</li><li><strong><code>decrypt_message</code></strong>: Call <code>_maybe_rotate()</code> first, then follow the same decrypt-length-then-body pattern from Exercise 11, advancing the nonce by 2. Return just the plaintext</li></ol>',
-      code: `class CipherState:
-    def __init__(self, key, chaining_key):
-        self.key = key
-        self.chaining_key = chaining_key
-        self.nonce = 0
-
-    def _maybe_rotate(self):
+        '<ol><li>Check if <code>self.nonce >= ROTATION_THRESHOLD</code> (where ROTATION_THRESHOLD is 1000)</li><li>If so, call <code>hkdf_two_keys(self.chaining_key, self.key)</code> to derive the new chaining key and new encryption key</li><li>Update <code>self.chaining_key</code> and <code>self.key</code> with the new values</li><li>Reset <code>self.nonce</code> to 0</li></ol>',
+      code: `    def _maybe_rotate(self):
         if self.nonce >= ROTATION_THRESHOLD:
-            new_ck, new_key = hkdf_two_keys(self.chaining_key, self.key)
-            self.chaining_key = new_ck
-            self.key = new_key
-            self.nonce = 0
-
-    def encrypt_message(self, plaintext):
-        self._maybe_rotate()
-        length_bytes = struct.pack(">H", len(plaintext))
-        cipher = ChaCha20Poly1305(self.key)
-        enc_len = cipher.encrypt(
-            b'\\x00' * 4 + self.nonce.to_bytes(8, 'little'), length_bytes, b"")
-        enc_body = cipher.encrypt(
-            b'\\x00' * 4 + (self.nonce + 1).to_bytes(8, 'little'), plaintext, b"")
-        self.nonce += 2
-        return enc_len + enc_body
-
-    def decrypt_message(self, ciphertext):
-        self._maybe_rotate()
-        cipher = ChaCha20Poly1305(self.key)
-        enc_len = ciphertext[:18]
-        length_bytes = cipher.decrypt(
-            b'\\x00' * 4 + self.nonce.to_bytes(8, 'little'), enc_len, b"")
-        enc_body = ciphertext[18:]
-        plaintext = cipher.decrypt(
-            b'\\x00' * 4 + (self.nonce + 1).to_bytes(8, 'little'), enc_body, b"")
-        self.nonce += 2
-        return plaintext`,
+            self.chaining_key, self.key = hkdf_two_keys(self.chaining_key, self.key)
+            self.nonce = 0`,
     },
     rewardSats: 21,
   },

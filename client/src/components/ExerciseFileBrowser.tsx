@@ -5,7 +5,9 @@ import { python } from "@codemirror/lang-python";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { syntaxHighlighting, defaultHighlightStyle } from "@codemirror/language";
 import { EXERCISE_GROUPS, LN_MODULE_DISPLAY_CODE, type ExerciseGroup } from "../lib/exercise-groups";
+import { NOISE_EXERCISE_GROUPS } from "../lib/noise-exercise-groups";
 import { LIGHTNING_EXERCISES } from "../data/lightning-exercises";
+import { CODE_EXERCISES } from "../data/code-exercises";
 import { useIsMobile } from "../hooks/use-mobile";
 
 // ─── Search highlight for CodeMirror ─────────────────────────────────────────
@@ -31,6 +33,7 @@ interface ExerciseFileBrowserProps {
   currentExerciseId: string;
   theme: "light" | "dark";
   onClose: () => void;
+  tutorialType?: "lightning" | "noise";
 }
 
 interface SearchMatch {
@@ -43,9 +46,9 @@ interface SearchMatch {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-function buildFileTree(): Record<string, ExerciseGroup[]> {
+function buildFileTree(groups: Record<string, ExerciseGroup>): Record<string, ExerciseGroup[]> {
   const tree: Record<string, ExerciseGroup[]> = {};
-  for (const group of Object.values(EXERCISE_GROUPS)) {
+  for (const group of Object.values(groups)) {
     const parts = group.label.replace(/\.py$/, "").split("/");
     const dir = parts.length > 1 ? parts[0] : "";
     if (!tree[dir]) tree[dir] = [];
@@ -54,8 +57,8 @@ function buildFileTree(): Record<string, ExerciseGroup[]> {
   return tree;
 }
 
-function getGroupForExercise(exerciseId: string): string | null {
-  for (const group of Object.values(EXERCISE_GROUPS)) {
+function getGroupForExercise(exerciseId: string, groups: Record<string, ExerciseGroup>): string | null {
+  for (const group of Object.values(groups)) {
     if (group.exerciseIds.includes(exerciseId)) return group.id;
   }
   return null;
@@ -63,7 +66,8 @@ function getGroupForExercise(exerciseId: string): string | null {
 
 function assembleFileContent(
   group: ExerciseGroup,
-  currentExerciseId: string
+  currentExerciseId: string,
+  exercises: Record<string, { starterCode: string }>
 ): { code: string; currentLineStart: number; currentLineEnd: number } {
   const parts: string[] = [];
   let currentLineStart = -1;
@@ -77,7 +81,7 @@ function assembleFileContent(
 
   // Add each exercise's code
   for (const exId of group.exerciseIds) {
-    const exData = LIGHTNING_EXERCISES[exId];
+    const exData = exercises[exId];
     if (!exData) continue;
 
     const linesBefore = parts.join("\n").split("\n").length;
@@ -112,14 +116,14 @@ function assembleFileContent(
 }
 
 /** Build full file content for a group (for search indexing). */
-function getFileCode(group: ExerciseGroup): string {
+function getFileCode(group: ExerciseGroup, exercises: Record<string, { starterCode: string }>): string {
   const parts: string[] = [];
   if (group.preamble.trim()) {
     parts.push(group.preamble.trim());
     parts.push("");
   }
   for (const exId of group.exerciseIds) {
-    const exData = LIGHTNING_EXERCISES[exId];
+    const exData = exercises[exId];
     if (!exData) continue;
     let code: string;
     try {
@@ -164,19 +168,27 @@ export default function ExerciseFileBrowser({
   currentExerciseId,
   theme,
   onClose,
+  tutorialType = "lightning",
 }: ExerciseFileBrowserProps) {
   const dark = theme === "dark";
   const isMobile = useIsMobile();
-  const fileTree = useMemo(() => buildFileTree(), []);
+  const isNoise = tutorialType === "noise";
+  const exerciseGroups = isNoise ? NOISE_EXERCISE_GROUPS : EXERCISE_GROUPS;
+  const exercises: Record<string, { starterCode: string }> = isNoise ? CODE_EXERCISES : LIGHTNING_EXERCISES;
+  const dirOrder = useMemo(() => {
+    if (isNoise) return Array.from(new Set(Object.values(NOISE_EXERCISE_GROUPS).map(g => g.label.replace(/\.py$/, "").split("/")[0])));
+    return DIR_ORDER;
+  }, [isNoise]);
+  const fileTree = useMemo(() => buildFileTree(exerciseGroups), [exerciseGroups]);
   const currentGroupId = useMemo(
-    () => getGroupForExercise(currentExerciseId),
-    [currentExerciseId]
+    () => getGroupForExercise(currentExerciseId, exerciseGroups),
+    [currentExerciseId, exerciseGroups]
   );
 
   const [selectedGroupId, setSelectedGroupId] = useState<string>(
-    currentGroupId || Object.values(EXERCISE_GROUPS)[0]?.id || ""
+    currentGroupId || Object.values(exerciseGroups)[0]?.id || ""
   );
-  const [expandedDirs, setExpandedDirs] = useState<Set<string>>(() => new Set(DIR_ORDER));
+  const [expandedDirs, setExpandedDirs] = useState<Set<string>>(() => new Set(dirOrder));
 
   // Sidebar mode: "files" or "search"
   const [sidebarMode, setSidebarMode] = useState<"files" | "search">("files");
@@ -189,15 +201,15 @@ export default function ExerciseFileBrowser({
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
 
-  const isLnModule = selectedGroupId === "__ln_module__";
-  const selectedGroup = isLnModule ? null : EXERCISE_GROUPS[selectedGroupId];
+  const isLnModule = !isNoise && selectedGroupId === "__ln_module__";
+  const selectedGroup = isLnModule ? null : exerciseGroups[selectedGroupId];
 
   // Build content for selected file
   const fileContent = useMemo(() => {
     if (isLnModule) return { code: LN_MODULE_DISPLAY_CODE, currentLineStart: -1, currentLineEnd: -1 };
     if (!selectedGroup) return { code: "", currentLineStart: -1, currentLineEnd: -1 };
-    return assembleFileContent(selectedGroup, currentExerciseId);
-  }, [selectedGroup, currentExerciseId, isLnModule]);
+    return assembleFileContent(selectedGroup, currentExerciseId, exercises);
+  }, [selectedGroup, currentExerciseId, isLnModule, exercises]);
 
   // ── Cross-file search ──────────────────────────────────────────────────
   const searchResults = useMemo(() => {
@@ -205,31 +217,33 @@ export default function ExerciseFileBrowser({
     const lower = searchQuery.toLowerCase();
     const results: SearchMatch[] = [];
 
-    // Search ln.py
-    const lnLines = LN_MODULE_DISPLAY_CODE.split("\n");
-    let lnCharPos = 0;
-    for (let i = 0; i < lnLines.length; i++) {
-      const lineText = lnLines[i];
-      const lineLower = lineText.toLowerCase();
-      let col = 0;
-      while (true) {
-        const found = lineLower.indexOf(lower, col);
-        if (found === -1) break;
-        results.push({
-          groupId: "__ln_module__",
-          fileLabel: "ln.py",
-          lineNum: i + 1,
-          lineText,
-          charPos: lnCharPos + found,
-        });
-        col = found + 1;
+    // Search ln.py (Lightning only)
+    if (!isNoise) {
+      const lnLines = LN_MODULE_DISPLAY_CODE.split("\n");
+      let lnCharPos = 0;
+      for (let i = 0; i < lnLines.length; i++) {
+        const lineText = lnLines[i];
+        const lineLower = lineText.toLowerCase();
+        let col = 0;
+        while (true) {
+          const found = lineLower.indexOf(lower, col);
+          if (found === -1) break;
+          results.push({
+            groupId: "__ln_module__",
+            fileLabel: "ln.py",
+            lineNum: i + 1,
+            lineText,
+            charPos: lnCharPos + found,
+          });
+          col = found + 1;
+        }
+        lnCharPos += lineText.length + 1; // +1 for newline
       }
-      lnCharPos += lineText.length + 1; // +1 for newline
     }
 
     // Search exercise groups
-    for (const group of Object.values(EXERCISE_GROUPS)) {
-      const code = getFileCode(group);
+    for (const group of Object.values(exerciseGroups)) {
+      const code = getFileCode(group, exercises);
       const lines = code.split("\n");
       let charPos = 0;
       for (let i = 0; i < lines.length; i++) {
@@ -253,7 +267,7 @@ export default function ExerciseFileBrowser({
     }
 
     return results;
-  }, [searchQuery]);
+  }, [searchQuery, isNoise, exerciseGroups, exercises]);
 
   // Group search results by file
   const groupedSearchResults = useMemo(() => {
@@ -445,14 +459,15 @@ export default function ExerciseFileBrowser({
 
   // Build flat list of all groups for mobile dropdown
   const allGroups = useMemo(() => {
-    const groups: Array<{ id: string; label: string }> = [{ id: "__ln__", label: "ln.py" }];
-    for (const dir of DIR_ORDER) {
+    const groups: Array<{ id: string; label: string }> = [];
+    if (!isNoise) groups.push({ id: "__ln_module__", label: "ln.py" });
+    for (const dir of dirOrder) {
       for (const group of fileTree[dir] || []) {
         groups.push({ id: group.id, label: group.label });
       }
     }
     return groups;
-  }, [fileTree]);
+  }, [fileTree, isNoise, dirOrder]);
 
   return (
     <div className="fixed inset-0 z-[9998] flex items-center justify-center" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -532,7 +547,8 @@ export default function ExerciseFileBrowser({
                 <span className={`font-pixel text-[10px] ${goldText}`}>EXPLORER</span>
               </div>
               <div className="flex-1 overflow-y-auto py-1">
-                {/* ln.py */}
+                {/* ln.py (Lightning only) */}
+                {!isNoise && (
                 <button
                   type="button"
                   onClick={() => setSelectedGroupId("__ln_module__")}
@@ -546,8 +562,9 @@ export default function ExerciseFileBrowser({
                     ln.py
                   </span>
                 </button>
+                )}
 
-                {DIR_ORDER.map((dir) => {
+                {dirOrder.map((dir) => {
                   const groups = fileTree[dir];
                   if (!groups?.length) return null;
                   const isExpanded = expandedDirs.has(dir);
@@ -739,11 +756,11 @@ export default function ExerciseFileBrowser({
           {selectedGroup && !isLnModule && (
             <div className={`px-3 py-1.5 border-b ${borderColor} flex items-center gap-1 overflow-x-auto shrink-0`}>
               {selectedGroup.exerciseIds.map((exId) => {
-                const exData = LIGHTNING_EXERCISES[exId];
+                const exData = exercises[exId];
                 if (!exData) return null;
                 const isCurrent = exId === currentExerciseId;
                 const fnMatch = exData.starterCode.match(/def\s+(\w+)/);
-                const fnName = fnMatch ? fnMatch[1] : exId.replace("ln-exercise-", "");
+                const fnName = fnMatch ? fnMatch[1] : exId.replace(/^(ln-exercise-|exercise-)/, "");
 
                 return (
                   <button
@@ -751,7 +768,7 @@ export default function ExerciseFileBrowser({
                     type="button"
                     onClick={() => {
                       if (!viewRef.current) return;
-                      const content = assembleFileContent(selectedGroup, exId);
+                      const content = assembleFileContent(selectedGroup, exId, exercises);
                       if (content.currentLineStart > 0) {
                         const line = viewRef.current.state.doc.line(
                           Math.min(content.currentLineStart, viewRef.current.state.doc.lines)

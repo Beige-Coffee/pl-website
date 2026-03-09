@@ -6,3 +6,9 @@ vite.config.ts.*
 *.tar.gz
 .env
 .local/
+
+# Working documents (prompts, agent notes)
+AGENTS.md
+codex-*.md
+pre-launch-test.md
+.claude/commands/

@@ -14,8 +14,10 @@ import CodeExercise from "../components/CodeExercise";
 import Scratchpad from "../components/Scratchpad";
 import { CollapsibleItem, CollapsibleGroup } from "../components/CollapsibleSection";
 import { CODE_EXERCISES } from "../data/code-exercises";
+import { getNoiseExerciseGroupContext } from "../lib/noise-exercise-groups";
 import { Tooltip, TooltipTrigger, TooltipContent } from "../components/ui/tooltip";
 import FeedbackWidget from "../components/FeedbackWidget";
+import HandshakeDiagram from "../components/HandshakeDiagram";
 import { PanelStateContext, usePanelStateProvider } from "../hooks/use-panel-state";
 import { useIsMobile } from "../hooks/use-mobile";
 
@@ -2849,6 +2851,7 @@ function ChapterContent({
             if (exerciseList.length === 1) {
               const ex = exerciseList[0];
               const isCompleted = completedCheckpoints.some(c => c.checkpointId === ex.id);
+              const ctx = getNoiseExerciseGroupContext(ex.id);
               return (
                 <div className="my-8 relative exercise-accent-card">
                   <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${accentBg} z-10`} />
@@ -2873,6 +2876,26 @@ function ChapterContent({
                       onCompleted={onCheckpointCompleted}
                       getProgress={getProgress}
                       saveProgress={saveProgress}
+                      fileLabel={ctx?.fileLabel}
+                      preamble={ctx?.preamble}
+                      setupCode={ctx?.setupCode}
+                      crossGroupExercises={ctx?.crossGroupExercises.map(cg => ({
+                        id: cg.id,
+                        starterCode: CODE_EXERCISES[cg.id]?.starterCode ?? "",
+                      }))}
+                      classMethodExercises={ctx?.classMethodExercises.map(cm => ({
+                        id: cm.id,
+                        starterCode: CODE_EXERCISES[cm.id]?.starterCode ?? "",
+                      }))}
+                      priorInGroupExercises={ctx?.priorInGroupExercises.map(pe => ({
+                        id: pe.id,
+                        starterCode: CODE_EXERCISES[pe.id]?.starterCode ?? "",
+                      }))}
+                      futureExercises={ctx?.futureExercises.map(fe => ({
+                        id: fe.id,
+                        starterCode: CODE_EXERCISES[fe.id]?.starterCode ?? "",
+                      }))}
+                      tutorialType="noise"
                     />
                   </CollapsibleItem>
                 </div>
@@ -2894,6 +2917,7 @@ function ChapterContent({
                 >
                   {exerciseList.map((ex: any) => {
                     const isCompleted = completedCheckpoints.some(c => c.checkpointId === ex.id);
+                    const ctx = getNoiseExerciseGroupContext(ex.id);
                     return (
                       <CollapsibleItem
                         key={ex.id}
@@ -2916,6 +2940,26 @@ function ChapterContent({
                           onCompleted={onCheckpointCompleted}
                           getProgress={getProgress}
                           saveProgress={saveProgress}
+                          fileLabel={ctx?.fileLabel}
+                          preamble={ctx?.preamble}
+                          setupCode={ctx?.setupCode}
+                          crossGroupExercises={ctx?.crossGroupExercises.map(cg => ({
+                            id: cg.id,
+                            starterCode: CODE_EXERCISES[cg.id]?.starterCode ?? "",
+                          }))}
+                          classMethodExercises={ctx?.classMethodExercises.map(cm => ({
+                            id: cm.id,
+                            starterCode: CODE_EXERCISES[cm.id]?.starterCode ?? "",
+                          }))}
+                          priorInGroupExercises={ctx?.priorInGroupExercises.map(pe => ({
+                            id: pe.id,
+                            starterCode: CODE_EXERCISES[pe.id]?.starterCode ?? "",
+                          }))}
+                          futureExercises={ctx?.futureExercises.map(fe => ({
+                            id: fe.id,
+                            starterCode: CODE_EXERCISES[fe.id]?.starterCode ?? "",
+                          }))}
+                          tutorialType="noise"
                         />
                       </CollapsibleItem>
                     );
@@ -2932,6 +2976,9 @@ function ChapterContent({
             // Individual code-exercise tags are now handled by code-intro
             return null;
           },
+          "handshake-diagram": ({ act }: any) => (
+            <HandshakeDiagram theme={theme} act={act || undefined} />
+          ),
           "checkpoint-group": ({ id, ids }: any) => {
             const groupId = String(id || "");
             const questionIds = String(ids || "").split(",").map((s: string) => s.trim()).filter(Boolean);
