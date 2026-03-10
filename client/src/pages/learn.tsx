@@ -27,7 +27,7 @@ function MessagesThumbnail() {
   const cardX = (W - cardW) / 2;
 
   return (
-    <div className="w-full h-full flex items-center justify-center pointer-events-none select-none bg-[#faf6ee]">
+    <div className="w-full h-full flex items-center justify-center pointer-events-none select-none bg-white">
       <svg
         viewBox={`0 0 ${W} ${H}`}
         xmlns="http://www.w3.org/2000/svg"
@@ -117,7 +117,7 @@ export default function Learn() {
             <Link key={resource.id} href={resource.href}>
               <a className="flex flex-col sm:flex-row sm:h-[248px] bg-card border-4 border-border pixel-shadow hover:translate-y-[-2px] hover:shadow-[6px_6px_0px_rgba(0,0,0,0.3)] transition-all group overflow-hidden">
                 {/* Thumbnail — left side */}
-                <div className="sm:w-[45%] md:w-[40%] flex-shrink-0 border-b-4 sm:border-b-0 sm:border-r-4 border-border bg-[#faf6ee] overflow-hidden">
+                <div className="sm:w-[45%] md:w-[40%] flex-shrink-0 border-b-4 sm:border-b-0 sm:border-r-4 border-border bg-white overflow-hidden">
                   {resource.thumbnail === "messages" && (
                     <MessagesThumbnail />
                   )}
