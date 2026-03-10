@@ -224,13 +224,12 @@ class NodeManager {
       "-txindex=1",
       "-fallbackfee=0.00001",
       "-minrelaytxfee=0",
+      "-walletbroadcast=0",
       "-wallet=pl",
     ];
 
     console.log("[node] Starting bitcoind for user", userId, "on RPC port", rpcPort);
 
-    // Wrap in shell to set a sane fd limit — "unlimited" ulimit causes
-    // bitcoind to fail with "Not enough file descriptors available"
     const proc = spawn("sh", ["-c", `ulimit -n 4096 2>/dev/null; exec "${this.bitcoindPath}" ${args.map(a => `'${a}'`).join(" ")}`], {
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -256,35 +255,30 @@ class NodeManager {
       }
     });
 
-    // Collect stderr for debugging
     let stderrBuf = "";
     proc.stderr?.on("data", (chunk: Buffer) => {
       stderrBuf += chunk.toString();
       if (stderrBuf.length > 4096) stderrBuf = stderrBuf.slice(-2048);
     });
 
-    // Wait for RPC to become available
-    await this._waitForReady(instance);
+    await this._waitForRpc(instance);
+    await this._ensureOutOfIBD(instance);
+    await this._waitForWallet(instance);
     instance.ready = true;
     return instance;
   }
 
-  private async _waitForReady(instance: NodeInstance, maxWaitMs = 15_000): Promise<void> {
+  private async _waitForRpc(instance: NodeInstance, maxWaitMs = 30_000): Promise<void> {
     const start = Date.now();
     while (Date.now() - start < maxWaitMs) {
       try {
-        await this._rpcCall(instance.rpcPort, "getblockchaininfo", []);
-        break;
+        await this._rpcCallWithTimeout(instance.rpcPort, "getblockchaininfo", [], 2_000);
+        return;
       } catch {
         await new Promise((r) => setTimeout(r, 300));
       }
     }
-    if (Date.now() - start >= maxWaitMs) {
-      throw new Error("bitcoind failed to start within timeout");
-    }
-
-    await this._ensureOutOfIBD(instance);
-    await this._waitForWallet(instance);
+    throw new Error("bitcoind failed to start within timeout");
   }
 
   private async _ensureOutOfIBD(instance: NodeInstance): Promise<void> {
@@ -313,14 +307,15 @@ class NodeManager {
     const start = Date.now();
     while (Date.now() - start < maxWaitMs) {
       try {
-        await this._rpcCall(instance.rpcPort, "getwalletinfo", []);
-        console.log("[node] Wallet ready for user", instance.userId);
-        return;
-      } catch {
-        await new Promise((r) => setTimeout(r, 500));
-      }
+        const wi = await this._rpcCallWithTimeout(instance.rpcPort, "getwalletinfo", [], 3_000);
+        if ((wi as any)?.walletname === "pl") {
+          console.log("[node] Wallet ready for user", instance.userId);
+          return;
+        }
+      } catch {}
+      await new Promise((r) => setTimeout(r, 1_000));
     }
-    console.log("[node] Wallet not ready after", maxWaitMs / 1000, "s — continuing anyway");
+    throw new Error("Wallet not ready after " + (maxWaitMs / 1000) + "s");
   }
 
   private async _rpcCall(port: number, method: string, params: unknown[]): Promise<unknown> {
@@ -354,6 +349,30 @@ class NodeManager {
     if (data.error) {
       throw new Error(data.error.message);
     }
+    return data.result;
+  }
+
+  private async _rpcCallWithTimeout(port: number, method: string, params: unknown[], timeoutMs: number): Promise<unknown> {
+    const body = JSON.stringify({ jsonrpc: "1.0", id: "plrpc", method, params });
+    let res: Response;
+    try {
+      res = await fetch(`http://127.0.0.1:${port}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Basic " + Buffer.from(`${RPC_USER}:${RPC_PASS}`).toString("base64"),
+        },
+        body,
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+    } catch (err: any) {
+      if (err?.name === "TimeoutError" || err?.message?.includes("aborted due to timeout")) {
+        throw new Error(`${method} timed out after ${Math.round(timeoutMs / 1000)}s`);
+      }
+      throw err;
+    }
+    const data = (await res.json()) as RpcResponse;
+    if (data.error) throw new Error(data.error.message);
     return data.result;
   }
 
