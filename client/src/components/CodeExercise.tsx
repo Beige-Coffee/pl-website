@@ -13,6 +13,7 @@ import { closeBrackets, closeBracketsKeymap, autocompletion, completionKeymap } 
 import { lintKeymap } from "@codemirror/lint";
 import { runPythonTests, type TestResult, subscribeToPyodideStatus, type PyodideLoadingPhase } from "../lib/pyodide-runner";
 import { createPyodideCompletionSource, createWordCompletionSource, preloadCompletionContext, invalidateCompletionCache } from "../lib/pyodide-completions";
+import { buildExerciseTestCode } from "../lib/exercise-code-assembly";
 import { signatureHints } from "../lib/signature-hint-extension";
 import { cleanErrorMessage } from "../lib/error-cleanup";
 import { QRCodeSVG } from "qrcode.react";
@@ -209,7 +210,6 @@ export default function CodeExercise({
   crossGroupExercises,
   classMethodExercises,
   priorInGroupExercises,
-  futureExercises,
   tutorialType,
 }: CodeExerciseProps) {
   const dark = theme === "dark";
@@ -382,8 +382,9 @@ export default function CodeExercise({
     return parts.filter(Boolean).join("\n\n");
   }, [setupCode, preamble, crossGroupExercises, classMethodExercises, priorInGroupExercises]);
 
-  // Assemble full code for test execution
-  // Order: [setupCode] → [classMethodDeps] → [standaloneDeps] → [preamble] → [inGroupPriors] → [student] → [futureStubs]
+  // Assemble full code for test execution.
+  // Future exercise stubs are intentionally excluded so later definitions
+  // cannot overwrite the current exercise under test.
   const assembleTestCode = useCallback((): string => {
     if (!hasGroupContext) {
       const studentCode = viewRef.current?.state.doc.toString() || "";
@@ -391,18 +392,18 @@ export default function CodeExercise({
       return [context, studentCode].filter(Boolean).join("\n\n");
     }
 
-    const parts: string[] = [];
+    const classMethodDeps: string[] = [];
+    const standaloneDeps: string[] = [];
+    const priorInGroupDeps: string[] = [];
 
     // 1. Hidden setup code (registers `ln` module, may include `class ChannelKeyManager:`)
-    if (setupCode) parts.push(setupCode);
-
     // 2. Class method cross-group deps (go right after setupCode's class declaration)
     for (const cm of classMethodExercises ?? []) {
       try {
         const saved = localStorage.getItem(`pl-exercise-${cm.id}`);
-        parts.push(saved ?? cm.starterCode);
+        classMethodDeps.push(saved ?? cm.starterCode);
       } catch {
-        parts.push(cm.starterCode);
+        classMethodDeps.push(cm.starterCode);
       }
     }
 
@@ -410,22 +411,19 @@ export default function CodeExercise({
     for (const cg of crossGroupExercises ?? []) {
       try {
         const saved = localStorage.getItem(`pl-exercise-${cg.id}`);
-        parts.push(saved ?? cg.starterCode);
+        standaloneDeps.push(saved ?? cg.starterCode);
       } catch {
-        parts.push(cg.starterCode);
+        standaloneDeps.push(cg.starterCode);
       }
     }
-
-    // 4. Visible preamble (imports from ln, class declarations)
-    if (preamble) parts.push(preamble);
 
     // 5. Prior in-group exercises (inside the class body if applicable)
     for (const pe of priorInGroupExercises ?? []) {
       try {
         const saved = localStorage.getItem(`pl-exercise-${pe.id}`);
-        parts.push(saved ?? pe.starterCode);
+        priorInGroupDeps.push(saved ?? pe.starterCode);
       } catch {
-        parts.push(pe.starterCode);
+        priorInGroupDeps.push(pe.starterCode);
       }
     }
 
@@ -434,15 +432,16 @@ export default function CodeExercise({
     const editableCode = range
       ? viewRef.current?.state.doc.sliceString(range.from, range.to) || ""
       : viewRef.current?.state.doc.toString() || "";
-    parts.push(editableCode);
 
-    // 7. Future exercises: include stubs so class body is complete
-    for (const fe of futureExercises ?? []) {
-      parts.push(fe.starterCode);
-    }
-
-    return parts.filter(Boolean).join("\n\n");
-  }, [setupCode, preamble, crossGroupExercises, classMethodExercises, priorInGroupExercises, futureExercises, hasGroupContext, assembleContext]);
+    return buildExerciseTestCode({
+      setupCode,
+      classMethodDeps,
+      standaloneDeps,
+      preamble,
+      priorInGroupDeps,
+      currentCode: editableCode,
+    });
+  }, [setupCode, preamble, crossGroupExercises, classMethodExercises, priorInGroupExercises, hasGroupContext, assembleContext]);
 
 
   // Stable completion sources (created once)

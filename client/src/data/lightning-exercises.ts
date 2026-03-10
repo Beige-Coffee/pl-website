@@ -290,10 +290,11 @@ def test_p2wsh_output():
         Steps:
         1. Deserialize tx_bytes into a CTransaction
         2. Compute sighash using SignatureHash() with SIGVERSION_WITNESS_V0
-        3. Sign with ECDSA using the secret_key (DER encoding)
+        3. Sign with deterministic ECDSA using the secret_key (DER encoding)
         4. Append SIGHASH_ALL byte (0x01)
 
-        Use sigencode_der_canonize for canonical (low-S) signatures.
+        Use sign_digest_deterministic() with sigencode_der_canonize so
+        signatures are canonical (low-S) and deterministic.
 
         Args:
             tx_bytes: raw transaction bytes
@@ -366,18 +367,31 @@ def test_sign_with_funding_key():
     result = km.sign_input(bytes.fromhex(tx_hex), 0, CScript(funding_script), 500000, km.funding_key)
     assert isinstance(result, bytes), "Must return bytes when signing with km.funding_key"
     assert len(result) > 64, "DER signature should be > 64 bytes"
+
+def test_bolt3_commitment_signature_vector():
+    km = ChannelKeyManager(bytes([0x01] * 32))
+    km.funding_key = bytes.fromhex("30ff4956bbdd3222d44cc5e8a1261dab1e07957bdac5ae88fe3261ef321f3749")
+    unsigned_tx = bytes.fromhex("0200000001bef67e4e2fb9ddeeb3461973cd4c62abb35050b1add772995b820b584a488489000000000038b02b8002c0c62d0000000000160014cc1b07838e387deacd0e5232e1e8b49f4c29e48454a56a00000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e3e195220")
+    funding_script = bytes.fromhex("5221023da092f6980e58d2c037173180e9a465476026ee50f96695963e8efe436f54eb21030e9f7b623d2ccc7c9bd44d66d5ce21ce504c0acf6385a132cec6d3c39fa711c152ae")
+    expected = bytes.fromhex("30440220616210b2cc4d3afb601013c373bbd8aac54febd9f15400379a8cb65ce7deca60022034236c010991beb7ff770510561ae8dc885b8d38d1947248c38f2ae05564714201")
+    result = km.sign_input(unsigned_tx, 0, CScript(funding_script), 10_000_000, km.funding_key)
+    assert result == expected, "Signature should match the BOLT 3 commitment vector exactly"
 `,
     hints: {
       conceptual:
-        "<p>Your goal is to produce a BIP143 segwit v0 signature for a transaction input. First deserialize the raw transaction bytes with <code>CTransaction.deserialize()</code>. Then use python-bitcoinlib's <code>SignatureHash()</code> to compute the sighash digest, passing <code>SIGHASH_ALL</code>, the input amount, and <code>SIGVERSION_WITNESS_V0</code>. Sign the digest with the <code>ecdsa</code> library's <code>SigningKey</code> class using <code>sigencode_der_canonize</code> for canonical low-S DER encoding. Finally, append the <code>SIGHASH_ALL</code> byte to the signature.</p>",
+        "<p>Your goal is to produce a BIP143 segwit v0 signature for a transaction input. First deserialize the raw transaction bytes with <code>CTransaction.deserialize()</code>. Then use python-bitcoinlib's <code>SignatureHash()</code> to compute the sighash digest, passing <code>SIGHASH_ALL</code>, the input amount, and <code>SIGVERSION_WITNESS_V0</code>. Sign the digest with the <code>ecdsa</code> library's <code>SigningKey</code> class using <code>sign_digest_deterministic()</code> and <code>sigencode_der_canonize</code> so the signature is canonical (low-S) and stable enough to match the exact BOLT vectors downstream. Finally, append the <code>SIGHASH_ALL</code> byte to the signature.</p>",
       steps:
-        '<ol><li>Deserialize the raw transaction bytes into a <code>CTransaction</code> object using its <code>deserialize()</code> class method</li><li>Compute the sighash digest using <code>SignatureHash()</code>. This function needs the witness script, the deserialized transaction, the input index, the hash type (<code>SIGHASH_ALL</code>), the input amount, and the sigversion (<code>SIGVERSION_WITNESS_V0</code>)</li><li>Create a <code>SigningKey</code> from the 32-byte <code>secret_key</code> using the <code>from_string()</code> class method with <code>SECP256k1</code> as the curve</li><li>Sign the sighash digest using <code>sign_digest()</code> on the signing key, passing <code>sigencode_der_canonize</code> as the encoding function to ensure canonical (low-S) signatures</li><li>Append the <code>SIGHASH_ALL</code> byte to the DER signature using <code>bytes([SIGHASH_ALL])</code> and return the combined result. Note: <code>bytes([value])</code> creates a single byte with that value, while <code>bytes(value)</code> creates that many zero bytes</li></ol>',
+        '<ol><li>Deserialize the raw transaction bytes into a <code>CTransaction</code> object using its <code>deserialize()</code> class method</li><li>Compute the sighash digest using <code>SignatureHash()</code>. This function needs the witness script, the deserialized transaction, the input index, the hash type (<code>SIGHASH_ALL</code>), the input amount, and the sigversion (<code>SIGVERSION_WITNESS_V0</code>)</li><li>Create a <code>SigningKey</code> from the 32-byte <code>secret_key</code> using the <code>from_string()</code> class method with <code>SECP256k1</code> as the curve</li><li>Sign the sighash digest using <code>sign_digest_deterministic()</code> on the signing key, passing <code>hashlib.sha256</code> as the nonce hash function and <code>sigencode_der_canonize</code> as the encoding function so the signature is canonical and deterministic</li><li>Append the <code>SIGHASH_ALL</code> byte to the DER signature using <code>bytes([SIGHASH_ALL])</code> and return the combined result. Note: <code>bytes([value])</code> creates a single byte with that value, while <code>bytes(value)</code> creates that many zero bytes</li></ol>',
       code: `    def sign_input(self, tx_bytes, input_index, script, amount, secret_key):
         tx = CTransaction.deserialize(tx_bytes)
         sighash = SignatureHash(script, tx, input_index, SIGHASH_ALL,
                                 amount=amount, sigversion=SIGVERSION_WITNESS_V0)
         sk = SigningKey.from_string(secret_key, curve=SECP256k1)
-        sig = sk.sign_digest(sighash, sigencode=sigencode_der_canonize)
+        sig = sk.sign_digest_deterministic(
+            sighash,
+            hashfunc=hashlib.sha256,
+            sigencode=sigencode_der_canonize,
+        )
         return sig + bytes([SIGHASH_ALL])`,
     },
     rewardSats: 21,
@@ -1730,11 +1744,11 @@ def test_bolt3_p2wsh_vectors():
     ]
     result = create_htlc_outputs(ck, offered, received)
     expected = [
-        (2000, 502, bytes.fromhex("0020403d394747cae42e98ff01734ad5c08f82ba123d3d9a620abda88989651e2ab5")),
-        (3000, 503, bytes.fromhex("0020c20b5d1f8584fd90443e7b7b720136174fa4b9333c261d04dbbd012635c0f419")),
-        (1000, 500, bytes.fromhex("002052bfef0479d7b293c27e0f1eb294bea154c63a3294ef092c19af51409bce0e2a")),
-        (2000, 501, bytes.fromhex("0020748eba944fedc8827f6b06bc44678f93c0f9e6078b35c6331ed31e75f8ce0c2d")),
-        (4000, 504, bytes.fromhex("00208c48d15160397c9731df9bc3b236656efb6665fbfe92b4a6878e88a499f741c4")),
+        (2000, 502, bytes.fromhex("0020ee453bd54ff1d64a1a71c96d67bd8311d117ee3f825e9b4c6a3ae6d8a22960d3")),
+        (3000, 503, bytes.fromhex("0020b4f9f7a1d4216ece933d9d4964bf825728d900246e424638b8822fcdeb308f47")),
+        (1000, 500, bytes.fromhex("002048054c44d6062c392bd99c3fdad87e2106ff5e6d25ac249bd0266d3b1b8918f7")),
+        (2000, 501, bytes.fromhex("002061a5d92908a300947864b8335fd42715f4eaf2e0125184e9ad18e3b7d2e19a9c")),
+        (4000, 504, bytes.fromhex("002035e5186238bb9d19f3fe1e27092ea1ddb1e4fefc0442a02f455940ed0552f7f4")),
     ]
     assert len(result) == 5, f"Expected 5 HTLC outputs, got {len(result)}"
     for actual, (value, cltv_expiry, script) in zip(result, expected):
@@ -1957,7 +1971,7 @@ def test_bolt3_five_htlc_vector():
     tx = create_commitment_tx(funding_txid, 0, 6_988_000, 3_000_000, ck, remote_pk, opener_bp, accepter_bp, 42, 144, 546, 0, offered_htlcs=offered, received_htlcs=received)
     witness = CScriptWitness([b'', local_sig, remote_sig, funding_script])
     tx.wit = CTxWitness([CTxInWitness(witness)])
-    expected_hex = "02000000000101bef67e4e2fb9ddeeb3461973cd4c62abb35050b1add772995b820b584a488489000000000038b02b8007e80300000000000022002052bfef0479d7b293c27e0f1eb294bea154c63a3294ef092c19af51409bce0e2ad007000000000000220020403d394747cae42e98ff01734ad5c08f82ba123d3d9a620abda88989651e2ab5d007000000000000220020748eba944fedc8827f6b06bc44678f93c0f9e6078b35c6331ed31e75f8ce0c2db80b000000000000220020c20b5d1f8584fd90443e7b7b720136174fa4b9333c261d04dbbd012635c0f419a00f0000000000002200208c48d15160397c9731df9bc3b236656efb6665fbfe92b4a6878e88a499f741c4c0c62d0000000000160014cc1b07838e387deacd0e5232e1e8b49f4c29e484e0a06a00000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e040047304402206fc2d1f10ea59951eefac0b4b7c396a3c3d87b71ff0b019796ef4535beaf36f902201765b0181e514d04f4c8ad75659d7037be26cdb3f8bb6f78fe61decef484c3ea01473044022009b048187705a8cbc9ad73adbe5af148c3d012e1f067961486c822c7af08158c022006d66f3704cfab3eb2dc49dae24e4aa22a6910fc9b424007583204e3621af2e501475221023da092f6980e58d2c037173180e9a465476026ee50f96695963e8efe436f54eb21030e9f7b623d2ccc7c9bd44d66d5ce21ce504c0acf6385a132cec6d3c39fa711c152ae3e195220"
+    expected_hex = "02000000000101bef67e4e2fb9ddeeb3461973cd4c62abb35050b1add772995b820b584a488489000000000038b02b8007e80300000000000022002048054c44d6062c392bd99c3fdad87e2106ff5e6d25ac249bd0266d3b1b8918f7d00700000000000022002061a5d92908a300947864b8335fd42715f4eaf2e0125184e9ad18e3b7d2e19a9cd007000000000000220020ee453bd54ff1d64a1a71c96d67bd8311d117ee3f825e9b4c6a3ae6d8a22960d3b80b000000000000220020b4f9f7a1d4216ece933d9d4964bf825728d900246e424638b8822fcdeb308f47a00f00000000000022002035e5186238bb9d19f3fe1e27092ea1ddb1e4fefc0442a02f455940ed0552f7f4c0c62d0000000000160014cc1b07838e387deacd0e5232e1e8b49f4c29e484e0a06a00000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e040047304402206fc2d1f10ea59951eefac0b4b7c396a3c3d87b71ff0b019796ef4535beaf36f902201765b0181e514d04f4c8ad75659d7037be26cdb3f8bb6f78fe61decef484c3ea01473044022009b048187705a8cbc9ad73adbe5af148c3d012e1f067961486c822c7af08158c022006d66f3704cfab3eb2dc49dae24e4aa22a6910fc9b424007583204e3621af2e501475221023da092f6980e58d2c037173180e9a465476026ee50f96695963e8efe436f54eb21030e9f7b623d2ccc7c9bd44d66d5ce21ce504c0acf6385a132cec6d3c39fa711c152ae3e195220"
     assert tx.serialize().hex() == expected_hex, "Commitment transaction with five HTLCs should match the BOLT 3 vector"
 `,
     hints: {

@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { LIGHTNING_EXERCISES } from "../../client/src/data/lightning-exercises";
 
@@ -6,6 +7,14 @@ describe("Lightning BOLT vector coverage", () => {
     id: string;
     snippets: string[];
   }> = [
+    {
+      id: "ln-exercise-sign-input",
+      snippets: [
+        "Signature should match the BOLT 3 commitment vector exactly",
+        "30ff4956bbdd3222d44cc5e8a1261dab1e07957bdac5ae88fe3261ef321f3749",
+        "30440220616210b2cc4d3afb601013c373bbd8aac54febd9f15400379a8cb65ce7deca60022034236c010991beb7ff770510561ae8dc885b8d38d1947248c38f2ae05564714201",
+      ],
+    },
     {
       id: "ln-exercise-commitment-tx",
       snippets: [
@@ -23,15 +32,15 @@ describe("Lightning BOLT vector coverage", () => {
     {
       id: "ln-exercise-htlc-outputs",
       snippets: [
-        "0020403d394747cae42e98ff01734ad5c08f82ba123d3d9a620abda88989651e2ab5",
-        "00208c48d15160397c9731df9bc3b236656efb6665fbfe92b4a6878e88a499f741c4",
+        "0020ee453bd54ff1d64a1a71c96d67bd8311d117ee3f825e9b4c6a3ae6d8a22960d3",
+        "002035e5186238bb9d19f3fe1e27092ea1ddb1e4fefc0442a02f455940ed0552f7f4",
       ],
     },
     {
       id: "ln-exercise-commitment-tx-htlc",
       snippets: [
         "Commitment transaction with five HTLCs should match the BOLT 3 vector",
-        "02000000000101bef67e4e2fb9ddeeb3461973cd4c62abb35050b1add772995b820b584a488489000000000038b02b8007e80300000000000022002052bfef0479d7b293c27e0f1eb294bea154c63a3294ef092c19af51409bce0e2ad007000000000000220020403d394747cae42e98ff01734ad5c08f82ba123d3d9a620abda88989651e2ab5d007000000000000220020748eba944fedc8827f6b06bc44678f93c0f9e6078b35c6331ed31e75f8ce0c2db80b000000000000220020c20b5d1f8584fd90443e7b7b720136174fa4b9333c261d04dbbd012635c0f419a00f0000000000002200208c48d15160397c9731df9bc3b236656efb6665fbfe92b4a6878e88a499f741c4c0c62d0000000000160014cc1b07838e387deacd0e5232e1e8b49f4c29e484e0a06a00000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e040047304402206fc2d1f10ea59951eefac0b4b7c396a3c3d87b71ff0b019796ef4535beaf36f902201765b0181e514d04f4c8ad75659d7037be26cdb3f8bb6f78fe61decef484c3ea01473044022009b048187705a8cbc9ad73adbe5af148c3d012e1f067961486c822c7af08158c022006d66f3704cfab3eb2dc49dae24e4aa22a6910fc9b424007583204e3621af2e501475221023da092f6980e58d2c037173180e9a465476026ee50f96695963e8efe436f54eb21030e9f7b623d2ccc7c9bd44d66d5ce21ce504c0acf6385a132cec6d3c39fa711c152ae3e195220",
+        "02000000000101bef67e4e2fb9ddeeb3461973cd4c62abb35050b1add772995b820b584a488489000000000038b02b8007e80300000000000022002048054c44d6062c392bd99c3fdad87e2106ff5e6d25ac249bd0266d3b1b8918f7d00700000000000022002061a5d92908a300947864b8335fd42715f4eaf2e0125184e9ad18e3b7d2e19a9cd007000000000000220020ee453bd54ff1d64a1a71c96d67bd8311d117ee3f825e9b4c6a3ae6d8a22960d3b80b000000000000220020b4f9f7a1d4216ece933d9d4964bf825728d900246e424638b8822fcdeb308f47a00f00000000000022002035e5186238bb9d19f3fe1e27092ea1ddb1e4fefc0442a02f455940ed0552f7f4c0c62d0000000000160014cc1b07838e387deacd0e5232e1e8b49f4c29e484e0a06a00000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e040047304402206fc2d1f10ea59951eefac0b4b7c396a3c3d87b71ff0b019796ef4535beaf36f902201765b0181e514d04f4c8ad75659d7037be26cdb3f8bb6f78fe61decef484c3ea01473044022009b048187705a8cbc9ad73adbe5af148c3d012e1f067961486c822c7af08158c022006d66f3704cfab3eb2dc49dae24e4aa22a6910fc9b424007583204e3621af2e501475221023da092f6980e58d2c037173180e9a465476026ee50f96695963e8efe436f54eb21030e9f7b623d2ccc7c9bd44d66d5ce21ce504c0acf6385a132cec6d3c39fa711c152ae3e195220",
       ],
     },
     {
@@ -85,4 +94,23 @@ describe("Lightning BOLT vector coverage", () => {
       }
     });
   }
+
+  it("keeps HTLC P2WSH vectors consistent with the canonical witness scripts", () => {
+    const offeredWitnessScript = "76a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c820120876475527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae67a914b43e1b38138a41b37f7cd9a1d274bc63e3a9b5d188527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae6868";
+    const receivedWitnessScript = "76a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c82012087647502f401b175ac67a914b8bcb07f6344b42ab04250c86a6e8b75d3fdbbc688527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae6868";
+
+    const offeredP2wsh = `0020${crypto.createHash("sha256").update(Buffer.from(offeredWitnessScript, "hex")).digest("hex")}`;
+    const receivedP2wsh = `0020${crypto.createHash("sha256").update(Buffer.from(receivedWitnessScript, "hex")).digest("hex")}`;
+
+    expect(LIGHTNING_EXERCISES["ln-exercise-htlc-outputs"].testCode).toContain(offeredP2wsh);
+    expect(LIGHTNING_EXERCISES["ln-exercise-htlc-outputs"].testCode).toContain(receivedP2wsh);
+    expect(LIGHTNING_EXERCISES["ln-exercise-commitment-tx-htlc"].testCode).toContain(offeredP2wsh);
+    expect(LIGHTNING_EXERCISES["ln-exercise-commitment-tx-htlc"].testCode).toContain(receivedP2wsh);
+  });
+
+  it("keeps deterministic signing in the canonical sign_input solution", () => {
+    const exercise = LIGHTNING_EXERCISES["ln-exercise-sign-input"];
+    expect(exercise.hints.code).toContain("sign_digest_deterministic(");
+    expect(exercise.hints.code).toContain("hashfunc=hashlib.sha256");
+  });
 });
