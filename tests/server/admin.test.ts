@@ -8,6 +8,8 @@ describe("Admin routes", () => {
 
   beforeEach(async () => {
     resetMockStorage();
+    process.env.PL_NODE_LOAD_TEST_BYPASS_ENABLED = "1";
+    process.env.PL_NODE_LOAD_TEST_BYPASS_TOKEN = "test-load-token";
     agent = await createTestApp();
     originalFetch = globalThis.fetch;
     globalThis.fetch = vi.fn().mockImplementation((url: string) => {
@@ -22,6 +24,8 @@ describe("Admin routes", () => {
   });
 
   afterEach(() => {
+    delete process.env.PL_NODE_LOAD_TEST_BYPASS_ENABLED;
+    delete process.env.PL_NODE_LOAD_TEST_BYPASS_TOKEN;
     globalThis.fetch = originalFetch;
   });
 
@@ -174,6 +178,7 @@ describe("Admin routes", () => {
     it("provisions verified learner accounts", async () => {
       const res = await agent
         .post("/api/admin/test-learners/provision")
+        .set("x-pl-load-test-token", "test-load-token")
         .send({ password: "test-admin-pass", prefix: "launch", count: 2 });
 
       expect(res.status).toBe(200);
@@ -189,6 +194,7 @@ describe("Admin routes", () => {
     it("returns node metrics and resets them", async () => {
       const metricsRes = await agent
         .get("/api/admin/node-metrics")
+        .set("x-pl-load-test-token", "test-load-token")
         .query({ password: "test-admin-pass" });
 
       expect(metricsRes.status).toBe(200);
@@ -197,6 +203,7 @@ describe("Admin routes", () => {
 
       const resetRes = await agent
         .post("/api/admin/node-metrics/reset")
+        .set("x-pl-load-test-token", "test-load-token")
         .send({ password: "test-admin-pass" });
 
       expect(resetRes.status).toBe(200);

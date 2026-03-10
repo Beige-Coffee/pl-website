@@ -496,13 +496,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return !!adminPw && !!password && password === adminPw;
   }
 
-  function canBypassNodeLimiter(req: Request): boolean {
+  function hasLaunchTestToken(req: Request): boolean {
     const enabled = process.env.PL_NODE_LOAD_TEST_BYPASS_ENABLED === "1";
     const configuredToken = process.env.PL_NODE_LOAD_TEST_BYPASS_TOKEN || "";
     if (!enabled || !configuredToken) return false;
-    const ip = getClientIp(req);
     const providedToken = req.headers["x-pl-load-test-token"];
-    return isAdminIp(ip) && typeof providedToken === "string" && providedToken === configuredToken;
+    return typeof providedToken === "string" && providedToken === configuredToken;
+  }
+
+  function canBypassNodeLimiter(req: Request): boolean {
+    return hasLaunchTestToken(req);
   }
 
   function sanitizeLaunchPrefix(raw: unknown): string {
@@ -1384,7 +1387,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/admin/node-metrics", async (req: Request, res: Response) => {
     const ip = getClientIp(req);
-    if (!isAdminIp(ip)) {
+    if (!hasLaunchTestToken(req)) {
       return res.status(403).json({ error: "Access denied" });
     }
     if (!adminLimiter.check(ip)) {
@@ -1404,7 +1407,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/admin/node-metrics/reset", async (req: Request, res: Response) => {
     const ip = getClientIp(req);
-    if (!isAdminIp(ip)) {
+    if (!hasLaunchTestToken(req)) {
       return res.status(403).json({ error: "Access denied" });
     }
     if (!adminLimiter.check(ip)) {
@@ -1420,7 +1423,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/admin/test-learners/provision", async (req: Request, res: Response) => {
     const ip = getClientIp(req);
-    if (!isAdminIp(ip)) {
+    if (!hasLaunchTestToken(req)) {
       return res.status(403).json({ error: "Access denied" });
     }
     if (!adminLimiter.check(ip)) {

@@ -26,12 +26,12 @@ test.describe("Lightning reward smoke", () => {
     );
 
     let credentials: LearnerCredentials | null = getProductionLearnerCredentials();
-    if (process.env.PL_ADMIN_PASSWORD) {
+    if (process.env.PL_ADMIN_PASSWORD && process.env.PL_NODE_LOAD_TEST_BYPASS_TOKEN) {
       const { learners } = await provisionLaunchTestLearners(baseURL, 1, process.env.PL_LAUNCH_REWARD_PREFIX || "reward-smoke");
       credentials = learners[0];
     }
 
-    test.skip(!credentials, "Provide PL_ADMIN_PASSWORD or production learner credentials.");
+    test.skip(!credentials, "Provide PL_ADMIN_PASSWORD and PL_NODE_LOAD_TEST_BYPASS_TOKEN, or production learner credentials.");
 
     const rewardLightningAddress = getRewardLightningAddress();
     const report: CourseRunReport = {

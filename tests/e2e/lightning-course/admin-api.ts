@@ -67,7 +67,14 @@ async function adminJson<T>(
   init: RequestInit & { method?: string },
 ): Promise<T> {
   const target = `${normalizeBaseUrl(baseURL)}${path}`;
-  const response = await fetch(target, init);
+  const headers = new Headers(init.headers);
+  for (const [key, value] of Object.entries(getNodeLoadTestHeaders())) {
+    headers.set(key, value);
+  }
+  const response = await fetch(target, {
+    ...init,
+    headers,
+  });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(body.error || `Request failed: ${response.status}`);

@@ -27,11 +27,14 @@ test.describe("Lightning course automation", () => {
     const environment = testInfo.project.name.includes("production") ? "production" : "local";
     const claimRewards = environment === "production" && process.env.PL_CLAIM_REWARDS === "1";
     const productionCredentials = environment === "production" ? getProductionLearnerCredentials() : null;
-    const canProvisionProductionLearner = environment === "production" && !!process.env.PL_ADMIN_PASSWORD;
+    const canProvisionProductionLearner =
+      environment === "production" &&
+      !!process.env.PL_ADMIN_PASSWORD &&
+      !!process.env.PL_NODE_LOAD_TEST_BYPASS_TOKEN;
 
     test.skip(
       environment === "production" && !productionCredentials && !canProvisionProductionLearner,
-      "Set PL_ADMIN_PASSWORD or provide PL_PROD_LEARNER_EMAIL and PL_PROD_LEARNER_PASSWORD to run the production course flow."
+      "Set PL_ADMIN_PASSWORD and PL_NODE_LOAD_TEST_BYPASS_TOKEN, or provide PL_PROD_LEARNER_EMAIL and PL_PROD_LEARNER_PASSWORD, to run the production course flow."
     );
 
     let credentials: LearnerCredentials = productionCredentials || createLocalLearnerCredentials();
