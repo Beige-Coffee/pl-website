@@ -121,6 +121,14 @@ export class MockStorage implements IStorage {
     this.sessions.delete(token);
   }
 
+  async deleteSessionsByUserId(userId: string): Promise<void> {
+    for (const [token, session] of this.sessions) {
+      if (session.userId === userId) {
+        this.sessions.delete(token);
+      }
+    }
+  }
+
   async getUserBySessionToken(token: string): Promise<User | undefined> {
     const session = this.sessions.get(token);
     if (!session) return undefined;
@@ -134,6 +142,28 @@ export class MockStorage implements IStorage {
     if (user) {
       this.users.set(userId, { ...user, rewardClaimed: true });
     }
+  }
+
+  async setUserEmailVerified(userId: string, emailVerified: boolean): Promise<void> {
+    const user = this.users.get(userId);
+    if (user) {
+      this.users.set(userId, {
+        ...user,
+        emailVerified,
+        verificationToken: null,
+        verificationExpiry: null,
+      });
+    }
+  }
+
+  async updateUserPassword(userId: string, passwordHash: string, displayName?: string | null): Promise<void> {
+    const user = this.users.get(userId);
+    if (!user) return;
+    this.users.set(userId, {
+      ...user,
+      passwordHash,
+      displayName: displayName === undefined ? user.displayName : displayName,
+    });
   }
 
   async updateUserLightningAddress(userId: string, lightningAddress: string | null): Promise<void> {
@@ -287,6 +317,47 @@ export class MockStorage implements IStorage {
     }
   }
 
+  async deleteCheckpointCompletion(userId: string, checkpointId: string): Promise<void> {
+    this.checkpoints.delete(`${userId}:${checkpointId}`);
+  }
+
+  async deleteAllCheckpointCompletions(userId: string): Promise<void> {
+    for (const [key, checkpoint] of this.checkpoints) {
+      if (checkpoint.userId === userId) {
+        this.checkpoints.delete(key);
+      }
+    }
+  }
+
+  async deleteWithdrawalsForCheckpoint(userId: string, checkpointId: string): Promise<void> {
+    for (const [k1, withdrawal] of this.withdrawals) {
+      if (withdrawal.userId === userId && withdrawal.checkpointId === checkpointId) {
+        this.withdrawals.delete(k1);
+      }
+    }
+  }
+
+  async resetUserLaunchState(userId: string): Promise<void> {
+    await this.deleteAllCheckpointCompletions(userId);
+    await this.deleteAllUserProgress(userId);
+    await this.deleteSessionsByUserId(userId);
+
+    for (const [k1, withdrawal] of this.withdrawals) {
+      if (withdrawal.userId === userId) {
+        this.withdrawals.delete(k1);
+      }
+    }
+
+    const user = this.users.get(userId);
+    if (user) {
+      this.users.set(userId, {
+        ...user,
+        rewardClaimed: false,
+        lightningAddress: null,
+      });
+    }
+  }
+
   async getCompletedCheckpoints(userId: string): Promise<{ checkpointId: string; amountSats: number; paidAt: string }[]> {
     const results: { checkpointId: string; amountSats: number; paidAt: string }[] = [];
     for (const cp of this.checkpoints.values()) {
@@ -434,6 +505,10 @@ export class MockStorage implements IStorage {
       this.progress.set(userId, userMap);
     }
     userMap.set(key, value);
+  }
+
+  async deleteAllUserProgress(userId: string): Promise<void> {
+    this.progress.delete(userId);
   }
 
   // ── Feedback ──

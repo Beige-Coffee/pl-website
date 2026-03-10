@@ -3,6 +3,41 @@ import { Link } from "wouter";
 
 interface DashboardData {
   nodeBalance: Record<string, unknown>;
+  nodeMetrics: {
+    activeNodes: number;
+    maxConcurrent: number;
+    idleTimeoutMs: number;
+    limiterBypassCount: number;
+    startupFailures: number;
+    walletReadyFailures: number;
+    cleanup: {
+      idleStops: number;
+      staleDirsRemoved: number;
+    };
+    provision: {
+      count: number;
+      successCount: number;
+      failureCount: number;
+      timeoutCount: number;
+      totalMs: number;
+      maxMs: number;
+      lastMs: number;
+      avgMs: number;
+    };
+    rpc: Record<string, {
+      count: number;
+      successCount: number;
+      failureCount: number;
+      timeoutCount: number;
+      totalMs: number;
+      maxMs: number;
+      lastMs: number;
+      avgMs: number;
+    }>;
+  };
+  launchControls: {
+    nodeLimiterBypassEnabled: boolean;
+  };
   totalSatsPaid: number;
   pendingCount: number;
   recentWithdrawals: Array<{
@@ -68,7 +103,15 @@ interface DashboardData {
   }>;
 }
 
-type Tab = "overview" | "users" | "withdrawals" | "checkpoints" | "analytics" | "donations" | "feedback";
+type LaunchLearner = {
+  userId: string;
+  email: string;
+  password: string;
+  displayName: string;
+  created: boolean;
+};
+
+type Tab = "overview" | "users" | "withdrawals" | "checkpoints" | "analytics" | "launch" | "donations" | "feedback";
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return "-";
@@ -79,6 +122,12 @@ function formatDate(dateStr: string | null): string {
 function truncate(str: string | null, len: number): string {
   if (!str) return "-";
   return str.length > len ? str.slice(0, len) + "..." : str;
+}
+
+function formatMs(ms: number): string {
+  if (!ms) return "0 ms";
+  if (ms < 1000) return `${ms} ms`;
+  return `${(ms / 1000).toFixed(1)} s`;
 }
 
 const ADMIN_SESSION_KEY = "pl_admin_session";
@@ -121,6 +170,12 @@ export default function AdminPage() {
   const [selectedCheckpointUser, setSelectedCheckpointUser] = useState<string | null>(null);
   const [selectedTutorial, setSelectedTutorial] = useState<"noise" | "lightning" | "visual-lightning">("noise");
   const [checkpointSubTab, setCheckpointSubTab] = useState<"funnel" | "pages" | "matrix">("funnel");
+  const [launchPrefix, setLaunchPrefix] = useState("launch");
+  const [launchCount, setLaunchCount] = useState("5");
+  const [launchBusy, setLaunchBusy] = useState(false);
+  const [launchMessage, setLaunchMessage] = useState<string | null>(null);
+  const [provisionedLearners, setProvisionedLearners] = useState<LaunchLearner[]>([]);
+  const [resettingNodeMetrics, setResettingNodeMetrics] = useState(false);
 
   const fetchDashboard = useCallback(async (pw: string) => {
     if (!pw) return;
@@ -241,6 +296,63 @@ export default function AdminPage() {
     });
   };
 
+  const provisionLaunchLearners = async () => {
+    const count = Number.parseInt(launchCount, 10);
+    if (!Number.isInteger(count) || count < 1 || count > 50) {
+      setLaunchMessage("Count must be between 1 and 50.");
+      return;
+    }
+    setLaunchBusy(true);
+    setLaunchMessage(null);
+    try {
+      const res = await fetch("/api/admin/test-learners/provision", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          password: storedPassword,
+          prefix: launchPrefix,
+          count,
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setLaunchMessage(body.error || "Failed to provision learners");
+        return;
+      }
+      setProvisionedLearners(body.learners || []);
+      setLaunchPrefix(body.prefix || launchPrefix);
+      setLaunchMessage(`Provisioned ${body.learners?.length || 0} launch learners.`);
+      refresh();
+    } catch {
+      setLaunchMessage("Failed to provision learners");
+    } finally {
+      setLaunchBusy(false);
+    }
+  };
+
+  const resetNodeMetrics = async () => {
+    setResettingNodeMetrics(true);
+    setLaunchMessage(null);
+    try {
+      const res = await fetch("/api/admin/node-metrics/reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: storedPassword }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setLaunchMessage(body.error || "Failed to reset node metrics");
+        return;
+      }
+      setLaunchMessage("Node metrics reset.");
+      refresh();
+    } catch {
+      setLaunchMessage("Failed to reset node metrics");
+    } finally {
+      setResettingNodeMetrics(false);
+    }
+  };
+
   if (ipAllowed === null) {
     return null;
   }
@@ -327,6 +439,7 @@ export default function AdminPage() {
           <button className={tabClass("withdrawals")} onClick={() => setActiveTab("withdrawals")}>WITHDRAWALS</button>
           <button className={tabClass("checkpoints")} onClick={() => setActiveTab("checkpoints")}>CHECKPOINTS</button>
           <button className={tabClass("analytics")} onClick={() => setActiveTab("analytics")}>ANALYTICS</button>
+          <button className={tabClass("launch")} onClick={() => setActiveTab("launch")}>LAUNCH</button>
           <button className={tabClass("donations")} onClick={() => setActiveTab("donations")}>DONATIONS ({(data.recentDonations || []).length})</button>
           <button className={tabClass("feedback")} onClick={() => setActiveTab("feedback")}>FEEDBACK ({(data.recentFeedback || []).length})</button>
         </nav>
@@ -1236,6 +1349,143 @@ export default function AdminPage() {
             </div>
           );
         })()}
+
+        {activeTab === "launch" && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className={cardClass}>
+                <div className="font-pixel text-[9px] text-foreground/60 mb-1">ACTIVE NODES</div>
+                <div className="font-pixel text-base">{data.nodeMetrics.activeNodes}</div>
+              </div>
+              <div className={cardClass}>
+                <div className="font-pixel text-[9px] text-foreground/60 mb-1">PROVISION AVG</div>
+                <div className="font-pixel text-base">{formatMs(data.nodeMetrics.provision.avgMs)}</div>
+              </div>
+              <div className={cardClass}>
+                <div className="font-pixel text-[9px] text-foreground/60 mb-1">PROVISION MAX</div>
+                <div className="font-pixel text-base">{formatMs(data.nodeMetrics.provision.maxMs)}</div>
+              </div>
+              <div className={cardClass}>
+                <div className="font-pixel text-[9px] text-foreground/60 mb-1">BYPASS</div>
+                <div className="font-pixel text-base">
+                  {data.launchControls.nodeLimiterBypassEnabled ? "ENABLED" : "DISABLED"}
+                </div>
+              </div>
+            </div>
+
+            <div className={cardClass}>
+              <div className="flex flex-wrap items-end gap-3">
+                <div>
+                  <label className="block font-pixel text-[10px] text-foreground/60 mb-1">PREFIX</label>
+                  <input
+                    value={launchPrefix}
+                    onChange={(e) => setLaunchPrefix(e.target.value)}
+                    className="border-2 border-border bg-background px-3 py-2 font-mono text-sm"
+                    spellCheck={false}
+                  />
+                </div>
+                <div>
+                  <label className="block font-pixel text-[10px] text-foreground/60 mb-1">COUNT</label>
+                  <input
+                    value={launchCount}
+                    onChange={(e) => setLaunchCount(e.target.value)}
+                    className="w-24 border-2 border-border bg-background px-3 py-2 font-mono text-sm"
+                    inputMode="numeric"
+                  />
+                </div>
+                <button
+                  onClick={provisionLaunchLearners}
+                  disabled={launchBusy}
+                  className="font-pixel text-[10px] border-2 border-border bg-primary text-black px-4 py-2 hover:bg-primary/80 disabled:opacity-50"
+                >
+                  {launchBusy ? "WORKING..." : "PROVISION + RESET"}
+                </button>
+                <button
+                  onClick={resetNodeMetrics}
+                  disabled={resettingNodeMetrics}
+                  className="font-pixel text-[10px] border-2 border-border px-4 py-2 hover:bg-primary/10 disabled:opacity-50"
+                >
+                  {resettingNodeMetrics ? "RESETTING..." : "RESET NODE METRICS"}
+                </button>
+              </div>
+              {launchMessage && (
+                <div className="mt-3 font-pixel text-[10px] text-foreground/70">{launchMessage}</div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className={cardClass}>
+                <div className="font-pixel text-[10px] mb-2">NODE HEALTH</div>
+                <div className="space-y-1 text-sm" style={{ fontFamily: sansFont }}>
+                  <div className="flex justify-between"><span>Provision attempts</span><span>{data.nodeMetrics.provision.count}</span></div>
+                  <div className="flex justify-between"><span>Provision failures</span><span>{data.nodeMetrics.provision.failureCount}</span></div>
+                  <div className="flex justify-between"><span>Provision timeouts</span><span>{data.nodeMetrics.provision.timeoutCount}</span></div>
+                  <div className="flex justify-between"><span>Startup failures</span><span>{data.nodeMetrics.startupFailures}</span></div>
+                  <div className="flex justify-between"><span>Wallet readiness failures</span><span>{data.nodeMetrics.walletReadyFailures}</span></div>
+                  <div className="flex justify-between"><span>Idle stops</span><span>{data.nodeMetrics.cleanup.idleStops}</span></div>
+                  <div className="flex justify-between"><span>Stale dir cleanup</span><span>{data.nodeMetrics.cleanup.staleDirsRemoved}</span></div>
+                  <div className="flex justify-between"><span>Limiter bypass count</span><span>{data.nodeMetrics.limiterBypassCount}</span></div>
+                </div>
+              </div>
+
+              <div className={cardClass}>
+                <div className="font-pixel text-[10px] mb-2">PROVISIONED LEARNERS</div>
+                {provisionedLearners.length === 0 ? (
+                  <div className="text-sm text-foreground/40" style={{ fontFamily: sansFont }}>
+                    Run PROVISION + RESET to create a reusable launch-testing learner bank.
+                  </div>
+                ) : (
+                  <div className="space-y-1 text-xs" style={{ fontFamily: sansFont }}>
+                    {provisionedLearners.map((learner) => (
+                      <div key={learner.userId} className="border border-border/30 px-3 py-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-semibold">{learner.email}</span>
+                          <span className="font-pixel text-[9px] text-foreground/50">
+                            {learner.created ? "CREATED" : "RESET"}
+                          </span>
+                        </div>
+                        <div className="text-foreground/60 break-all">pw: {learner.password}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className={`${cardClass} overflow-x-auto`}>
+              <div className="font-pixel text-[10px] mb-2">RPC LATENCY</div>
+              <table className={tableClass} style={{ fontFamily: sansFont }}>
+                <thead>
+                  <tr>
+                    <th className={thClass}>METHOD</th>
+                    <th className={thClass}>COUNT</th>
+                    <th className={thClass}>AVG</th>
+                    <th className={thClass}>MAX</th>
+                    <th className={thClass}>FAIL</th>
+                    <th className={thClass}>TIMEOUT</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(data.nodeMetrics.rpc)
+                    .sort((a, b) => b[1].count - a[1].count)
+                    .map(([method, metric]) => (
+                      <tr key={method} className="hover:bg-primary/5">
+                        <td className={tdClass}>{method}</td>
+                        <td className={tdClass}>{metric.count}</td>
+                        <td className={tdClass}>{formatMs(metric.avgMs)}</td>
+                        <td className={tdClass}>{formatMs(metric.maxMs)}</td>
+                        <td className={tdClass}>{metric.failureCount}</td>
+                        <td className={tdClass}>{metric.timeoutCount}</td>
+                      </tr>
+                    ))}
+                  {Object.keys(data.nodeMetrics.rpc).length === 0 && (
+                    <tr><td colSpan={6} className={`${tdClass} text-center text-foreground/40`}>No node RPC metrics yet</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* Feedback Tab */}
         {activeTab === "feedback" && (

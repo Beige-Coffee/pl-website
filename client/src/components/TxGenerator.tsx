@@ -4,6 +4,7 @@ import type { TxGeneratorConfig } from "../data/tx-generators";
 import { LIGHTNING_EXERCISES } from "../data/lightning-exercises";
 
 const STORAGE_PREFIX = "pl-txnotebook-";
+const GENERATOR_FETCH_TIMEOUT_MS = 150_000;
 
 const sansFont = {
   fontFamily:
@@ -31,6 +32,26 @@ function parseOutput(stdout: string): Record<string, string> {
   return result;
 }
 
+function getFriendlyGeneratorError(message: string): string {
+  const normalized = message.toLowerCase();
+  if (normalized.includes("node is still starting")) {
+    return "Your Bitcoin node is still starting. Wait a few seconds, then try again.";
+  }
+  if (normalized.includes("wallet not ready") || normalized.includes("listunspent failed")) {
+    return "The Bitcoin wallet is still warming up. Open Bitcoin Node, wait for it to finish loading, then try again.";
+  }
+  if (normalized.includes("timed out") || normalized.includes("timeout")) {
+    return "The Bitcoin node request timed out. Open Bitcoin Node first or wait a moment, then retry.";
+  }
+  if (normalized.includes("signrawtransactionwithwallet failed") || normalized.includes("transaction signing incomplete")) {
+    return "The node could not sign the transaction. Open Bitcoin Node, make sure the wallet is ready, then retry.";
+  }
+  if (normalized.includes("createmultisig failed") || normalized.includes("createrawtransaction failed")) {
+    return "The generator could not build the funding transaction. Retry after the Bitcoin node is ready.";
+  }
+  return message;
+}
+
 export default function TxGenerator({ config, theme, sessionToken, isCompleted, onCompleted, getProgress }: TxGeneratorProps) {
   const dark = theme === "dark";
   const isUtility = config.type === "utility";
@@ -47,6 +68,7 @@ export default function TxGenerator({ config, theme, sessionToken, isCompleted, 
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [runningHint, setRunningHint] = useState<string | null>(null);
 
   // Track whether we've already submitted completion this session
   const completionSubmittedRef = useRef(false);
@@ -83,6 +105,30 @@ export default function TxGenerator({ config, theme, sessionToken, isCompleted, 
     }
   }, [config.notebookSaves]);
 
+  useEffect(() => {
+    if (!running) {
+      setRunningHint(null);
+      return;
+    }
+    if (!config.execute) {
+      setRunningHint("Running the generator...");
+      return;
+    }
+
+    setRunningHint("Starting your Bitcoin node and loading its wallet...");
+    const walletTimer = window.setTimeout(() => {
+      setRunningHint("Still working. The wallet may still be warming up.");
+    }, 10_000);
+    const retryTimer = window.setTimeout(() => {
+      setRunningHint("If this takes too long, open Bitcoin Node first, wait for it to finish starting, then retry.");
+    }, 35_000);
+
+    return () => {
+      window.clearTimeout(walletTimer);
+      window.clearTimeout(retryTimer);
+    };
+  }, [running, config.execute]);
+
   const handleRun = useCallback(async () => {
     if (running) return;
     setRunning(true);
@@ -96,15 +142,27 @@ export default function TxGenerator({ config, theme, sessionToken, isCompleted, 
       if (config.execute) {
         // Hybrid execution: uses server RPC + optional Python
         const nodeRpc = async (method: string, params: unknown[]) => {
-          const res = await fetch("/api/node/rpc", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
-            },
-            body: JSON.stringify({ method, params }),
-          });
-          return res.json();
+          try {
+            const res = await fetch("/api/node/rpc", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
+              },
+              body: JSON.stringify({ method, params }),
+              signal: AbortSignal.timeout(GENERATOR_FETCH_TIMEOUT_MS),
+            });
+            const payload = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              return { error: payload.error || `${method} failed with HTTP ${res.status}` };
+            }
+            return payload;
+          } catch (err: any) {
+            if (err?.name === "TimeoutError" || err?.message?.includes("aborted due to timeout")) {
+              return { error: `${method} timed out after ${Math.round(GENERATOR_FETCH_TIMEOUT_MS / 1000)}s` };
+            }
+            return { error: err?.message || `${method} failed` };
+          }
         };
         parsed = await config.execute({ inputs, nodeRpc, runPython: runPythonCode });
       } else if (config.pythonCode) {
@@ -167,7 +225,7 @@ export default function TxGenerator({ config, theme, sessionToken, isCompleted, 
         }
       }
     } catch (err: any) {
-      setError(err.message || "Unknown error");
+      setError(getFriendlyGeneratorError(err.message || "Unknown error"));
     } finally {
       setRunning(false);
     }
@@ -338,6 +396,12 @@ export default function TxGenerator({ config, theme, sessionToken, isCompleted, 
         >
           {running ? "Generating..." : config.buttonLabel}
         </button>
+
+        {runningHint && (
+          <div className={`mt-2 text-xs ${mutedText}`}>
+            {runningHint}
+          </div>
+        )}
 
         {/* Error */}
         {error && (

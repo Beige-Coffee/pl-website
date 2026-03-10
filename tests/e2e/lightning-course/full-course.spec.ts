@@ -17,6 +17,7 @@ import {
   persistRunReport,
   recordServerSnapshot,
 } from "./helpers.ts";
+import { provisionLaunchTestLearners } from "./admin-api.ts";
 import { buildLightningCourseManifest } from "./manifest.ts";
 
 test.describe("Lightning course automation", () => {
@@ -24,15 +25,23 @@ test.describe("Lightning course automation", () => {
 
   test("completes the Lightning course like a learner", async ({ page, browser, baseURL }, testInfo) => {
     const environment = testInfo.project.name.includes("production") ? "production" : "local";
-    const claimRewards = environment === "production";
+    const claimRewards = environment === "production" && process.env.PL_CLAIM_REWARDS === "1";
     const productionCredentials = environment === "production" ? getProductionLearnerCredentials() : null;
+    const canProvisionProductionLearner = environment === "production" && !!process.env.PL_ADMIN_PASSWORD;
 
     test.skip(
-      environment === "production" && !productionCredentials,
-      "Set PL_PROD_LEARNER_EMAIL and PL_PROD_LEARNER_PASSWORD to run the production course flow."
+      environment === "production" && !productionCredentials && !canProvisionProductionLearner,
+      "Set PL_ADMIN_PASSWORD or provide PL_PROD_LEARNER_EMAIL and PL_PROD_LEARNER_PASSWORD to run the production course flow."
     );
 
-    const credentials: LearnerCredentials = productionCredentials || createLocalLearnerCredentials();
+    let credentials: LearnerCredentials = productionCredentials || createLocalLearnerCredentials();
+    if (environment === "production" && canProvisionProductionLearner) {
+      const prefix = claimRewards
+        ? (process.env.PL_LAUNCH_REWARD_PREFIX || "reward-smoke")
+        : (process.env.PL_LAUNCH_TEST_PREFIX || "course-regression");
+      const { learners } = await provisionLaunchTestLearners(baseURL, 1, prefix);
+      credentials = learners[0];
+    }
     const rewardLightningAddress = getRewardLightningAddress();
     const manifest = buildLightningCourseManifest();
 
@@ -53,23 +62,31 @@ test.describe("Lightning course automation", () => {
 
     const initialState = await fetchServerState(page);
     expect(initialState.auth.authenticated).toBe(true);
-    expect(initialState.checkpoints).toHaveLength(0);
-    expect(Object.keys(initialState.progress)).toHaveLength(0);
+    expect(initialState.checkpoints, "Launch-regression learner should start clean").toHaveLength(0);
+    expect(Object.keys(initialState.progress), "Launch-regression learner should start without saved progress").toHaveLength(0);
     if (environment === "production") {
       expect(initialState.auth.emailVerified).toBe(true);
       expect(initialState.auth.rewardClaimed).toBe(false);
-      await ensureLightningAddress(page, rewardLightningAddress);
+      if (claimRewards) {
+        await ensureLightningAddress(page, rewardLightningAddress);
+      }
     }
 
     await recordServerSnapshot(page, report, "post-auth");
 
-    const expectedCheckpointIds = new Set<string>();
-    const expectedProgressKeys = new Set<string>();
+    const expectedCheckpointIds = new Set<string>(initialState.checkpoints.map((cp) => cp.checkpointId));
+    const expectedProgressKeys = new Set<string>(Object.keys(initialState.progress));
     const midpoint = Math.floor(manifest.length / 2) - 1;
 
     for (let index = 0; index < manifest.length; index++) {
       const chapter = manifest[index];
-      const chapterReport = await completeChapter(page, chapter, claimRewards);
+      const chapterReport = await completeChapter(
+        page,
+        chapter,
+        claimRewards,
+        expectedCheckpointIds,
+        expectedProgressKeys
+      );
       report.chapters.push(chapterReport);
 
       for (const checkpointId of chapterReport.completedCheckpointIds) {

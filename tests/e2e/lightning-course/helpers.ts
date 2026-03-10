@@ -77,7 +77,7 @@ export interface CourseRunReport {
 
 export async function enableCodeMode(context: BrowserContext) {
   await context.addInitScript(() => {
-    localStorage.setItem("pl-tutorial-mode", "code");
+    localStorage.setItem("pl-ln-tutorial-mode", "code");
   });
 }
 
@@ -246,6 +246,21 @@ export async function assertChapterImagesLoaded(page: Page): Promise<number> {
   const count = await article.locator("img").count();
   if (count === 0) return 0;
 
+  await expect
+    .poll(async () => {
+      const imageStatuses = await article.locator("img").evaluateAll((elements) =>
+        elements.map((element) => ({
+          complete: (element as HTMLImageElement).complete,
+          naturalWidth: (element as HTMLImageElement).naturalWidth,
+        }))
+      );
+      return imageStatuses.every((status) => status.complete && status.naturalWidth > 0);
+    }, {
+      timeout: 20_000,
+      intervals: [500, 1000, 2000],
+    })
+    .toBe(true);
+
   const statuses = await article.locator("img").evaluateAll((elements) =>
     elements.map((element) => ({
       src: (element as HTMLImageElement).src,
@@ -315,6 +330,27 @@ async function waitForScopedRunButton(scope: Locator) {
     state: "visible",
     timeout: 120_000,
   });
+}
+
+async function triggerScopedRun(page: Page, scope: Locator) {
+  const runButton = scope.locator('button:has-text("RUN TESTS")').first();
+  const started = async () => {
+    const runningButton = scope.locator('button:has-text("RUNNING..."), button:has-text("LOADING PYTHON..."), button:has-text("DOWNLOADING PYTHON...")').first();
+    const passedBanner = scope.getByText("ALL TESTS PASSED!", { exact: true });
+    return Promise.race([
+      runningButton.waitFor({ state: "visible", timeout: 3_000 }).then(() => true).catch(() => false),
+      passedBanner.waitFor({ state: "visible", timeout: 3_000 }).then(() => true).catch(() => false),
+    ]);
+  };
+
+  await runButton.click();
+  if (await started()) return;
+
+  await runButton.focus();
+  await page.keyboard.press("Enter");
+  if (await started()) return;
+
+  throw new Error("Exercise run did not start after clicking RUN TESTS");
 }
 
 export async function completeDragDropExercise(
@@ -397,7 +433,7 @@ export async function completeExercise(
   const exercise = LIGHTNING_EXERCISES[exerciseId];
   await waitForScopedRunButton(container);
   await replaceScopedEditorContent(page, container, exercise.hints.code);
-  await clickButtonByContainedText(container, "RUN TESTS");
+  await triggerScopedRun(page, container);
   await expect(container.getByText("ALL TESTS PASSED!", { exact: true })).toBeVisible({
     timeout: 120_000,
   });
@@ -414,7 +450,7 @@ export async function completeExercise(
   }
 }
 
-export async function runTrackedGenerator(page: Page, generatorId: string) {
+export async function runTrackedGenerator(page: Page, generatorId: string): Promise<void> {
   const config = TX_GENERATORS[generatorId];
   const title = config.title;
   const card = page.locator(`text=${title}`).first().locator("..").locator("..");
@@ -430,7 +466,7 @@ export async function runTrackedGenerator(page: Page, generatorId: string) {
         page.evaluate((keys) => {
           return keys.every((key) => !!localStorage.getItem(`pl-txnotebook-${key}`));
         }, config.notebookSaves!.map((entry) => entry.key)),
-      { timeout: 20_000, intervals: [500, 1000, 2000] })
+      { timeout: 120_000, intervals: [1000, 2000, 5000] })
       .toBe(true);
   }
 
@@ -438,7 +474,7 @@ export async function runTrackedGenerator(page: Page, generatorId: string) {
     .poll(async () => {
       const state = await fetchServerState(page);
       return state.checkpoints.some((cp) => cp.checkpointId === generatorId);
-    }, { timeout: 15_000, intervals: [500, 1000, 2000] })
+    }, { timeout: 60_000, intervals: [1000, 2000, 5000] })
     .toBe(true);
 }
 
@@ -469,7 +505,9 @@ export async function completeQuiz(page: Page, claimRewards: boolean) {
 export async function completeChapter(
   page: Page,
   chapter: CourseChapterManifest,
-  claimRewards: boolean
+  claimRewards: boolean,
+  existingCheckpointIds: Set<string> = new Set(),
+  existingProgressKeys: Set<string> = new Set()
 ): Promise<CourseChapterReport> {
   await navigateToChapter(page, chapter.id);
   await assertArticleRendered(page, chapter);
@@ -486,46 +524,63 @@ export async function completeChapter(
 
   for (const block of chapter.blocks) {
     if (block.type === "drag-drop") {
-      await completeDragDropExercise(page, checkpointIndex, claimRewards);
+      if (!existingCheckpointIds.has(block.id)) {
+        await completeDragDropExercise(page, checkpointIndex, claimRewards);
+      }
       completedCheckpointIds.push(block.id);
       checkpointIndex += 1;
       continue;
     }
     if (block.type === "checkpoint") {
-      await completeSingleCheckpoint(page, checkpointIndex, block.id, claimRewards);
+      if (!existingCheckpointIds.has(block.id)) {
+        await completeSingleCheckpoint(page, checkpointIndex, block.id, claimRewards);
+      }
       completedCheckpointIds.push(block.id);
       checkpointIndex += 1;
       continue;
     }
     if (block.type === "checkpoint-group") {
-      await completeCheckpointGroup(page, checkpointIndex, block.id, block.questionIds, claimRewards);
+      const alreadyCompleted = [block.id, ...block.questionIds]
+        .every((id) => existingCheckpointIds.has(id));
+      if (!alreadyCompleted) {
+        await completeCheckpointGroup(page, checkpointIndex, block.id, block.questionIds, claimRewards);
+      }
       completedCheckpointIds.push(block.id, ...block.questionIds);
       checkpointIndex += 1;
       continue;
     }
     if (block.type === "exercises") {
       for (const exerciseId of block.exerciseIds) {
-        await completeExercise(page, exerciseIndex, exerciseId, claimRewards);
+        if (!existingCheckpointIds.has(exerciseId)) {
+          await completeExercise(page, exerciseIndex, exerciseId, claimRewards);
+        }
         completedCheckpointIds.push(exerciseId);
         exerciseIndex += 1;
       }
       continue;
     }
     if (block.type === "generator") {
-      await runTrackedGenerator(page, block.id);
-      completedCheckpointIds.push(block.id);
-      if (!nodeUsed && block.id === "gen-funding") {
+      if (!nodeUsed && block.id === "gen-funding" && !existingCheckpointIds.has(block.id)) {
         await useBitcoinNode(page);
         nodeUsed = true;
+      }
+      if (!existingCheckpointIds.has(block.id)) {
+        await runTrackedGenerator(page, block.id);
+        completedCheckpointIds.push(block.id);
+      } else {
+        completedCheckpointIds.push(block.id);
       }
     }
   }
 
   if (chapter.isReadOnly) {
-    const markReadButton = page.locator('button:has-text("MARK AS READ")').first();
-    await markReadButton.scrollIntoViewIfNeeded();
-    await markReadButton.click();
-    await assertChapterReadSaved(page, chapter.id);
+    const progressKey = `chapter-read:${chapter.id}`;
+    if (!existingProgressKeys.has(progressKey)) {
+      const markReadButton = page.locator('button:has-text("MARK AS READ")').first();
+      await markReadButton.scrollIntoViewIfNeeded();
+      await markReadButton.click();
+      await assertChapterReadSaved(page, chapter.id);
+    }
     completedProgressKeys.push(`chapter-read:${chapter.id}`);
   }
 

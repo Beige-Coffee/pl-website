@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createTestApp, resetMockStorage, getMockStorage } from "../helpers";
+import { nodeManager } from "../../server/bitcoin-node";
 
 describe("Admin routes", () => {
   let agent: any;
@@ -52,6 +53,8 @@ describe("Admin routes", () => {
       expect(res.body).toHaveProperty("pendingCount");
       expect(res.body).toHaveProperty("users");
       expect(res.body).toHaveProperty("userCount");
+      expect(res.body).toHaveProperty("nodeMetrics");
+      expect(res.body).toHaveProperty("launchControls");
     });
 
     it("returns 401 for wrong password", async () => {
@@ -123,6 +126,81 @@ describe("Admin routes", () => {
         .send({ password: "test-admin-pass", donation_id: "some-id" });
 
       expect(res.status).toBe(403);
+    });
+  });
+
+  describe("POST /api/admin/reset-checkpoints", () => {
+    it("fully resets learner launch state when checkpointId is omitted", async () => {
+      const mockStore = getMockStorage();
+      const user = await mockStore.createUserWithPassword("reset@test.com", "hash", "reset");
+      await mockStore.setUserEmailVerified(user.id, true);
+      await mockStore.setRewardClaimed(user.id);
+      await mockStore.updateUserLightningAddress(user.id, "alice@example.com");
+      await mockStore.markCheckpointCompleted(user.id, "channel-fairness");
+      await mockStore.setUserProgress(user.id, "chapter-read:intro", "1");
+      const withdrawal = await mockStore.createWithdrawal("k1-reset", user.id, "21000", "channel-fairness");
+      await mockStore.markWithdrawalPaid(withdrawal.k1, "payment-index");
+
+      const res = await agent
+        .post("/api/admin/reset-checkpoints")
+        .send({ password: "test-admin-pass", userId: user.id });
+
+      expect(res.status).toBe(200);
+      expect(await mockStore.getCompletedCheckpoints(user.id)).toEqual([]);
+      expect(await mockStore.getUserProgress(user.id)).toEqual({});
+      expect(await mockStore.getWithdrawalsByUserId(user.id)).toEqual([]);
+      expect(mockStore.users.get(user.id)?.rewardClaimed).toBe(false);
+      expect(mockStore.users.get(user.id)?.lightningAddress).toBeNull();
+    });
+
+    it("removes the checkpoint reward record when resetting one checkpoint", async () => {
+      const mockStore = getMockStorage();
+      const user = await mockStore.createUserWithPassword("single@test.com", "hash", "single");
+      await mockStore.markCheckpointCompleted(user.id, "channel-fairness");
+      const withdrawal = await mockStore.createWithdrawal("k1-single", user.id, "21000", "channel-fairness");
+      await mockStore.markWithdrawalPaid(withdrawal.k1, "payment-index");
+
+      const res = await agent
+        .post("/api/admin/reset-checkpoints")
+        .send({ password: "test-admin-pass", userId: user.id, checkpointId: "channel-fairness" });
+
+      expect(res.status).toBe(200);
+      expect(await mockStore.hasCompletedCheckpoint(user.id, "channel-fairness")).toBe(false);
+      expect(await mockStore.getPaidWithdrawalForCheckpoint(user.id, "channel-fairness")).toBeUndefined();
+    });
+  });
+
+  describe("Launch testing controls", () => {
+    it("provisions verified learner accounts", async () => {
+      const res = await agent
+        .post("/api/admin/test-learners/provision")
+        .send({ password: "test-admin-pass", prefix: "launch", count: 2 });
+
+      expect(res.status).toBe(200);
+      expect(res.body.prefix).toBe("launch");
+      expect(res.body.learners).toHaveLength(2);
+      expect(res.body.learners[0].email).toBe("launch-01@pl-launch.test");
+
+      const mockStore = getMockStorage();
+      const learner = await mockStore.getUserByEmail("launch-01@pl-launch.test");
+      expect(learner?.emailVerified).toBe(true);
+    });
+
+    it("returns node metrics and resets them", async () => {
+      const metricsRes = await agent
+        .get("/api/admin/node-metrics")
+        .query({ password: "test-admin-pass" });
+
+      expect(metricsRes.status).toBe(200);
+      expect(metricsRes.body).toHaveProperty("nodeMetrics");
+      expect(metricsRes.body).toHaveProperty("launchControls");
+
+      const resetRes = await agent
+        .post("/api/admin/node-metrics/reset")
+        .send({ password: "test-admin-pass" });
+
+      expect(resetRes.status).toBe(200);
+      expect(nodeManager.resetMetrics).toHaveBeenCalled();
     });
   });
 });

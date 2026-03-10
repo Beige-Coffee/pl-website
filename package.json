@@ -19,6 +19,9 @@
     "test:e2e:lightning-course": "playwright test -c playwright.lightning-course.config.ts",
     "test:e2e:lightning-course:local": "playwright test -c playwright.lightning-course.config.ts --project local-preflight",
     "test:e2e:lightning-course:prod": "PW_LIGHTNING_COURSE_NO_WEBSERVER=1 playwright test -c playwright.lightning-course.config.ts --project production-course",
+    "test:e2e:lightning-course:reward": "PW_LIGHTNING_COURSE_NO_WEBSERVER=1 PL_REWARD_SMOKE=1 PL_CLAIM_REWARDS=1 playwright test -c playwright.lightning-course.config.ts --project production-course tests/e2e/lightning-course/reward-smoke.spec.ts",
+    "test:lightning:load:prod": "node --import tsx tests/e2e/lightning-course/node-concurrency.ts",
+    "test:lightning:idle:prod": "node --import tsx tests/e2e/lightning-course/node-idle-cleanup.ts",
     "test:all": "vitest run && playwright test"
   },
   "notes": "removed framer motion dependency",

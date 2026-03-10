@@ -487,6 +487,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const ALLOWED_ADMIN_IP = "108.236.117.225";
   const LOCALHOST_IPS = ["127.0.0.1", "::1", "::ffff:127.0.0.1"];
 
+  function isAdminIp(ip: string): boolean {
+    return ip === ALLOWED_ADMIN_IP || LOCALHOST_IPS.includes(ip);
+  }
+
+  function hasAdminPassword(password: string | undefined): boolean {
+    const adminPw = process.env.ADMIN_PASSWORD;
+    return !!adminPw && !!password && password === adminPw;
+  }
+
+  function canBypassNodeLimiter(req: Request): boolean {
+    const enabled = process.env.PL_NODE_LOAD_TEST_BYPASS_ENABLED === "1";
+    const configuredToken = process.env.PL_NODE_LOAD_TEST_BYPASS_TOKEN || "";
+    if (!enabled || !configuredToken) return false;
+    const ip = getClientIp(req);
+    const providedToken = req.headers["x-pl-load-test-token"];
+    return isAdminIp(ip) && typeof providedToken === "string" && providedToken === configuredToken;
+  }
+
+  function sanitizeLaunchPrefix(raw: unknown): string {
+    const fallback = "launch";
+    if (typeof raw !== "string") return fallback;
+    const sanitized = raw.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+    return sanitized.slice(0, 24) || fallback;
+  }
+
+  function buildLaunchTestCredentials(prefix: string, count: number) {
+    return Array.from({ length: count }, (_, index) => {
+      const label = String(index + 1).padStart(2, "0");
+      return {
+        label,
+        email: `${prefix}-${label}@pl-launch.test`,
+        password: `Launch-${prefix}-${label}-Pass!`,
+        displayName: `${prefix}-${label}`,
+      };
+    });
+  }
+
   const QUIZ_ANSWER_KEYS: Record<string, number[]> = {
     noise: [3, 0, 2, 2, 1, 0, 3, 0, 3, 1],
     lightning: [1, 1, 1, 1, 1, 1, 2, 1, 2, 2],
@@ -1272,6 +1309,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       return res.json({
         nodeBalance,
+        nodeMetrics: nodeManager.getMetrics(),
+        launchControls: {
+          nodeLimiterBypassEnabled: process.env.PL_NODE_LOAD_TEST_BYPASS_ENABLED === "1",
+        },
         totalSatsPaid,
         pendingCount,
         recentWithdrawals,
@@ -1314,15 +1355,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/admin/reset-checkpoints", async (req: Request, res: Response) => {
     const ip = getClientIp(req);
-    if (ip !== ALLOWED_ADMIN_IP && !LOCALHOST_IPS.includes(ip)) {
+    if (!isAdminIp(ip)) {
       return res.status(403).json({ error: "Access denied" });
     }
     if (!adminLimiter.check(ip)) {
       return res.status(429).json({ error: "Too many attempts, try again later" });
     }
     const { password, userId, checkpointId } = req.body;
-    const adminPw = process.env.ADMIN_PASSWORD;
-    if (!adminPw || !password || password !== adminPw) {
+    if (!hasAdminPassword(password)) {
       return res.status(401).json({ error: "Unauthorized" });
     }
     if (!userId || typeof userId !== "string") {
@@ -1331,14 +1371,112 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       if (checkpointId && typeof checkpointId === "string") {
         await storage.deleteCheckpointCompletion(userId, checkpointId);
+        await storage.deleteWithdrawalsForCheckpoint(userId, checkpointId);
       } else {
-        await storage.deleteAllCheckpointCompletions(userId);
-        await storage.deleteAllUserProgress(userId);
+        await storage.resetUserLaunchState(userId);
       }
       return res.json({ success: true });
     } catch (err: any) {
       console.error("[admin] Error resetting checkpoints:", err.message);
       return res.status(500).json({ error: "Failed to reset checkpoints" });
+    }
+  });
+
+  app.get("/api/admin/node-metrics", async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    if (!isAdminIp(ip)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+    if (!adminLimiter.check(ip)) {
+      return res.status(429).json({ error: "Too many attempts, try again later" });
+    }
+    const { password } = req.query as Record<string, string>;
+    if (!hasAdminPassword(password)) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    return res.json({
+      nodeMetrics: nodeManager.getMetrics(),
+      launchControls: {
+        nodeLimiterBypassEnabled: process.env.PL_NODE_LOAD_TEST_BYPASS_ENABLED === "1",
+      },
+    });
+  });
+
+  app.post("/api/admin/node-metrics/reset", async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    if (!isAdminIp(ip)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+    if (!adminLimiter.check(ip)) {
+      return res.status(429).json({ error: "Too many attempts, try again later" });
+    }
+    const { password } = req.body;
+    if (!hasAdminPassword(password)) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    nodeManager.resetMetrics();
+    return res.json({ success: true });
+  });
+
+  app.post("/api/admin/test-learners/provision", async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    if (!isAdminIp(ip)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+    if (!adminLimiter.check(ip)) {
+      return res.status(429).json({ error: "Too many attempts, try again later" });
+    }
+
+    const { password, count, prefix } = req.body;
+    if (!hasAdminPassword(password)) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const learnerCount = typeof count === "number" && Number.isInteger(count) ? count : 5;
+    if (learnerCount < 1 || learnerCount > 50) {
+      return res.status(400).json({ error: "count must be an integer between 1 and 50" });
+    }
+
+    const launchPrefix = sanitizeLaunchPrefix(prefix);
+    const credentials = buildLaunchTestCredentials(launchPrefix, learnerCount);
+
+    try {
+      const learners = await Promise.all(credentials.map(async (entry) => {
+        const passwordHash = await bcrypt.hash(entry.password, 10);
+        const existing = await storage.getUserByEmail(entry.email);
+        if (existing) {
+          await storage.updateUserPassword(existing.id, passwordHash, entry.displayName);
+          await storage.setUserEmailVerified(existing.id, true);
+          await storage.resetUserLaunchState(existing.id);
+          return {
+            userId: existing.id,
+            email: entry.email,
+            password: entry.password,
+            displayName: entry.displayName,
+            created: false,
+          };
+        }
+
+        const user = await storage.createUserWithPassword(entry.email, passwordHash, entry.displayName);
+        await storage.setUserEmailVerified(user.id, true);
+        await storage.resetUserLaunchState(user.id);
+        return {
+          userId: user.id,
+          email: entry.email,
+          password: entry.password,
+          displayName: entry.displayName,
+          created: true,
+        };
+      }));
+
+      return res.json({
+        prefix: launchPrefix,
+        count: learnerCount,
+        learners,
+      });
+    } catch (err: any) {
+      console.error("[admin] Error provisioning test learners:", err.message);
+      return res.status(500).json({ error: "Failed to provision test learners" });
     }
   });
 
@@ -1530,6 +1668,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const nodeLimiter = new RateLimiter(30, 10_000);
 
   app.get("/api/node/status", async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    const bypass = canBypassNodeLimiter(req);
+    if (!bypass && !nodeLimiter.check(ip)) {
+      return res.status(429).json({ error: "Too many requests" });
+    }
+    if (bypass) {
+      nodeManager.noteLimiterBypass();
+    }
     try {
       const user = await getAuthUser(req);
       if (!user) return res.status(401).json({ error: "Not authenticated" });
@@ -1555,8 +1701,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/node/exec", async (req: Request, res: Response) => {
     const ip = getClientIp(req);
-    if (!nodeLimiter.check(ip)) {
+    const bypass = canBypassNodeLimiter(req);
+    if (!bypass && !nodeLimiter.check(ip)) {
       return res.status(429).json({ error: "Too many requests" });
+    }
+    if (bypass) {
+      nodeManager.noteLimiterBypass();
     }
 
     try {
@@ -1578,8 +1728,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/node/rpc", async (req: Request, res: Response) => {
     const ip = getClientIp(req);
-    if (!nodeLimiter.check(ip)) {
+    const bypass = canBypassNodeLimiter(req);
+    if (!bypass && !nodeLimiter.check(ip)) {
       return res.status(429).json({ error: "Too many requests" });
+    }
+    if (bypass) {
+      nodeManager.noteLimiterBypass();
     }
 
     try {
@@ -1598,7 +1752,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json({ result });
     } catch (err: any) {
       const status = err.message?.includes("busy") ? 503 : 500;
-      return res.json({ error: err.message });
+      return res.status(status).json({ error: err.message });
     }
   });
 

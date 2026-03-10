@@ -23,6 +23,35 @@ interface RpcResponse {
   id: string;
 }
 
+interface MetricBucket {
+  count: number;
+  successCount: number;
+  failureCount: number;
+  timeoutCount: number;
+  totalMs: number;
+  maxMs: number;
+  lastMs: number;
+}
+
+interface MetricSummary extends MetricBucket {
+  avgMs: number;
+}
+
+export interface NodeMetricsSnapshot {
+  activeNodes: number;
+  maxConcurrent: number;
+  idleTimeoutMs: number;
+  limiterBypassCount: number;
+  startupFailures: number;
+  walletReadyFailures: number;
+  cleanup: {
+    idleStops: number;
+    staleDirsRemoved: number;
+  };
+  provision: MetricSummary;
+  rpc: Record<string, MetricSummary>;
+}
+
 // ─── Constants ──────────────────────────────────────────────────────────────
 
 const BASE_DIR = join(process.cwd(), ".local");
@@ -62,6 +91,25 @@ const BLOCKED_COMMANDS = new Set([
   "backupwallet",   // no filesystem access needed
 ]);
 
+function createMetricBucket(): MetricBucket {
+  return {
+    count: 0,
+    successCount: 0,
+    failureCount: 0,
+    timeoutCount: 0,
+    totalMs: 0,
+    maxMs: 0,
+    lastMs: 0,
+  };
+}
+
+function summarizeMetric(bucket: MetricBucket): MetricSummary {
+  return {
+    ...bucket,
+    avgMs: bucket.count > 0 ? Math.round(bucket.totalMs / bucket.count) : 0,
+  };
+}
+
 // ─── NodeManager Singleton ──────────────────────────────────────────────────
 
 class NodeManager {
@@ -71,6 +119,74 @@ class NodeManager {
   private bitcoindPath: string | null = null;
   private binaryReady = false;
   private binaryPromise: Promise<void> | null = null;
+  private metrics = {
+    provision: createMetricBucket(),
+    rpc: new Map<string, MetricBucket>(),
+    cleanup: {
+      idleStops: 0,
+      staleDirsRemoved: 0,
+    },
+    limiterBypassCount: 0,
+    startupFailures: 0,
+    walletReadyFailures: 0,
+  };
+
+  private recordMetric(bucket: MetricBucket, durationMs: number, success: boolean, timedOut: boolean) {
+    bucket.count += 1;
+    bucket.totalMs += durationMs;
+    bucket.lastMs = durationMs;
+    bucket.maxMs = Math.max(bucket.maxMs, durationMs);
+    if (success) {
+      bucket.successCount += 1;
+      return;
+    }
+    bucket.failureCount += 1;
+    if (timedOut) {
+      bucket.timeoutCount += 1;
+    }
+  }
+
+  private recordRpcMetric(method: string, durationMs: number, success: boolean, timedOut: boolean) {
+    const bucket = this.metrics.rpc.get(method) ?? createMetricBucket();
+    this.recordMetric(bucket, durationMs, success, timedOut);
+    this.metrics.rpc.set(method, bucket);
+  }
+
+  noteLimiterBypass(): void {
+    this.metrics.limiterBypassCount += 1;
+  }
+
+  resetMetrics(): void {
+    this.metrics = {
+      provision: createMetricBucket(),
+      rpc: new Map<string, MetricBucket>(),
+      cleanup: {
+        idleStops: 0,
+        staleDirsRemoved: 0,
+      },
+      limiterBypassCount: 0,
+      startupFailures: 0,
+      walletReadyFailures: 0,
+    };
+  }
+
+  getMetrics(): NodeMetricsSnapshot {
+    const rpc: Record<string, MetricSummary> = {};
+    for (const [method, bucket] of Array.from(this.metrics.rpc.entries())) {
+      rpc[method] = summarizeMetric(bucket);
+    }
+    return {
+      activeNodes: this.instances.size,
+      maxConcurrent: MAX_CONCURRENT,
+      idleTimeoutMs: IDLE_TIMEOUT_MS,
+      limiterBypassCount: this.metrics.limiterBypassCount,
+      startupFailures: this.metrics.startupFailures,
+      walletReadyFailures: this.metrics.walletReadyFailures,
+      cleanup: { ...this.metrics.cleanup },
+      provision: summarizeMetric(this.metrics.provision),
+      rpc,
+    };
+  }
 
   async ensureBitcoindBinary(): Promise<void> {
     if (this.binaryReady && this.bitcoindPath) return;
@@ -186,6 +302,9 @@ class NodeManager {
       existing.lastActivity = Date.now();
       return existing;
     }
+    if (existing && !existing.ready) {
+      throw new Error("Node is still starting, try again in a few seconds");
+    }
 
     if (this.instances.size >= MAX_CONCURRENT) {
       throw new Error("Server busy, try again in a few minutes");
@@ -207,6 +326,7 @@ class NodeManager {
 
     const rpcPort = await this.allocatePort();
     const p2pPort = await this.allocatePort();
+    const provisionStartedAt = Date.now();
 
     const args = [
       `-datadir=${dataDir}`,
@@ -261,11 +381,29 @@ class NodeManager {
       if (stderrBuf.length > 4096) stderrBuf = stderrBuf.slice(-2048);
     });
 
-    await this._waitForRpc(instance);
-    await this._ensureOutOfIBD(instance);
-    await this._waitForWallet(instance);
-    instance.ready = true;
-    return instance;
+    try {
+      await this._waitForRpc(instance);
+      await this._ensureOutOfIBD(instance);
+      await this._waitForWallet(instance);
+      instance.ready = true;
+      this.recordMetric(this.metrics.provision, Date.now() - provisionStartedAt, true, false);
+      return instance;
+    } catch (err: any) {
+      const message = err?.message || "Unknown node startup error";
+      if (/wallet/i.test(message)) {
+        this.metrics.walletReadyFailures += 1;
+      } else {
+        this.metrics.startupFailures += 1;
+      }
+      this.recordMetric(
+        this.metrics.provision,
+        Date.now() - provisionStartedAt,
+        false,
+        /timed out|timeout/i.test(message)
+      );
+      await this.stop(userId);
+      throw err;
+    }
   }
 
   private async _waitForRpc(instance: NodeInstance, maxWaitMs = 30_000): Promise<void> {
@@ -318,7 +456,14 @@ class NodeManager {
     throw new Error("Wallet not ready after " + (maxWaitMs / 1000) + "s");
   }
 
-  private async _rpcCall(port: number, method: string, params: unknown[]): Promise<unknown> {
+  private async _rpcCall(
+    port: number,
+    method: string,
+    params: unknown[],
+    recordMetric = true,
+    timeoutOverrideMs?: number
+  ): Promise<unknown> {
+    const startedAt = Date.now();
     const body = JSON.stringify({
       jsonrpc: "1.0",
       id: "plrpc",
@@ -326,7 +471,7 @@ class NodeManager {
       params,
     });
 
-    const timeoutMs = RPC_TIMEOUT_OVERRIDES_MS[method] ?? DEFAULT_RPC_TIMEOUT_MS;
+    const timeoutMs = timeoutOverrideMs ?? RPC_TIMEOUT_OVERRIDES_MS[method] ?? DEFAULT_RPC_TIMEOUT_MS;
     let res: Response;
     try {
       res = await fetch(`http://127.0.0.1:${port}`, {
@@ -339,6 +484,9 @@ class NodeManager {
         signal: AbortSignal.timeout(timeoutMs),
       });
     } catch (err: any) {
+      if (recordMetric) {
+        this.recordRpcMetric(method, Date.now() - startedAt, false, true);
+      }
       if (err?.name === "TimeoutError" || err?.message?.includes("aborted due to timeout")) {
         throw new Error(`${method} timed out after ${Math.round(timeoutMs / 1000)}s`);
       }
@@ -347,33 +495,19 @@ class NodeManager {
 
     const data = (await res.json()) as RpcResponse;
     if (data.error) {
+      if (recordMetric) {
+        this.recordRpcMetric(method, Date.now() - startedAt, false, false);
+      }
       throw new Error(data.error.message);
+    }
+    if (recordMetric) {
+      this.recordRpcMetric(method, Date.now() - startedAt, true, false);
     }
     return data.result;
   }
 
   private async _rpcCallWithTimeout(port: number, method: string, params: unknown[], timeoutMs: number): Promise<unknown> {
-    const body = JSON.stringify({ jsonrpc: "1.0", id: "plrpc", method, params });
-    let res: Response;
-    try {
-      res = await fetch(`http://127.0.0.1:${port}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: "Basic " + Buffer.from(`${RPC_USER}:${RPC_PASS}`).toString("base64"),
-        },
-        body,
-        signal: AbortSignal.timeout(timeoutMs),
-      });
-    } catch (err: any) {
-      if (err?.name === "TimeoutError" || err?.message?.includes("aborted due to timeout")) {
-        throw new Error(`${method} timed out after ${Math.round(timeoutMs / 1000)}s`);
-      }
-      throw err;
-    }
-    const data = (await res.json()) as RpcResponse;
-    if (data.error) throw new Error(data.error.message);
-    return data.result;
+    return this._rpcCall(port, method, params, false, timeoutMs);
   }
 
   async rpc(userId: UserId, method: string, params: unknown[]): Promise<unknown> {
@@ -523,6 +657,7 @@ class NodeManager {
     this.instances.forEach((instance, userId) => {
       if (now - instance.lastActivity > IDLE_TIMEOUT_MS) {
         console.log("[node] Stopping idle node for user", userId);
+        this.metrics.cleanup.idleStops += 1;
         this.stop(userId);
       }
     });
@@ -541,6 +676,7 @@ class NodeManager {
           if (userIdMatch && !this.instances.has(parseInt(userIdMatch[1]!, 10))) {
             console.log("[node] Removing stale data dir:", dir);
             rmSync(fullPath, { recursive: true });
+            this.metrics.cleanup.staleDirsRemoved += 1;
           }
         }
       }

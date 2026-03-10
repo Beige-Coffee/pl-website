@@ -129,5 +129,28 @@ describe("Node routes", () => {
 
       expect(res.status).toBe(400);
     });
+
+    it("allows controlled limiter bypass with the launch-test token", async () => {
+      process.env.PL_NODE_LOAD_TEST_BYPASS_ENABLED = "1";
+      process.env.PL_NODE_LOAD_TEST_BYPASS_TOKEN = "test-load-token";
+      try {
+        const { sessionToken } = await createAuthenticatedUser(agent);
+        const responses = await Promise.all(
+          Array.from({ length: 35 }, () =>
+            agent
+              .post("/api/node/rpc")
+              .set(authHeader(sessionToken))
+              .set("x-pl-load-test-token", "test-load-token")
+              .send({ method: "getblockcount", params: [] })
+          )
+        );
+
+        expect(responses.every((res: any) => res.status === 200)).toBe(true);
+        expect(nodeManager.noteLimiterBypass).toHaveBeenCalled();
+      } finally {
+        delete process.env.PL_NODE_LOAD_TEST_BYPASS_ENABLED;
+        delete process.env.PL_NODE_LOAD_TEST_BYPASS_TOKEN;
+      }
+    });
   });
 });

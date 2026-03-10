@@ -18,8 +18,11 @@ export interface IStorage {
   createSession(userId: string): Promise<Session>;
   getSession(token: string): Promise<Session | undefined>;
   deleteSession(token: string): Promise<void>;
+  deleteSessionsByUserId(userId: string): Promise<void>;
   getUserBySessionToken(token: string): Promise<User | undefined>;
   setRewardClaimed(userId: string): Promise<void>;
+  setUserEmailVerified(userId: string, emailVerified: boolean): Promise<void>;
+  updateUserPassword(userId: string, passwordHash: string, displayName?: string | null): Promise<void>;
   updateUserLightningAddress(userId: string, lightningAddress: string | null): Promise<void>;
   setVerificationToken(userId: string, token: string, expiry: Date): Promise<void>;
   verifyEmail(token: string): Promise<User | undefined>;
@@ -39,6 +42,8 @@ export interface IStorage {
   markCheckpointCompleted(userId: string, checkpointId: string): Promise<void>;
   deleteCheckpointCompletion(userId: string, checkpointId: string): Promise<void>;
   deleteAllCheckpointCompletions(userId: string): Promise<void>;
+  deleteWithdrawalsForCheckpoint(userId: string, checkpointId: string): Promise<void>;
+  resetUserLaunchState(userId: string): Promise<void>;
   getCompletedCheckpoints(userId: string): Promise<{ checkpointId: string; amountSats: number; paidAt: string }[]>;
   getPaidWithdrawalForCheckpoint(userId: string, checkpointId: string): Promise<LnurlWithdrawal | undefined>;
   cancelPendingWithdrawalsForCheckpoint(userId: string, checkpointId: string): Promise<void>;
@@ -104,6 +109,10 @@ export class DatabaseStorage implements IStorage {
     await db.delete(sessions).where(eq(sessions.token, token));
   }
 
+  async deleteSessionsByUserId(userId: string): Promise<void> {
+    await db.delete(sessions).where(eq(sessions.userId, userId));
+  }
+
   async getUserBySessionToken(token: string): Promise<User | undefined> {
     const [session] = await db.select().from(sessions).where(eq(sessions.token, token));
     if (!session) return undefined;
@@ -113,6 +122,24 @@ export class DatabaseStorage implements IStorage {
 
   async setRewardClaimed(userId: string): Promise<void> {
     await db.update(users).set({ rewardClaimed: true }).where(eq(users.id, userId));
+  }
+
+  async setUserEmailVerified(userId: string, emailVerified: boolean): Promise<void> {
+    await db.update(users)
+      .set({
+        emailVerified,
+        verificationToken: null,
+        verificationExpiry: null,
+      })
+      .where(eq(users.id, userId));
+  }
+
+  async updateUserPassword(userId: string, passwordHash: string, displayName?: string | null): Promise<void> {
+    const values: { passwordHash: string; displayName?: string | null } = { passwordHash };
+    if (displayName !== undefined) {
+      values.displayName = displayName;
+    }
+    await db.update(users).set(values).where(eq(users.id, userId));
   }
 
   async updateUserLightningAddress(userId: string, lightningAddress: string | null): Promise<void> {
@@ -227,6 +254,31 @@ export class DatabaseStorage implements IStorage {
   async deleteAllCheckpointCompletions(userId: string): Promise<void> {
     await db.delete(checkpointCompletions)
       .where(eq(checkpointCompletions.userId, userId));
+  }
+
+  async deleteWithdrawalsForCheckpoint(userId: string, checkpointId: string): Promise<void> {
+    await db.delete(lnurlWithdrawals)
+      .where(
+        and(
+          eq(lnurlWithdrawals.userId, userId),
+          eq(lnurlWithdrawals.checkpointId, checkpointId)
+        )
+      );
+  }
+
+  async resetUserLaunchState(userId: string): Promise<void> {
+    await Promise.all([
+      db.delete(checkpointCompletions).where(eq(checkpointCompletions.userId, userId)),
+      db.delete(userProgress).where(eq(userProgress.userId, userId)),
+      db.delete(lnurlWithdrawals).where(eq(lnurlWithdrawals.userId, userId)),
+      db.delete(sessions).where(eq(sessions.userId, userId)),
+      db.update(users)
+        .set({
+          rewardClaimed: false,
+          lightningAddress: null,
+        })
+        .where(eq(users.id, userId)),
+    ]);
   }
 
   async getCompletedCheckpoints(userId: string): Promise<{ checkpointId: string; amountSats: number; paidAt: string }[]> {
