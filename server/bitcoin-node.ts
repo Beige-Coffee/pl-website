@@ -40,6 +40,7 @@ const MIN_PORT = 18500;
 const MAX_PORT = 18999;
 const DEFAULT_RPC_TIMEOUT_MS = 30_000;
 const RPC_TIMEOUT_OVERRIDES_MS: Record<string, number> = {
+  listunspent: 120_000,
   fundrawtransaction: 120_000,
   signrawtransactionwithwallet: 60_000,
   loadwallet: 60_000,
