@@ -46,6 +46,8 @@ const RPC_TIMEOUT_OVERRIDES_MS: Record<string, number> = {
   loadwallet: 60_000,
   createwallet: 60_000,
   rescanblockchain: 300_000,
+  getwalletinfo: 10_000,
+  generatetoaddress: 120_000,
 };
 
 const BLOCKED_COMMANDS = new Set([
@@ -272,12 +274,53 @@ class NodeManager {
     while (Date.now() - start < maxWaitMs) {
       try {
         await this._rpcCall(instance.rpcPort, "getblockchaininfo", []);
-        return;
+        break;
       } catch {
         await new Promise((r) => setTimeout(r, 300));
       }
     }
-    throw new Error("bitcoind failed to start within timeout");
+    if (Date.now() - start >= maxWaitMs) {
+      throw new Error("bitcoind failed to start within timeout");
+    }
+
+    await this._ensureOutOfIBD(instance);
+    await this._waitForWallet(instance);
+  }
+
+  private async _ensureOutOfIBD(instance: NodeInstance): Promise<void> {
+    try {
+      const info = (await this._rpcCall(instance.rpcPort, "getblockchaininfo", [])) as any;
+      if (!info?.initialblockdownload) return;
+
+      console.log("[node] Node in IBD mode — mining block with mocktime to exit...");
+
+      const now = Math.floor(Date.now() / 1000);
+      await this._rpcCall(instance.rpcPort, "setmocktime", [now]);
+
+      const THROWAWAY_ADDR = "bcrt1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqdku202";
+      await this._rpcCall(instance.rpcPort, "generatetoaddress", [1, THROWAWAY_ADDR]);
+
+      await this._rpcCall(instance.rpcPort, "setmocktime", [0]);
+
+      const info2 = (await this._rpcCall(instance.rpcPort, "getblockchaininfo", [])) as any;
+      console.log("[node] After mining: IBD =", info2?.initialblockdownload, "height =", info2?.blocks);
+    } catch (err: any) {
+      console.log("[node] IBD exit attempt failed:", err.message);
+    }
+  }
+
+  private async _waitForWallet(instance: NodeInstance, maxWaitMs = 60_000): Promise<void> {
+    const start = Date.now();
+    while (Date.now() - start < maxWaitMs) {
+      try {
+        await this._rpcCall(instance.rpcPort, "getwalletinfo", []);
+        console.log("[node] Wallet ready for user", instance.userId);
+        return;
+      } catch {
+        await new Promise((r) => setTimeout(r, 500));
+      }
+    }
+    console.log("[node] Wallet not ready after", maxWaitMs / 1000, "s — continuing anyway");
   }
 
   private async _rpcCall(port: number, method: string, params: unknown[]): Promise<unknown> {
