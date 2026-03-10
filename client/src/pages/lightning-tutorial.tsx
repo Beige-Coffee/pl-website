@@ -23,6 +23,7 @@ import TxGenerator from "../components/TxGenerator";
 import FundingTxDiagram from "../components/FundingTxDiagram";
 import ScriptDebugger from "../components/ScriptDebugger/ScriptDebugger";
 import FeedbackWidget from "../components/FeedbackWidget";
+import AnnotatedTransaction from "../components/AnnotatedTransaction";
 import NotebookRef from "../components/NotebookRef";
 import { TX_GENERATORS } from "../data/tx-generators";
 import { Tooltip, TooltipTrigger, TooltipContent } from "../components/ui/tooltip";
@@ -3707,6 +3708,9 @@ function ChapterContent({
           "code-exercise": () => {
             // Individual code-exercise tags are now handled by code-intro
             return null;
+          },
+          "annotated-tx": () => {
+            return <AnnotatedTransaction theme={theme} />;
           },
           "checkpoint-group": ({ id, ids }: any) => {
             const groupId = String(id || "");
