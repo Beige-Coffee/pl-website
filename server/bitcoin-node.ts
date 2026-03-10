@@ -1,5 +1,6 @@
 import { spawn, execSync, type ChildProcess } from "child_process";
 import { existsSync, mkdirSync, cpSync, rmSync, readdirSync, statSync } from "fs";
+import { createServer } from "net";
 import { join } from "path";
 import { randomInt } from "crypto";
 
@@ -37,6 +38,14 @@ const RPC_USER = "pl";
 const RPC_PASS = "pldevpass";
 const MIN_PORT = 18500;
 const MAX_PORT = 18999;
+const DEFAULT_RPC_TIMEOUT_MS = 30_000;
+const RPC_TIMEOUT_OVERRIDES_MS: Record<string, number> = {
+  fundrawtransaction: 120_000,
+  signrawtransactionwithwallet: 60_000,
+  loadwallet: 60_000,
+  createwallet: 60_000,
+  rescanblockchain: 300_000,
+};
 
 const BLOCKED_COMMANDS = new Set([
   "stop",           // would kill the node process
@@ -145,13 +154,25 @@ class NodeManager {
     }
   }
 
-  private allocatePort(): number {
+  private async isPortAvailable(port: number): Promise<boolean> {
+    return new Promise((resolve) => {
+      const server = createServer();
+      server.unref();
+      server.once("error", () => resolve(false));
+      server.once("listening", () => {
+        server.close(() => resolve(true));
+      });
+      server.listen(port, "127.0.0.1");
+    });
+  }
+
+  private async allocatePort(): Promise<number> {
     for (let attempt = 0; attempt < 500; attempt++) {
       const port = MIN_PORT + randomInt(MAX_PORT - MIN_PORT);
-      if (!this.usedPorts.has(port)) {
-        this.usedPorts.add(port);
-        return port;
-      }
+      if (this.usedPorts.has(port)) continue;
+      if (!(await this.isPortAvailable(port))) continue;
+      this.usedPorts.add(port);
+      return port;
     }
     throw new Error("No available ports");
   }
@@ -181,8 +202,8 @@ class NodeManager {
       }
     }
 
-    const rpcPort = this.allocatePort();
-    const p2pPort = this.allocatePort();
+    const rpcPort = await this.allocatePort();
+    const p2pPort = await this.allocatePort();
 
     const args = [
       `-datadir=${dataDir}`,
@@ -266,15 +287,24 @@ class NodeManager {
       params,
     });
 
-    const res = await fetch(`http://127.0.0.1:${port}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: "Basic " + Buffer.from(`${RPC_USER}:${RPC_PASS}`).toString("base64"),
-      },
-      body,
-      signal: AbortSignal.timeout(30_000),
-    });
+    const timeoutMs = RPC_TIMEOUT_OVERRIDES_MS[method] ?? DEFAULT_RPC_TIMEOUT_MS;
+    let res: Response;
+    try {
+      res = await fetch(`http://127.0.0.1:${port}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Basic " + Buffer.from(`${RPC_USER}:${RPC_PASS}`).toString("base64"),
+        },
+        body,
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+    } catch (err: any) {
+      if (err?.name === "TimeoutError" || err?.message?.includes("aborted due to timeout")) {
+        throw new Error(`${method} timed out after ${Math.round(timeoutMs / 1000)}s`);
+      }
+      throw err;
+    }
 
     const data = (await res.json()) as RpcResponse;
     if (data.error) {

@@ -446,16 +446,40 @@ function parsePythonOutput(stdout: string): Record<string, string> {
 }
 
 const FUNDING_AMOUNT_BTC = 0.05; // 5,000,000 sats
+const FUNDING_TX_FEE_BTC = 0.0000025; // 250 sats, fixed for the generator's simple 1-in/2-out tx
+
+interface WalletUtxo {
+  txid: string;
+  vout: number;
+  amount: number;
+  spendable?: boolean;
+  safe?: boolean;
+}
+
+function selectFundingUtxo(unspent: WalletUtxo[]): WalletUtxo | null {
+  const minAmount = FUNDING_AMOUNT_BTC + FUNDING_TX_FEE_BTC;
+  return [...unspent]
+    .filter((utxo) =>
+      typeof utxo.txid === "string" &&
+      Number.isInteger(utxo.vout) &&
+      typeof utxo.amount === "number" &&
+      utxo.amount >= minAmount &&
+      utxo.spendable !== false &&
+      utxo.safe !== false
+    )
+    .sort((a, b) => a.amount - b.amount)[0] ?? null;
+}
 
 /**
  * Funding transaction execute function.
  * Uses the student's regtest Bitcoin node to create a real, broadcastable funding tx:
  * 1. Derive Alice + Bob funding pubkeys via Python
- * 2. createmultisig → P2WSH address for the 2-of-2 multisig
- * 3. createrawtransaction → unsigned tx with the funding output
- * 4. fundrawtransaction → auto-select wallet UTXOs, add change
- * 5. signrawtransactionwithwallet → sign with the wallet's keys
- * 6. decoderawtransaction → extract txid
+ * 2. createmultisig("bech32") → native P2WSH address for the 2-of-2 multisig
+ * 3. listunspent → choose a spendable wallet UTXO explicitly
+ * 4. getrawchangeaddress → reserve a change output
+ * 5. createrawtransaction → build 1-in/2-out tx (funding output first, change second)
+ * 6. signrawtransactionwithwallet → sign with the wallet's keys
+ * 7. decoderawtransaction → extract txid
  */
 async function executeFundingGenerator(ctx: {
   inputs: Record<string, string>;
@@ -472,29 +496,42 @@ async function executeFundingGenerator(ctx: {
   const bobPub = pyOut["BOB_FUNDING_PUB"];
   if (!alicePub || !bobPub) throw new Error("Failed to derive funding pubkeys");
 
-  // Step 2: Create multisig address (P2WSH)
-  const msResult = await nodeRpc("createmultisig", [2, [alicePub, bobPub]]);
+  // Step 2: Create a native segwit multisig address so later witness-based
+  // commitment transactions spend the same output type the course teaches.
+  const msResult = await nodeRpc("createmultisig", [2, [alicePub, bobPub], "bech32"]);
   if (msResult.error) throw new Error(`createmultisig failed: ${msResult.error}`);
   const msAddress = msResult.result.address as string;
 
-  // Step 3: Create raw tx with just the funding output (no inputs yet)
+  // Step 3: Pick a confirmed wallet UTXO ourselves instead of relying on
+  // fundrawtransaction. This avoids slow wallet coin selection on production.
+  const unspentResult = await nodeRpc("listunspent", []);
+  if (unspentResult.error) throw new Error(`listunspent failed: ${unspentResult.error}`);
+  const utxo = selectFundingUtxo(unspentResult.result as WalletUtxo[]);
+  if (!utxo) {
+    throw new Error("No spendable UTXO is available. Mine a block in the Bitcoin Node, then try again.");
+  }
+
+  const changeAddressResult = await nodeRpc("getrawchangeaddress", ["bech32"]);
+  if (changeAddressResult.error) throw new Error(`getrawchangeaddress failed: ${changeAddressResult.error}`);
+  const changeAddress = changeAddressResult.result as string;
+  const changeAmount = Number((utxo.amount - FUNDING_AMOUNT_BTC - FUNDING_TX_FEE_BTC).toFixed(8));
+  if (changeAmount <= 0) {
+    throw new Error("Selected UTXO is too small to fund the channel output and fee.");
+  }
+
+  // Step 4: Build a deterministic tx with the funding output at vout 0.
   const createResult = await nodeRpc("createrawtransaction", [
-    [],
-    [{ [msAddress]: FUNDING_AMOUNT_BTC }],
+    [{ txid: utxo.txid, vout: utxo.vout }],
+    [
+      { [msAddress]: FUNDING_AMOUNT_BTC },
+      { [changeAddress]: changeAmount },
+    ],
   ]);
   if (createResult.error) throw new Error(`createrawtransaction failed: ${createResult.error}`);
-  const emptyHex = createResult.result as string;
-
-  // Step 4: Fund the transaction (wallet selects UTXOs, adds change at vout 1)
-  const fundResult = await nodeRpc("fundrawtransaction", [
-    emptyHex,
-    { changePosition: 1 },
-  ]);
-  if (fundResult.error) throw new Error(`fundrawtransaction failed: ${fundResult.error}`);
-  const fundedHex = fundResult.result.hex as string;
+  const unsignedHex = createResult.result as string;
 
   // Step 5: Sign with the wallet's keys
-  const signResult = await nodeRpc("signrawtransactionwithwallet", [fundedHex]);
+  const signResult = await nodeRpc("signrawtransactionwithwallet", [unsignedHex]);
   if (signResult.error) throw new Error(`signrawtransactionwithwallet failed: ${signResult.error}`);
   if (!signResult.result.complete) throw new Error("Transaction signing incomplete");
   const signedHex = signResult.result.hex as string;
