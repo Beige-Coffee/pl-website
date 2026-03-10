@@ -10,6 +10,7 @@ vite.config.ts.*
 # Generated test artifacts
 test-results/
 playwright-report/
+/tests/production-walkthrough.ts
 
 # Working documents (prompts, agent notes)
 AGENTS.md
