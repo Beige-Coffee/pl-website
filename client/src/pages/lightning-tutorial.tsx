@@ -215,15 +215,15 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
     explanation: "OP_CHECKMULTISIG has a well-known off-by-one bug from Bitcoin's early days: it pops one more item off the stack than the number of signatures specified. This extra item is consumed but never used. By convention, this item must be an empty byte string (OP_0). If it were any other value, modern Bitcoin nodes would reject the transaction as non-standard. This bug was never fixed because changing it would require a hard fork.",
   },
   "fee-deduction": {
-    question: "In BOLT 3 commitment transactions, who pays the transaction fee and how is it deducted?",
+    question: "In BOLT 3 commitment transactions, whose balance is reduced to pay the base commitment fee?",
     options: [
       "The fee is split equally between both parties' outputs",
-      "The fee is paid by the channel funder (initiator) by deducting it from the to_local output",
+      "The channel opener pays it by deducting it from their balance on that commitment transaction",
       "The fee is paid from a separate fee output that both parties contribute to",
       "The fee is paid by whoever broadcasts the transaction, using an additional input",
     ],
     answer: 1,
-    explanation: "BOLT 2 specifies that the channel funder (the party who initiated the channel open) is responsible for paying the commitment transaction fee. This fee is deducted from the funder's output (to_local when the funder is the local party). The counterparty's output remains unaffected by fee changes. This simplifies fee negotiation since only one party's balance changes when the feerate is updated.",
+    explanation: "In BOLT 3, the base commitment fee is paid by the channel opener. On the opener's own commitment transaction this reduces `to_local`, while on the counterparty's commitment transaction it reduces `to_remote`. The non-opener's balance stays unchanged by feerate updates.",
   },
   "static-remotekey": {
     question: "The to_remote output uses the payment_basepoint directly (P2WPKH) rather than a per-commitment derived key. Why?",

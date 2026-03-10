@@ -361,22 +361,49 @@ async function waitForScopedRunButton(scope: Locator) {
 }
 
 async function invokeScopedReactClick(scope: Locator, text: string): Promise<boolean> {
-  const button = scope.locator("button").filter({ hasText: text }).first();
-  return button.evaluate(async (el) => {
-    const reactPropsKey = Object.getOwnPropertyNames(el).find((name) => name.startsWith("__reactProps$"));
+  return scope.evaluate(async (root, buttonText) => {
+    const buttons = Array.from(root.querySelectorAll("button"));
+    const button = buttons.find((candidate) => candidate.textContent?.trim() === buttonText);
+    if (!button) return false;
+    const reactPropsKey = Object.getOwnPropertyNames(button).find((name) => name.startsWith("__reactProps$"));
     if (!reactPropsKey) return false;
-    const props = (el as Record<string, unknown>)[reactPropsKey] as { onClick?: (event: unknown) => unknown } | undefined;
+    const props = (button as Record<string, unknown>)[reactPropsKey] as { onClick?: (event: unknown) => unknown } | undefined;
     if (typeof props?.onClick !== "function") return false;
     props.onClick({
       preventDefault() {},
       stopPropagation() {},
-      currentTarget: el,
-      target: el,
+      currentTarget: button,
+      target: button,
       nativeEvent: new MouseEvent("click", { bubbles: true, cancelable: true }),
     });
     await new Promise((resolve) => setTimeout(resolve, 250));
     return true;
-  }).catch(() => false);
+  }, text).catch(() => false);
+}
+
+async function invokeVisibleReactButton(page: Page, text: string): Promise<boolean> {
+  return page.evaluate(async (buttonText) => {
+    const buttons = Array.from(document.querySelectorAll("button"));
+    const button = buttons.find((candidate) =>
+      candidate.textContent?.trim() === buttonText &&
+      candidate instanceof HTMLElement &&
+      candidate.offsetParent !== null
+    );
+    if (!button) return false;
+    const reactPropsKey = Object.getOwnPropertyNames(button).find((name) => name.startsWith("__reactProps$"));
+    if (!reactPropsKey) return false;
+    const props = (button as Record<string, unknown>)[reactPropsKey] as { onClick?: (event: unknown) => unknown } | undefined;
+    if (typeof props?.onClick !== "function") return false;
+    props.onClick({
+      preventDefault() {},
+      stopPropagation() {},
+      currentTarget: button,
+      target: button,
+      nativeEvent: new MouseEvent("click", { bubbles: true, cancelable: true }),
+    });
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    return true;
+  }, text).catch(() => false);
 }
 
 async function triggerScopedRun(page: Page, scope: Locator) {
@@ -487,21 +514,48 @@ export async function completeExercise(
 
   const container = await openExerciseContainer(page, exerciseIndex);
   await waitForScopedRunButton(container);
-  await triggerScopedRun(page, container);
-  await expect
-    .poll(async () => {
-      const body = await container.innerText();
-      const passMatch = body.match(/(\d+)\/(\d+) passed/);
-      if (passMatch && passMatch[1] === passMatch[2] && Number(passMatch[1]) > 0) {
-        return "passed";
-      }
-      const state = await fetchServerState(page);
-      if (state.checkpoints.some((cp) => cp.checkpointId === exerciseId)) {
-        return "checkpoint";
-      }
-      return null;
-    }, { timeout: 120_000, intervals: [1000, 2000, 5000] })
-    .not.toBeNull();
+  const startedState = await page.evaluate(async () => {
+    const buttons = Array.from(document.querySelectorAll("button"));
+    const button = buttons.find((candidate) =>
+      candidate.textContent?.trim() === "RUN TESTS" &&
+      candidate instanceof HTMLElement &&
+      candidate.offsetParent !== null
+    );
+    if (!button) return null;
+    const reactPropsKey = Object.getOwnPropertyNames(button).find((name) => name.startsWith("__reactProps$"));
+    if (!reactPropsKey) return null;
+    const props = (button as Record<string, unknown>)[reactPropsKey] as { onClick?: (event: unknown) => unknown } | undefined;
+    if (typeof props?.onClick !== "function") return null;
+    props.onClick({
+      preventDefault() {},
+      stopPropagation() {},
+      currentTarget: button,
+      target: button,
+      nativeEvent: new MouseEvent("click", { bubbles: true, cancelable: true }),
+    });
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    return button.textContent?.trim() || null;
+  });
+  if (!startedState || startedState === "RUN TESTS") {
+    await triggerScopedRun(page, container);
+  }
+  let completed = false;
+  let lastBody = "";
+  for (let attempt = 0; attempt < 24; attempt++) {
+    await page.waitForTimeout(5_000);
+    lastBody = await container.innerText();
+    const passMatch = lastBody.match(/(\d+)\/(\d+) passed/);
+    if (passMatch && passMatch[1] === passMatch[2] && Number(passMatch[1]) > 0) {
+      completed = true;
+      break;
+    }
+    const state = await fetchServerState(page);
+    if (state.checkpoints.some((cp) => cp.checkpointId === exerciseId)) {
+      completed = true;
+      break;
+    }
+  }
+  expect(completed, `Exercise ${exerciseId} did not complete. Last card state:\n${lastBody}`).toBe(true);
 
   await expect
     .poll(async () => {

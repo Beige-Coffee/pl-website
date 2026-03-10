@@ -199,7 +199,7 @@ def test_script_structure():
     Uses CMutableTransaction to build a version 2 transaction with:
     - One input spending the given UTXO (sequence 0xffffffff)
     - One P2WSH output: CScript([OP_0, SHA256(funding_script)])
-    - nVersion = 2 (required for BIP 68 relative timelocks)
+    - nVersion = 2 (used for consistency with later Lightning transactions that enforce BIP 68 relative timelocks)
 
     Use these python-bitcoinlib types:
     - CTxIn(COutPoint(txid_bytes, vout)) for the input
@@ -2482,37 +2482,52 @@ def test_bolt3_vector_third_received_htlc():
     testCode: `
 def test_bolt3_vector():
     km = ChannelKeyManager(bytes([0x01] * 32))
-    km.htlc_basepoint_secret = bytes.fromhex("bb13b121cdc357cd2e608b0aea294afca36e2b34cf958e2e6451a2f274694491")
     per_cp = bytes.fromhex("025f7117a78150fe2ef97db7cfc83bd57b2e2c0d0dd25eaf467a4a1c2a45ce1486")
     ck = CommitmentKeys(per_cp, bytes(33), bytes(33), bytes(33), bytes(33))
     unsigned_tx = CMutableTransaction.deserialize(bytes.fromhex("0200000001ab84ff284f162cfbfef241f853b47d4368d171f9e2a1445160cd591c4c7d882b01000000000000000001d0070000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80ef6010000"))
     htlc_script = bytes.fromhex("76a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c820120876475527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae67a914b43e1b38138a41b37f7cd9a1d274bc63e3a9b5d188ac6868")
     remote_sig = bytes.fromhex("30440220649fe8b20e67e46cbb0d09b4acea87dbec001b39b08dee7bdd0b1f03922a8640022037c462dff79df501cecfdb12ea7f4de91f99230bb544726f6e04527b1f89600401")
-    result = finalize_htlc_timeout(km, ck, unsigned_tx, htlc_script, 2000, remote_sig)
+    local_htlc_privkey = bytes.fromhex("bb13b121cdc357cd2e608b0aea294afca36e2b34cf958e2e6451a2f274694491")
+    original_derive_privkey = derive_privkey
+    globals()['derive_privkey'] = lambda _basepoint_secret, _per_cp: local_htlc_privkey
+    try:
+        result = finalize_htlc_timeout(km, ck, unsigned_tx, htlc_script, 2000, remote_sig)
+    finally:
+        globals()['derive_privkey'] = original_derive_privkey
     expected_hex = "02000000000101ab84ff284f162cfbfef241f853b47d4368d171f9e2a1445160cd591c4c7d882b01000000000000000001d0070000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e05004730440220649fe8b20e67e46cbb0d09b4acea87dbec001b39b08dee7bdd0b1f03922a8640022037c462dff79df501cecfdb12ea7f4de91f99230bb544726f6e04527b1f89600401483045022100803159dee7935dba4a1d36a61055ce8fd62caa528573cc221ae288515405a252022029c59e7cffce374fe860100a4a63787e105c3cf5156d40b12dd53ff55ac8cf3f01008576a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c820120876475527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae67a914b43e1b38138a41b37f7cd9a1d274bc63e3a9b5d188ac6868f6010000"
     assert result.serialize().hex() == expected_hex, "Finalized HTLC timeout transaction should match the BOLT 3 vector"
 
 def test_second_bolt3_timeout_vector():
     km = ChannelKeyManager(bytes([0x01] * 32))
-    km.htlc_basepoint_secret = bytes.fromhex("bb13b121cdc357cd2e608b0aea294afca36e2b34cf958e2e6451a2f274694491")
     per_cp = bytes.fromhex("025f7117a78150fe2ef97db7cfc83bd57b2e2c0d0dd25eaf467a4a1c2a45ce1486")
     ck = CommitmentKeys(per_cp, bytes(33), bytes(33), bytes(33), bytes(33))
     unsigned_tx = CMutableTransaction.deserialize(bytes.fromhex("0200000001ab84ff284f162cfbfef241f853b47d4368d171f9e2a1445160cd591c4c7d882b03000000000000000001b80b0000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80ef7010000"))
     htlc_script = bytes.fromhex("76a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c820120876475527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae67a9148a486ff2e31d6158bf39e2608864d63fefd09d5b88ac6868")
     remote_sig = bytes.fromhex("304402207bcbf4f60a9829b05d2dbab84ed593e0291836be715dc7db6b72a64caf646af802201e489a5a84f7c5cc130398b841d138d031a5137ac8f4c49c770a4959dc3c136301")
-    result = finalize_htlc_timeout(km, ck, unsigned_tx, htlc_script, 3000, remote_sig)
+    local_htlc_privkey = bytes.fromhex("bb13b121cdc357cd2e608b0aea294afca36e2b34cf958e2e6451a2f274694491")
+    original_derive_privkey = derive_privkey
+    globals()['derive_privkey'] = lambda _basepoint_secret, _per_cp: local_htlc_privkey
+    try:
+        result = finalize_htlc_timeout(km, ck, unsigned_tx, htlc_script, 3000, remote_sig)
+    finally:
+        globals()['derive_privkey'] = original_derive_privkey
     expected_hex = "02000000000101ab84ff284f162cfbfef241f853b47d4368d171f9e2a1445160cd591c4c7d882b03000000000000000001b80b0000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e050047304402207bcbf4f60a9829b05d2dbab84ed593e0291836be715dc7db6b72a64caf646af802201e489a5a84f7c5cc130398b841d138d031a5137ac8f4c49c770a4959dc3c13630147304402203121d9b9c055f354304b016a36662ee99e1110d9501cb271b087ddb6f382c2c80220549882f3f3b78d9c492de47543cb9a697cecc493174726146536c5954dac748701008576a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c820120876475527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae67a9148a486ff2e31d6158bf39e2608864d63fefd09d5b88ac6868f7010000"
     assert result.serialize().hex() == expected_hex, "Second finalized HTLC timeout transaction should match the BOLT 3 vector"
 
 def test_witness_shape():
     km = ChannelKeyManager(bytes([0x01] * 32))
-    km.htlc_basepoint_secret = bytes.fromhex("bb13b121cdc357cd2e608b0aea294afca36e2b34cf958e2e6451a2f274694491")
     per_cp = bytes.fromhex("025f7117a78150fe2ef97db7cfc83bd57b2e2c0d0dd25eaf467a4a1c2a45ce1486")
     ck = CommitmentKeys(per_cp, bytes(33), bytes(33), bytes(33), bytes(33))
     unsigned_tx = CMutableTransaction.deserialize(bytes.fromhex("0200000001ab84ff284f162cfbfef241f853b47d4368d171f9e2a1445160cd591c4c7d882b01000000000000000001d0070000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80ef6010000"))
     htlc_script = bytes.fromhex("76a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c820120876475527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae67a914b43e1b38138a41b37f7cd9a1d274bc63e3a9b5d188ac6868")
     remote_sig = bytes.fromhex("30440220649fe8b20e67e46cbb0d09b4acea87dbec001b39b08dee7bdd0b1f03922a8640022037c462dff79df501cecfdb12ea7f4de91f99230bb544726f6e04527b1f89600401")
-    result = finalize_htlc_timeout(km, ck, unsigned_tx, htlc_script, 2000, remote_sig)
+    local_htlc_privkey = bytes.fromhex("bb13b121cdc357cd2e608b0aea294afca36e2b34cf958e2e6451a2f274694491")
+    original_derive_privkey = derive_privkey
+    globals()['derive_privkey'] = lambda _basepoint_secret, _per_cp: local_htlc_privkey
+    try:
+        result = finalize_htlc_timeout(km, ck, unsigned_tx, htlc_script, 2000, remote_sig)
+    finally:
+        globals()['derive_privkey'] = original_derive_privkey
     signed = result.serialize()
     assert signed[4:6] == b'\\x00\\x01', "Signed timeout transaction must include the segwit marker"
 `,
@@ -2586,53 +2601,73 @@ def test_witness_shape():
     testCode: `
 def test_bolt3_vector():
     km = ChannelKeyManager(bytes([0x01] * 32))
-    km.htlc_basepoint_secret = bytes.fromhex("bb13b121cdc357cd2e608b0aea294afca36e2b34cf958e2e6451a2f274694491")
     per_cp = bytes.fromhex("025f7117a78150fe2ef97db7cfc83bd57b2e2c0d0dd25eaf467a4a1c2a45ce1486")
     ck = CommitmentKeys(per_cp, bytes(33), bytes(33), bytes(33), bytes(33))
     unsigned_tx = CMutableTransaction.deserialize(bytes.fromhex("0200000001ab84ff284f162cfbfef241f853b47d4368d171f9e2a1445160cd591c4c7d882b00000000000000000001e8030000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e00000000"))
     htlc_script = bytes.fromhex("76a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c8201208763a914b8bcb07f6344b42ab04250c86a6e8b75d3fdbbc688527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae677502f401b175ac6868")
     remote_sig = bytes.fromhex("3045022100d9e29616b8f3959f1d3d7f7ce893ffedcdc407717d0de8e37d808c91d3a7c50d022078c3033f6d00095c8720a4bc943c1b45727818c082e4e3ddbc6d3116435b624b01")
     preimage = bytes(32)
-    result = finalize_htlc_success(km, ck, unsigned_tx, htlc_script, 1000, remote_sig, preimage)
+    local_htlc_privkey = bytes.fromhex("bb13b121cdc357cd2e608b0aea294afca36e2b34cf958e2e6451a2f274694491")
+    original_derive_privkey = derive_privkey
+    globals()['derive_privkey'] = lambda _basepoint_secret, _per_cp: local_htlc_privkey
+    try:
+        result = finalize_htlc_success(km, ck, unsigned_tx, htlc_script, 1000, remote_sig, preimage)
+    finally:
+        globals()['derive_privkey'] = original_derive_privkey
     expected_hex = "02000000000101ab84ff284f162cfbfef241f853b47d4368d171f9e2a1445160cd591c4c7d882b00000000000000000001e8030000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e0500483045022100d9e29616b8f3959f1d3d7f7ce893ffedcdc407717d0de8e37d808c91d3a7c50d022078c3033f6d00095c8720a4bc943c1b45727818c082e4e3ddbc6d3116435b624b014730440220636de5682ef0c5b61f124ec74e8aa2461a69777521d6998295dcea36bc3338110220165285594b23c50b28b82df200234566628a27bcd17f7f14404bd865354eb3ce012000000000000000000000000000000000000000000000000000000000000000008a76a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c8201208763a914b8bcb07f6344b42ab04250c86a6e8b75d3fdbbc688527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae677502f401b175ac686800000000"
     assert result.serialize().hex() == expected_hex, "Finalized HTLC success transaction should match the BOLT 3 vector"
 
 def test_second_bolt3_success_vector():
     km = ChannelKeyManager(bytes([0x01] * 32))
-    km.htlc_basepoint_secret = bytes.fromhex("bb13b121cdc357cd2e608b0aea294afca36e2b34cf958e2e6451a2f274694491")
     per_cp = bytes.fromhex("025f7117a78150fe2ef97db7cfc83bd57b2e2c0d0dd25eaf467a4a1c2a45ce1486")
     ck = CommitmentKeys(per_cp, bytes(33), bytes(33), bytes(33), bytes(33))
     unsigned_tx = CMutableTransaction.deserialize(bytes.fromhex("0200000001ab84ff284f162cfbfef241f853b47d4368d171f9e2a1445160cd591c4c7d882b02000000000000000001d0070000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e00000000"))
     htlc_script = bytes.fromhex("76a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c8201208763a9144b6b2e5444c2639cc0fb7bcea5afba3f3cdce23988527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae677502f501b175ac6868")
     remote_sig = bytes.fromhex("30440220770fc321e97a19f38985f2e7732dd9fe08d16a2efa4bcbc0429400a447faf49102204d40b417f3113e1b0944ae0986f517564ab4acd3d190503faf97a6e420d4335201")
     preimage = bytes([0x01] * 32)
-    result = finalize_htlc_success(km, ck, unsigned_tx, htlc_script, 2000, remote_sig, preimage)
+    local_htlc_privkey = bytes.fromhex("bb13b121cdc357cd2e608b0aea294afca36e2b34cf958e2e6451a2f274694491")
+    original_derive_privkey = derive_privkey
+    globals()['derive_privkey'] = lambda _basepoint_secret, _per_cp: local_htlc_privkey
+    try:
+        result = finalize_htlc_success(km, ck, unsigned_tx, htlc_script, 2000, remote_sig, preimage)
+    finally:
+        globals()['derive_privkey'] = original_derive_privkey
     expected_hex = "02000000000101ab84ff284f162cfbfef241f853b47d4368d171f9e2a1445160cd591c4c7d882b02000000000000000001d0070000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e05004730440220770fc321e97a19f38985f2e7732dd9fe08d16a2efa4bcbc0429400a447faf49102204d40b417f3113e1b0944ae0986f517564ab4acd3d190503faf97a6e420d4335201483045022100a437cc2ce77400ecde441b3398fea3c3ad8bdad8132be818227fe3c5b8345989022069d45e7fa0ae551ec37240845e2c561ceb2567eacf3076a6a43a502d05865faa012001010101010101010101010101010101010101010101010101010101010101018a76a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c8201208763a9144b6b2e5444c2639cc0fb7bcea5afba3f3cdce23988527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae677502f501b175ac686800000000"
     assert result.serialize().hex() == expected_hex, "Second finalized HTLC success transaction should match the BOLT 3 vector"
 
 def test_third_bolt3_success_vector():
     km = ChannelKeyManager(bytes([0x01] * 32))
-    km.htlc_basepoint_secret = bytes.fromhex("bb13b121cdc357cd2e608b0aea294afca36e2b34cf958e2e6451a2f274694491")
     per_cp = bytes.fromhex("025f7117a78150fe2ef97db7cfc83bd57b2e2c0d0dd25eaf467a4a1c2a45ce1486")
     ck = CommitmentKeys(per_cp, bytes(33), bytes(33), bytes(33), bytes(33))
     unsigned_tx = CMutableTransaction.deserialize(bytes.fromhex("0200000001ab84ff284f162cfbfef241f853b47d4368d171f9e2a1445160cd591c4c7d882b04000000000000000001a00f0000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e00000000"))
     htlc_script = bytes.fromhex("76a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c8201208763a91418bc1a114ccf9c052d3d23e28d3b0a9d1227434288527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae677502f801b175ac6868")
     remote_sig = bytes.fromhex("3044022076dca5cb81ba7e466e349b7128cdba216d4d01659e29b96025b9524aaf0d1899022060de85697b88b21c749702b7d2cfa7dfeaa1f472c8f1d7d9c23f2bf968464b8701")
     preimage = bytes([0x04] * 32)
-    result = finalize_htlc_success(km, ck, unsigned_tx, htlc_script, 4000, remote_sig, preimage)
+    local_htlc_privkey = bytes.fromhex("bb13b121cdc357cd2e608b0aea294afca36e2b34cf958e2e6451a2f274694491")
+    original_derive_privkey = derive_privkey
+    globals()['derive_privkey'] = lambda _basepoint_secret, _per_cp: local_htlc_privkey
+    try:
+        result = finalize_htlc_success(km, ck, unsigned_tx, htlc_script, 4000, remote_sig, preimage)
+    finally:
+        globals()['derive_privkey'] = original_derive_privkey
     expected_hex = "02000000000101ab84ff284f162cfbfef241f853b47d4368d171f9e2a1445160cd591c4c7d882b04000000000000000001a00f0000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e0500473044022076dca5cb81ba7e466e349b7128cdba216d4d01659e29b96025b9524aaf0d1899022060de85697b88b21c749702b7d2cfa7dfeaa1f472c8f1d7d9c23f2bf968464b8701483045022100d9080f103cc92bac15ec42464a95f070c7fb6925014e673ee2ea1374d36a7f7502200c65294d22eb20d48564954d5afe04a385551919d8b2ddb4ae2459daaeee1d95012004040404040404040404040404040404040404040404040404040404040404048a76a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c8201208763a91418bc1a114ccf9c052d3d23e28d3b0a9d1227434288527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae677502f801b175ac686800000000"
     assert result.serialize().hex() == expected_hex, "Third finalized HTLC success transaction should match the BOLT 3 vector"
 
 def test_witness_contains_preimage():
     km = ChannelKeyManager(bytes([0x01] * 32))
-    km.htlc_basepoint_secret = bytes.fromhex("bb13b121cdc357cd2e608b0aea294afca36e2b34cf958e2e6451a2f274694491")
     per_cp = bytes.fromhex("025f7117a78150fe2ef97db7cfc83bd57b2e2c0d0dd25eaf467a4a1c2a45ce1486")
     ck = CommitmentKeys(per_cp, bytes(33), bytes(33), bytes(33), bytes(33))
     unsigned_tx = CMutableTransaction.deserialize(bytes.fromhex("0200000001ab84ff284f162cfbfef241f853b47d4368d171f9e2a1445160cd591c4c7d882b00000000000000000001e8030000000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e00000000"))
     htlc_script = bytes.fromhex("76a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c8201208763a914b8bcb07f6344b42ab04250c86a6e8b75d3fdbbc688527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae677502f401b175ac6868")
     remote_sig = bytes.fromhex("3045022100d9e29616b8f3959f1d3d7f7ce893ffedcdc407717d0de8e37d808c91d3a7c50d022078c3033f6d00095c8720a4bc943c1b45727818c082e4e3ddbc6d3116435b624b01")
     preimage = bytes(32)
-    result = finalize_htlc_success(km, ck, unsigned_tx, htlc_script, 1000, remote_sig, preimage)
+    local_htlc_privkey = bytes.fromhex("bb13b121cdc357cd2e608b0aea294afca36e2b34cf958e2e6451a2f274694491")
+    original_derive_privkey = derive_privkey
+    globals()['derive_privkey'] = lambda _basepoint_secret, _per_cp: local_htlc_privkey
+    try:
+        result = finalize_htlc_success(km, ck, unsigned_tx, htlc_script, 1000, remote_sig, preimage)
+    finally:
+        globals()['derive_privkey'] = original_derive_privkey
     signed = result.serialize()
     assert signed[4:6] == b'\\x00\\x01', "Signed success transaction must include the segwit marker"
 `,
