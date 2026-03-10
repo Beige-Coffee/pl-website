@@ -344,7 +344,6 @@ class NodeManager {
       "-txindex=1",
       "-fallbackfee=0.00001",
       "-minrelaytxfee=0",
-      "-walletbroadcast=0",
       "-wallet=pl",
     ];
 
