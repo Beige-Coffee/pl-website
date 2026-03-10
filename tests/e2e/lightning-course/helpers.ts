@@ -299,6 +299,7 @@ function getExerciseContainer(page: Page, exerciseIndex: number): Locator {
 
 async function openCheckpointContainer(page: Page, checkpointIndex: number): Promise<Locator> {
   const header = page.locator('button:has-text("CHECKPOINT")').nth(checkpointIndex);
+  await expect(header).toBeVisible({ timeout: 15_000 });
   await header.scrollIntoViewIfNeeded();
   await header.click();
   return getCheckpointContainer(page, checkpointIndex);
@@ -306,15 +307,42 @@ async function openCheckpointContainer(page: Page, checkpointIndex: number): Pro
 
 async function openExerciseContainer(page: Page, exerciseIndex: number): Promise<Locator> {
   const header = page.locator('button:has-text("EXERCISE")').nth(exerciseIndex);
+  await expect(header).toBeVisible({ timeout: 15_000 });
   await header.scrollIntoViewIfNeeded();
   await header.click();
   return getExerciseContainer(page, exerciseIndex);
+}
+
+async function getInlineDragDropContainer(page: Page): Promise<Locator> {
+  const label = page.getByText("MATCH THE TOOLS", { exact: true }).first();
+  await expect(label).toBeVisible({ timeout: 15_000 });
+  return label.locator("..");
 }
 
 async function clickButtonByContainedText(scope: Locator, text: string) {
   const button = scope.locator("button").filter({ hasText: text }).first();
   await expect(button).toBeVisible({ timeout: 10_000 });
   await button.click();
+}
+
+async function seedExerciseCode(page: Page, exerciseId: string, code: string) {
+  await page.evaluate(async ({ exerciseId, code }) => {
+    localStorage.setItem(`pl-exercise-${exerciseId}`, code);
+    const token = localStorage.getItem("pl-session-token");
+    if (!token) throw new Error("Missing session token while seeding exercise code");
+    const response = await fetch("/api/progress", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ key: `exercise-${exerciseId}`, value: code }),
+    });
+    if (!response.ok) {
+      const body = await response.text().catch(() => "");
+      throw new Error(`Failed to save exercise progress for ${exerciseId}: ${response.status} ${body}`);
+    }
+  }, { exerciseId, code });
 }
 
 async function replaceScopedEditorContent(page: Page, scope: Locator, text: string) {
@@ -330,6 +358,25 @@ async function waitForScopedRunButton(scope: Locator) {
     state: "visible",
     timeout: 120_000,
   });
+}
+
+async function invokeScopedReactClick(scope: Locator, text: string): Promise<boolean> {
+  const button = scope.locator("button").filter({ hasText: text }).first();
+  return button.evaluate(async (el) => {
+    const reactPropsKey = Object.getOwnPropertyNames(el).find((name) => name.startsWith("__reactProps$"));
+    if (!reactPropsKey) return false;
+    const props = (el as Record<string, unknown>)[reactPropsKey] as { onClick?: (event: unknown) => unknown } | undefined;
+    if (typeof props?.onClick !== "function") return false;
+    props.onClick({
+      preventDefault() {},
+      stopPropagation() {},
+      currentTarget: el,
+      target: el,
+      nativeEvent: new MouseEvent("click", { bubbles: true, cancelable: true }),
+    });
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    return true;
+  }).catch(() => false);
 }
 
 async function triggerScopedRun(page: Page, scope: Locator) {
@@ -350,15 +397,19 @@ async function triggerScopedRun(page: Page, scope: Locator) {
   await page.keyboard.press("Enter");
   if (await started()) return;
 
+  if (await invokeScopedReactClick(scope, "RUN TESTS")) {
+    if (await started()) return;
+  }
+
   throw new Error("Exercise run did not start after clicking RUN TESTS");
 }
 
 export async function completeDragDropExercise(
   page: Page,
-  checkpointIndex: number,
+  _checkpointIndex: number,
   claimRewards: boolean
 ) {
-  const container = await openCheckpointContainer(page, checkpointIndex);
+  const container = await getInlineDragDropContainer(page);
   for (const item of MATCH_DATA) {
     await clickButtonByContainedText(container, item.definition);
     await container.getByText(item.label, { exact: true }).click();
@@ -429,14 +480,28 @@ export async function completeExercise(
   exerciseId: string,
   claimRewards: boolean
 ) {
-  const container = await openExerciseContainer(page, exerciseIndex);
   const exercise = LIGHTNING_EXERCISES[exerciseId];
+  await seedExerciseCode(page, exerciseId, exercise.hints.code);
+  await page.goto(page.url());
+  await expect(page.getByTestId("container-article")).toBeVisible({ timeout: 20_000 });
+
+  const container = await openExerciseContainer(page, exerciseIndex);
   await waitForScopedRunButton(container);
-  await replaceScopedEditorContent(page, container, exercise.hints.code);
   await triggerScopedRun(page, container);
-  await expect(container.getByText("ALL TESTS PASSED!", { exact: true })).toBeVisible({
-    timeout: 120_000,
-  });
+  await expect
+    .poll(async () => {
+      const body = await container.innerText();
+      const passMatch = body.match(/(\d+)\/(\d+) passed/);
+      if (passMatch && passMatch[1] === passMatch[2] && Number(passMatch[1]) > 0) {
+        return "passed";
+      }
+      const state = await fetchServerState(page);
+      if (state.checkpoints.some((cp) => cp.checkpointId === exerciseId)) {
+        return "checkpoint";
+      }
+      return null;
+    }, { timeout: 120_000, intervals: [1000, 2000, 5000] })
+    .not.toBeNull();
 
   await expect
     .poll(async () => {

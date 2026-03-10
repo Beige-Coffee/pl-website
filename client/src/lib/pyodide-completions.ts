@@ -273,14 +273,23 @@ function detectEnclosingClass(doc: string, cursorPos: number): string | null {
 const cache = new Map<string, Completion[]>();
 let contextPreloaded = false;
 
+function makePreloadCodeSafe(code: string): string {
+  const trimmed = code.trimEnd();
+  if (!trimmed.endsWith(":")) return code;
+  const lastLine = trimmed.split("\n").at(-1) || "";
+  const indent = (lastLine.match(/^(\s*)/)?.[1] || "") + "    ";
+  return `${trimmed}\n${indent}pass`;
+}
+
 /**
  * Preload exercise context (preamble + prior exercise code) into the Pyodide
  * namespace so that `dir()` introspection works for autocomplete.
  */
 export async function preloadCompletionContext(code: string): Promise<void> {
   if (!code || contextPreloaded) return;
+  const safeCode = makePreloadCodeSafe(code);
   try {
-    await execPythonSilent(code);
+    await execPythonSilent(safeCode);
     contextPreloaded = true;
     console.log("[autocomplete] Preloaded context successfully");
   } catch (e) {
@@ -289,7 +298,7 @@ export async function preloadCompletionContext(code: string): Promise<void> {
     setTimeout(async () => {
       if (contextPreloaded) return;
       try {
-        await execPythonSilent(code);
+        await execPythonSilent(safeCode);
         contextPreloaded = true;
         console.log("[autocomplete] Preloaded context on retry");
       } catch (e2) {
