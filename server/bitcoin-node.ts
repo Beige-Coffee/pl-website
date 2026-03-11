@@ -576,6 +576,16 @@ class NodeManager {
       return { error: `Command '${cmd}' is not available in this environment.` };
     }
 
+    // testmempoolaccept expects [["rawtx"]] — wrap the hex arg in an array
+    if (cmd === "testmempoolaccept" && args.length >= 1) {
+      try {
+        const result = await this._rpcCall(instance.rpcPort, cmd, [[args[0]]]);
+        return { result };
+      } catch (err: any) {
+        return { error: err.message };
+      }
+    }
+
     // Convert numeric-looking args
     const rpcArgs = args.map((a) => {
       if (/^\d+$/.test(a)) return parseInt(a, 10);

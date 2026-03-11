@@ -18,6 +18,23 @@ const MAX_SPLIT = 0.4;
 
 const PROMPT = "bitcoin-cli> ";
 
+// Commands available for tab completion, ordered by course relevance
+const COMMANDS = [
+  "sendrawtransaction",
+  "decoderawtransaction",
+  "gettransaction",
+  "gettxout",
+  "mine",
+  "decodescript",
+  "testmempoolaccept",
+  "getblockcount",
+  "getblockchaininfo",
+  "getmempoolinfo",
+  "getrawtransaction",
+  "help",
+  "clear",
+];
+
 const sansFont = { fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' } as const;
 
 // ─── JSON Syntax Highlight ──────────────────────────────────────────────────
@@ -165,7 +182,10 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
         if (cancelled) return;
         if (data.running) {
           setNodeReady(true);
-          setLines([{ type: "info", text: "Bitcoin node ready. Type 'help' for available commands." }]);
+          setLines([
+            { type: "info", text: "Bitcoin node ready. Type 'help' for available commands." },
+            { type: "info", text: "Tip: Press Tab to autocomplete command names." },
+          ]);
         } else if (data.error) {
           setLines([{ type: "error", text: data.error }]);
         }
@@ -252,9 +272,39 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
     }
   }, [sessionToken]);
 
+  // ── Tab completion ─────────────────────────────────────────────────────
+
+  const tabCycleRef = useRef<{ prefix: string; matches: string[]; index: number } | null>(null);
+
   // ── Key handling ────────────────────────────────────────────────────────
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Tab") {
+      e.preventDefault();
+      const text = input.trimStart();
+      // Only complete the command (first word) when there are no spaces yet
+      if (!text.includes(" ")) {
+        const prefix = text.toLowerCase();
+        // If we're continuing a tab cycle with the same prefix, advance the index
+        if (tabCycleRef.current && tabCycleRef.current.prefix === prefix && tabCycleRef.current.matches.length > 0) {
+          const cycle = tabCycleRef.current;
+          cycle.index = (cycle.index + 1) % cycle.matches.length;
+          setInput(cycle.matches[cycle.index]);
+        } else {
+          // Start a new cycle
+          const matches = COMMANDS.filter((c) => c.startsWith(prefix));
+          if (matches.length > 0) {
+            tabCycleRef.current = { prefix, matches, index: 0 };
+            setInput(matches[0]);
+          }
+        }
+      }
+      return;
+    }
+
+    // Any non-tab key resets the tab cycle
+    tabCycleRef.current = null;
+
     if (e.key === "Enter") {
       e.preventDefault();
       executeCommand(input);
@@ -349,7 +399,6 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
 
   const panelBg = dark ? "bg-[#0a0f1a]" : "bg-[#faf6ee]";
   const panelBorder = dark ? "border-[#2a3552]" : "border-[#d4c9a8]";
-  const headerBg = dark ? "bg-[#0f1930]" : "bg-[#f0e8d8]";
   const goldText = dark ? "text-[#FFD700]" : "text-[#9a7200]";
   const goldBorder = dark ? "border-[#FFD700]" : "border-[#b8860b]";
   const textMuted = dark ? "text-slate-400" : "text-black/60";
@@ -433,19 +482,42 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
             style={{ fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace" }}
           >
             <span className={`${promptColor} text-sm shrink-0`}>{PROMPT}</span>
-            <input
-              ref={inputRef}
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              disabled={running || provisioning || !nodeReady}
-              className={`flex-1 bg-transparent ${inputTextColor} outline-none border-none ${placeholderColor} disabled:opacity-40`}
-              style={{ fontSize: isMobile ? "16px" : "14px" }}
-              placeholder={nodeReady ? "type a command..." : "waiting for node..."}
-              autoComplete="off"
-              spellCheck={false}
-            />
+            <div className="flex-1 relative">
+              {/* Ghost autocomplete suggestion */}
+              {(() => {
+                const trimmed = input.trimStart();
+                if (trimmed.length > 0 && !trimmed.includes(" ")) {
+                  const match = COMMANDS.find((c) => c.startsWith(trimmed.toLowerCase()) && c !== trimmed.toLowerCase());
+                  if (match) {
+                    return (
+                      <div
+                        aria-hidden
+                        className={`absolute inset-0 pointer-events-none flex items-center ${dark ? "text-slate-500" : "text-stone-400"}`}
+                        style={{ fontSize: isMobile ? "16px" : "14px" }}
+                      >
+                        <span className="invisible">{input}</span>
+                        <span>{match.slice(trimmed.length)}</span>
+                        <span className={`ml-2 text-xs ${dark ? "text-slate-600" : "text-stone-400"}`}>Tab</span>
+                      </div>
+                    );
+                  }
+                }
+                return null;
+              })()}
+              <input
+                ref={inputRef}
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                disabled={running || provisioning || !nodeReady}
+                className={`w-full bg-transparent ${inputTextColor} outline-none border-none ${placeholderColor} disabled:opacity-40 relative z-10`}
+                style={{ fontSize: isMobile ? "16px" : "14px" }}
+                placeholder={nodeReady ? "type a command..." : "waiting for node..."}
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </div>
           </div>
         </>
       )}
@@ -485,7 +557,7 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
       />
 
       {/* Header */}
-      <div className={`flex items-center justify-between px-4 py-2.5 border-b-2 ${panelBorder} ${headerBg} shrink-0`}>
+      <div className={`flex items-center justify-between px-4 py-2.5 border-b-2 ${panelBorder} ${dark ? "bg-[#0f1930]" : "bg-[#f0e8d8]"} shrink-0`}>
         <div className={`font-pixel text-xs ${goldText} flex items-center gap-2`}>
           Bitcoin Node
           {provisioning && <span className="inline-block w-3 h-3 border-2 border-[#FFD700]/30 border-t-[#FFD700] rounded-full animate-spin" />}
@@ -520,32 +592,49 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
             backdropFilter: "blur(4px)",
           }}
         >
-          <div className={`${dark ? "text-slate-200" : "text-stone-800"} text-sm space-y-4`}>
-            <div>
-              <span className={`${dark ? "text-[#FFD700]" : "text-[#9a7200]"} font-bold`}>sendrawtransaction</span>
-              <span className={dark ? "text-slate-400" : "text-stone-500"}> &lt;raw tx hex&gt;</span>
-              <div className={`${dark ? "text-slate-400" : "text-stone-500"} text-xs mt-0.5`}>Broadcast a raw transaction to the network.</div>
+          <div className={`${dark ? "text-slate-200" : "text-stone-800"} text-sm space-y-3`}>
+            <div className={`${dark ? "text-slate-500" : "text-stone-400"} text-xs italic mb-3`}>
+              Press <span className={`${dark ? "text-slate-300" : "text-stone-600"} font-bold not-italic`}>Tab</span> to autocomplete commands.
             </div>
-            <div>
-              <span className={`${dark ? "text-[#FFD700]" : "text-[#9a7200]"} font-bold`}>decoderawtransaction</span>
-              <span className={dark ? "text-slate-400" : "text-stone-500"}> &lt;raw tx hex&gt;</span>
-              <div className={`${dark ? "text-slate-400" : "text-stone-500"} text-xs mt-0.5`}>Decode a raw transaction to inspect its inputs, outputs, and other details.</div>
-            </div>
-            <div>
-              <span className={`${dark ? "text-[#FFD700]" : "text-[#9a7200]"} font-bold`}>gettransaction</span>
-              <span className={dark ? "text-slate-400" : "text-stone-500"}> &lt;txid&gt;</span>
-              <div className={`${dark ? "text-slate-400" : "text-stone-500"} text-xs mt-0.5`}>Retrieve info about a broadcast transaction, including confirmation count.</div>
-            </div>
-            <div>
-              <span className={`${dark ? "text-[#FFD700]" : "text-[#9a7200]"} font-bold`}>gettxout</span>
-              <span className={dark ? "text-slate-400" : "text-stone-500"}> &lt;txid&gt; &lt;output index&gt;</span>
-              <div className={`${dark ? "text-slate-400" : "text-stone-500"} text-xs mt-0.5`}>Look up a UTXO. Returns nothing if it has been spent or never existed.</div>
-            </div>
-            <div>
-              <span className={`${dark ? "text-[#FFD700]" : "text-[#9a7200]"} font-bold`}>mine</span>
-              <span className={dark ? "text-slate-400" : "text-stone-500"}> &lt;number of blocks&gt;</span>
-              <div className={`${dark ? "text-slate-400" : "text-stone-500"} text-xs mt-0.5`}>Mine blocks on the regtest network. Transactions in the mempool will be included.</div>
-            </div>
+            <div className={`${dark ? "text-[#FFD700]/50" : "text-[#9a7200]/50"} text-[10px] font-bold uppercase tracking-wider`}>Core Commands</div>
+            {([
+              ["sendrawtransaction", "raw tx hex", "Broadcast a raw transaction to the network."],
+              ["decoderawtransaction", "raw tx hex", "Decode a raw transaction to inspect its inputs, outputs, and other details."],
+              ["gettransaction", "txid", "Retrieve info about a broadcast transaction, including confirmation count."],
+              ["gettxout", "txid, output index", "Look up a UTXO. Returns nothing if it has been spent or never existed."],
+              ["mine", "number of blocks", "Mine blocks on the regtest network. Transactions in the mempool will be included."],
+            ] as [string, string, string][]).map(([cmd, args, desc]) => (
+              <div key={cmd}>
+                <span className={`${dark ? "text-[#FFD700]" : "text-[#9a7200]"} font-bold`}>{cmd}</span>
+                <span className={dark ? "text-slate-400" : "text-stone-500"}>{" "}&lt;{args}&gt;</span>
+                <div className={`${dark ? "text-slate-400" : "text-stone-500"} text-xs mt-0.5`}>{desc}</div>
+              </div>
+            ))}
+            <div className={`${dark ? "text-[#FFD700]/50" : "text-[#9a7200]/50"} text-[10px] font-bold uppercase tracking-wider mt-4`}>Inspection</div>
+            {([
+              ["decodescript", "hex", "Decode a hex-encoded script to see its opcodes and address."],
+              ["testmempoolaccept", "raw tx hex", "Test if a transaction would be accepted to the mempool (without broadcasting)."],
+              ["getrawtransaction", "txid, verbose", "Get raw transaction data. Pass 'true' as second arg for decoded JSON."],
+            ] as [string, string, string][]).map(([cmd, args, desc]) => (
+              <div key={cmd}>
+                <span className={`${dark ? "text-[#FFD700]" : "text-[#9a7200]"} font-bold`}>{cmd}</span>
+                <span className={dark ? "text-slate-400" : "text-stone-500"}>{" "}&lt;{args}&gt;</span>
+                <div className={`${dark ? "text-slate-400" : "text-stone-500"} text-xs mt-0.5`}>{desc}</div>
+              </div>
+            ))}
+            <div className={`${dark ? "text-[#FFD700]/50" : "text-[#9a7200]/50"} text-[10px] font-bold uppercase tracking-wider mt-4`}>Blockchain</div>
+            {([
+              ["getblockcount", null, "Get the current block height."],
+              ["getblockchaininfo", null, "Get blockchain status (chain, blocks, difficulty, etc.)."],
+              ["getmempoolinfo", null, "Get mempool statistics (size, bytes, fee thresholds)."],
+            ] as [string, string | null, string][]).map(([cmd, args, desc]) => (
+              <div key={cmd}>
+                <span className={`${dark ? "text-[#FFD700]" : "text-[#9a7200]"} font-bold`}>{cmd}</span>
+                {args && <span className={dark ? "text-slate-400" : "text-stone-500"}>{" "}&lt;{args}&gt;</span>}
+                <div className={`${dark ? "text-slate-400" : "text-stone-500"} text-xs mt-0.5`}>{desc}</div>
+              </div>
+            ))}
+            <div className={`${dark ? "text-[#FFD700]/50" : "text-[#9a7200]/50"} text-[10px] font-bold uppercase tracking-wider mt-4`}>Utility</div>
             <div>
               <span className={`${dark ? "text-[#FFD700]" : "text-[#9a7200]"} font-bold`}>help</span>
               <div className={`${dark ? "text-slate-400" : "text-stone-500"} text-xs mt-0.5`}>List all available commands.</div>

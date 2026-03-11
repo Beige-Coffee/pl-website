@@ -154,7 +154,6 @@ export default function TxNotebook({ theme }: TxNotebookProps) {
   const goldText = dark ? "text-[#FFD700]" : "text-[#9a7200]";
   const panelBg = dark ? "bg-[#0a0f1a]" : "bg-[#fdf9f2]";
   const panelBorder = dark ? "border-[#2a3552]" : "border-[#d4c9a8]";
-  const headerBg = dark ? "bg-[#0b1220]" : "bg-[#f5f0e8]";
   const labelColor = dark ? "text-slate-300" : "text-black/75";
   const inputBg = dark ? "bg-[#0f1930]" : "bg-white";
   const inputBorder = dark ? "border-[#2a3552]" : "border-[#d4c9a8]";
@@ -238,7 +237,7 @@ export default function TxNotebook({ theme }: TxNotebookProps) {
 
       <div className="flex flex-col w-full min-h-0">
         {/* Header */}
-        <div className={`flex items-center justify-between px-4 py-2.5 border-b-2 ${panelBorder} ${headerBg} shrink-0`}>
+        <div className={`flex items-center justify-between px-4 py-2.5 border-b-2 ${panelBorder} ${dark ? "bg-[#0b1220]" : "bg-[#f5f0e8]"} shrink-0`}>
           <div className={`font-pixel text-xs ${goldText}`}>TRANSACTIONS</div>
           <button
             onClick={() => setIsOpen(false)}

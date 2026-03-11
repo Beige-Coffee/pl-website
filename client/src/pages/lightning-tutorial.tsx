@@ -1175,6 +1175,18 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
     });
   }, [auth.markCheckpointCompleted]);
 
+  // Close tools dropdown on click outside
+  useEffect(() => {
+    if (!toolsOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (toolsRef.current && !toolsRef.current.contains(e.target as Node)) {
+        setToolsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [toolsOpen]);
+
   const [theme, setTheme] = useState<"light" | "dark">("light");
 
   useEffect(() => {
@@ -1189,18 +1201,6 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
       // ignore
     }
   }, [theme]);
-
-  // Close tools dropdown on click outside
-  useEffect(() => {
-    if (!toolsOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (toolsRef.current && !toolsRef.current.contains(e.target as Node)) {
-        setToolsOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [toolsOpen]);
 
   const t = theme === "dark"
     ? {

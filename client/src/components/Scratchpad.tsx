@@ -400,7 +400,6 @@ export default function Scratchpad({ theme }: ScratchpadProps) {
 
   const panelBg = dark ? "bg-[#0b1220]" : "bg-[#faf6ef]";
   const panelBorder = dark ? "border-[#2a3552]" : "border-[#d4c9a8]";
-  const headerBg = dark ? "bg-[#0f1930]" : "bg-[#f0e8d8]";
   const terminalBg = dark ? "bg-[#060a14]" : "bg-[#1a1a2e]";
   const goldText = dark ? "text-[#FFD700]" : "text-[#9a7200]";
   const goldBorder = dark ? "border-[#FFD700]" : "border-[#b8860b]";
@@ -537,7 +536,7 @@ export default function Scratchpad({ theme }: ScratchpadProps) {
       />
 
       {/* Header */}
-      <div className={`flex items-center justify-between px-4 py-2.5 border-b-2 ${panelBorder} ${headerBg} shrink-0`}>
+      <div className={`flex items-center justify-between px-4 py-2.5 border-b-2 ${panelBorder} ${dark ? "bg-[#0f1930]" : "bg-[#f0e8d8]"} shrink-0`}>
         <div className={`font-pixel text-xs ${goldText}`}>SCRATCHPAD</div>
         <button
           onClick={() => setIsOpen(false)}
