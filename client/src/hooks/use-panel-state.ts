@@ -48,16 +48,31 @@ const PANEL_EVENTS: Record<PanelId, string> = {
   scratchpad: "scratchpad-open",
 };
 
+const SHARED_WIDTH_KEY = "pl-panel-width";
+const DEFAULT_SHARED_WIDTH = 450;
+
+function loadSharedWidth(): number {
+  try {
+    const stored = localStorage.getItem(SHARED_WIDTH_KEY);
+    if (stored) {
+      const n = parseInt(stored, 10);
+      if (n >= 300 && n <= 2000) return n;
+    }
+  } catch {}
+  return DEFAULT_SHARED_WIDTH;
+}
+
 export function usePanelStateProvider(): PanelState & PanelActions {
   const [activePanel, setActivePanel] = useState<PanelId | null>(null);
-  const [panelWidth, setPanelWidth] = useState(0);
+  const [panelWidth, setPanelWidth] = useState(loadSharedWidth);
   const [isDragging, setIsDragging] = useState(false);
   const activePanelRef = useRef<PanelId | null>(null);
 
-  const openPanel = useCallback((id: PanelId, width: number) => {
+  const openPanel = useCallback((id: PanelId, _width: number) => {
     activePanelRef.current = id;
     setActivePanel(id);
-    setPanelWidth(width);
+    // Use the shared width, ignoring the per-panel width
+    setPanelWidth((current) => current || loadSharedWidth());
   }, []);
 
   const closePanel = useCallback((id: PanelId) => {
@@ -72,6 +87,7 @@ export function usePanelStateProvider(): PanelState & PanelActions {
 
   const resizePanel = useCallback((width: number) => {
     setPanelWidth(width);
+    try { localStorage.setItem(SHARED_WIDTH_KEY, String(width)); } catch {}
   }, []);
 
   const startDragging = useCallback(() => {

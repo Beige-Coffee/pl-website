@@ -106,6 +106,7 @@ export default function Scratchpad({ theme }: ScratchpadProps) {
 
   // Panel width (horizontal resize)
   const [panelWidth, setPanelWidth] = useState(() => {
+    if (panel.panelWidth > 0) return panel.panelWidth;
     try {
       const saved = localStorage.getItem(STORAGE_KEY_WIDTH);
       if (saved) return Math.max(MIN_WIDTH, parseInt(saved, 10));
@@ -152,6 +153,13 @@ export default function Scratchpad({ theme }: ScratchpadProps) {
       localStorage.setItem(STORAGE_KEY_SPLIT, String(splitRatio));
     } catch {}
   }, [splitRatio]);
+
+  // Sync local width from shared panel width when this panel becomes active
+  useEffect(() => {
+    if (isOpen && panel.activePanel === "scratchpad" && panel.panelWidth > 0) {
+      setPanelWidth(panel.panelWidth);
+    }
+  }, [isOpen, panel.activePanel]);
 
   // Sync with panel context when open or width changes
   useEffect(() => {

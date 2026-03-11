@@ -83,7 +83,7 @@ export default function TxNotebook({ theme }: TxNotebookProps) {
   const panel = usePanelState();
   const [isOpenRaw, setIsOpenRaw] = useState(false);
   const [values, setValues] = useState<Record<FieldKey, string>>(loadAll);
-  const [width, setWidth] = useState(DEFAULT_WIDTH);
+  const [width, setWidth] = useState(() => panel.panelWidth > 0 ? panel.panelWidth : DEFAULT_WIDTH);
   const draggingRef = useRef(false);
   const startXRef = useRef(0);
   const startWidthRef = useRef(0);
@@ -134,6 +134,13 @@ export default function TxNotebook({ theme }: TxNotebookProps) {
     window.addEventListener("tx-notebook-updated", refresh);
     return () => window.removeEventListener("tx-notebook-updated", refresh);
   }, []);
+
+  // Sync local width from shared panel width when this panel becomes active
+  useEffect(() => {
+    if (isOpen && panel.activePanel === "notebook" && panel.panelWidth > 0) {
+      setWidth(panel.panelWidth);
+    }
+  }, [isOpen, panel.activePanel]);
 
   // Sync with panel context when open or width changes
   useEffect(() => {

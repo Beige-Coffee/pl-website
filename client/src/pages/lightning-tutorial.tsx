@@ -1057,6 +1057,7 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
   const [toolsOpen, setToolsOpen] = useState(false);
   const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
   const toolsRef = useRef<HTMLDivElement>(null);
+  const toolPanelActiveRef = useRef(false);
 
   // One-time tooltip for TOOLS button
   const [toolsTooltipVisible, setToolsTooltipVisible] = useState(false);
@@ -1164,11 +1165,11 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
     });
   }, [auth.markCheckpointCompleted]);
 
-  // Close tools dropdown on click outside
+  // Close tools dropdown on click outside (only when no tool panel is open)
   useEffect(() => {
     if (!toolsOpen) return;
     const handler = (e: MouseEvent) => {
-      if (toolsRef.current && !toolsRef.current.contains(e.target as Node)) {
+      if (toolsRef.current && !toolsRef.current.contains(e.target as Node) && !toolPanelActiveRef.current) {
         setToolsOpen(false);
       }
     };
@@ -1243,6 +1244,11 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
   const panelState = usePanelStateProvider();
   const panelPadding = isMobile ? 0 : (panelState.activePanel ? panelState.panelWidth : 0);
   const panelTransition = panelState.isDragging ? "none" : "padding-right 300ms cubic-bezier(0.4, 0, 0.2, 1)";
+
+  // Keep ref in sync for the click-outside handler (which runs before panelState is available)
+  useEffect(() => {
+    toolPanelActiveRef.current = !!panelState.activePanel;
+  }, [panelState.activePanel]);
 
   return (
     <PanelStateContext.Provider value={panelState}>
@@ -1686,7 +1692,6 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
                         } else {
                           setFileBrowserOpen(true);
                         }
-                        setToolsOpen(false);
                       }}
                       className={`w-full text-left border-2 px-3 py-1.5 transition-colors cursor-pointer ${
                         theme === "dark"

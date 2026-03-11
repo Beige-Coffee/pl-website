@@ -114,6 +114,8 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
   const [showHelp, setShowHelp] = useState(false);
 
   const [panelWidth, setPanelWidth] = useState(() => {
+    // Use shared panel width if available, fall back to per-panel saved width
+    if (panel.panelWidth > 0) return panel.panelWidth;
     try {
       const saved = localStorage.getItem(STORAGE_KEY_WIDTH);
       if (saved) return Math.max(MIN_WIDTH, parseInt(saved, 10));
@@ -145,6 +147,13 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY_SPLIT, String(splitRatio)); } catch {}
   }, [splitRatio]);
+
+  // Sync local width from shared panel width when this panel becomes active
+  useEffect(() => {
+    if (isOpen && panel.activePanel === "node" && panel.panelWidth > 0) {
+      setPanelWidth(panel.panelWidth);
+    }
+  }, [isOpen, panel.activePanel]);
 
   // Sync with panel context when open or width changes
   useEffect(() => {
