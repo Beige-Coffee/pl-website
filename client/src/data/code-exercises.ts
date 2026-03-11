@@ -1795,15 +1795,6 @@ def test_decrypt_simple_message():
 def test_decrypt_nonce_tracking():
     key = os.urandom(32)
     ck = os.urandom(32)
-    sender = CipherState(key, ck)
-    receiver = CipherState(key, ck)
-    sender.encrypt_message(b"first")
-    ct2 = sender.encrypt_message(b"second")
-    # Receiver must decrypt in same order
-    ct1 = CipherState(key, ck)  # fresh for first msg
-    receiver2 = CipherState(key, ck)
-    ct_first = CipherState(key, ck).encrypt_message(b"first")
-    # Simpler: just test nonce advances
     s = CipherState(key, ck)
     r = CipherState(key, ck)
     ct = s.encrypt_message(b"msg")
