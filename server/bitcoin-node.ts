@@ -384,7 +384,6 @@ class NodeManager {
       await this._waitForRpc(instance);
       await this._ensureOutOfIBD(instance);
       await this._waitForWallet(instance);
-      await this._flushMempool(instance);
       instance.ready = true;
       this.recordMetric(this.metrics.provision, Date.now() - provisionStartedAt, true, false);
       return instance;
