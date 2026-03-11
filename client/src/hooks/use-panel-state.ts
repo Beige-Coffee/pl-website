@@ -64,21 +64,21 @@ function loadSharedWidth(): number {
 
 export function usePanelStateProvider(): PanelState & PanelActions {
   const [activePanel, setActivePanel] = useState<PanelId | null>(null);
-  const [panelWidth, setPanelWidth] = useState(loadSharedWidth);
+  const [panelWidth, setPanelWidth] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const activePanelRef = useRef<PanelId | null>(null);
 
   const openPanel = useCallback((id: PanelId, _width: number) => {
     activePanelRef.current = id;
     setActivePanel(id);
-    // Use the shared width, ignoring the per-panel width
-    setPanelWidth((current) => current || loadSharedWidth());
+    setPanelWidth(loadSharedWidth());
   }, []);
 
   const closePanel = useCallback((id: PanelId) => {
     setActivePanel((current) => {
       if (current === id) {
         activePanelRef.current = null;
+        setPanelWidth(0);
         return null;
       }
       return current;
