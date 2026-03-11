@@ -130,7 +130,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
     question: "The BOLT 3 per-commitment secret generation uses a bit-flipping and hashing algorithm. What is the key advantage of this scheme?",
     options: [
       "It allows compact storage of all previous secrets using O(log n) space instead of O(n), through a structure called a shachain",
-      "It makes the secrets deterministic, so they can be regenerated from the seed without any additional storage",
+      "It makes the secrets deterministic, so both parties can regenerate any secret from the seed on demand",
       "It ensures that each secret is exactly 32 bytes, matching the size of a SHA256 hash",
       "It produces cryptographically stronger secrets than simple sequential hashing",
     ],
@@ -252,7 +252,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
     options: [
       "They let every payment remain on-chain, but miners can validate them more efficiently",
       "They let many unrelated channel pairs merge their balances into one shared UTXO that updates globally",
-      "They allow essentially unlimited transactions between two parties using only two on-chain transactions (open and close), keeping the blockchain small while supporting high throughput",
+      "They allow essentially unlimited transactions between two parties using only two on-chain transactions (open and close), keeping the blockchain footprint small while supporting high throughput",
       "They eliminate the need for on-chain enforcement, because the latest state exists only in memory",
     ],
     answer: 2,
