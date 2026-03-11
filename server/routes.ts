@@ -50,7 +50,9 @@ const adminLimiter = new RateLimiter(5, 60_000);
 const feedbackLimiter = new RateLimiter(5, 600_000);
 
 function getClientIp(req: Request): string {
-  return (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";
+  const ip = req.ip || req.socket.remoteAddress || "";
+  if (!ip) return "unknown";
+  return ip.replace(/^::ffff:/, "");
 }
 
 function startLexeSidecar() {

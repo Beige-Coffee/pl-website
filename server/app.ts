@@ -23,6 +23,8 @@ export function log(message: string, source = "express") {
 }
 
 export const app = express();
+const trustProxyHops = Number.parseInt(process.env.TRUST_PROXY_HOPS || "", 10);
+app.set("trust proxy", Number.isFinite(trustProxyHops) ? trustProxyHops : (process.env.REPL_ID ? 1 : false));
 
 declare module 'http' {
   interface IncomingMessage {
