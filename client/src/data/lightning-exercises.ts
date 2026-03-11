@@ -114,7 +114,7 @@ def test_different_channel_index():
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 3 -Create Funding Script
+  // EXERCISE 2 - Create Funding Script
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-funding-script": {
     id: "ln-exercise-funding-script",
@@ -183,7 +183,7 @@ def test_script_structure():
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 4 -Create Funding Transaction
+  // EXERCISE 3 - Create Funding Transaction
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-funding-tx": {
     id: "ln-exercise-funding-tx",
@@ -274,7 +274,7 @@ def test_p2wsh_output():
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 4 - ChannelKeyManager.sign_input
+  // EXERCISE 4 - Sign a Transaction Input
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-sign-input": {
     id: "ln-exercise-sign-input",
@@ -400,7 +400,7 @@ def test_bolt3_commitment_signature_vector():
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 6 -Derive Revocation Public Key
+  // EXERCISE 5 - Derive Revocation Public Key
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-revocation-pubkey": {
     id: "ln-exercise-revocation-pubkey",
@@ -487,7 +487,7 @@ def test_uses_both_inputs():
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 7 -Derive Revocation Private Key
+  // EXERCISE 6 - Derive Revocation Private Key
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-revocation-privkey": {
     id: "ln-exercise-revocation-privkey",
@@ -568,7 +568,7 @@ def test_pubkey_consistency():
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 7 - ChannelKeyManager.build_commitment_secret
+  // EXERCISE 7 - Build Commitment Secret
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-commitment-secret": {
     id: "ln-exercise-commitment-secret",
@@ -651,7 +651,7 @@ def test_deterministic():
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 8 - ChannelKeyManager.derive_per_commitment_point
+  // EXERCISE 8 - Derive Per-Commitment Point
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-per-commitment-point": {
     id: "ln-exercise-per-commitment-point",
@@ -749,7 +749,7 @@ def test_different_commitments():
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 9b - Get Commitment Keys
+  // EXERCISE 9 - Get Commitment Keys
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-get-commitment-keys": {
     id: "ln-exercise-get-commitment-keys",
@@ -844,7 +844,7 @@ test_get_commitment_keys()`,
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 10 -Derive Public Key from Basepoint
+  // EXERCISE 10 - Derive Public Key from Basepoint
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-derive-pubkey": {
     id: "ln-exercise-derive-pubkey",
@@ -908,7 +908,7 @@ def test_returns_compressed():
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 11 -Derive Private Key from Basepoint Secret
+  // EXERCISE 11 - Derive Private Key
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-derive-privkey": {
     id: "ln-exercise-derive-privkey",
@@ -976,7 +976,7 @@ def test_returns_32_bytes():
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 12 -Create to_remote Script
+  // EXERCISE 12 - Create to_remote Script
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-to-remote-script": {
     id: "ln-exercise-to-remote-script",
@@ -1037,7 +1037,7 @@ def test_uses_hash160():
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 13 -Create to_local Script
+  // EXERCISE 13 - Create to_local Script
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-to-local-script": {
     id: "ln-exercise-to-local-script",
@@ -1111,7 +1111,7 @@ def test_script_structure():
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 14 -Compute Obscured Commitment Number
+  // EXERCISE 14 - Compute Obscured Commitment Number
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-obscure-factor": {
     id: "ln-exercise-obscure-factor",
@@ -1177,7 +1177,7 @@ def get_obscure_factor(opener_payment_basepoint, accepter_payment_basepoint):
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 15 -Set Obscured Commitment Number in TX
+  // EXERCISE 15 - Set Obscured Commitment Number
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-obscured-commitment": {
     id: "ln-exercise-obscured-commitment",
@@ -1257,7 +1257,7 @@ def test_sequence_upper_byte():
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 16 -Create Commitment Transaction Outputs
+  // EXERCISE 16 - Create Commitment TX Outputs
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-commitment-outputs": {
     id: "ln-exercise-commitment-outputs",
@@ -1349,7 +1349,7 @@ def test_dust_filtering():
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 16 - Sort Outputs (BIP 69 / BOLT 3)
+  // EXERCISE 17 - Sort Outputs
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-sort-outputs": {
     id: "ln-exercise-sort-outputs",
@@ -1419,7 +1419,7 @@ def test_none_cltv_treated_as_zero():
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 17 - Create Commitment Transaction
+  // EXERCISE 18 - Create Commitment Transaction
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-commitment-tx": {
     id: "ln-exercise-commitment-tx",
@@ -1560,7 +1560,7 @@ def test_bolt3_unsigned_vector():
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 18 -Finalize Commitment Transaction
+  // EXERCISE 19 - Finalize Commitment Transaction
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-finalize-commitment": {
     id: "ln-exercise-finalize-commitment",
@@ -1646,7 +1646,7 @@ def test_witness_order_respects_flag():
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 19 - Create HTLC Outputs
+  // EXERCISE 26 - Create HTLC Outputs
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-htlc-outputs": {
     id: "ln-exercise-htlc-outputs",
@@ -1779,7 +1779,7 @@ def test_bolt3_p2wsh_vectors():
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 19b - Update Commitment Transaction for HTLCs
+  // EXERCISE 27 - Update Commitment Transaction for HTLCs
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-commitment-tx-htlc": {
     id: "ln-exercise-commitment-tx-htlc",
@@ -2015,7 +2015,7 @@ def test_bolt3_five_htlc_vector():
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 20 -Create Offered HTLC Script
+  // EXERCISE 20 - Create Offered HTLC Script
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-offered-htlc-script": {
     id: "ln-exercise-offered-htlc-script",
@@ -2111,7 +2111,7 @@ def test_script_length():
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 20 -Create Received HTLC Script
+  // EXERCISE 23 - Create Received HTLC Script
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-received-htlc-script": {
     id: "ln-exercise-received-htlc-script",
@@ -2212,7 +2212,7 @@ def test_script_returns_bytes():
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 21 -Create HTLC Timeout Transaction
+  // EXERCISE 21 - Create HTLC Timeout Transaction
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-htlc-timeout-tx": {
     id: "ln-exercise-htlc-timeout-tx",
@@ -2316,7 +2316,7 @@ def test_bolt3_vector_second_offered_htlc():
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 22 -Create HTLC Success Transaction
+  // EXERCISE 24 - Create HTLC Success Transaction
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-htlc-success-tx": {
     id: "ln-exercise-htlc-success-tx",
@@ -2439,7 +2439,7 @@ def test_bolt3_vector_third_received_htlc():
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 23 - Finalize HTLC Timeout Transaction
+  // EXERCISE 22 - Finalize HTLC Timeout Transaction
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-finalize-htlc-timeout": {
     id: "ln-exercise-finalize-htlc-timeout",
@@ -2556,7 +2556,7 @@ def test_witness_shape():
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 24 - Finalize HTLC Success Transaction
+  // EXERCISE 25 - Finalize HTLC Success Transaction
   // ═══════════════════════════════════════════════════════════════════════════
   "ln-exercise-finalize-htlc-success": {
     id: "ln-exercise-finalize-htlc-success",
