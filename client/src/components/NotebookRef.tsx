@@ -74,25 +74,25 @@ export default function NotebookRef({ storageKey, label, theme }: NotebookRefPro
   }
 
   return (
-    <div className={`my-3 border rounded overflow-hidden ${
-      dark ? "border-[#2a3552] bg-[#0f1930]" : "border-[#d4c9a8] bg-[#f8f5ee]"
+    <div className={`my-3 border overflow-hidden ${
+      dark ? "border-[#2a3552] bg-[#0f1930]" : "border-[#d4c9a8] bg-[#fdf9f2]"
     }`}>
-      <div className="flex items-center justify-between px-3 py-1.5">
-        <span className={`text-[10px] font-semibold uppercase ${dark ? "text-slate-400" : "text-black/50"}`}>
+      <div className="flex items-center justify-between px-4 py-2">
+        <span className={`text-sm font-bold uppercase ${dark ? "text-slate-300" : "text-black/75"}`}>
           {label}
         </span>
         <button
           onClick={handleCopy}
-          className={`font-pixel text-[9px] px-2 py-0.5 border cursor-pointer transition-opacity hover:opacity-80 ${
+          className={`text-sm font-semibold px-3 py-1.5 border cursor-pointer transition-opacity hover:opacity-80 ${
             dark ? "border-[#2a3552] text-slate-400" : "border-[#d4c9a8] text-black/50"
           }`}
         >
           {copied ? "COPIED" : "COPY"}
         </button>
       </div>
-      <div className="px-3 pb-2 overflow-x-auto">
-        <code className={`text-[11px] font-mono break-all leading-relaxed ${
-          dark ? "text-emerald-300" : "text-emerald-800"
+      <div className="px-4 pb-3 overflow-x-auto">
+        <code className={`text-base font-mono break-all leading-relaxed ${
+          dark ? "text-slate-200" : "text-black/80"
         }`}>
           {value}
         </code>
