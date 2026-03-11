@@ -34,6 +34,8 @@ export interface TxGeneratorConfig {
     key: string;            // pl-txnotebook-{key}
     parseLabel: string;     // Label in stdout to extract, e.g. "TXID"
   }>;
+  /** Notebook keys to clear when this generator produces a new transaction. */
+  invalidatesNotebookKeys?: string[];
   /** Exercise IDs that must be completed before this generator is unlocked. */
   requiredExercises?: string[];
 }
@@ -948,6 +950,14 @@ export const TX_GENERATORS: Record<string, TxGeneratorConfig> = {
     buttonLabel: "Generate Transaction",
     inputs: [],
     execute: executeFundingGenerator,
+    invalidatesNotebookKeys: [
+      "commitment-refund-txid",
+      "commitment-refund-txhex",
+      "commitment-htlc-txid",
+      "commitment-htlc-txhex",
+      "htlc-timeout-txid",
+      "htlc-timeout-txhex",
+    ],
     notebookSaves: [
       { key: "funding-txid", parseLabel: "TXID" },
       { key: "funding-txhex", parseLabel: "HEX" },

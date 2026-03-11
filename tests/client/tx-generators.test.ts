@@ -11,6 +11,17 @@ describe("Signed Lightning transaction generators", () => {
       expect(pythonCode).not.toContain("sign_digest(sighash, sigencode=sigencode_der)");
     }
   });
+
+  it("clears downstream notebook transactions when funding is regenerated", () => {
+    expect(TX_GENERATORS["gen-funding"].invalidatesNotebookKeys).toEqual([
+      "commitment-refund-txid",
+      "commitment-refund-txhex",
+      "commitment-htlc-txid",
+      "commitment-htlc-txhex",
+      "htlc-timeout-txid",
+      "htlc-timeout-txhex",
+    ]);
+  });
 });
 
 describe("Funding transaction generator", () => {

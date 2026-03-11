@@ -191,7 +191,14 @@ export default function TxGenerator({ config, theme, sessionToken, isCompleted, 
       setOutputParsed(parsed);
 
       // Save to TxNotebook localStorage
-      if (config.notebookSaves) {
+      if (config.notebookSaves || config.invalidatesNotebookKeys?.length) {
+        if (config.invalidatesNotebookKeys?.length) {
+          for (const key of config.invalidatesNotebookKeys) {
+            try {
+              localStorage.removeItem(STORAGE_PREFIX + key);
+            } catch {}
+          }
+        }
         for (const save of config.notebookSaves) {
           const value = parsed[save.parseLabel];
           if (value) {
