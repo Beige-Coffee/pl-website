@@ -47,7 +47,7 @@ import hmac
 import hashlib
 import struct
 from ecdsa import SECP256k1, SigningKey
-from ecdsa.util import sigencode_der
+from ecdsa.util import sigencode_der_canonize
 
 ORDER = SECP256k1.order
 
@@ -305,7 +305,11 @@ def finalize_commitment_tx(unsigned_tx_hex, funding_script, funding_amount,
     sighash = dsha256(preimage)
 
     sk = SigningKey.from_string(local_funding_privkey, curve=SECP256k1)
-    local_sig = sk.sign_digest(sighash, sigencode=sigencode_der) + b'\\x01'
+    local_sig = sk.sign_digest_deterministic(
+        sighash,
+        hashfunc=hashlib.sha256,
+        sigencode=sigencode_der_canonize,
+    ) + b'\\x01'
 
     if local_sig_first:
         sig1, sig2 = local_sig, remote_signature
@@ -364,7 +368,11 @@ def finalize_htlc_timeout(unsigned_tx_hex, htlc_script, htlc_amount,
     sighash = dsha256(preimage)
 
     sk = SigningKey.from_string(local_htlc_privkey, curve=SECP256k1)
-    local_sig = sk.sign_digest(sighash, sigencode=sigencode_der) + b'\\x01'
+    local_sig = sk.sign_digest_deterministic(
+        sighash,
+        hashfunc=hashlib.sha256,
+        sigencode=sigencode_der_canonize,
+    ) + b'\\x01'
 
     result = version
     result += b'\\x00\\x01'
@@ -589,7 +597,11 @@ preimage_data = (version + hp + hs + prevhash + previndex + sc
 sighash = dsha256(preimage_data)
 
 bob_sk = SigningKey.from_string(bob_funding_privkey, curve=SECP256k1)
-bob_sig = bob_sk.sign_digest(sighash, sigencode=sigencode_der) + b'\\x01'
+bob_sig = bob_sk.sign_digest_deterministic(
+    sighash,
+    hashfunc=hashlib.sha256,
+    sigencode=sigencode_der_canonize,
+) + b'\\x01'
 
 # Determine signature order
 alice_funding_pub = alice_keys['funding']['pubkey']
@@ -670,7 +682,11 @@ preimage_data = (version + hp + hs + prevhash + previndex + sc
 sighash = dsha256(preimage_data)
 
 bob_sk = SigningKey.from_string(bob_funding_privkey, curve=SECP256k1)
-bob_sig = bob_sk.sign_digest(sighash, sigencode=sigencode_der) + b'\\x01'
+bob_sig = bob_sk.sign_digest_deterministic(
+    sighash,
+    hashfunc=hashlib.sha256,
+    sigencode=sigencode_der_canonize,
+) + b'\\x01'
 
 alice_funding_pub = alice_keys['funding']['pubkey']
 bob_funding_pub = bob_keys['funding']['pubkey']
@@ -746,7 +762,11 @@ bob_htlc_privkey = derive_privkey(
     per_commitment_point
 )
 bob_sk = SigningKey.from_string(bob_htlc_privkey, curve=SECP256k1)
-bob_htlc_sig = bob_sk.sign_digest(sighash, sigencode=sigencode_der) + b'\\x01'
+bob_htlc_sig = bob_sk.sign_digest_deterministic(
+    sighash,
+    hashfunc=hashlib.sha256,
+    sigencode=sigencode_der_canonize,
+) + b'\\x01'
 
 # Finalize with Alice's HTLC signature
 signed_hex = finalize_htlc_timeout(

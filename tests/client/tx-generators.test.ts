@@ -2,6 +2,17 @@ import { describe, expect, it, vi } from "vitest";
 
 import { TX_GENERATORS } from "../../client/src/data/tx-generators.ts";
 
+describe("Signed Lightning transaction generators", () => {
+  it("use deterministic low-S DER signatures in their embedded Python", () => {
+    for (const id of ["gen-commitment", "gen-htlc-commitment", "gen-htlc-timeout"] as const) {
+      const pythonCode = TX_GENERATORS[id].pythonCode || "";
+      expect(pythonCode).toContain("sign_digest_deterministic(");
+      expect(pythonCode).toContain("sigencode_der_canonize");
+      expect(pythonCode).not.toContain("sign_digest(sighash, sigencode=sigencode_der)");
+    }
+  });
+});
+
 describe("Funding transaction generator", () => {
   it("builds a native P2WSH funding tx from an explicit wallet UTXO", async () => {
     const generator = TX_GENERATORS["gen-funding"];
