@@ -137,17 +137,6 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
     answer: 0,
     explanation: "The bit-flipping algorithm used in BOLT 3 is designed so that the receiver of revealed secrets can store them in a compact 'shachain' structure that uses only O(log n) space while being able to derive any previously revealed secret. This is critical for Lightning because a long-lived channel could have millions of state updates, and storing every individual per-commitment secret would be prohibitively expensive. The shachain allows a node to verify and store secrets efficiently.",
   },
-  "p2wsh-wrapping": {
-    question: "Why are HTLC outputs and the to_local output wrapped in P2WSH (Pay-to-Witness-Script-Hash)?",
-    options: [
-      "P2WSH hides the spending conditions until the output is spent, reducing the on-chain footprint and providing privacy about the channel's HTLC structure",
-      "P2WSH allows the scripts to be larger than the 520-byte limit imposed on P2SH scripts",
-      "P2WSH enables the use of Schnorr signatures, which are more efficient than ECDSA",
-      "P2WSH is required for all SegWit transactions; there is no alternative",
-    ],
-    answer: 0,
-    explanation: "P2WSH commits to a script hash rather than the full script in the output. The actual script (witness script) is only revealed when the output is spent. This means that on-chain observers cannot see the complex HTLC conditions or revocation paths until a close occurs, providing some privacy. Additionally, the witness data doesn't count toward the traditional block size limit (it gets a 75% discount in weight), reducing fees for these complex scripts.",
-  },
   "htlc-dust": {
     question: "What makes an HTLC 'dust' (trimmed) in the context of commitment transactions?",
     options: [
@@ -578,7 +567,7 @@ export const CHAPTER_REQUIREMENTS: Record<string, {
   "get-htlc-commitment": { checkpoints: [], exercises: ["gen-htlc-commitment"] },
   "get-htlc-timeout": { checkpoints: [], exercises: ["gen-htlc-timeout"] },
   "received-htlcs": { checkpoints: ["htlc-timeout-vs-success"], exercises: ["ln-exercise-received-htlc-script", "ln-exercise-htlc-success-tx", "ln-exercise-finalize-htlc-success"] },
-  "htlc-fees-dust": { checkpoints: ["htlc-dust", "p2wsh-wrapping"], exercises: ["ln-exercise-htlc-outputs", "ln-exercise-commitment-tx-htlc"] },
+  "htlc-fees-dust": { checkpoints: ["htlc-dust"], exercises: ["ln-exercise-htlc-outputs", "ln-exercise-commitment-tx-htlc"] },
   "closing-channels": { checkpoints: [], exercises: [] },
   "quiz": { checkpoints: [], exercises: [] },
   "pay-it-forward": { checkpoints: [], exercises: [] },

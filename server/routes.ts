@@ -160,7 +160,6 @@ export const CHECKPOINT_ANSWER_KEY: Record<string, number> = {
   "commitment-secret-algorithm": 0,
   "csv-purpose": 2,
   "obscured-commitment": 0,
-  "p2wsh-wrapping": 0,
   "htlc-dust": 3,
   "htlc-timeout-vs-success": 2,
   "htlc-preimage-purpose": 1,

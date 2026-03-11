@@ -657,7 +657,6 @@ export default function AdminPage() {
                 { id: "ln-exercise-htlc-outputs", label: "HTLC Outputs", chapter: "HTLC Fees & Dust" },
                 { id: "ln-exercise-commitment-tx-htlc", label: "HTLC Commit Tx", chapter: "HTLC Fees & Dust" },
                 { id: "htlc-dust", label: "Dust Quiz", chapter: "HTLC Fees & Dust" },
-                { id: "p2wsh-wrapping", label: "P2WSH Quiz", chapter: "HTLC Fees & Dust" },
               ],
               pages: [
                 { page: "/lightning-tutorial", label: "Intro" },
