@@ -346,7 +346,7 @@ class NodeManager {
       `-rpcpassword=${RPC_PASS}`,
       "-rpcallowip=127.0.0.1",
       "-rpcbind=127.0.0.1",
-      "-dbcache=4",
+      "-dbcache=20",
       "-maxmempool=5",
       "-maxconnections=0",
       "-txindex=1",
@@ -593,7 +593,7 @@ class NodeManager {
           "  validateaddress <addr>     - Validate a Bitcoin address",
           "  help <command>             - Get help for a specific command",
           "",
-          "  mine <n>                   - Mine n blocks (max 25 per command)",
+          "  mine <n>                   - Mine n blocks (max 40 per command)",
           "  clear                      - Clear terminal",
         ].join("\n"),
       };
@@ -630,10 +630,10 @@ class NodeManager {
   }
 
   private async _handleMine(instance: NodeInstance, args: string[]): Promise<{ result?: unknown; error?: string }> {
-    const MAX_MINE_BLOCKS = 25;
+    const MAX_MINE_BLOCKS = 40;
     const numBlocks = parseInt(args[0] || "1", 10);
     if (isNaN(numBlocks) || numBlocks < 1) {
-      return { error: "Usage: mine <number> (1-25)" };
+      return { error: "Usage: mine <number> (1-40)" };
     }
     if (numBlocks > MAX_MINE_BLOCKS) {
       return { error: `For this course, mine is limited to ${MAX_MINE_BLOCKS} blocks at a time. Run 'mine ${MAX_MINE_BLOCKS}' multiple times if you need more.` };
