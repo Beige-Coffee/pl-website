@@ -566,7 +566,7 @@ class NodeManager {
           "  validateaddress <addr>     - Validate a Bitcoin address",
           "  help <command>             - Get help for a specific command",
           "",
-          "  mine <n>                   - Mine n blocks (shortcut)",
+          "  mine <n>                   - Mine n blocks (max 40 per command)",
           "  clear                      - Clear terminal",
         ].join("\n"),
       };
@@ -603,9 +603,13 @@ class NodeManager {
   }
 
   private async _handleMine(instance: NodeInstance, args: string[]): Promise<{ result?: unknown; error?: string }> {
+    const MAX_MINE_BLOCKS = 40;
     const numBlocks = parseInt(args[0] || "1", 10);
-    if (isNaN(numBlocks) || numBlocks < 1 || numBlocks > 1000) {
-      return { error: "Usage: mine <number> (1-1000)" };
+    if (isNaN(numBlocks) || numBlocks < 1) {
+      return { error: "Usage: mine <number> (1-40)" };
+    }
+    if (numBlocks > MAX_MINE_BLOCKS) {
+      return { error: `For this course, mine is limited to ${MAX_MINE_BLOCKS} blocks at a time. Run 'mine ${MAX_MINE_BLOCKS}' multiple times if you need more.` };
     }
 
     try {

@@ -229,7 +229,8 @@ async function main() {
     await runNodeCommandExpectText(page, `sendrawtransaction ${htlcCommitmentHex}`, htlcCommitmentTxid, 30_000);
     await runNodeCommandExpectRegex(page, "mine 1", /[0-9a-f]{64}/i, 30_000);
     await runNodeCommandExpectText(page, `sendrawtransaction ${htlcTimeoutHex}`, "non-final", 30_000);
-    await runNodeCommandExpectRegex(page, "mine 50", /[0-9a-f]{64}/i, 30_000);
+    await runNodeCommandExpectRegex(page, "mine 40", /[0-9a-f]{64}/i, 30_000);
+    await runNodeCommandExpectRegex(page, "mine 10", /[0-9a-f]{64}/i, 30_000);
     await runNodeCommandExpectText(page, `sendrawtransaction ${htlcTimeoutHex}`, htlcTimeoutTxid, 30_000);
 
     const state = await fetchServerState(page);
