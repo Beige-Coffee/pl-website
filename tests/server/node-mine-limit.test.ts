@@ -29,19 +29,19 @@ describe("mine command limits", () => {
   });
 
   it("mine 40 batches into smaller RPC calls and succeeds", async () => {
-    // mine 40 with BATCH=5 => 8 generatetoaddress + 1 getblockcount = 9 calls
+    // mine 40 with BATCH=2 => 20 generatetoaddress + 1 getblockcount = 21 calls
     manager._rpcCall = vi.fn().mockResolvedValue("mock");
-    // 8 batches of 5 blocks each
-    for (let i = 0; i < 8; i++) {
-      manager._rpcCall.mockResolvedValueOnce(Array(5).fill("0".repeat(64)));
+    // 20 batches of 2 blocks each
+    for (let i = 0; i < 20; i++) {
+      manager._rpcCall.mockResolvedValueOnce(Array(2).fill("0".repeat(64)));
     }
     manager._rpcCall.mockResolvedValueOnce(140); // getblockcount
 
     const result = await manager.exec("test-user", "mine 40");
     expect(result.error).toBeUndefined();
     expect(result.result).toContain("Mined 40 blocks");
-    // 8 generatetoaddress batches + 1 getblockcount
-    expect(manager._rpcCall).toHaveBeenCalledTimes(9);
+    // 20 generatetoaddress batches + 1 getblockcount
+    expect(manager._rpcCall).toHaveBeenCalledTimes(21);
   });
 
   it("mine 41 returns the friendly course-specific error", async () => {

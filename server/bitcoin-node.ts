@@ -76,7 +76,7 @@ const RPC_TIMEOUT_OVERRIDES_MS: Record<string, number> = {
   createwallet: 60_000,
   rescanblockchain: 300_000,
   getwalletinfo: 10_000,
-  generatetoaddress: 120_000,
+  generatetoaddress: 300_000,
 };
 
 const BLOCKED_COMMANDS = new Set([
@@ -539,10 +539,12 @@ class NodeManager {
 
     const result = await this._execCommand(instance, rawCommand);
 
-    // If the command failed with a timeout or connection error, the node process
-    // may be dead or hung. Stop it so the next call triggers a fresh re-provision.
-    if (result.error && /timed out|ECONNREFUSED|ECONNRESET|socket hang up/i.test(result.error)) {
-      console.log("[node] Node appears unresponsive for user", userId, "- stopping for re-provision on next call");
+    // If the command failed with a connection error (not a timeout), the node
+    // process is likely dead. Stop it so the next call triggers a fresh re-provision.
+    // Timeouts are NOT treated as fatal — the node may still be alive and processing
+    // (e.g., generatetoaddress mining blocks slowly). Killing it mid-write can corrupt data.
+    if (result.error && /ECONNREFUSED|ECONNRESET|socket hang up/i.test(result.error)) {
+      console.log("[node] Node appears dead for user", userId, "- stopping for re-provision on next call");
       await this.stop(userId);
     }
 
@@ -647,9 +649,9 @@ class NodeManager {
       const address = "bcrt1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqdku202";
 
       // Batch into smaller generatetoaddress calls to avoid RPC timeouts
-      // on resource-constrained hosts (e.g. Replit). Each batch of 5 blocks
-      // completes well within the 120s generatetoaddress timeout.
-      const BATCH = 5;
+      // on resource-constrained hosts (e.g. Replit). Each batch of 2 blocks
+      // keeps wallet processing manageable within the 300s timeout.
+      const BATCH = 2;
       let remaining = numBlocks;
       while (remaining > 0) {
         const batch = Math.min(remaining, BATCH);

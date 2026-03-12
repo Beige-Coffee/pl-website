@@ -289,9 +289,10 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
 
       if (data.error) {
         setLines((prev) => [...prev, { type: "error", text: data.error }]);
-        // Auto-recover: if the error indicates the node is unresponsive,
-        // reset nodeReady to trigger automatic re-provisioning
-        if (/timed out|ECONNREFUSED|ECONNRESET|socket hang up/i.test(data.error)) {
+        // Auto-recover: if the error indicates the node process is dead,
+        // reset nodeReady to trigger automatic re-provisioning.
+        // Timeouts are NOT treated as fatal — the node may still be processing.
+        if (/ECONNREFUSED|ECONNRESET|socket hang up/i.test(data.error)) {
           setNodeReady(false);
         }
       } else if (data.result === "__CLEAR__") {
