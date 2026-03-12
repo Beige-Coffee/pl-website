@@ -22,7 +22,7 @@ const PROMPT = "bitcoin-cli> ";
 const COMMANDS = [
   "sendrawtransaction",
   "decoderawtransaction",
-  "gettransaction",
+  "getrawtransaction",
   "gettxout",
   "mine",
   "decodescript",
@@ -30,7 +30,7 @@ const COMMANDS = [
   "getblockcount",
   "getblockchaininfo",
   "getmempoolinfo",
-  "getrawtransaction",
+  "gettransaction",
   "help",
   "clear",
 ];
@@ -569,9 +569,6 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
         <DrawerContent className={`max-h-[85dvh] flex flex-col ${panelBg}`} data-testid="drawer-node-terminal">
           <DrawerTitle className={`font-pixel text-xs ${goldText} px-4 pt-2 flex items-center gap-2`}>
             Bitcoin Node
-            {nodeReady && !provisioning && (
-              <span className="inline-block w-2 h-2 rounded-full bg-green-500" title="Node active" />
-            )}
             {provisioning && <span className="inline-block w-3 h-3 border-2 border-[#FFD700]/30 border-t-[#FFD700] rounded-full animate-spin" />}
           </DrawerTitle>
           {terminalContent}
@@ -600,9 +597,6 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
       <div className={`flex items-center justify-between px-4 py-2.5 border-b-2 ${panelBorder} ${dark ? "bg-[#0f1930]" : "bg-[#f0e8d8]"} shrink-0`}>
         <div className={`font-pixel text-xs ${goldText} flex items-center gap-2`}>
           Bitcoin Node
-          {nodeReady && !provisioning && (
-            <span className="inline-block w-2 h-2 rounded-full bg-green-500" title="Node active" />
-          )}
           {provisioning && <span className="inline-block w-3 h-3 border-2 border-[#FFD700]/30 border-t-[#FFD700] rounded-full animate-spin" />}
         </div>
         <div className="flex items-center gap-2">
@@ -643,7 +637,7 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
             {([
               ["sendrawtransaction", "raw tx hex", "Broadcast a raw transaction to the network."],
               ["decoderawtransaction", "raw tx hex", "Decode a raw transaction to inspect its inputs, outputs, and other details."],
-              ["gettransaction", "txid", "Retrieve info about a broadcast transaction, including confirmation count."],
+              ["getrawtransaction", "txid true", "Get transaction details and confirmation count. Pass 'true' for decoded JSON."],
               ["gettxout", "txid, output index", "Look up a UTXO. Returns nothing if it has been spent or never existed."],
               ["mine", "number of blocks", "Mine blocks on the regtest network. Transactions in the mempool will be included."],
             ] as [string, string, string][]).map(([cmd, args, desc]) => (
@@ -657,7 +651,7 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
             {([
               ["decodescript", "hex", "Decode a hex-encoded script to see its opcodes and address."],
               ["testmempoolaccept", "raw tx hex", "Test if a transaction would be accepted to the mempool (without broadcasting)."],
-              ["getrawtransaction", "txid, verbose", "Get raw transaction data. Pass 'true' as second arg for decoded JSON."],
+              ["gettransaction", "txid", "Get wallet transaction info (only for transactions involving wallet addresses)."],
             ] as [string, string, string][]).map(([cmd, args, desc]) => (
               <div key={cmd}>
                 <span className={`${dark ? "text-[#FFD700]" : "text-[#9a7200]"} font-bold`}>{cmd}</span>

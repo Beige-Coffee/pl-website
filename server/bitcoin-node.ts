@@ -353,6 +353,7 @@ class NodeManager {
       "-fallbackfee=0.00001",
       "-minrelaytxfee=0",
       "-walletbroadcast=0",
+      "-persistmempool=0",
       "-wallet=pl",
     ];
 
@@ -578,7 +579,7 @@ class NodeManager {
           "  getblockcount              - Get current block height",
           "  getblockhash <height>      - Get block hash by height",
           "  getblock <hash> [verbose]  - Get block data",
-          "  getrawtransaction <txid> [verbose]  - Get raw transaction",
+          "  getrawtransaction <txid> true  - Get transaction details + confirmations",
           "  decoderawtransaction <hex> - Decode a raw transaction",
           "  decodescript <hex>         - Decode a script",
           "  sendrawtransaction <hex>   - Broadcast a raw transaction",
@@ -639,13 +640,11 @@ class NodeManager {
     }
 
     try {
-      // Get or create an address to mine to
-      let address: string;
-      try {
-        address = (await this._rpcCall(instance.rpcPort, "getnewaddress", [])) as string;
-      } catch {
-        address = (await this._rpcCall(instance.rpcPort, "getnewaddress", ["", "bech32"])) as string;
-      }
+      // Use a fixed throwaway address instead of getnewaddress to avoid:
+      // 1. Wallet-dependent RPC that blocks during wallet scanning on restart
+      // 2. Adding coinbase transactions to the wallet, which causes slow
+      //    wallet reconciliation on subsequent node restarts
+      const address = "bcrt1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqdku202";
 
       // Batch into smaller generatetoaddress calls to avoid RPC timeouts
       // on resource-constrained hosts (e.g. Replit). Each batch of 5 blocks

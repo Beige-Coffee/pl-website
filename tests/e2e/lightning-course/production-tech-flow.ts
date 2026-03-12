@@ -181,9 +181,9 @@ async function main() {
     // Open channel Bitcoin Node flow
     await navigateToChapter(page, "open-channel");
     await runNodeCommandExpectText(page, `sendrawtransaction ${fundingHex}`, fundingTxid, 30_000);
-    await runNodeCommandExpectText(page, `gettransaction ${fundingTxid}`, "\"confirmations\": 0", 30_000);
+    await runNodeCommandExpectText(page, `getrawtransaction ${fundingTxid} true`, "witness_v0_scripthash", 30_000);
     await runNodeCommandExpectRegex(page, "mine 6", /[0-9a-f]{64}/i, 30_000);
-    await runNodeCommandExpectText(page, `gettransaction ${fundingTxid}`, "\"confirmations\": 6", 30_000);
+    await runNodeCommandExpectText(page, `getrawtransaction ${fundingTxid} true`, "\"confirmations\": 6", 30_000);
 
     // Simple HTLC walkthrough
     await navigateToChapter(page, "simple-htlc");

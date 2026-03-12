@@ -148,12 +148,13 @@ export async function decodeRawTransaction(page: Page, txHex: string): Promise<a
 }
 
 /**
- * Get a transaction by txid via gettransaction RPC.
+ * Get a transaction by txid via getrawtransaction RPC (verbose mode).
+ * Uses txindex rather than wallet state, so works for any transaction.
  */
 export async function getTransaction(page: Page, txid: string): Promise<any> {
-  const rpcResult = await nodeRpc(page, "gettransaction", [txid]);
+  const rpcResult = await nodeRpc(page, "getrawtransaction", [txid, true]);
   if (rpcResult.error) {
-    throw new Error(`gettransaction error: ${rpcResult.error}`);
+    throw new Error(`getrawtransaction error: ${rpcResult.error}`);
   }
   return rpcResult.result;
 }
