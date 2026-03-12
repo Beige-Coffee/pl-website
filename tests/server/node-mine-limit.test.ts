@@ -28,33 +28,32 @@ describe("mine command limits", () => {
     });
   });
 
-  it("mine 40 batches into smaller RPC calls and succeeds", async () => {
-    // mine 40 with BATCH=5 => 8 generatetoaddress + 1 getblockcount = 9 calls
-    // (uses fixed throwaway address, no getnewaddress needed)
+  it("mine 25 batches into smaller RPC calls and succeeds", async () => {
+    // mine 25 with BATCH=5 => 5 generatetoaddress + 1 getblockcount = 6 calls
     manager._rpcCall = vi.fn().mockResolvedValue("mock");
-    // 8 batches of 5 blocks each
-    for (let i = 0; i < 8; i++) {
+    // 5 batches of 5 blocks each
+    for (let i = 0; i < 5; i++) {
       manager._rpcCall.mockResolvedValueOnce(Array(5).fill("0".repeat(64)));
     }
-    manager._rpcCall.mockResolvedValueOnce(140); // getblockcount
+    manager._rpcCall.mockResolvedValueOnce(125); // getblockcount
 
-    const result = await manager.exec("test-user", "mine 40");
+    const result = await manager.exec("test-user", "mine 25");
     expect(result.error).toBeUndefined();
-    expect(result.result).toContain("Mined 40 blocks");
-    // 8 generatetoaddress batches + 1 getblockcount
-    expect(manager._rpcCall).toHaveBeenCalledTimes(9);
+    expect(result.result).toContain("Mined 25 blocks");
+    // 5 generatetoaddress batches + 1 getblockcount
+    expect(manager._rpcCall).toHaveBeenCalledTimes(6);
   });
 
-  it("mine 41 returns the friendly course-specific error", async () => {
-    const result = await manager.exec("test-user", "mine 41");
+  it("mine 26 returns the friendly course-specific error", async () => {
+    const result = await manager.exec("test-user", "mine 26");
     expect(result.error).toBeDefined();
-    expect(result.error).toContain("limited to 40 blocks at a time");
-    expect(result.error).toContain("mine 40");
+    expect(result.error).toContain("limited to 25 blocks at a time");
+    expect(result.error).toContain("mine 25");
   });
 
   it("mine 1000 returns the friendly error", async () => {
     const result = await manager.exec("test-user", "mine 1000");
-    expect(result.error).toContain("limited to 40 blocks at a time");
+    expect(result.error).toContain("limited to 25 blocks at a time");
   });
 
   it("mine 0 returns usage error", async () => {
@@ -82,8 +81,8 @@ describe("mine command limits", () => {
     expect(result.result).toContain("Mined 1 block.");
   });
 
-  it("help text mentions the 40-block limit", async () => {
+  it("help text mentions the 25-block limit", async () => {
     const result = await manager.exec("test-user", "help");
-    expect(result.result).toContain("max 40");
+    expect(result.result).toContain("max 25");
   });
 });
