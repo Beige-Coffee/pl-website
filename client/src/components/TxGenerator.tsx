@@ -115,9 +115,9 @@ export default function TxGenerator({ config, theme, sessionToken, isCompleted, 
       return;
     }
 
-    setRunningHint("Starting your Bitcoin node and loading its wallet...");
+    setRunningHint("Starting your Bitcoin node...");
     const walletTimer = window.setTimeout(() => {
-      setRunningHint("Still working. The wallet may still be warming up.");
+      setRunningHint("Still working. This may take a moment on first use.");
     }, 10_000);
     const retryTimer = window.setTimeout(() => {
       setRunningHint("If this takes too long, open Bitcoin Node first, wait for it to finish starting, then retry.");

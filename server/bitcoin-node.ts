@@ -15,6 +15,7 @@ interface NodeInstance {
   dataDir: string;
   lastActivity: number;
   ready: boolean;
+  walletLoaded: boolean;
 }
 
 interface RpcResponse {
@@ -89,6 +90,25 @@ const BLOCKED_COMMANDS = new Set([
   "walletpassphrase", // not applicable
   "walletpassphrasechange", // not applicable
   "backupwallet",   // no filesystem access needed
+  "loadwallet",     // managed internally for on-demand loading
+  "unloadwallet",   // managed internally for on-demand loading
+  "createwallet",   // managed internally
+]);
+
+// RPCs that require a loaded wallet. All other RPCs work without one.
+const WALLET_RPCS = new Set([
+  "listunspent",
+  "signrawtransactionwithwallet",
+  "getrawchangeaddress",
+  "getnewaddress",
+  "getbalance",
+  "sendtoaddress",
+  "fundrawtransaction",
+  "getwalletinfo",
+  "listtransactions",
+  "gettransaction",
+  "getaddressinfo",
+  "listaddressgroupings",
 ]);
 
 function createMetricBucket(): MetricBucket {
@@ -354,7 +374,6 @@ class NodeManager {
       "-minrelaytxfee=0",
       "-walletbroadcast=0",
       "-persistmempool=0",
-      "-wallet=pl",
     ];
 
     console.log("[node] Starting bitcoind for user", userId, "on RPC port", rpcPort);
@@ -370,6 +389,7 @@ class NodeManager {
       dataDir,
       lastActivity: Date.now(),
       ready: false,
+      walletLoaded: false,
     };
 
     this.instances.set(userId, instance);
@@ -393,7 +413,6 @@ class NodeManager {
     try {
       await this._waitForRpc(instance);
       await this._ensureOutOfIBD(instance);
-      await this._waitForWallet(instance);
       instance.ready = true;
       this.recordMetric(this.metrics.provision, Date.now() - provisionStartedAt, true, false);
       return instance;
@@ -450,19 +469,38 @@ class NodeManager {
     }
   }
 
-  private async _waitForWallet(instance: NodeInstance, maxWaitMs = 60_000): Promise<void> {
-    const start = Date.now();
-    while (Date.now() - start < maxWaitMs) {
-      try {
-        const wi = await this._rpcCallWithTimeout(instance.rpcPort, "getwalletinfo", [], 3_000);
-        if ((wi as any)?.walletname === "pl") {
-          console.log("[node] Wallet ready for user", instance.userId);
-          return;
-        }
-      } catch {}
-      await new Promise((r) => setTimeout(r, 1_000));
+  private async _ensureWalletLoaded(instance: NodeInstance): Promise<void> {
+    if (instance.walletLoaded) return;
+    try {
+      await this._rpcCall(instance.rpcPort, "loadwallet", ["pl"]);
+      instance.walletLoaded = true;
+      console.log("[node] Wallet loaded on-demand for user", instance.userId);
+    } catch (err: any) {
+      if (/already loaded/i.test(err.message)) {
+        instance.walletLoaded = true;
+        return;
+      }
+      if (/not found/i.test(err.message)) {
+        await this._rpcCall(instance.rpcPort, "createwallet", ["pl"]);
+        instance.walletLoaded = true;
+        console.log("[node] Wallet created on-demand for user", instance.userId);
+        return;
+      }
+      this.metrics.walletReadyFailures += 1;
+      throw new Error(`Failed to load wallet: ${err.message}`);
     }
-    throw new Error("Wallet not ready after " + (maxWaitMs / 1000) + "s");
+  }
+
+  private async _unloadWallet(instance: NodeInstance): Promise<void> {
+    if (!instance.walletLoaded) return;
+    try {
+      await this._rpcCall(instance.rpcPort, "unloadwallet", ["pl"]);
+      instance.walletLoaded = false;
+      console.log("[node] Wallet unloaded for user", instance.userId);
+    } catch (err: any) {
+      console.log("[node] Failed to unload wallet:", err.message);
+      instance.walletLoaded = false;
+    }
   }
 
   private async _rpcCall(
@@ -525,6 +563,9 @@ class NodeManager {
     }
     const instance = await this.getOrCreate(userId);
     instance.lastActivity = Date.now();
+    if (WALLET_RPCS.has(method)) {
+      await this._ensureWalletLoaded(instance);
+    }
     return this._rpcCall(instance.rpcPort, method, params);
   }
 
@@ -615,6 +656,15 @@ class NodeManager {
       }
     }
 
+    // Load wallet on-demand for wallet RPCs
+    if (WALLET_RPCS.has(cmd)) {
+      try {
+        await this._ensureWalletLoaded(instance);
+      } catch (err: any) {
+        return { error: err.message };
+      }
+    }
+
     // Convert numeric-looking args
     const rpcArgs = args.map((a) => {
       if (/^\d+$/.test(a)) return parseInt(a, 10);
@@ -641,13 +691,12 @@ class NodeManager {
       return { error: `For this course, mine is limited to ${MAX_MINE_BLOCKS} blocks at a time. Run 'mine ${MAX_MINE_BLOCKS}' multiple times if you need more.` };
     }
 
+    // Unload wallet before mining so generateblock runs without wallet scanning.
+    // The wallet is loaded on-demand only when wallet RPCs are needed.
+    await this._unloadWallet(instance);
+
     try {
       const address = "bcrt1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqdku202";
-
-      // Use generateblock to mine blocks. First block includes mempool txs;
-      // remaining blocks are empty (just advancing chain height for timelocks).
-      // generateblock still triggers wallet/txindex processing via ActivateBestChain,
-      // so it can be slow on resource-constrained hosts — hence the 120s timeout.
       const mempool = (await this._rpcCall(instance.rpcPort, "getrawmempool", [])) as string[];
       await this._rpcCall(instance.rpcPort, "generateblock", [address, mempool || []]);
 
