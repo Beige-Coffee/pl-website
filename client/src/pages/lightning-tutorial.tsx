@@ -1682,8 +1682,8 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
                   {[
                     { label: "Scratchpad", panelId: "scratchpad" as const, testId: "button-desktop-tool-scratchpad" },
                     { label: "Bitcoin Node", panelId: "node" as const, testId: "button-desktop-tool-node" },
-                    { label: "Files", panelId: null, testId: "button-desktop-tool-files" },
                     { label: "Transactions", panelId: "notebook" as const, testId: "button-desktop-tool-notebook" },
+                    { label: "Files", panelId: null, testId: "button-desktop-tool-files" },
                   ].map((item) => (
                     <button
                       key={item.label}
@@ -1724,8 +1724,8 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
                       {[
                         { label: "Scratchpad", panelId: "scratchpad" as const, testId: "button-mobile-tool-scratchpad" },
                         { label: "Bitcoin Node", panelId: "node" as const, testId: "button-mobile-tool-node" },
-                        { label: "Files", panelId: null, testId: "button-mobile-tool-files" },
                         { label: "Transactions", panelId: "notebook" as const, testId: "button-mobile-tool-notebook" },
+                        { label: "Files", panelId: null, testId: "button-mobile-tool-files" },
                       ].map((item) => (
                         <button
                           key={item.label}

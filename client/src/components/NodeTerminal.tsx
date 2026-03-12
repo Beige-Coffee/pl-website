@@ -307,6 +307,8 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
       setLines((prev) => [...prev, { type: "error", text: "Network error: " + err.message }]);
     } finally {
       setRunning(false);
+      // Re-focus input after command completes so user can keep typing
+      requestAnimationFrame(() => inputRef.current?.focus());
     }
   }, [sessionToken]);
 
