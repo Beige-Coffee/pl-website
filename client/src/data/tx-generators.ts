@@ -299,7 +299,7 @@ def finalize_commitment_tx(unsigned_tx_hex, funding_script, funding_amount,
 
     hp = dsha256(prevhash + previndex)
     hs = dsha256(sequence)
-    ho = dsha256(outputs[1:])
+    ho = dsha256(outputs)
     sc = bytes([len(funding_script)]) + funding_script
     preimage = (version + hp + hs + prevhash + previndex + sc
                 + struct.pack('<q', funding_amount) + sequence + ho
@@ -362,7 +362,7 @@ def finalize_htlc_timeout(unsigned_tx_hex, htlc_script, htlc_amount,
 
     hp = dsha256(prevhash + previndex)
     hs = dsha256(sequence)
-    ho = dsha256(outputs[1:])
+    ho = dsha256(outputs)
     sc = bytes([len(htlc_script)]) + htlc_script
     preimage = (version + hp + hs + prevhash + previndex + sc
                 + struct.pack('<q', htlc_amount) + sequence + ho
@@ -591,7 +591,7 @@ outputs = tx[out_start:-4]
 
 hp = dsha256(prevhash + previndex)
 hs = dsha256(sequence)
-ho = dsha256(outputs[1:])
+ho = dsha256(outputs)
 sc = bytes([len(funding_script)]) + funding_script
 preimage_data = (version + hp + hs + prevhash + previndex + sc
             + struct.pack('<q', FUNDING_AMOUNT) + sequence + ho
@@ -676,7 +676,7 @@ outputs = tx[out_start:-4]
 
 hp = dsha256(prevhash + previndex)
 hs = dsha256(sequence_val)
-ho = dsha256(outputs[1:])
+ho = dsha256(outputs)
 sc = bytes([len(funding_script)]) + funding_script
 preimage_data = (version + hp + hs + prevhash + previndex + sc
             + struct.pack('<q', FUNDING_AMOUNT) + sequence_val + ho
@@ -751,7 +751,7 @@ outputs = tx[out_start:-4]
 
 hp = dsha256(prevhash + previndex)
 hs = dsha256(sequence_val)
-ho = dsha256(outputs[1:])
+ho = dsha256(outputs)
 sc = bytes([len(htlc_script)]) + htlc_script
 preimage_data = (version + hp + hs + prevhash + previndex + sc
             + struct.pack('<q', HTLC_AMOUNT) + sequence_val + ho
