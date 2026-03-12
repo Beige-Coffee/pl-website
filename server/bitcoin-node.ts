@@ -621,7 +621,17 @@ class NodeManager {
         address = (await this._rpcCall(instance.rpcPort, "getnewaddress", ["", "bech32"])) as string;
       }
 
-      const hashes = await this._rpcCall(instance.rpcPort, "generatetoaddress", [numBlocks, address]);
+      // Batch into smaller generatetoaddress calls to avoid RPC timeouts
+      // on resource-constrained hosts (e.g. Replit). Each batch of 5 blocks
+      // completes well within the 120s generatetoaddress timeout.
+      const BATCH = 5;
+      let remaining = numBlocks;
+      while (remaining > 0) {
+        const batch = Math.min(remaining, BATCH);
+        await this._rpcCall(instance.rpcPort, "generatetoaddress", [batch, address]);
+        remaining -= batch;
+      }
+
       const blockCount = await this._rpcCall(instance.rpcPort, "getblockcount", []);
       return {
         result: `Mined ${numBlocks} block${numBlocks > 1 ? "s" : ""}. Current height: ${blockCount}`,
