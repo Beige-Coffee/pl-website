@@ -25,7 +25,6 @@ describe("mine command limits", () => {
       rpcPort: 18500,
       lastActivity: Date.now(),
       ready: true,
-      walletLoaded: false,
     });
   });
 

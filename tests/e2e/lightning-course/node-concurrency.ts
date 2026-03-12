@@ -49,13 +49,13 @@ async function main() {
     const summary = summarizeStage(users);
     const gateFailures: string[] = [];
     const provisionP95 = summary.operations.provision?.p95Ms || 0;
-    const listUnspentP95 = summary.operations.listunspent?.p95Ms || 0;
+    const scantxoutsetP95 = summary.operations.scantxoutset?.p95Ms || 0;
     const fundingP95 = summary.operations.fundingChain?.p95Ms || 0;
 
     if (summary.failureRate > 0.02) gateFailures.push(`failureRate=${summary.failureRate}`);
     if (summary.timeoutCount > 0) gateFailures.push(`timeoutCount=${summary.timeoutCount}`);
     if (provisionP95 > 30_000) gateFailures.push(`provisionP95=${provisionP95}`);
-    if (listUnspentP95 > 20_000) gateFailures.push(`listunspentP95=${listUnspentP95}`);
+    if (scantxoutsetP95 > 20_000) gateFailures.push(`scantxoutsetP95=${scantxoutsetP95}`);
     if (fundingP95 > 45_000) gateFailures.push(`fundingChainP95=${fundingP95}`);
 
     report.stages.push({

@@ -15,7 +15,6 @@ interface NodeInstance {
   dataDir: string;
   lastActivity: number;
   ready: boolean;
-  walletLoaded: boolean;
 }
 
 interface RpcResponse {
@@ -44,7 +43,6 @@ export interface NodeMetricsSnapshot {
   idleTimeoutMs: number;
   limiterBypassCount: number;
   startupFailures: number;
-  walletReadyFailures: number;
   cleanup: {
     idleStops: number;
     staleDirsRemoved: number;
@@ -70,45 +68,12 @@ const MIN_PORT = 18500;
 const MAX_PORT = 18999;
 const DEFAULT_RPC_TIMEOUT_MS = 30_000;
 const RPC_TIMEOUT_OVERRIDES_MS: Record<string, number> = {
-  listunspent: 120_000,
-  fundrawtransaction: 120_000,
-  signrawtransactionwithwallet: 60_000,
-  loadwallet: 60_000,
-  createwallet: 60_000,
-  rescanblockchain: 300_000,
-  getwalletinfo: 10_000,
+  scantxoutset: 120_000,
   generateblock: 120_000,
 };
 
 const BLOCKED_COMMANDS = new Set([
   "stop",           // would kill the node process
-  "dumpprivkey",    // unnecessary on regtest, avoid confusion
-  "dumpwallet",     // unnecessary on regtest
-  "importprivkey",  // could corrupt wallet state
-  "importwallet",   // could corrupt wallet state
-  "encryptwallet",  // would lock the wallet
-  "walletpassphrase", // not applicable
-  "walletpassphrasechange", // not applicable
-  "backupwallet",   // no filesystem access needed
-  "loadwallet",     // managed internally for on-demand loading
-  "unloadwallet",   // managed internally for on-demand loading
-  "createwallet",   // managed internally
-]);
-
-// RPCs that require a loaded wallet. All other RPCs work without one.
-const WALLET_RPCS = new Set([
-  "listunspent",
-  "signrawtransactionwithwallet",
-  "getrawchangeaddress",
-  "getnewaddress",
-  "getbalance",
-  "sendtoaddress",
-  "fundrawtransaction",
-  "getwalletinfo",
-  "listtransactions",
-  "gettransaction",
-  "getaddressinfo",
-  "listaddressgroupings",
 ]);
 
 function createMetricBucket(): MetricBucket {
@@ -148,7 +113,6 @@ class NodeManager {
     },
     limiterBypassCount: 0,
     startupFailures: 0,
-    walletReadyFailures: 0,
   };
 
   private recordMetric(bucket: MetricBucket, durationMs: number, success: boolean, timedOut: boolean) {
@@ -186,7 +150,6 @@ class NodeManager {
       },
       limiterBypassCount: 0,
       startupFailures: 0,
-      walletReadyFailures: 0,
     };
   }
 
@@ -201,7 +164,6 @@ class NodeManager {
       idleTimeoutMs: IDLE_TIMEOUT_MS,
       limiterBypassCount: this.metrics.limiterBypassCount,
       startupFailures: this.metrics.startupFailures,
-      walletReadyFailures: this.metrics.walletReadyFailures,
       cleanup: { ...this.metrics.cleanup },
       provision: summarizeMetric(this.metrics.provision),
       rpc,
@@ -370,9 +332,8 @@ class NodeManager {
       "-maxmempool=5",
       "-maxconnections=0",
       "-txindex=1",
-      "-fallbackfee=0.00001",
+      "-disablewallet",
       "-minrelaytxfee=0",
-      "-walletbroadcast=0",
       "-persistmempool=0",
     ];
 
@@ -389,7 +350,6 @@ class NodeManager {
       dataDir,
       lastActivity: Date.now(),
       ready: false,
-      walletLoaded: false,
     };
 
     this.instances.set(userId, instance);
@@ -418,11 +378,7 @@ class NodeManager {
       return instance;
     } catch (err: any) {
       const message = err?.message || "Unknown node startup error";
-      if (/wallet/i.test(message)) {
-        this.metrics.walletReadyFailures += 1;
-      } else {
-        this.metrics.startupFailures += 1;
-      }
+      this.metrics.startupFailures += 1;
       this.recordMetric(
         this.metrics.provision,
         Date.now() - provisionStartedAt,
@@ -466,40 +422,6 @@ class NodeManager {
       console.log("[node] After mining: IBD =", info2?.initialblockdownload, "height =", info2?.blocks);
     } catch (err: any) {
       console.log("[node] IBD exit attempt failed:", err.message);
-    }
-  }
-
-  private async _ensureWalletLoaded(instance: NodeInstance): Promise<void> {
-    if (instance.walletLoaded) return;
-    try {
-      await this._rpcCall(instance.rpcPort, "loadwallet", ["pl"]);
-      instance.walletLoaded = true;
-      console.log("[node] Wallet loaded on-demand for user", instance.userId);
-    } catch (err: any) {
-      if (/already loaded/i.test(err.message)) {
-        instance.walletLoaded = true;
-        return;
-      }
-      if (/not found/i.test(err.message)) {
-        await this._rpcCall(instance.rpcPort, "createwallet", ["pl"]);
-        instance.walletLoaded = true;
-        console.log("[node] Wallet created on-demand for user", instance.userId);
-        return;
-      }
-      this.metrics.walletReadyFailures += 1;
-      throw new Error(`Failed to load wallet: ${err.message}`);
-    }
-  }
-
-  private async _unloadWallet(instance: NodeInstance): Promise<void> {
-    if (!instance.walletLoaded) return;
-    try {
-      await this._rpcCall(instance.rpcPort, "unloadwallet", ["pl"]);
-      instance.walletLoaded = false;
-      console.log("[node] Wallet unloaded for user", instance.userId);
-    } catch (err: any) {
-      console.log("[node] Failed to unload wallet:", err.message);
-      instance.walletLoaded = false;
     }
   }
 
@@ -563,9 +485,6 @@ class NodeManager {
     }
     const instance = await this.getOrCreate(userId);
     instance.lastActivity = Date.now();
-    if (WALLET_RPCS.has(method)) {
-      await this._ensureWalletLoaded(instance);
-    }
     return this._rpcCall(instance.rpcPort, method, params);
   }
 
@@ -628,9 +547,7 @@ class NodeManager {
           "  sendrawtransaction <hex>   - Broadcast a raw transaction",
           "  createrawtransaction       - Create a raw transaction",
           "  testmempoolaccept <hex>    - Test if a transaction would be accepted",
-          "  getnewaddress              - Generate a new address",
-          "  getbalance                 - Get wallet balance",
-          "  listunspent                - List unspent outputs",
+          "  scantxoutset \"start\" [...]  - Scan UTXO set by descriptor",
           "  gettxout <txid> <n>        - Get UTXO info",
           "  getmempoolinfo             - Get mempool info",
           "  validateaddress <addr>     - Validate a Bitcoin address",
@@ -638,6 +555,9 @@ class NodeManager {
           "",
           "  mine <n>                   - Mine n blocks (max 40 per command)",
           "  clear                      - Clear terminal",
+          "",
+          "  Note: Wallet is disabled for performance. Use scantxoutset to find UTXOs",
+          "  and signrawtransactionwithkey to sign transactions with a known private key.",
         ].join("\n"),
       };
     }
@@ -651,15 +571,6 @@ class NodeManager {
       try {
         const result = await this._rpcCall(instance.rpcPort, cmd, [[args[0]]]);
         return { result };
-      } catch (err: any) {
-        return { error: err.message };
-      }
-    }
-
-    // Load wallet on-demand for wallet RPCs
-    if (WALLET_RPCS.has(cmd)) {
-      try {
-        await this._ensureWalletLoaded(instance);
       } catch (err: any) {
         return { error: err.message };
       }
@@ -690,10 +601,6 @@ class NodeManager {
     if (numBlocks > MAX_MINE_BLOCKS) {
       return { error: `For this course, mine is limited to ${MAX_MINE_BLOCKS} blocks at a time. Run 'mine ${MAX_MINE_BLOCKS}' multiple times if you need more.` };
     }
-
-    // Unload wallet before mining so generateblock runs without wallet scanning.
-    // The wallet is loaded on-demand only when wallet RPCs are needed.
-    await this._unloadWallet(instance);
 
     try {
       const address = "bcrt1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqdku202";

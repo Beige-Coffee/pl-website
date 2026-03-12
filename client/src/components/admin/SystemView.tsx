@@ -330,7 +330,6 @@ export default function SystemView({ data, storedPassword, onRefresh }: SystemVi
                 <div className="flex justify-between"><span>Provision avg</span><span>{formatMs(data.nodeMetrics.provision.avgMs)}</span></div>
                 <div className="flex justify-between"><span>Provision max</span><span>{formatMs(data.nodeMetrics.provision.maxMs)}</span></div>
                 <div className="flex justify-between"><span>Startup failures</span><span>{data.nodeMetrics.startupFailures}</span></div>
-                <div className="flex justify-between"><span>Wallet readiness failures</span><span>{data.nodeMetrics.walletReadyFailures}</span></div>
                 <div className="flex justify-between"><span>Idle stops</span><span>{data.nodeMetrics.cleanup.idleStops}</span></div>
                 <div className="flex justify-between"><span>Stale dir cleanup</span><span>{data.nodeMetrics.cleanup.staleDirsRemoved}</span></div>
                 <div className="flex justify-between"><span>Limiter bypass</span><span>{data.launchControls.nodeLimiterBypassEnabled ? "ENABLED" : "DISABLED"}</span></div>

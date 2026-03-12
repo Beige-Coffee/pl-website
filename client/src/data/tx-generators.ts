@@ -458,15 +458,24 @@ function parsePythonOutput(stdout: string): Record<string, string> {
 const FUNDING_AMOUNT_BTC = 0.05; // 5,000,000 sats
 const FUNDING_TX_FEE_BTC = 0.0000025; // 250 sats, fixed for the generator's simple 1-in/2-out tx
 
-interface WalletUtxo {
+// Known key from the snapshot wallet — all pre-mined coins were sent to this key.
+// Wallet is disabled on the node for performance; we sign with the key directly.
+const SNAPSHOT_WIF = "cMahea7zqjxrtgAbB7LSGbcQUr1uX1ojuat9jZodMN87JcbXMTcA";
+const SNAPSHOT_ADDRESS = "bcrt1qw508d6qejxtdg4y5r3zarvary0c5xw7kygt080";
+const SNAPSHOT_SCRIPTPUBKEY = "0014751e76e8199196d454941c45d1b3a323f1433bd6";
+const SNAPSHOT_DESCRIPTOR = "wpkh(0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798)";
+
+interface ScantxoutsetUtxo {
   txid: string;
   vout: number;
   amount: number;
-  spendable?: boolean;
-  safe?: boolean;
+  scriptPubKey: string;
+  height: number;
 }
 
-function selectFundingUtxo(unspent: WalletUtxo[]): WalletUtxo | null {
+const COINBASE_MATURITY = 100; // regtest coinbase outputs need 100 confirmations
+
+function selectFundingUtxo(unspent: ScantxoutsetUtxo[], currentHeight: number): ScantxoutsetUtxo | null {
   const minAmount = FUNDING_AMOUNT_BTC + FUNDING_TX_FEE_BTC;
   return [...unspent]
     .filter((utxo) =>
@@ -474,21 +483,20 @@ function selectFundingUtxo(unspent: WalletUtxo[]): WalletUtxo | null {
       Number.isInteger(utxo.vout) &&
       typeof utxo.amount === "number" &&
       utxo.amount >= minAmount &&
-      utxo.spendable !== false &&
-      utxo.safe !== false
+      (currentHeight - utxo.height) >= COINBASE_MATURITY
     )
     .sort((a, b) => a.amount - b.amount)[0] ?? null;
 }
 
 /**
- * Funding transaction execute function.
+ * Funding transaction execute function (walletless).
  * Uses the student's regtest Bitcoin node to create a real, broadcastable funding tx:
  * 1. Derive Alice + Bob funding pubkeys via Python
  * 2. createmultisig("bech32") → native P2WSH address for the 2-of-2 multisig
- * 3. listunspent → choose a spendable wallet UTXO explicitly
- * 4. getrawchangeaddress → reserve a change output
+ * 3. scantxoutset → find a spendable UTXO from snapshot coins (no wallet needed)
+ * 4. Use known snapshot address for change
  * 5. createrawtransaction → build 1-in/2-out tx (funding output first, change second)
- * 6. signrawtransactionwithwallet → sign with the wallet's keys
+ * 6. signrawtransactionwithkey → sign with the known snapshot private key
  * 7. decoderawtransaction → extract txid
  */
 async function executeFundingGenerator(ctx: {
@@ -512,24 +520,27 @@ async function executeFundingGenerator(ctx: {
   if (msResult.error) throw new Error(`createmultisig failed: ${msResult.error}`);
   const msAddress = msResult.result.address as string;
 
-  // Step 3: Pick a confirmed wallet UTXO ourselves instead of relying on
-  // fundrawtransaction. This avoids slow wallet coin selection on production.
-  const unspentResult = await nodeRpc("listunspent", []);
-  if (unspentResult.error) throw new Error(`listunspent failed: ${unspentResult.error}`);
-  const utxo = selectFundingUtxo(unspentResult.result as WalletUtxo[]);
+  // Step 3: Get block height and scan for spendable coins using the known descriptor.
+  // We need the height to filter out immature coinbase outputs (need 100 confirmations).
+  const heightResult = await nodeRpc("getblockcount", []);
+  if (heightResult.error) throw new Error(`getblockcount failed: ${heightResult.error}`);
+  const currentHeight = heightResult.result as number;
+
+  const scanResult = await nodeRpc("scantxoutset", ["start", [{ desc: SNAPSHOT_DESCRIPTOR, range: 1000 }]]);
+  if (scanResult.error) throw new Error(`scantxoutset failed: ${scanResult.error}`);
+  const utxo = selectFundingUtxo(scanResult.result.unspents as ScantxoutsetUtxo[], currentHeight);
   if (!utxo) {
     throw new Error("No spendable UTXO is available. Mine a block in the Bitcoin Node, then try again.");
   }
 
-  const changeAddressResult = await nodeRpc("getrawchangeaddress", ["bech32"]);
-  if (changeAddressResult.error) throw new Error(`getrawchangeaddress failed: ${changeAddressResult.error}`);
-  const changeAddress = changeAddressResult.result as string;
+  // Step 4: Use the known snapshot address for change (no wallet needed).
+  const changeAddress = SNAPSHOT_ADDRESS;
   const changeAmount = Number((utxo.amount - FUNDING_AMOUNT_BTC - FUNDING_TX_FEE_BTC).toFixed(8));
   if (changeAmount <= 0) {
     throw new Error("Selected UTXO is too small to fund the channel output and fee.");
   }
 
-  // Step 4: Build a deterministic tx with the funding output at vout 0.
+  // Step 5: Build a deterministic tx with the funding output at vout 0.
   const createResult = await nodeRpc("createrawtransaction", [
     [{ txid: utxo.txid, vout: utxo.vout }],
     [
@@ -540,13 +551,14 @@ async function executeFundingGenerator(ctx: {
   if (createResult.error) throw new Error(`createrawtransaction failed: ${createResult.error}`);
   const unsignedHex = createResult.result as string;
 
-  // Step 5: Sign with the wallet's keys
-  const signResult = await nodeRpc("signrawtransactionwithwallet", [unsignedHex]);
-  if (signResult.error) throw new Error(`signrawtransactionwithwallet failed: ${signResult.error}`);
+  // Step 6: Sign with the known snapshot private key (no wallet needed).
+  const prevout = { txid: utxo.txid, vout: utxo.vout, scriptPubKey: SNAPSHOT_SCRIPTPUBKEY, amount: utxo.amount };
+  const signResult = await nodeRpc("signrawtransactionwithkey", [unsignedHex, [SNAPSHOT_WIF], [prevout]]);
+  if (signResult.error) throw new Error(`signrawtransactionwithkey failed: ${signResult.error}`);
   if (!signResult.result.complete) throw new Error("Transaction signing incomplete");
   const signedHex = signResult.result.hex as string;
 
-  // Step 6: Decode to get the txid
+  // Step 7: Decode to get the txid
   const decodeResult = await nodeRpc("decoderawtransaction", [signedHex]);
   if (decodeResult.error) throw new Error(`decoderawtransaction failed: ${decodeResult.error}`);
   const txid = decodeResult.result.txid as string;
@@ -945,7 +957,7 @@ export const TX_GENERATORS: Record<string, TxGeneratorConfig> = {
   "gen-funding": {
     id: "gen-funding",
     title: "Generate Funding Transaction",
-    description: "This generator creates two sets of channel keys (one for Alice and one for Bob) using the functions we built earlier. It then uses your regtest Bitcoin node to fetch a UTXO, create a 2-of-2 multisig Funding Transaction, and sign it via Bitcoin Core's <code>signrawtransactionwithwallet</code> RPC command. The resulting signed transaction is ready to be broadcast!<br/><br/><strong>NOTE:</strong> Future transactions will be signed using code we write ourselves, so don't feel bad if you wanted to get in the weeds and sign transactions - we'll do this shortly!<br/><br/><strong>IMPORTANT:</strong> Make sure your Bitcoin Node is running (open it via <strong>TOOLS</strong> in the top-right corner) before generating.",
+    description: "This generator creates two sets of channel keys (one for Alice and one for Bob) using the functions we built earlier. It then uses your regtest Bitcoin node to find a spendable UTXO, create a 2-of-2 multisig Funding Transaction, and sign it with a known private key. The resulting signed transaction is ready to be broadcast!<br/><br/><strong>NOTE:</strong> Future transactions will be signed using code we write ourselves, so don't feel bad if you wanted to get in the weeds and sign transactions - we'll do this shortly!<br/><br/><strong>IMPORTANT:</strong> Make sure your Bitcoin Node is running (open it via <strong>TOOLS</strong> in the top-right corner) before generating.",
     type: "transaction",
     buttonLabel: "Generate Transaction",
     inputs: [],

@@ -25,7 +25,7 @@ describe("Signed Lightning transaction generators", () => {
 });
 
 describe("Funding transaction generator", () => {
-  it("builds a native P2WSH funding tx from an explicit wallet UTXO", async () => {
+  it("builds a native P2WSH funding tx using walletless RPCs", async () => {
     const generator = TX_GENERATORS["gen-funding"];
     const nodeRpc = vi.fn(async (method: string, params: unknown[]) => {
       switch (method) {
@@ -40,27 +40,28 @@ describe("Funding transaction generator", () => {
               address: "bcrt1qfundingoutput",
             },
           };
-        case "listunspent":
+        case "getblockcount":
+          return { result: 200 };
+        case "scantxoutset":
           return {
-            result: [
-              { txid: "large-utxo", vout: 1, amount: 1.25, spendable: true, safe: true },
-              { txid: "selected-utxo", vout: 0, amount: 0.051, spendable: true, safe: true },
-            ],
+            result: {
+              unspents: [
+                { txid: "large-utxo", vout: 1, amount: 1.25, scriptPubKey: "0014abc", height: 10 },
+                { txid: "selected-utxo", vout: 0, amount: 0.051, scriptPubKey: "0014abc", height: 5 },
+              ],
+            },
           };
-        case "getrawchangeaddress":
-          expect(params).toEqual(["bech32"]);
-          return { result: "bcrt1qchangeoutput" };
         case "createrawtransaction":
           expect(params).toEqual([
             [{ txid: "selected-utxo", vout: 0 }],
             [
               { bcrt1qfundingoutput: 0.05 },
-              { bcrt1qchangeoutput: 0.0009975 },
+              { "bcrt1qw508d6qejxtdg4y5r3zarvary0c5xw7kygt080": 0.0009975 },
             ],
           ]);
           return { result: "unsigned-funding-hex" };
-        case "signrawtransactionwithwallet":
-          expect(params).toEqual(["unsigned-funding-hex"]);
+        case "signrawtransactionwithkey":
+          expect(params[0]).toBe("unsigned-funding-hex");
           return {
             result: {
               complete: true,
@@ -99,13 +100,12 @@ describe("Funding transaction generator", () => {
     });
     expect(nodeRpc.mock.calls.map(([method]) => method)).toEqual([
       "createmultisig",
-      "listunspent",
-      "getrawchangeaddress",
+      "getblockcount",
+      "scantxoutset",
       "createrawtransaction",
-      "signrawtransactionwithwallet",
+      "signrawtransactionwithkey",
       "decoderawtransaction",
     ]);
-    expect(nodeRpc.mock.calls.some(([method]) => method === "fundrawtransaction")).toBe(false);
   });
 
   it("surfaces a useful error when no spendable UTXO can fund the channel output", async () => {
@@ -114,8 +114,10 @@ describe("Funding transaction generator", () => {
       switch (method) {
         case "createmultisig":
           return { result: { address: "bcrt1qfundingoutput" } };
-        case "listunspent":
-          return { result: [{ txid: "tiny", vout: 0, amount: 0.01, spendable: true, safe: true }] };
+        case "getblockcount":
+          return { result: 200 };
+        case "scantxoutset":
+          return { result: { unspents: [{ txid: "tiny", vout: 0, amount: 0.01, scriptPubKey: "0014abc", height: 1 }] } };
         default:
           throw new Error(`Unexpected RPC method: ${method}`);
       }

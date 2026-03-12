@@ -28,7 +28,6 @@ vi.mock("../server/bitcoin-node", () => ({
       idleTimeoutMs: 600000,
       limiterBypassCount: 0,
       startupFailures: 0,
-      walletReadyFailures: 0,
       cleanup: { idleStops: 0, staleDirsRemoved: 0 },
       provision: {
         count: 0,

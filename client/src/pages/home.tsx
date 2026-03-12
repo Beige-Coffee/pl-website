@@ -155,25 +155,40 @@ export default function Home() {
         {authenticated && continueData.length > 0 && (
           <div className="absolute top-2 left-4 z-20">
             <button
-              onClick={() => setShowContinue((s) => !s)}
-              className="font-pixel text-[10px] text-foreground/60 hover:text-foreground transition-colors border-2 border-border bg-card px-2.5 py-1 hover:bg-secondary"
+              onClick={() => continueData.length === 1 ? navigate(continueData[0].path) : setShowContinue((s) => !s)}
+              className="flex items-start gap-2.5 bg-card border-2 border-border px-3 py-2 shadow-[2px_2px_0px_rgba(0,0,0,0.15)] hover:shadow-[2px_2px_0px_rgba(0,0,0,0.25)] hover:border-foreground/30 transition-all group cursor-pointer text-left"
             >
-              CONTINUE WHERE YOU LEFT OFF ▾
+              <span className="text-[#b8860b] mt-0.5 text-base leading-none">&#9654;</span>
+              <div className="min-w-0">
+                <span className="font-pixel text-[10px] text-foreground/45 block leading-none">RESUME</span>
+                <span
+                  className="text-sm font-semibold text-foreground/80 group-hover:text-foreground truncate block mt-0.5 max-w-[200px]"
+                  style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}
+                >
+                  {continueData[0].chapterTitle}
+                </span>
+                {continueData.length > 1 && (
+                  <span className="font-pixel text-[9px] text-foreground/35 block mt-0.5">+{continueData.length - 1} MORE ▾</span>
+                )}
+              </div>
             </button>
-            {showContinue && (
+            {showContinue && continueData.length > 1 && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setShowContinue(false)} />
-                <div className="absolute top-full left-0 mt-1 z-20 bg-card border-2 border-border shadow-md min-w-[220px]">
+                <div className="absolute top-full left-0 mt-1 z-20 bg-card border-2 border-border shadow-md min-w-[240px]">
                   {continueData.map((item) => (
                     <Link
                       key={item.path}
                       href={item.path}
-                      className="flex items-center gap-2 px-3 py-2 hover:bg-secondary transition-colors text-sm border-b last:border-b-0 border-border"
+                      className="flex items-center gap-2.5 px-3 py-2.5 hover:bg-secondary transition-colors border-b last:border-b-0 border-border"
                       style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}
                       onClick={() => setShowContinue(false)}
                     >
-                      <span className="font-pixel text-[10px] text-foreground/50 shrink-0">{item.course === "Intro to Payment Channels" ? "LN" : "NOISE"}</span>
-                      <span className="font-semibold truncate">{item.chapterTitle}</span>
+                      <span className="text-[#b8860b] text-xs leading-none">&#9654;</span>
+                      <div className="min-w-0">
+                        <span className="font-pixel text-[9px] text-foreground/40 block leading-none">{item.course === "Intro to Payment Channels" ? "LIGHTNING" : "NOISE"}</span>
+                        <span className="text-sm font-semibold text-foreground/80 truncate block mt-0.5">{item.chapterTitle}</span>
+                      </div>
                     </Link>
                   ))}
                 </div>

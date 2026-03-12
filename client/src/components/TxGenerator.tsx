@@ -37,14 +37,14 @@ function getFriendlyGeneratorError(message: string): string {
   if (normalized.includes("node is still starting")) {
     return "Your Bitcoin node is still starting. Wait a few seconds, then try again.";
   }
-  if (normalized.includes("wallet not ready") || normalized.includes("listunspent failed")) {
-    return "The Bitcoin wallet is still warming up. Open Bitcoin Node, wait for it to finish loading, then try again.";
+  if (normalized.includes("scantxoutset failed")) {
+    return "Could not scan for spendable UTXOs. Open Bitcoin Node, wait for it to finish loading, then try again.";
   }
   if (normalized.includes("timed out") || normalized.includes("timeout")) {
     return "The Bitcoin node request timed out. Open Bitcoin Node first or wait a moment, then retry.";
   }
-  if (normalized.includes("signrawtransactionwithwallet failed") || normalized.includes("transaction signing incomplete")) {
-    return "The node could not sign the transaction. Open Bitcoin Node, make sure the wallet is ready, then retry.";
+  if (normalized.includes("signrawtransactionwithkey failed") || normalized.includes("transaction signing incomplete")) {
+    return "The node could not sign the transaction. Open Bitcoin Node and make sure it is running, then retry.";
   }
   if (normalized.includes("createmultisig failed") || normalized.includes("createrawtransaction failed")) {
     return "The generator could not build the funding transaction. Retry after the Bitcoin node is ready.";

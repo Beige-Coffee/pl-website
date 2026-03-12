@@ -13,7 +13,6 @@ export interface AdminNodeMetricsResponse {
     idleTimeoutMs: number;
     limiterBypassCount: number;
     startupFailures: number;
-    walletReadyFailures: number;
     cleanup: {
       idleStops: number;
       staleDirsRemoved: number;

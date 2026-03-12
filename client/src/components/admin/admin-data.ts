@@ -52,7 +52,6 @@ export interface DashboardData {
     idleTimeoutMs: number;
     limiterBypassCount: number;
     startupFailures: number;
-    walletReadyFailures: number;
     cleanup: {
       idleStops: number;
       staleDirsRemoved: number;

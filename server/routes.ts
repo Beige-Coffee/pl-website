@@ -536,7 +536,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   const QUIZ_ANSWER_KEYS: Record<string, number[]> = {
     noise: [3, 0, 2, 2, 1, 0, 3, 0, 3, 1],
-    lightning: [1, 1, 1, 1, 1, 1, 2, 1, 2, 2],
+    lightning: [0, 3, 2, 0, 1, 3, 0, 2, 1, 3],
   };
   const QUIZ_PASS_THRESHOLD = 0.9;
   const REWARD_AMOUNT_SATS = parseInt(process.env.REWARD_AMOUNT_SATS || "21", 10);

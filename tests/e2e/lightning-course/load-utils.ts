@@ -63,12 +63,17 @@ const FUNDING_AMOUNT_BTC = 0.05;
 const FUNDING_TX_FEE_BTC = 0.0000025;
 const REQUEST_TIMEOUT_MS = 180_000;
 
-interface WalletUtxo {
+const SNAPSHOT_WIF = "cMahea7zqjxrtgAbB7LSGbcQUr1uX1ojuat9jZodMN87JcbXMTcA";
+const SNAPSHOT_ADDRESS = "bcrt1qw508d6qejxtdg4y5r3zarvary0c5xw7kygt080";
+const SNAPSHOT_SCRIPTPUBKEY = "0014751e76e8199196d454941c45d1b3a323f1433bd6";
+const SNAPSHOT_DESCRIPTOR = "wpkh(0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798)";
+
+interface ScantxoutsetUtxo {
   txid: string;
   vout: number;
   amount: number;
-  spendable?: boolean;
-  safe?: boolean;
+  scriptPubKey: string;
+  height: number;
 }
 
 function normalizeBaseUrl(baseURL?: string): string {
@@ -193,7 +198,9 @@ export async function callLearnerNodeRpc<T>(baseURL: string, token: string, meth
   return nodeRpc<T>(baseURL, token, method, params);
 }
 
-function selectFundingUtxo(unspent: WalletUtxo[]): WalletUtxo | null {
+const COINBASE_MATURITY = 100;
+
+function selectFundingUtxo(unspent: ScantxoutsetUtxo[], currentHeight: number): ScantxoutsetUtxo | null {
   const minAmount = FUNDING_AMOUNT_BTC + FUNDING_TX_FEE_BTC;
   return [...unspent]
     .filter((utxo) =>
@@ -201,8 +208,7 @@ function selectFundingUtxo(unspent: WalletUtxo[]): WalletUtxo | null {
       Number.isInteger(utxo.vout) &&
       typeof utxo.amount === "number" &&
       utxo.amount >= minAmount &&
-      utxo.spendable !== false &&
-      utxo.safe !== false
+      (currentHeight - utxo.height) >= COINBASE_MATURITY
     )
     .sort((a, b) => a.amount - b.amount)[0] ?? null;
 }
@@ -248,14 +254,15 @@ export async function runNodeScenario(baseURL: string, learner: ProvisionedLearn
 
   try {
     await recordRpc("getblockchaininfo", []);
+    const currentHeight = await recordRpc<number>("getblockcount", []);
     const multisig = await recordRpc<{ address: string }>("createmultisig", [2, [LOAD_TEST_ALICE_PUBKEY, LOAD_TEST_BOB_PUBKEY], "bech32"]);
-    const unspent = await recordRpc<WalletUtxo[]>("listunspent", []);
-    const utxo = selectFundingUtxo(unspent);
+    const scanResult = await recordRpc<{ unspents: ScantxoutsetUtxo[] }>("scantxoutset", ["start", [{ desc: SNAPSHOT_DESCRIPTOR, range: 1000 }]]);
+    const utxo = selectFundingUtxo(scanResult.unspents, currentHeight);
     if (!utxo) {
       throw new Error("No spendable UTXO available for funding test");
     }
 
-    const changeAddress = await recordRpc<string>("getrawchangeaddress", ["bech32"]);
+    const changeAddress = SNAPSHOT_ADDRESS;
     const changeAmount = Number((utxo.amount - FUNDING_AMOUNT_BTC - FUNDING_TX_FEE_BTC).toFixed(8));
     if (changeAmount <= 0) {
       throw new Error("Selected UTXO is too small to complete the funding chain");
@@ -265,7 +272,8 @@ export async function runNodeScenario(baseURL: string, learner: ProvisionedLearn
       { [multisig.address]: FUNDING_AMOUNT_BTC },
       { [changeAddress]: changeAmount },
     ]]);
-    const signed = await recordRpc<{ complete: boolean; hex: string }>("signrawtransactionwithwallet", [createResult]);
+    const prevout = { txid: utxo.txid, vout: utxo.vout, scriptPubKey: SNAPSHOT_SCRIPTPUBKEY, amount: utxo.amount };
+    const signed = await recordRpc<{ complete: boolean; hex: string }>("signrawtransactionwithkey", [createResult, [SNAPSHOT_WIF], [prevout]]);
     if (!signed.complete) {
       throw new Error("Transaction signing incomplete");
     }
