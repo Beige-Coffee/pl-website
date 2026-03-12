@@ -299,8 +299,16 @@ class NodeManager {
   async getOrCreate(userId: UserId): Promise<NodeInstance> {
     const existing = this.instances.get(userId);
     if (existing?.ready) {
-      existing.lastActivity = Date.now();
-      return existing;
+      // Detect dead/crashed process (e.g., OOM-killed or SIGKILL'd by host)
+      if (existing.process.exitCode !== null || existing.process.killed) {
+        console.log("[node] Detected dead process for user", userId, "- reprovisioning");
+        this.usedPorts.delete(existing.rpcPort);
+        this.instances.delete(userId);
+        // Fall through to provision a new node
+      } else {
+        existing.lastActivity = Date.now();
+        return existing;
+      }
     }
     if (existing && !existing.ready) {
       throw new Error("Node is still starting, try again in a few seconds");
@@ -520,9 +528,27 @@ class NodeManager {
   }
 
   async exec(userId: UserId, rawCommand: string): Promise<{ result?: unknown; error?: string }> {
-    const instance = await this.getOrCreate(userId);
+    let instance: NodeInstance;
+    try {
+      instance = await this.getOrCreate(userId);
+    } catch (err: any) {
+      return { error: err.message };
+    }
     instance.lastActivity = Date.now();
 
+    const result = await this._execCommand(instance, rawCommand);
+
+    // If the command failed with a timeout or connection error, the node process
+    // may be dead or hung. Stop it so the next call triggers a fresh re-provision.
+    if (result.error && /timed out|ECONNREFUSED|ECONNRESET|socket hang up/i.test(result.error)) {
+      console.log("[node] Node appears unresponsive for user", userId, "- stopping for re-provision on next call");
+      await this.stop(userId);
+    }
+
+    return result;
+  }
+
+  private async _execCommand(instance: NodeInstance, rawCommand: string): Promise<{ result?: unknown; error?: string }> {
     const trimmed = rawCommand.trim();
     if (!trimmed) return { error: "Empty command" };
 
@@ -664,6 +690,10 @@ class NodeManager {
   getStatus(userId: UserId): { running: boolean; blockHeight?: number } {
     const instance = this.instances.get(userId);
     if (!instance?.ready) return { running: false };
+    // Check if the underlying process is actually alive
+    if (instance.process.exitCode !== null || instance.process.killed) {
+      return { running: false };
+    }
     return { running: true };
   }
 

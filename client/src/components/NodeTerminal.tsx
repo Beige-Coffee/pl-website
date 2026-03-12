@@ -112,6 +112,7 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
   const [history, setHistory] = useState<string[]>([]);
   const [historyIdx, setHistoryIdx] = useState(-1);
   const [showHelp, setShowHelp] = useState(false);
+  const hadNodeRef = useRef(false);
 
   const [panelWidth, setPanelWidth] = useState(() => {
     // Use shared panel width if available, fall back to per-panel saved width
@@ -136,6 +137,11 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
   const panelRef = useRef<HTMLDivElement>(null);
   const isDraggingWidth = useRef(false);
   const isDraggingSplit = useRef(false);
+
+  // Track if node was ever ready (for restart vs first-provision UX)
+  useEffect(() => {
+    if (nodeReady) hadNodeRef.current = true;
+  }, [nodeReady]);
 
   // Persist state
   useEffect(() => {
@@ -174,8 +180,13 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
     if (!isOpen || !authenticated || !sessionToken || nodeReady) return;
 
     let cancelled = false;
+    const isRestart = hadNodeRef.current;
     setProvisioning(true);
-    setLines([{ type: "info", text: "Starting your Bitcoin node..." }]);
+    if (isRestart) {
+      setLines((prev) => [...prev, { type: "info", text: "Node restarting..." }]);
+    } else {
+      setLines([{ type: "info", text: "Starting your Bitcoin node..." }]);
+    }
 
     fetch("/api/node/status?provision=true", {
       headers: { Authorization: `Bearer ${sessionToken}` },
@@ -191,17 +202,29 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
         if (cancelled) return;
         if (data.running) {
           setNodeReady(true);
-          setLines([
-            { type: "info", text: "Bitcoin node ready. Type 'help' for available commands." },
-            { type: "info", text: "Tip: Press Tab to autocomplete command names." },
-          ]);
+          if (isRestart) {
+            setLines((prev) => [...prev, { type: "info", text: "Node ready. Please try your command again." }]);
+          } else {
+            setLines([
+              { type: "info", text: "Bitcoin node ready. Type 'help' for available commands." },
+              { type: "info", text: "Tip: Press Tab to autocomplete command names." },
+            ]);
+          }
         } else if (data.error) {
-          setLines([{ type: "error", text: data.error }]);
+          if (isRestart) {
+            setLines((prev) => [...prev, { type: "error", text: data.error }]);
+          } else {
+            setLines([{ type: "error", text: data.error }]);
+          }
         }
       })
       .catch((err) => {
         if (cancelled) return;
-        setLines([{ type: "error", text: err.message }]);
+        if (isRestart) {
+          setLines((prev) => [...prev, { type: "error", text: err.message }]);
+        } else {
+          setLines([{ type: "error", text: err.message }]);
+        }
       })
       .finally(() => {
         if (!cancelled) setProvisioning(false);
@@ -266,6 +289,11 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
 
       if (data.error) {
         setLines((prev) => [...prev, { type: "error", text: data.error }]);
+        // Auto-recover: if the error indicates the node is unresponsive,
+        // reset nodeReady to trigger automatic re-provisioning
+        if (/timed out|ECONNREFUSED|ECONNRESET|socket hang up/i.test(data.error)) {
+          setNodeReady(false);
+        }
       } else if (data.result === "__CLEAR__") {
         setLines([]);
       } else if (data.result !== undefined) {
@@ -541,6 +569,9 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
         <DrawerContent className={`max-h-[85dvh] flex flex-col ${panelBg}`} data-testid="drawer-node-terminal">
           <DrawerTitle className={`font-pixel text-xs ${goldText} px-4 pt-2 flex items-center gap-2`}>
             Bitcoin Node
+            {nodeReady && !provisioning && (
+              <span className="inline-block w-2 h-2 rounded-full bg-green-500" title="Node active" />
+            )}
             {provisioning && <span className="inline-block w-3 h-3 border-2 border-[#FFD700]/30 border-t-[#FFD700] rounded-full animate-spin" />}
           </DrawerTitle>
           {terminalContent}
@@ -569,6 +600,9 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
       <div className={`flex items-center justify-between px-4 py-2.5 border-b-2 ${panelBorder} ${dark ? "bg-[#0f1930]" : "bg-[#f0e8d8]"} shrink-0`}>
         <div className={`font-pixel text-xs ${goldText} flex items-center gap-2`}>
           Bitcoin Node
+          {nodeReady && !provisioning && (
+            <span className="inline-block w-2 h-2 rounded-full bg-green-500" title="Node active" />
+          )}
           {provisioning && <span className="inline-block w-3 h-3 border-2 border-[#FFD700]/30 border-t-[#FFD700] rounded-full animate-spin" />}
         </div>
         <div className="flex items-center gap-2">
