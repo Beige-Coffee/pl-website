@@ -29,6 +29,8 @@
   "test:lightning:prod:smoke": "npm run test:lightning:prod:exercises && npm run test:lightning:prod:tech-flow",
   "test:lightning:load:prod": "node --import tsx tests/e2e/lightning-course/node-concurrency.ts",
   "test:lightning:idle:prod": "node --import tsx tests/e2e/lightning-course/node-idle-cleanup.ts",
+    "test:lightning:predeploy": "npm run test:lightning:audit && playwright test -c playwright.lightning-course.config.ts --project=local-preflight tests/e2e/lightning-course/local-critical-flow.spec.ts",
+    "test:lightning:predeploy:ui": "playwright test -c playwright.lightning-course.config.ts --project=local-preflight tests/e2e/lightning-course/node-terminal-ui.spec.ts",
     "test:all": "vitest run && playwright test"
   },
   "notes": "removed framer motion dependency",

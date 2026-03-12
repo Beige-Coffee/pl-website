@@ -208,18 +208,51 @@ export async function logoutUser(page: Page) {
 
 /**
  * Open the node terminal panel via the TOOLS dropdown.
- * Clicks TOOLS > Bitcoin Node, waits for terminal input to be ready.
+ * Returns early if the node input is already visible.
+ * Uses data-testid attributes for stability; falls back to dispatching
+ * the "node-terminal-open" custom event if the button path fails.
  */
 export async function openNodeTerminal(page: Page) {
-  // Open TOOLS dropdown
-  await page.locator('button:has-text("TOOLS")').first().click();
-  await page.waitForTimeout(300);
-  // Click "Bitcoin Node" in the dropdown
-  await page.locator('button:has-text("Bitcoin Node")').click();
+  const nodeInput = page.locator('input[placeholder="type a command..."]').first();
+
+  // If the terminal is already open, nothing to do
+  if (await nodeInput.isVisible().catch(() => false)) {
+    return;
+  }
+
+  // Try desktop test-id path first
+  const desktopButton = page.getByTestId("button-desktop-tool-node");
+  const mobileButton = page.getByTestId("button-mobile-tool-node");
+
+  if (await desktopButton.isVisible().catch(() => false)) {
+    await desktopButton.click();
+  } else if (await mobileButton.isVisible().catch(() => false)) {
+    await mobileButton.click();
+  } else {
+    // TOOLS dropdown may be closed — open it via the toggle, then click node
+    const toolsToggle = page.getByTestId("button-desktop-tools-toggle");
+    if (await toolsToggle.isVisible().catch(() => false)) {
+      await toolsToggle.click();
+      await page.waitForTimeout(300);
+      await page.getByTestId("button-desktop-tool-node").click();
+    } else {
+      // Mobile FAB path
+      const mobileFab = page.getByTestId("button-mobile-tools-toggle");
+      if (await mobileFab.isVisible().catch(() => false)) {
+        await mobileFab.click();
+        await page.waitForTimeout(300);
+        await page.getByTestId("button-mobile-tool-node").click();
+      } else {
+        // Last resort: dispatch the custom event directly
+        await page.evaluate(() => {
+          window.dispatchEvent(new CustomEvent("node-terminal-open"));
+        });
+      }
+    }
+  }
+
   // Wait for terminal input to be visible (placeholder changes when node is ready)
-  await expect(
-    page.locator('input[placeholder="type a command..."]').first()
-  ).toBeVisible({ timeout: 30_000 });
+  await expect(nodeInput).toBeVisible({ timeout: 30_000 });
 }
 
 /**

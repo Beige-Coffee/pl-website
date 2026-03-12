@@ -1639,6 +1639,7 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
             style={{ right: panelPadding + 16, transition: panelTransition, padding: "8px 10px" }}
           >
             <button
+              data-testid="button-desktop-tools-toggle"
               onClick={() => {
                 setToolsOpen((o) => !o);
                 if (toolsTooltipVisible) {
@@ -1679,13 +1680,14 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
                 <div className={`h-[2px] mt-2 mb-2 ${theme === "dark" ? "bg-[#2a3552]" : "bg-[#d4c9a8]"}`} />
                 <div className="grid gap-1">
                   {[
-                    { label: "Scratchpad", panelId: "scratchpad" as const },
-                    { label: "Bitcoin Node", panelId: "node" as const },
-                    { label: "Files", panelId: null },
-                    { label: "Transactions", panelId: "notebook" as const },
+                    { label: "Scratchpad", panelId: "scratchpad" as const, testId: "button-desktop-tool-scratchpad" },
+                    { label: "Bitcoin Node", panelId: "node" as const, testId: "button-desktop-tool-node" },
+                    { label: "Files", panelId: null, testId: "button-desktop-tool-files" },
+                    { label: "Transactions", panelId: "notebook" as const, testId: "button-desktop-tool-notebook" },
                   ].map((item) => (
                     <button
                       key={item.label}
+                      data-testid={item.testId}
                       onClick={() => {
                         if (item.panelId) {
                           panelState.switchPanel(item.panelId);
