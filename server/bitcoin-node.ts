@@ -76,7 +76,6 @@ const RPC_TIMEOUT_OVERRIDES_MS: Record<string, number> = {
   createwallet: 60_000,
   rescanblockchain: 300_000,
   getwalletinfo: 10_000,
-  generatetoaddress: 300_000,
 };
 
 const BLOCKED_COMMANDS = new Set([
@@ -439,7 +438,7 @@ class NodeManager {
       await this._rpcCall(instance.rpcPort, "setmocktime", [now]);
 
       const THROWAWAY_ADDR = "bcrt1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqdku202";
-      await this._rpcCall(instance.rpcPort, "generatetoaddress", [1, THROWAWAY_ADDR]);
+      await this._rpcCall(instance.rpcPort, "generateblock", [THROWAWAY_ADDR, []]);
 
       await this._rpcCall(instance.rpcPort, "setmocktime", [0]);
 
@@ -642,21 +641,16 @@ class NodeManager {
     }
 
     try {
-      // Use a fixed throwaway address instead of getnewaddress to avoid:
-      // 1. Wallet-dependent RPC that blocks during wallet scanning on restart
-      // 2. Adding coinbase transactions to the wallet, which causes slow
-      //    wallet reconciliation on subsequent node restarts
       const address = "bcrt1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqdku202";
 
-      // Batch into smaller generatetoaddress calls to avoid RPC timeouts
-      // on resource-constrained hosts (e.g. Replit). Each batch of 2 blocks
-      // keeps wallet processing manageable within the 300s timeout.
-      const BATCH = 2;
-      let remaining = numBlocks;
-      while (remaining > 0) {
-        const batch = Math.min(remaining, BATCH);
-        await this._rpcCall(instance.rpcPort, "generatetoaddress", [batch, address]);
-        remaining -= batch;
+      // Use generateblock instead of generatetoaddress to skip wallet scanning.
+      // Each call completes in milliseconds regardless of wallet state.
+      // First block includes any mempool transactions; remaining blocks are empty.
+      const mempool = (await this._rpcCall(instance.rpcPort, "getrawmempool", [])) as string[];
+      await this._rpcCall(instance.rpcPort, "generateblock", [address, mempool || []]);
+
+      for (let i = 1; i < numBlocks; i++) {
+        await this._rpcCall(instance.rpcPort, "generateblock", [address, []]);
       }
 
       const blockCount = await this._rpcCall(instance.rpcPort, "getblockcount", []);
