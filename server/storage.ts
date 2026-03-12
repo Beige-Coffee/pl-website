@@ -61,6 +61,8 @@ export interface IStorage {
   deleteAllUserProgress(userId: string): Promise<void>;
   createFeedback(data: InsertFeedback): Promise<Feedback>;
   setFeedbackGithubUrl(id: string, url: string): Promise<void>;
+  updateLastActive(userId: string): Promise<void>;
+  deleteUser(userId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -398,8 +400,27 @@ export class DatabaseStorage implements IStorage {
       displayName: users.displayName,
       rewardClaimed: users.rewardClaimed,
       lightningAddress: users.lightningAddress,
+      emailVerified: users.emailVerified,
+      verificationToken: users.verificationToken,
+      verificationExpiry: users.verificationExpiry,
+      createdAt: users.createdAt,
+      lastActiveAt: users.lastActiveAt,
     }).from(users);
     return rows as Omit<User, "passwordHash">[];
+  }
+
+  async updateLastActive(userId: string): Promise<void> {
+    await db.update(users).set({ lastActiveAt: new Date() }).where(eq(users.id, userId));
+  }
+
+  async deleteUser(userId: string): Promise<void> {
+    await db.delete(feedback).where(eq(feedback.userId, userId));
+    await db.delete(pageEvents).where(eq(pageEvents.userId, userId));
+    await db.delete(userProgress).where(eq(userProgress.userId, userId));
+    await db.delete(lnurlWithdrawals).where(eq(lnurlWithdrawals.userId, userId));
+    await db.delete(checkpointCompletions).where(eq(checkpointCompletions.userId, userId));
+    await db.delete(sessions).where(eq(sessions.userId, userId));
+    await db.delete(users).where(eq(users.id, userId));
   }
 
   async getUserCount(): Promise<number> {

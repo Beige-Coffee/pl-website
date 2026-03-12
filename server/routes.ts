@@ -96,7 +96,13 @@ function getBaseUrl(req: Request): string {
 async function getAuthUser(req: Request) {
   const token = req.headers.authorization?.replace("Bearer ", "");
   if (!token) return null;
-  return storage.getUserBySessionToken(token);
+  const user = await storage.getUserBySessionToken(token);
+  if (user) {
+    if (!user.lastActiveAt || Date.now() - new Date(user.lastActiveAt).getTime() > 5 * 60_000) {
+      storage.updateLastActive(user.id).catch(() => {});
+    }
+  }
+  return user;
 }
 
 function verificationResultPage(success: boolean, message: string): string {
@@ -1311,6 +1317,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
       const pendingCount = recentWithdrawals.filter((w) => w.status === "pending" || w.status === "claimed").length;
 
+      // Compute user segments server-side
+      const now = Date.now();
+      const DAY = 86_400_000;
+      const userCheckpointIds: Record<string, Set<string>> = {};
+      const userLatestCheckpoint: Record<string, number> = {};
+      for (const c of checkpointCompletions) {
+        if (!userCheckpointIds[c.userId]) userCheckpointIds[c.userId] = new Set();
+        userCheckpointIds[c.userId].add(c.checkpointId);
+        const t = new Date(c.createdAt).getTime();
+        if (!userLatestCheckpoint[c.userId] || t > userLatestCheckpoint[c.userId]) {
+          userLatestCheckpoint[c.userId] = t;
+        }
+      }
+      const userPageActivity: Record<string, boolean> = {};
+      for (const e of recentEvents) {
+        if (e.userId) userPageActivity[e.userId] = true;
+      }
+      // Total checkpoint count across all tutorials for "completed" check
+      const ALL_CHECKPOINT_COUNT = 49; // lightning tutorial total
+      const userSegments: Record<string, string> = {};
+      for (const u of users) {
+        const cpSet = userCheckpointIds[u.id];
+        const cpCount = cpSet?.size ?? 0;
+        const lastActive = u.lastActiveAt ? new Date(u.lastActiveAt).getTime() : 0;
+        const createdAt = u.createdAt ? new Date(u.createdAt).getTime() : 0;
+        const daysSinceActive = lastActive ? (now - lastActive) / DAY : Infinity;
+        const latestCp = userLatestCheckpoint[u.id] ?? 0;
+        const daysSinceCheckpoint = latestCp ? (now - latestCp) / DAY : Infinity;
+        const accountAgeDays = createdAt ? (now - createdAt) / DAY : Infinity;
+
+        if (cpCount >= ALL_CHECKPOINT_COUNT) {
+          userSegments[u.id] = "completed";
+        } else if (accountAgeDays < 7 && cpCount <= 2) {
+          userSegments[u.id] = "new";
+        } else if (daysSinceActive <= 7 && daysSinceCheckpoint <= 14) {
+          userSegments[u.id] = "on-track";
+        } else if (daysSinceActive <= 7 && daysSinceCheckpoint > 14) {
+          userSegments[u.id] = "struggling";
+        } else if (cpCount > 0 && daysSinceActive > 7 && daysSinceActive <= 30) {
+          userSegments[u.id] = "stalled";
+        } else if (cpCount > 0 && daysSinceActive > 30) {
+          userSegments[u.id] = "churned";
+        } else if (userPageActivity[u.id] && cpCount === 0) {
+          userSegments[u.id] = "browsing";
+        } else {
+          userSegments[u.id] = "browsing";
+        }
+      }
+
       return res.json({
         nodeBalance,
         nodeMetrics: nodeManager.getMetrics(),
@@ -1328,6 +1383,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         recentEvents,
         recentDonations,
         recentFeedback,
+        userSegments,
       });
     } catch (err) {
       console.error("Admin dashboard error:", err);
@@ -1383,6 +1439,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err: any) {
       console.error("[admin] Error resetting checkpoints:", err.message);
       return res.status(500).json({ error: "Failed to reset checkpoints" });
+    }
+  });
+
+  app.post("/api/admin/delete-user", async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    if (!isAdminIp(ip)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+    if (!adminLimiter.check(ip)) {
+      return res.status(429).json({ error: "Too many attempts, try again later" });
+    }
+    const { password, userId } = req.body;
+    if (!hasAdminPassword(password)) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    if (!userId || typeof userId !== "string") {
+      return res.status(400).json({ error: "Missing userId" });
+    }
+    try {
+      await storage.deleteUser(userId);
+      return res.json({ success: true });
+    } catch (err: any) {
+      console.error("[admin] Error deleting user:", err.message);
+      return res.status(500).json({ error: "Failed to delete user" });
     }
   });
 

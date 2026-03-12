@@ -14,6 +14,8 @@ export const users = pgTable("users", {
   emailVerified: boolean("email_verified").default(false).notNull(),
   verificationToken: text("verification_token"),
   verificationExpiry: timestamp("verification_expiry"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  lastActiveAt: timestamp("last_active_at"),
 });
 
 export const sessions = pgTable("sessions", {
