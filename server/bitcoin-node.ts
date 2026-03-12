@@ -76,6 +76,7 @@ const RPC_TIMEOUT_OVERRIDES_MS: Record<string, number> = {
   createwallet: 60_000,
   rescanblockchain: 300_000,
   getwalletinfo: 10_000,
+  generateblock: 120_000,
 };
 
 const BLOCKED_COMMANDS = new Set([
@@ -345,7 +346,7 @@ class NodeManager {
       `-rpcpassword=${RPC_PASS}`,
       "-rpcallowip=127.0.0.1",
       "-rpcbind=127.0.0.1",
-      "-dbcache=20",
+      "-dbcache=100",
       "-maxmempool=5",
       "-maxconnections=0",
       "-txindex=1",
@@ -643,9 +644,10 @@ class NodeManager {
     try {
       const address = "bcrt1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqdku202";
 
-      // Use generateblock instead of generatetoaddress to skip wallet scanning.
-      // Each call completes in milliseconds regardless of wallet state.
-      // First block includes any mempool transactions; remaining blocks are empty.
+      // Use generateblock to mine blocks. First block includes mempool txs;
+      // remaining blocks are empty (just advancing chain height for timelocks).
+      // generateblock still triggers wallet/txindex processing via ActivateBestChain,
+      // so it can be slow on resource-constrained hosts — hence the 120s timeout.
       const mempool = (await this._rpcCall(instance.rpcPort, "getrawmempool", [])) as string[];
       await this._rpcCall(instance.rpcPort, "generateblock", [address, mempool || []]);
 
@@ -658,6 +660,17 @@ class NodeManager {
         result: `Mined ${numBlocks} block${numBlocks > 1 ? "s" : ""}. Current height: ${blockCount}`,
       };
     } catch (err: any) {
+      // If timed out, the node is likely still processing (not dead).
+      // Poll getblockcount to report partial progress so the student knows
+      // blocks were mined even though the command appeared to fail.
+      if (/timed out/i.test(err.message)) {
+        try {
+          const blockCount = await this._rpcCallWithTimeout(instance.rpcPort, "getblockcount", [], 10_000);
+          return { error: `Mining was slow but the node is still working. Current height: ${blockCount}. Try 'getblockcount' in a moment, then run 'mine' again for remaining blocks.` };
+        } catch {
+          return { error: `Mining timed out. The node may still be processing blocks. Wait a moment and try 'getblockcount' to check progress.` };
+        }
+      }
       return { error: `Failed to mine: ${err.message}` };
     }
   }
