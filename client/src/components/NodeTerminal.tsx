@@ -481,15 +481,15 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
           {/* Output area */}
           <div
             ref={outputRef}
-            className="flex-1 min-h-0 overflow-auto px-3 py-2 font-mono text-sm leading-relaxed cursor-text"
-            style={{ fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace" }}
+            className="flex-1 min-h-0 overflow-auto px-3 py-2 leading-relaxed cursor-text"
+            style={{ fontSize: isMobile ? "16px" : "14px", fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace" }}
             onClick={() => {
               const sel = window.getSelection();
               if (!sel || sel.isCollapsed) inputRef.current?.focus();
             }}
           >
             {lines.map((line, i) => (
-              <div key={i} className="whitespace-pre-wrap">
+              <div key={i} className="whitespace-pre-wrap break-words">
                 {line.type === "cmd" && (
                   <span>
                     <span className={promptColor}>{PROMPT}</span>
@@ -569,7 +569,7 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
   if (isMobile) {
     return (
       <Drawer open={isOpen} onOpenChange={(open) => setIsOpen(open)}>
-        <DrawerContent className={`max-h-[85dvh] flex flex-col ${panelBg}`} data-testid="drawer-node-terminal">
+        <DrawerContent className={`max-h-[95dvh] h-[95dvh] flex flex-col ${panelBg}`} data-testid="drawer-node-terminal">
           <DrawerTitle className={`font-pixel text-xs ${goldText} px-4 pt-2 flex items-center gap-2`}>
             Bitcoin Node
             {provisioning && <span className="inline-block w-3 h-3 border-2 border-[#FFD700]/30 border-t-[#FFD700] rounded-full animate-spin" />}

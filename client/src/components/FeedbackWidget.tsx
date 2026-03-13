@@ -28,6 +28,13 @@ export default function FeedbackWidget({ theme, chapterTitle, exerciseId, sessio
   const [category, setCategory] = useState<Category | null>(null);
   const [message, setMessage] = useState("");
 
+  // Listen for external open requests (e.g., from About page link)
+  useEffect(() => {
+    const handler = () => setOpen(true);
+    window.addEventListener("open-feedback", handler);
+    return () => window.removeEventListener("open-feedback", handler);
+  }, []);
+
   const [dragY, setDragY] = useState<number | null>(null);
   const draggingRef = useRef(false);
   const dragStartRef = useRef<{ startY: number; startTop: number }>({ startY: 0, startTop: 0 });
@@ -149,7 +156,7 @@ export default function FeedbackWidget({ theme, chapterTitle, exerciseId, sessio
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent
           data-feedback-widget="true"
-          className={`border-2 font-sans max-w-xl ${
+          className={`border-2 font-sans max-w-sm sm:max-w-xl ${
             dark
               ? "bg-[#0f1930] border-[#2a3552] text-slate-100"
               : "bg-[#fdf9f2] border-[#d4c9a8] text-foreground"

@@ -12,6 +12,11 @@ const KEYS = [
   { label: "=", insert: "=" },
   { label: '"', insert: '"' },
   { label: "_", insert: "_" },
+  { label: "#", insert: "#" },
+  { label: ".", insert: "." },
+  { label: ",", insert: "," },
+  { label: "+", insert: "+" },
+  { label: "-", insert: "-" },
 ];
 
 interface MobileKeyboardToolbarProps {
@@ -32,7 +37,7 @@ export default function MobileKeyboardToolbar({ editorView, visible }: MobileKey
   };
 
   return (
-    <div className="fixed bottom-0 inset-x-0 z-[60] flex overflow-x-auto gap-1 px-2 py-1.5 bg-[#1a1a2e] border-t border-white/10" data-testid="container-mobile-keyboard-toolbar">
+    <div className="fixed bottom-0 inset-x-0 z-[60] flex overflow-x-auto gap-1.5 px-2 py-2 bg-[#1a1a2e] border-t border-white/10" data-testid="container-mobile-keyboard-toolbar">
       {KEYS.map((k) => (
         <button
           key={k.label}
@@ -42,7 +47,7 @@ export default function MobileKeyboardToolbar({ editorView, visible }: MobileKey
             e.preventDefault(); // Prevent blur
             handleInsert(k.insert);
           }}
-          className="min-w-[40px] min-h-[36px] px-2 font-mono text-sm text-slate-200 bg-white/10 rounded active:bg-white/20 shrink-0"
+          className="min-w-[44px] min-h-[44px] px-2 font-mono text-base text-slate-200 bg-white/10 rounded active:bg-white/25 shrink-0"
         >
           {k.label}
         </button>

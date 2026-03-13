@@ -215,7 +215,7 @@ export default function TxNotebook({ theme }: TxNotebookProps) {
   if (isMobile) {
     return (
       <Drawer open={isOpen} onOpenChange={(open) => setIsOpen(open)}>
-        <DrawerContent className={`max-h-[85dvh] flex flex-col ${panelBg}`} data-testid="drawer-tx-notebook">
+        <DrawerContent className={`max-h-[95dvh] h-[95dvh] flex flex-col ${panelBg}`} data-testid="drawer-tx-notebook">
           <DrawerTitle className={`font-pixel text-xs ${goldText} px-4 pt-2`}>TRANSACTIONS</DrawerTitle>
           {bodyContent}
         </DrawerContent>

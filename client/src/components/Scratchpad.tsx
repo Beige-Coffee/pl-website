@@ -324,7 +324,7 @@ export default function Scratchpad({ theme }: ScratchpadProps) {
       ...(dark ? [oneDark] : [syntaxHighlighting(lightHighlightStyle)]),
       EditorView.theme({
         "&": {
-          fontSize: "13px",
+          fontSize: isMobile ? "16px" : "13px",
           border: "none",
           borderRadius: "0px",
           overflow: "hidden",
@@ -518,7 +518,7 @@ export default function Scratchpad({ theme }: ScratchpadProps) {
   if (isMobile) {
     return (
       <Drawer open={isOpen} onOpenChange={(open) => setIsOpen(open)}>
-        <DrawerContent className={`max-h-[85dvh] flex flex-col ${panelBg}`} data-testid="drawer-scratchpad">
+        <DrawerContent className={`max-h-[95dvh] h-[95dvh] flex flex-col ${panelBg}`} data-testid="drawer-scratchpad">
           <DrawerTitle className={`font-pixel text-xs ${goldText} px-4 pt-2`}>SCRATCHPAD</DrawerTitle>
           {panelContent}
         </DrawerContent>

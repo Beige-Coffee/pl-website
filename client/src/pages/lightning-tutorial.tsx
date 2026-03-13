@@ -23,6 +23,7 @@ import TxGenerator from "../components/TxGenerator";
 import FundingTxDiagram from "../components/FundingTxDiagram";
 import ScriptDebugger from "../components/ScriptDebugger/ScriptDebugger";
 import FeedbackWidget from "../components/FeedbackWidget";
+import ProfileDropdown from "../components/ProfileDropdown";
 import AnnotatedTransaction from "../components/AnnotatedTransaction";
 import NotebookRef from "../components/NotebookRef";
 import { TX_GENERATORS } from "../data/tx-generators";
@@ -630,323 +631,6 @@ This course assumes you have already read or understand the information containe
 > ### ⚡ Earn sats as you learn! ⚡
 >
 > This tutorial rewards you with real bitcoin for successfully completing checkpoint quizzes and coding exercises. You can redeem your earnings using any wallet that supports LNURL withdrawal, or link a Lightning Address to your account for automatic payouts. Sign in first, then click the [profile icon](#open-profile) in the top-right corner to set it up!`;
-}
-
-function ProfileDropdown({
-  theme,
-  email,
-  pubkey,
-  lightningAddress,
-  sessionToken,
-  emailVerified,
-  onSetLightningAddress,
-  onLogout,
-  onClose,
-}: {
-  theme: "light" | "dark";
-  email: string | null;
-  pubkey: string | null;
-  lightningAddress: string | null;
-  sessionToken: string | null;
-  emailVerified: boolean;
-  onSetLightningAddress: (address: string | null) => Promise<void>;
-  onLogout: () => void;
-  onClose: () => void;
-}) {
-  const dark = theme === "dark";
-  const [addressInput, setAddressInput] = useState(lightningAddress || "");
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [saveSuccess, setSaveSuccess] = useState(false);
-  const [showAddressForm, setShowAddressForm] = useState(false);
-  const [resending, setResending] = useState(false);
-  const [resendMsg, setResendMsg] = useState<string | null>(null);
-  const [showVerificationSection, setShowVerificationSection] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const isLightningUser = !!pubkey;
-  const needsVerification = !!email && !emailVerified && !isLightningUser;
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      // Ignore clicks on the profile toggle button (it handles its own toggle)
-      if (target.closest("[data-profile-toggle]")) return;
-      if (dropdownRef.current && !dropdownRef.current.contains(target)) {
-        onClose();
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [onClose]);
-
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
-
-  const handleResendVerification = async () => {
-    if (!sessionToken) return;
-    setResending(true);
-    setResendMsg(null);
-    try {
-      const res = await fetch("/api/auth/resend-verification", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${sessionToken}` },
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setResendMsg("Verification email sent! Check your inbox.");
-      } else {
-        setResendMsg(data.error || "Failed to send");
-      }
-    } catch {
-      setResendMsg("Failed to send");
-    } finally {
-      setResending(false);
-    }
-  };
-
-  const handleSave = async (): Promise<boolean> => {
-    setSaving(true);
-    setSaveError(null);
-    setSaveSuccess(false);
-    try {
-      const trimmed = addressInput.trim();
-      await onSetLightningAddress(trimmed || null);
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 2000);
-      return true;
-    } catch (err: any) {
-      setSaveError(err?.message || "Failed to save");
-      return false;
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const identity = email || (pubkey ? pubkey.slice(0, 12) + "..." : "User");
-
-  return (
-    <div
-      ref={dropdownRef}
-      className={`absolute right-0 top-full mt-2 w-[calc(100vw-2rem)] sm:w-[420px] max-w-[420px] border-4 z-50 ${
-        dark ? "border-[#2a3552] bg-[#0f1930]" : "border-border bg-card"
-      }`}
-      style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}
-      data-testid="container-profile-dropdown"
-    >
-      <div className={`px-5 py-4 border-b-2 ${dark ? "border-[#1f2a44]" : "border-border"}`}>
-        <div className={`font-pixel text-xs mb-1 ${dark ? "text-slate-400" : "text-foreground/60"}`}>
-          LOGGED IN AS
-        </div>
-        <div className={`text-base truncate ${dark ? "text-slate-200" : "text-foreground"}`}>
-          {identity}
-        </div>
-        {email && (
-          <div className="mt-2 flex items-center gap-2">
-            {emailVerified ? (
-              <span className={`text-xs font-pixel ${dark ? "text-green-400" : "text-green-700"}`}>VERIFIED</span>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setShowVerificationSection(v => !v)}
-                className={`font-pixel text-xs border-2 px-3 py-1.5 transition-all cursor-pointer ${
-                  dark
-                    ? "border-[#FFD700] text-[#FFD700] bg-[#FFD700]/10 hover:bg-[#FFD700]/20"
-                    : "border-[#b8860b] text-[#9a7200] bg-[#FFD700]/10 hover:bg-[#FFD700]/20"
-                }`}
-              >
-                NOT VERIFIED
-              </button>
-            )}
-          </div>
-        )}
-        {isLightningUser && !email && (
-          <div className="mt-2">
-            <span className={`text-xs font-pixel ${dark ? "text-green-400" : "text-green-700"}`}>LIGHTNING AUTH</span>
-          </div>
-        )}
-      </div>
-
-      {needsVerification && showVerificationSection && (
-        <div className={`px-5 py-4 border-b-2 ${dark ? "border-[#1f2a44]" : "border-border"}`}>
-          <p className={`text-base leading-relaxed mb-3 ${dark ? "text-slate-300" : "text-foreground/70"}`}>
-            Verify your email to claim bitcoin rewards from checkpoints. You can also log in with LNURL-Auth instead.
-          </p>
-          <button
-            type="button"
-            onClick={handleResendVerification}
-            disabled={resending}
-            className={`font-pixel text-sm border-2 px-5 py-3 transition-all ${
-              dark
-                ? "border-[#FFD700] text-[#FFD700] bg-[#FFD700]/10 hover:bg-[#FFD700]/20"
-                : "border-[#b8860b] text-[#9a7200] bg-[#FFD700]/10 hover:bg-[#FFD700]/20"
-            } ${resending ? "opacity-60 cursor-wait" : ""}`}
-            data-testid="button-resend-verification"
-          >
-            {resending ? "SENDING..." : "RESEND VERIFICATION EMAIL"}
-          </button>
-          {resendMsg && (
-            <p className={`mt-2 text-base font-bold ${resendMsg.includes("sent") ? (dark ? "text-green-400" : "text-green-800") : "text-red-400"}`}>
-              {resendMsg}
-            </p>
-          )}
-        </div>
-      )}
-
-      <div className={`px-5 py-4 border-b-2 ${dark ? "border-[#1f2a44]" : "border-border"}`}>
-        <div className={`font-pixel text-xs mb-2 ${dark ? "text-[#FFD700]" : "text-[#9a7200]"}`}>
-          LIGHTNING ADDRESS
-        </div>
-        {lightningAddress ? (
-          <div>
-            <div className="flex items-center gap-3">
-              <div className={`text-lg font-bold truncate flex-1 px-3 py-1 rounded-full ${dark ? "text-slate-200 bg-[#FFD700]/10" : "text-foreground bg-[#b8860b]/10"}`}>
-                {lightningAddress}
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setAddressInput(lightningAddress || "");
-                  setSaveError(null);
-                  setSaveSuccess(false);
-                  setShowAddressForm(true);
-                }}
-                className={`font-pixel text-xs border-2 px-3 py-1.5 transition-all shrink-0 ${
-                  dark
-                    ? "border-[#FFD700] text-[#FFD700] bg-[#FFD700]/10 hover:bg-[#FFD700]/20"
-                    : "border-[#b8860b] text-[#9a7200] bg-[#FFD700]/10 hover:bg-[#FFD700]/20"
-                }`}
-                data-testid="button-edit-lightning-address"
-              >
-                EDIT
-              </button>
-            </div>
-            <p className={`mt-2 text-base leading-relaxed ${dark ? "text-slate-400" : "text-foreground/60"}`}>
-              Rewards auto-send to this address.
-            </p>
-          </div>
-        ) : (
-          <div>
-            <button
-              type="button"
-              onClick={() => {
-                setAddressInput("");
-                setSaveError(null);
-                setSaveSuccess(false);
-                setShowAddressForm(true);
-              }}
-              className={`w-full font-pixel text-sm border-2 px-4 py-3 transition-all ${
-                dark
-                  ? "border-[#FFD700] text-[#FFD700] bg-[#FFD700]/10 hover:bg-[#FFD700]/20"
-                  : "border-[#b8860b] text-[#9a7200] bg-[#FFD700]/10 hover:bg-[#FFD700]/20"
-              }`}
-              data-testid="button-add-lightning-address"
-            >
-              ADD LIGHTNING ADDRESS
-            </button>
-            <p className={`mt-3 text-base font-medium leading-relaxed ${dark ? "text-slate-300" : "text-foreground/70"}`}>
-              Adding a Lightning address makes for a much more seamless experience. Complete checkpoints and receive sats automatically without having to scan a QR code.
-            </p>
-          </div>
-        )}
-      </div>
-
-      {showAddressForm && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center"
-          onClick={(e) => { if (e.target === e.currentTarget) setShowAddressForm(false); }}
-        >
-          <div className="absolute inset-0 bg-black/60" />
-          <div className={`relative w-[90vw] max-w-[400px] border-4 p-5 ${
-            dark ? "border-[#2a3552] bg-[#0f1930]" : "border-border bg-card"
-          }`}>
-            <div className={`font-pixel text-xs mb-3 ${dark ? "text-[#FFD700]" : "text-[#9a7200]"}`}>
-              {lightningAddress ? "EDIT LIGHTNING ADDRESS" : "ADD LIGHTNING ADDRESS"}
-            </div>
-            <input
-              type="text"
-              value={addressInput}
-              onChange={(e) => {
-                setAddressInput(e.target.value);
-                setSaveError(null);
-                setSaveSuccess(false);
-              }}
-              placeholder="you@wallet.com"
-              className={`w-full px-4 py-3 text-lg border-2 outline-none transition-colors ${
-                dark
-                  ? "border-[#2a3552] bg-[#0b1220] text-slate-200 placeholder:text-slate-600 focus:border-[#FFD700]"
-                  : "border-border bg-background text-foreground placeholder:text-foreground/30 focus:border-[#b8860b]"
-              }`}
-              data-testid="input-lightning-address"
-              autoFocus
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleSave();
-                if (e.key === "Escape") setShowAddressForm(false);
-              }}
-            />
-            <div className="flex items-center gap-3 mt-3">
-              <button
-                type="button"
-                onClick={async () => {
-                  const ok = await handleSave();
-                  if (ok) setShowAddressForm(false);
-                }}
-                disabled={saving}
-                className={`font-pixel text-xs border-2 px-4 py-2 transition-all border-[#FFD700] bg-[#FFD700] text-black hover:bg-[#FFC800] active:scale-95 ${
-                  saving ? "opacity-60 cursor-wait" : ""
-                }`}
-                data-testid="button-save-lightning-address"
-              >
-                {saving ? "SAVING..." : "SAVE"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowAddressForm(false)}
-                className={`font-pixel text-xs border-2 px-4 py-2 transition-all ${
-                  dark
-                    ? "border-[#2a3552] text-slate-400 hover:text-slate-200"
-                    : "border-border text-foreground/60 hover:text-foreground"
-                }`}
-              >
-                CANCEL
-              </button>
-              {saveSuccess && (
-                <span className="font-pixel text-xs text-green-400">SAVED!</span>
-              )}
-              {saveError && (
-                <span className="font-pixel text-xs text-red-400">{saveError}</span>
-              )}
-            </div>
-            <p className={`mt-3 text-base font-semibold leading-relaxed ${dark ? "text-slate-300" : "text-foreground/80"}`}>
-              Rewards will auto-send to this address, so you can complete checkpoints and receive sats without scanning a QR code.
-            </p>
-          </div>
-        </div>
-      )}
-
-      <div className="px-5 py-5">
-        <button
-          type="button"
-          onClick={() => {
-            onLogout();
-            onClose();
-          }}
-          className={`w-full font-pixel text-base border-2 px-4 py-3 transition-colors ${
-            dark
-              ? "border-[#2a3552] bg-[#0b1220] text-slate-400 hover:text-slate-200 hover:bg-[#132043]"
-              : "border-border bg-background text-foreground/60 hover:text-foreground hover:bg-secondary"
-          }`}
-          data-testid="button-logout"
-        >
-          LOGOUT
-        </button>
-      </div>
-    </div>
-  );
 }
 
 function LightningTutorialShell({ activeId }: { activeId: string }) {
@@ -1711,21 +1395,22 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
 
           {/* Mobile TOOLS FAB */}
           {isMobile && (
-            <div className="fixed bottom-4 right-4 z-50">
+            <>
               {mobileToolsOpen && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setMobileToolsOpen(false)} />
-                  <div className={`absolute bottom-14 right-0 z-50 border-2 rounded shadow-xl min-w-[180px] ${
+                <div className="fixed inset-0 z-50" onClick={() => setMobileToolsOpen(false)}>
+                  <div className="absolute inset-0 bg-black/40" />
+                  <div className={`absolute bottom-0 inset-x-0 z-50 border-t-2 ${
                     theme === "dark"
                       ? "bg-[#0b1220] border-[#2a3552]"
                       : "bg-[#fdf9f2] border-[#d4c9a8]"
-                  }`} data-testid="container-mobile-tools-menu">
-                    <div className="grid gap-1 p-2">
+                  }`} data-testid="container-mobile-tools-menu" onClick={(e) => e.stopPropagation()}>
+                    <div className={`font-pixel text-[10px] px-4 pt-3 pb-1 ${theme === "dark" ? "text-[#FFD700]" : "text-[#9a7200]"}`}>TOOLS</div>
+                    <div className="grid grid-cols-2 gap-2 p-3">
                       {[
-                        { label: "Scratchpad", panelId: "scratchpad" as const, testId: "button-mobile-tool-scratchpad" },
-                        { label: "Bitcoin Node", panelId: "node" as const, testId: "button-mobile-tool-node" },
-                        { label: "Transactions", panelId: "notebook" as const, testId: "button-mobile-tool-notebook" },
-                        { label: "Files", panelId: null, testId: "button-mobile-tool-files" },
+                        { label: "Scratchpad", icon: "\u270F", panelId: "scratchpad" as const, testId: "button-mobile-tool-scratchpad" },
+                        { label: "Bitcoin Node", icon: "\u26A1", panelId: "node" as const, testId: "button-mobile-tool-node" },
+                        { label: "Transactions", icon: "\u2B1A", panelId: "notebook" as const, testId: "button-mobile-tool-notebook" },
+                        { label: "Files", icon: "\u{1F4C1}", panelId: null, testId: "button-mobile-tool-files" },
                       ].map((item) => (
                         <button
                           key={item.label}
@@ -1738,31 +1423,36 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
                             }
                             setMobileToolsOpen(false);
                           }}
-                          className={`w-full text-left border-2 px-3 py-3 min-h-[44px] transition-colors cursor-pointer ${
+                          className={`w-full text-left border-2 px-3 py-3 min-h-[52px] transition-colors cursor-pointer ${
                             theme === "dark"
-                              ? "bg-[#0f1930] border-[#2a3552] text-slate-100 hover:bg-[#132043]"
-                              : "bg-card border-[#d4c9a8] text-foreground hover:bg-secondary"
+                              ? "bg-[#0f1930] border-[#2a3552] text-slate-100 hover:bg-[#132043] active:bg-[#1a2a50]"
+                              : "bg-card border-[#d4c9a8] text-foreground hover:bg-secondary active:bg-secondary/80"
                           }`}
                         >
-                          <div className="text-[16px] leading-snug" style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>{item.label}</div>
+                          <div className="text-lg mb-0.5">{item.icon}</div>
+                          <div className="text-sm leading-snug" style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>{item.label}</div>
                         </button>
                       ))}
                     </div>
                   </div>
-                </>
+                </div>
               )}
               <button
                 onClick={() => setMobileToolsOpen((o) => !o)}
-                className={`w-12 h-12 rounded-full border-2 shadow-lg flex items-center justify-center font-pixel text-[10px] ${
+                className={`fixed bottom-4 right-4 z-50 w-12 h-12 rounded-full border-2 shadow-lg flex items-center justify-center ${
                   theme === "dark"
                     ? "bg-[#0f1930] border-[#FFD700] text-[#FFD700]"
                     : "bg-[#fdf9f2] border-[#b8860b] text-[#9a7200]"
                 }`}
                 data-testid="button-mobile-tools-toggle"
               >
-                {mobileToolsOpen ? "X" : "\u2699"}
+                {mobileToolsOpen ? (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" /></svg>
+                )}
               </button>
-            </div>
+            </>
           )}
 
           <Scratchpad theme={theme} />

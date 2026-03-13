@@ -557,7 +557,7 @@ export default function CodeExercise({
           overflow: "hidden",
           ...(expanded ? { display: "flex", flexDirection: "column", height: "100%" } : {}),
         },
-        ".cm-scroller": { overflow: "auto", maxHeight: expanded ? "none" : (isMobile ? "50dvh" : "500px"), ...(expanded ? { flex: "1", minHeight: "0" } : {}) },
+        ".cm-scroller": { overflow: "auto", maxHeight: expanded ? "none" : (isMobile ? "65dvh" : "500px"), ...(expanded ? { flex: "1", minHeight: "0" } : {}) },
         ".cm-gutters": {
           backgroundColor: dark ? "#1e1e2e" : "#f5f0e8",
           borderRight: dark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.08)",
