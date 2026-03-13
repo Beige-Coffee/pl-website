@@ -1,8 +1,9 @@
 import { Link, useLocation } from "wouter";
 import { useState, useMemo } from "react";
-import lightningBolt from "@assets/generated_images/a_pixel_art_lightning_bolt_icon..png";
+import lightningBolt from "@/assets/lightning-bolt.png";
 import xkLogo from "/xk-logo.png";
 import LoginModal from "../components/LoginModal";
+import ProfileDropdown from "../components/ProfileDropdown";
 import { useAuth } from "../hooks/use-auth";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { chapters as lightningChapters } from "./lightning-tutorial";
@@ -12,8 +13,10 @@ export default function Home() {
   const [showCodeModal, setShowCodeModal] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showContinue, setShowContinue] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [, navigate] = useLocation();
-  const { authenticated, logout, loginWithToken, email, pubkey } = useAuth();
+  const auth = useAuth();
+  const { authenticated, logout, loginWithToken, setLightningAddress } = auth;
 
   // "Continue Where You Left Off" — read last chapters from localStorage
   const continueData = useMemo(() => {
@@ -129,14 +132,35 @@ export default function Home() {
         </div>
         <div className="flex items-center gap-4 md:gap-6">
           {authenticated ? (
-            <button
-              type="button"
-              onClick={logout}
-              className="font-pixel text-sm md:text-base hover:text-primary transition-colors border-b-4 border-transparent hover:border-primary pb-1"
-              title={email || pubkey ? `Logged in as ${email || (pubkey?.slice(0, 8) + "...")}` : "Logged in"}
-            >
-              LOGOUT
-            </button>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowProfileMenu((v) => !v)}
+                data-profile-toggle
+                className="p-2 text-foreground/70 hover:text-foreground transition-colors"
+                title={auth.email || auth.pubkey ? `Logged in as ${auth.email || (auth.pubkey?.slice(0, 8) + "...")}` : "Logged in"}
+                data-testid="button-profile"
+                aria-label="Toggle profile menu"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                  <circle cx="12" cy="7" r="4" />
+                </svg>
+              </button>
+              {showProfileMenu && (
+                <ProfileDropdown
+                  theme="light"
+                  email={auth.email}
+                  pubkey={auth.pubkey}
+                  lightningAddress={auth.lightningAddress}
+                  sessionToken={auth.sessionToken}
+                  emailVerified={auth.emailVerified}
+                  onSetLightningAddress={setLightningAddress}
+                  onLogout={logout}
+                  onClose={() => setShowProfileMenu(false)}
+                />
+              )}
+            </div>
           ) : (
             <button
               type="button"

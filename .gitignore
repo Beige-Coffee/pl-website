@@ -12,8 +12,21 @@ test-results/
 playwright-report/
 /tests/production-walkthrough.ts
 
-# Working documents (prompts, agent notes)
+# Replit artifacts
+attached_assets/
+main.py
+pyproject.toml
+uv.lock
+replit.md
+
+# Working documents (prompts, agent notes, planning)
 AGENTS.md
 codex-*.md
 pre-launch-test.md
 .claude/commands/
+.plan.md
+PLAN.md
+LEXE_SIDECAR_DOCS.md
+REPLIT_PROMPT_LIGHTNING_REWARDS.md
+noise-exercises-overview.md
+docs/

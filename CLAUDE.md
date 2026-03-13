@@ -100,7 +100,7 @@ Exercise IDs referenced in markdown `<code-intro>` tags are filtered against the
 
 ## Important Conventions
 
-- Path aliases: `@` = `client/src/`, `@shared` = `shared/`, `@assets` = `attached_assets/`
+- Path aliases: `@` = `client/src/`, `@shared` = `shared/`
 - The `Chapter` type in lightning-tutorial.tsx uses a `section` union type that must match the `sectionOrder` array exactly
 - Database schema is in `shared/schema.ts` and pushed via `npm run db:push` (Drizzle Kit)
 - Production API is at `programminglightning.com`. Local dev proxies `/api` requests there.
