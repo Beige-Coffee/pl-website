@@ -19,6 +19,9 @@ import { Tooltip, TooltipTrigger, TooltipContent } from "../components/ui/toolti
 import FeedbackWidget from "../components/FeedbackWidget";
 import ProfileDropdown from "../components/ProfileDropdown";
 import HandshakeDiagram from "../components/HandshakeDiagram";
+import CapstonePanel from "../components/CapstonePanel";
+import ServerProbe from "../components/ServerProbe";
+import NonceReuseLab from "../components/NonceReuseLab";
 import { PanelStateContext, usePanelStateProvider } from "../hooks/use-panel-state";
 import { useIsMobile } from "../hooks/use-mobile";
 
@@ -111,11 +114,11 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
     options: [
       "Nonce 0 is reserved for the HKDF extract phase. ChaCha20 uses counter 0 to derive the Poly1305 authentication keys, so nonce 0 refers to this internal counter, not an external nonce",
       "The Noise Protocol always starts nonces at 1 to distinguish handshake messages from transport messages, which start at 0",
-      "Bob already used `temp_k2` with nonce = 0 in Act 2 to create his authentication MAC, so reusing the same key with the same nonce would produce an identical keystream, leaking information about both plaintexts",
+      "Bob already used `temp_k2` with nonce = 0 in Act 2 to create his authentication MAC, so reusing the same key and nonce would produce identical Poly1305 authentication keys, breaking both confidentiality and authentication",
       "Alice's nonce counter was already incremented to 1 during the HKDF derivation of `temp_k2`, since HKDF internally calls ChaCha20 with nonce 0",
     ],
     answer: 2,
-    explanation: "In Act 2, Bob used `temp_k2` with nonce = 0 to encrypt a zero-length plaintext and produce his authentication MAC. Now in Act 3, Alice needs to use the same `temp_k2` to encrypt her static public key. If she also used nonce = 0, the ChaCha20 keystream would be identical to what Bob generated, and an attacker who XORed the two ciphertexts could learn information about Alice's static key. By using nonce = 1, Alice ensures a completely different keystream is generated, keeping her encrypted static public key secure.",
+    explanation: "In Act 2, Bob used `temp_k2` with nonce = 0 to encrypt a zero-length plaintext and produce his authentication MAC. Now in Act 3, Alice needs to use the same `temp_k2` to encrypt her static public key. If she also used nonce = 0, ChaCha20 would generate the same internal state, producing identical Poly1305 authentication keys (r, s). With two message-tag pairs under the same Poly1305 key, an attacker can forge valid MACs for arbitrary messages, completely breaking authentication. The identical keystream would also be used to encrypt Alice's static key, potentially exposing it. By using nonce = 1, Alice ensures completely different Poly1305 keys and a fresh keystream, keeping her encrypted static public key secure.",
   },
   "message-length-limit": {
     question: "What happens if a Lightning node needs to send a message that is 70,000 bytes long?",
@@ -133,7 +136,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
 type Chapter = {
   id: string;
   title: string;
-  section: "Introduction" | "Foundations" | "The Handshake" | "Encrypted Messaging" | "Quiz" | "Pay It Forward";
+  section: "Introduction" | "Foundations" | "The Handshake" | "Encrypted Messaging" | "Capstone" | "Quiz" | "Pay It Forward";
   kind: "intro" | "md";
   file?: string;
 };
@@ -209,6 +212,13 @@ export const chapters: Chapter[] = [
     file: "/noise_tutorial/1.12-rotating-keys.md",
   },
   {
+    id: "live-connection",
+    title: "Live Connection Lab",
+    section: "Capstone",
+    kind: "md",
+    file: "/noise_tutorial/1.15-live-connection.md",
+  },
+  {
     id: "quiz",
     title: "Test Your Knowledge",
     section: "Quiz",
@@ -228,6 +238,7 @@ export const sectionOrder: Chapter["section"][] = [
   "Foundations",
   "The Handshake",
   "Encrypted Messaging",
+  "Capstone",
   "Quiz",
   "Pay It Forward",
 ];
@@ -242,10 +253,11 @@ export const CHAPTER_REQUIREMENTS: Record<string, {
   "handshake-setup": { checkpoints: ["setup-wrong-key"], exercises: ["exercise-init-state"] },
   "act-1": { checkpoints: [], exercises: ["exercise-act1-initiator", "exercise-act1-responder"] },
   "act-2": { checkpoints: ["act2-both-ephemeral"], exercises: ["exercise-act2-responder", "exercise-act2-initiator"] },
-  "act-3": { checkpoints: ["act3-nonce-one"], exercises: ["exercise-act3-initiator"] },
+  "act-3": { checkpoints: ["act3-nonce-one"], exercises: ["exercise-act3-initiator", "exercise-act3-responder"] },
   "sending-messages": { checkpoints: ["message-length-limit"], exercises: ["exercise-encrypt"] },
   "receiving-messages": { checkpoints: [], exercises: ["exercise-decrypt"] },
   "key-rotation": { checkpoints: [], exercises: ["exercise-key-rotation"] },
+  "live-connection": { checkpoints: [], exercises: [] },
   "quiz": { checkpoints: [], exercises: [] },
   "pay-it-forward": { checkpoints: [], exercises: [] },
 };
@@ -317,6 +329,7 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
   const progress = useProgress(auth.sessionToken);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
 
   // Tutorial mode: "read" (checkpoints only) or "code" (coding exercises)
   // URL param takes priority (set from blog page), then falls back to localStorage
@@ -587,7 +600,7 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
         <aside
           className={`${
             mobileNavOpen ? "fixed inset-y-0 left-0 w-[300px] z-50 overflow-y-auto shadow-xl" : "hidden"
-          } md:relative md:block md:sticky md:top-[68px] md:w-auto md:z-auto md:shadow-none md:h-fit ${theme === "dark" ? "bg-[#0b1220]" : "bg-card"}`}
+          } md:relative md:block md:sticky md:top-[68px] md:w-auto md:z-auto md:shadow-none md:max-h-[calc(100vh-68px)] md:overflow-y-auto ${theme === "dark" ? "bg-[#0b1220]" : "bg-card"}`}
         >
           <div className="md:hidden flex items-center justify-between px-4 pt-4 pb-2">
             <div className={`font-pixel text-sm ${theme === "dark" ? "text-slate-200" : "text-foreground"}`}>
@@ -635,26 +648,39 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
           >
 
             {sectionOrder.map((section) => {
+              if (section === "Capstone" && tutorialMode !== "code") return null;
               const items = grouped.get(section) ?? [];
               if (!items.length) return null;
               const trackableItems = items.filter(c => c.id !== "pay-it-forward");
               const completedInSection = trackableItems.filter(c => chapterCompletion[c.id] === "complete").length;
               const totalInSection = trackableItems.length;
+              const isSectionCollapsed = collapsedSections.has(section);
               return (
                 <div key={section} className="mb-4">
-                  <div
-                    className={`font-pixel text-[14px] tracking-wide mb-2 flex items-center gap-2 ${theme === "dark" ? "text-slate-300" : "text-foreground/70"}`}
+                  <button
+                    type="button"
+                    onClick={() => setCollapsedSections((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(section)) next.delete(section);
+                      else next.add(section);
+                      return next;
+                    })}
+                    className={`flex items-center justify-between w-full font-pixel text-[14px] tracking-wide mb-2 cursor-pointer ${theme === "dark" ? "text-slate-300 hover:text-slate-100" : "text-foreground/70 hover:text-foreground"}`}
                     data-testid={`text-section-${section.replace(/\s+/g, "-").toLowerCase()}`}
                   >
-                    {section.toUpperCase()}
-                    {totalInSection > 0 && (
-                      <span className={`text-[11px] font-pixel ${completedInSection === totalInSection ? (theme === "dark" ? "text-green-400" : "text-green-600") : "opacity-50"}`}>
-                        {completedInSection}/{totalInSection}
-                      </span>
-                    )}
-                  </div>
+                    <span className="flex items-center gap-2">
+                      {section.toUpperCase()}
+                      {totalInSection > 0 && (
+                        <span className={`text-[11px] font-pixel ${completedInSection === totalInSection ? (theme === "dark" ? "text-[#FFD700]" : "text-[#b8860b]") : "opacity-50"}`}>
+                          {completedInSection}/{totalInSection}
+                        </span>
+                      )}
+                    </span>
+                    <span className={`text-[10px] transition-transform ${isSectionCollapsed ? "-rotate-90" : ""}`}>&#9660;</span>
+                  </button>
                   <div className={`h-[2px] ${theme === "dark" ? "bg-[#1f2a44]" : "bg-border"} mb-2`} />
 
+                  {!isSectionCollapsed && (
                   <nav className="grid gap-1">
                     {items.map((c) => {
                       const href = c.id === "intro" ? "/noise-tutorial" : `/noise-tutorial/${c.id}`;
@@ -673,11 +699,11 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
                         >
                           <div className="flex items-center gap-2">
                             {showIcon && (
-                              <span className={`w-7 h-7 shrink-0 rounded-full flex items-center justify-center text-base font-extrabold leading-none ${
+                              <span className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-lg font-extrabold leading-none ${
                                 isComplete
                                   ? theme === "dark"
-                                    ? "bg-green-500 text-white"
-                                    : "bg-green-600 text-white"
+                                    ? "bg-[#FFD700] text-white"
+                                    : "bg-[#b8860b] text-white"
                                   : theme === "dark" ? "border-2 border-[#2a3552]" : "border-2 border-border"
                               }`}>
                                 {isComplete && "\u2713"}
@@ -692,7 +718,7 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
                               if (!showExercises && !showQuizzes) return null;
                               const completedIds = new Set(auth.completedCheckpoints.map(cp => cp.checkpointId));
                               const dim = theme === "dark" ? "text-slate-600" : "text-foreground/25";
-                              const lit = theme === "dark" ? "text-green-400" : "text-green-600";
+                              const lit = theme === "dark" ? "text-[#FFD700]" : "text-[#b8860b]";
                               const tooltipClass = `font-pixel text-sm px-3 py-1.5 border-2 rounded-none ${
                                 theme === "dark"
                                   ? "bg-[#0f1930] text-slate-200 border-[#2a3552]"
@@ -728,6 +754,7 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
                       );
                     })}
                   </nav>
+                  )}
                 </div>
               );
             })}
@@ -2668,6 +2695,27 @@ function ChapterContent({
           "handshake-diagram": ({ act }: any) => (
             <HandshakeDiagram theme={theme} act={act || undefined} />
           ),
+          "nonce-reuse-lab": () => (
+            <NonceReuseLab theme={theme} />
+          ),
+          "server-probe": () => {
+            if (tutorialMode !== "code") return null;
+            return (
+              <ServerProbe
+                theme={theme}
+                onPacketCaptured={() => {}}
+              />
+            );
+          },
+          "capstone-panel": () => {
+            if (tutorialMode !== "code") return null;
+            return (
+              <CapstonePanel
+                getProgress={getProgress}
+                theme={theme}
+              />
+            );
+          },
           "checkpoint-group": ({ id, ids }: any) => {
             const groupId = String(id || "");
             const questionIds = String(ids || "").split(",").map((s: string) => s.trim()).filter(Boolean);

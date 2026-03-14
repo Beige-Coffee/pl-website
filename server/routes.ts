@@ -12,6 +12,8 @@ import { emailAuthSchema, insertPageEventSchema, type Feedback } from "@shared/s
 import { existsSync } from "fs";
 import { sendVerificationEmail } from "./email";
 import { nodeManager } from "./bitcoin-node";
+import { setupNoiseWebSocket, getServerPubkey } from "./noise-handshake-ws";
+import { hex as noiseHex } from "./noise-crypto";
 
 class RateLimiter {
   private attempts: Map<string, number[]> = new Map();
@@ -148,6 +150,7 @@ export const CHECKPOINT_ANSWER_KEY: Record<string, number> = {
   "exercise-act2-responder": 0,
   "exercise-act2-initiator": 0,
   "exercise-act3-initiator": 0,
+  "exercise-act3-responder": 0,
   "exercise-encrypt": 0,
   "exercise-decrypt": 0,
   "exercise-key-rotation": 0,
@@ -1955,7 +1958,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ─── Noise Protocol Endpoints ─────────────────────────────────────────────
+
+  app.get("/api/noise/pubkey", (_req: Request, res: Response) => {
+    try {
+      const pubkey = getServerPubkey();
+      res.json({ pubkey: noiseHex(pubkey) });
+    } catch (err) {
+      console.error("[noise] Failed to get server pubkey:", err);
+      res.status(500).json({ error: "Failed to get server public key" });
+    }
+  });
+
   const httpServer = createServer(app);
+
+  // Attach Noise Protocol WebSocket handler to the HTTP server
+  setupNoiseWebSocket(httpServer);
+
   return httpServer;
 }
 
