@@ -14,6 +14,7 @@ import AdminPage from "@/pages/admin";
 import VisualLightningPage from "@/pages/visual-lightning";
 import Learn from "@/pages/learn";
 
+
 function Router() {
   usePageTracking();
   return (
@@ -28,6 +29,7 @@ function Router() {
       <Route path="/admin" component={AdminPage} />
       <Route path="/visual-lightning" component={VisualLightningPage} />
       <Route path="/visual-lightning/:sectionId" component={VisualLightningPage} />
+
       <Route component={NotFound} />
     </Switch>
   );

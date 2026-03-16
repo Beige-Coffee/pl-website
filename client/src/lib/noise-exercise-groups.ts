@@ -1,9 +1,9 @@
 // ─── Noise Exercise Groups ──────────────────────────────────────────────────
 //
-// Groups the 12 Noise tutorial exercises into 3 logical Python "files":
-//   1. crypto/primitives.py  — keypair generation, ECDH, HKDF
-//   2. noise/handshake.py    — handshake init + 3 acts (6 exercises)
-//   3. noise/transport.py    — encrypt, decrypt, key rotation
+// Groups the 13 Noise tutorial exercises into 3 logical Python "files":
+//   1. crypto/primitives.py        — keypair generation, ECDH, HKDF
+//   2. noise/handshake.py          — handshake init + 3 acts (7 exercises)
+//   3. noise/transport.py          — encrypt, decrypt, key rotation
 //
 // Cross-group dependencies carry the student's solutions forward:
 //   - handshake.py uses ecdh() and hkdf_two_keys() from primitives.py
@@ -78,6 +78,7 @@ export const NOISE_EXERCISE_GROUPS: Record<string, NoiseExerciseGroup> = {
       "exercise-act2-responder",
       "exercise-act2-initiator",
       "exercise-act3-initiator",
+      "exercise-act3-responder",
     ],
     crossGroupDependencies: [
       "exercise-ecdh",
@@ -99,6 +100,7 @@ export const NOISE_EXERCISE_GROUPS: Record<string, NoiseExerciseGroup> = {
       "exercise-hkdf",
     ],
   },
+
 };
 
 // ─── Lookup Map ─────────────────────────────────────────────────────────────

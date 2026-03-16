@@ -348,14 +348,15 @@ export default function Home() {
                     </Tooltip>
                     <Tooltip delayDuration={0}>
                       <TooltipTrigger asChild>
-                        <span
-                          className="bg-muted text-muted-foreground px-6 py-2.5 font-pixel text-sm border-2 border-muted-foreground/30 cursor-not-allowed pixel-shadow text-center flex-1 md:flex-none opacity-75"
+                        <Link
+                          href="/noise-tutorial?mode=code"
+                          className="bg-foreground text-background px-6 py-2.5 font-pixel text-sm border-2 border-border hover:bg-foreground/80 transition-colors pixel-shadow active:translate-x-[2px] active:translate-y-[2px] active:shadow-none text-center flex-1 md:flex-none"
                         >
                           CODE
-                        </span>
+                        </Link>
                       </TooltipTrigger>
                       <TooltipContent side="right" align="start" className="bg-card text-foreground border-4 border-border text-lg px-4 py-3 pixel-shadow max-w-xs rounded-none font-sans">
-                        Coming March 2026
+                        Build the Noise Protocol from scratch with hands-on Python exercises.
                       </TooltipContent>
                     </Tooltip>
                   </div>
