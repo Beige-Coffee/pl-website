@@ -299,6 +299,14 @@ export default function CapstonePanel({ getProgress, theme }: CapstonePanelProps
         case "message_received":
           // Silently consume the completion token — don't show raw JSON in terminal
           if (event.plaintext.startsWith("__completion_token__:")) {
+            // Record lab completion on the server (best-effort, don't block UX)
+            const tokenPayload = event.plaintext.slice("__completion_token__:".length);
+            fetch("/api/noise/lab-complete", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ token: tokenPayload }),
+              credentials: "include",
+            }).catch(() => { /* ignore — user may not be logged in */ });
             break;
           }
           setMessages((prev) => [

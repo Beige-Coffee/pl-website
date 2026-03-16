@@ -14,6 +14,8 @@ import { sendVerificationEmail } from "./email";
 import { nodeManager } from "./bitcoin-node";
 import { setupNoiseWebSocket, getServerPubkey } from "./noise-handshake-ws";
 import { hex as noiseHex } from "./noise-crypto";
+import { sha256 } from "@noble/hashes/sha2.js";
+import { verify as ecdsaVerify } from "@noble/secp256k1";
 
 class RateLimiter {
   private attempts: Map<string, number[]> = new Map();
@@ -1967,6 +1969,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err) {
       console.error("[noise] Failed to get server pubkey:", err);
       res.status(500).json({ error: "Failed to get server public key" });
+    }
+  });
+
+  // Record Noise Lab completion — verifies the server-signed completion token
+  app.post("/api/noise/lab-complete", async (req: Request, res: Response) => {
+    try {
+      const user = await getAuthUser(req);
+      if (!user) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      const { token } = req.body;
+      if (!token || typeof token !== "string") {
+        return res.status(400).json({ error: "Missing completion token" });
+      }
+
+      let parsed: { studentPubkey: string; timestamp: string; signature: string };
+      try {
+        parsed = JSON.parse(token);
+      } catch {
+        return res.status(400).json({ error: "Invalid token format" });
+      }
+
+      if (!parsed.studentPubkey || !parsed.timestamp || !parsed.signature) {
+        return res.status(400).json({ error: "Incomplete token" });
+      }
+
+      // Reject tokens older than 10 minutes
+      const tokenAge = Date.now() - new Date(parsed.timestamp).getTime();
+      if (tokenAge > 10 * 60 * 1000 || tokenAge < 0) {
+        return res.status(400).json({ error: "Token expired" });
+      }
+
+      // Verify signature against server's noise pubkey
+      const message = parsed.studentPubkey + parsed.timestamp;
+      const messageHash = sha256(new TextEncoder().encode(message));
+      const sigBytes = hexToBytes(parsed.signature);
+      const serverPubkey = getServerPubkey();
+
+      const valid = ecdsaVerify(sigBytes, messageHash, serverPubkey);
+      if (!valid) {
+        return res.status(400).json({ error: "Invalid token signature" });
+      }
+
+      // Record the completion
+      await storage.markCheckpointCompleted(user.id, "noise-lab-complete");
+      return res.json({ success: true });
+    } catch (err) {
+      console.error("[noise] Lab completion error:", err);
+      res.status(500).json({ error: "Failed to record completion" });
     }
   });
 
