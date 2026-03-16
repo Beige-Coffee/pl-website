@@ -357,7 +357,7 @@ export default function Home() {
                           </Link>
                         ) : (
                           <span
-                            className="bg-foreground/40 text-background/60 px-6 py-2.5 font-pixel text-sm border-2 border-border/50 cursor-not-allowed text-center flex-1 md:flex-none"
+                            className="bg-muted text-muted-foreground px-6 py-2.5 font-pixel text-sm border-2 border-muted-foreground/30 cursor-not-allowed pixel-shadow text-center flex-1 md:flex-none opacity-75"
                           >
                             CODE
                           </span>
