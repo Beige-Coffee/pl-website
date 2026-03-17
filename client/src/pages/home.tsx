@@ -274,7 +274,7 @@ export default function Home() {
                         </button>
                       </TooltipTrigger>
                       <TooltipContent side="right" align="start" className="bg-card text-foreground border-4 border-border text-lg px-4 py-3 pixel-shadow max-w-xs rounded-none font-sans">
-                        Same content plus hands-on coding exercises where you build key parts of the protocol.
+                        Deep dive into how Lightning payment channels work. You'll build one from scratch with hands-on Python exercises.
                       </TooltipContent>
                     </Tooltip>
                   </div>
@@ -343,7 +343,7 @@ export default function Home() {
                         </Link>
                       </TooltipTrigger>
                       <TooltipContent side="right" align="start" className="bg-card text-foreground border-4 border-border text-lg px-4 py-3 pixel-shadow max-w-xs rounded-none font-sans">
-                        Deep dive into how Lightning works with checkpoint quizzes. No programming required.
+                        Learn how Lightning nodes establish encrypted connections, with checkpoint quizzes along the way. No programming required.
                       </TooltipContent>
                     </Tooltip>
                     <Tooltip delayDuration={0}>
