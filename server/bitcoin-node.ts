@@ -312,6 +312,10 @@ class NodeManager {
         cpSync(SNAPSHOT_DIR, regtestDir, { recursive: true });
         console.log("[node] Copied snapshot for user", userId);
       }
+    } else {
+      // Clean up stale LOCK files from previous unclean shutdown.
+      // Without this, bitcoind can't start after SIGKILL or crash.
+      this._cleanupStaleLocks(regtestDir);
     }
 
     const rpcPort = await this.allocatePort();
@@ -680,45 +684,57 @@ class NodeManager {
     }
   }
 
+  private _waitForExit(proc: ChildProcess, timeoutMs: number): Promise<boolean> {
+    return new Promise((resolve) => {
+      if (proc.exitCode !== null || proc.killed) return resolve(true);
+      const timeout = setTimeout(() => resolve(false), timeoutMs);
+      proc.once("exit", () => { clearTimeout(timeout); resolve(true); });
+    });
+  }
+
   async stop(userId: UserId): Promise<void> {
     const instance = this.instances.get(userId);
     if (!instance) return;
 
     const proc = instance.process;
-    const port = instance.rpcPort;
     this.instances.delete(userId);
 
-    // Already dead? Nothing to do.
     if (proc.exitCode !== null || proc.killed) return;
 
-    // Try RPC "stop" first — cleanest path, flushes all LevelDB writes.
-    // Then SIGTERM as fallback. NEVER use SIGKILL — it corrupts LevelDB
-    // and causes chain state to reset to an earlier height.
+    // Step 1: Try RPC "stop" (cleanest — flushes LevelDB before exiting)
     try {
-      await this._rpcCallWithTimeout(port, "stop", [], 5_000);
+      await this._rpcCallWithTimeout(instance.rpcPort, "stop", [], 5_000);
     } catch {
-      try {
-        proc.kill("SIGTERM");
-      } catch {}
+      // Step 2: SIGTERM if RPC fails (node is unresponsive)
+      try { proc.kill("SIGTERM"); } catch {}
     }
 
-    // Wait up to 30 seconds for the process to exit gracefully.
-    // bitcoind needs time to flush LevelDB — this is the critical path
-    // that prevents data loss.
-    await new Promise<void>((resolve) => {
-      if (proc.exitCode !== null) return resolve();
-      const timeout = setTimeout(() => {
-        console.log("[node] bitcoind still alive after 30s SIGTERM for user", userId, "- leaving it to finish");
-        resolve();
-      }, 30_000);
-      proc.once("exit", () => { clearTimeout(timeout); resolve(); });
-    });
+    // Step 3: Wait up to 15s for graceful exit
+    const exited = await this._waitForExit(proc, 15_000);
+
+    // Step 4: SIGKILL as last resort — may cause some data loss but
+    // without it the old process holds LOCK files and prevents restart entirely
+    if (!exited) {
+      console.log("[node] bitcoind did not exit after 15s for user", userId, "- sending SIGKILL");
+      try { proc.kill("SIGKILL"); } catch {}
+      await this._waitForExit(proc, 5_000);
+    }
+  }
+
+  /**
+   * Remove stale LevelDB LOCK files from the data directory.
+   * After SIGKILL or an unclean shutdown, bitcoind may leave LOCK files
+   * that prevent a new process from starting on the same data.
+   */
+  private _cleanupStaleLocks(regtestDir: string): void {
+    for (const subdir of ["blocks/index", "chainstate"]) {
+      const lockPath = join(regtestDir, subdir, "LOCK");
+      try { rmSync(lockPath); } catch {}
+    }
   }
 
   async restart(userId: UserId): Promise<void> {
     await this.stop(userId);
-    // Small extra wait after stop to let the filesystem release locks
-    await new Promise((r) => setTimeout(r, 1000));
     await this.getOrCreate(userId);
   }
 
