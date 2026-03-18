@@ -113,6 +113,7 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
   const [historyIdx, setHistoryIdx] = useState(-1);
   const [showHelp, setShowHelp] = useState(false);
   const hadNodeRef = useRef(false);
+  const execAbortRef = useRef<AbortController | null>(null);
 
   const [panelWidth, setPanelWidth] = useState(() => {
     // Use shared panel width if available, fall back to per-panel saved width
@@ -264,6 +265,8 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
     }
 
     setRunning(true);
+    const abortController = new AbortController();
+    execAbortRef.current = abortController;
     try {
       const res = await fetch("/api/node/exec", {
         method: "POST",
@@ -272,6 +275,7 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
           Authorization: `Bearer ${sessionToken}`,
         },
         body: JSON.stringify({ command: cmd }),
+        signal: abortController.signal,
       });
 
       const contentType = res.headers.get("content-type") || "";
@@ -314,8 +318,12 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
         setLines((prev) => [...prev, { type: "output", text }]);
       }
     } catch (err: any) {
-      setLines((prev) => [...prev, { type: "error", text: "Network error: " + err.message }]);
+      // Don't show errors for requests we intentionally aborted (e.g. restart)
+      if (err?.name !== "AbortError") {
+        setLines((prev) => [...prev, { type: "error", text: "Network error: " + err.message }]);
+      }
     } finally {
+      execAbortRef.current = null;
       setRunning(false);
       // Re-focus input after command completes so user can keep typing
       requestAnimationFrame(() => inputRef.current?.focus());
@@ -464,6 +472,12 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
 
   const restartNode = useCallback(async () => {
     if (!sessionToken || provisioning) return;
+    // Abort any in-flight command (e.g. a mining request waiting for timeout)
+    if (execAbortRef.current) {
+      execAbortRef.current.abort();
+      execAbortRef.current = null;
+    }
+    setRunning(false);
     setProvisioning(true);
     setNodeReady(false);
     setNodeUnresponsive(false);
