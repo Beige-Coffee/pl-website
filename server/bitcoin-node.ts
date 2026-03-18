@@ -588,7 +588,7 @@ class NodeManager {
           "  validateaddress <addr>     - Validate a Bitcoin address",
           "  help <command>             - Get help for a specific command",
           "",
-          "  mine <n>                   - Mine n blocks (max 20 per command)",
+          "  mine <n>                   - Mine n blocks (max 10 per command)",
           "  clear                      - Clear terminal",
           "",
           "  Note: Wallet is disabled for performance. Use scantxoutset to find UTXOs",
@@ -638,10 +638,10 @@ class NodeManager {
   }
 
   private async _handleMine(instance: NodeInstance, args: string[]): Promise<{ result?: unknown; error?: string }> {
-    const MAX_MINE_BLOCKS = 20;
+    const MAX_MINE_BLOCKS = 10;
     const numBlocks = parseInt(args[0] || "1", 10);
     if (isNaN(numBlocks) || numBlocks < 1) {
-      return { error: "Usage: mine <number> (1-20)" };
+      return { error: "Usage: mine <number> (1-10)" };
     }
     if (numBlocks > MAX_MINE_BLOCKS) {
       return { error: `Mining is limited to ${MAX_MINE_BLOCKS} blocks at a time. Run 'mine ${MAX_MINE_BLOCKS}' multiple times if you need more.` };
@@ -652,11 +652,11 @@ class NodeManager {
       const mempool = (await this._rpcCall(instance.rpcPort, "getrawmempool", [])) as string[];
       await this._rpcCall(instance.rpcPort, "generateblock", [address, mempool || []]);
 
-      // Small delay between blocks gives LevelDB time to flush writes to disk.
-      // Without this, 20 blocks fire in <0.2s and data stays in memory buffers —
-      // if the node crashes before flushing, those blocks are lost.
+      // Delay between blocks gives LevelDB time to flush writes to disk.
+      // Without this, blocks fire too fast and data stays in memory buffers —
+      // if the node is restarted before flushing, those blocks are lost.
       for (let i = 1; i < numBlocks; i++) {
-        await new Promise((r) => setTimeout(r, 150));
+        await new Promise((r) => setTimeout(r, 250));
         await this._rpcCall(instance.rpcPort, "generateblock", [address, []]);
       }
 
@@ -688,8 +688,12 @@ class NodeManager {
     const port = instance.rpcPort;
     this.instances.delete(userId);
 
-    // Try RPC "stop" first — this is the cleanest shutdown path for bitcoind,
-    // flushing all LevelDB writes before exiting. Falls back to SIGTERM.
+    // Already dead? Nothing to do.
+    if (proc.exitCode !== null || proc.killed) return;
+
+    // Try RPC "stop" first — cleanest path, flushes all LevelDB writes.
+    // Then SIGTERM as fallback. NEVER use SIGKILL — it corrupts LevelDB
+    // and causes chain state to reset to an earlier height.
     try {
       await this._rpcCallWithTimeout(port, "stop", [], 5_000);
     } catch {
@@ -698,26 +702,23 @@ class NodeManager {
       } catch {}
     }
 
-    // Wait up to 15 seconds for the process to exit gracefully.
-    // bitcoind needs time to flush LevelDB writes — cutting this short causes data loss.
-    const exited = await new Promise<boolean>((resolve) => {
-      if (proc.exitCode !== null) return resolve(true);
-      const timeout = setTimeout(() => resolve(false), 15_000);
-      proc.once("exit", () => { clearTimeout(timeout); resolve(true); });
+    // Wait up to 30 seconds for the process to exit gracefully.
+    // bitcoind needs time to flush LevelDB — this is the critical path
+    // that prevents data loss.
+    await new Promise<void>((resolve) => {
+      if (proc.exitCode !== null) return resolve();
+      const timeout = setTimeout(() => {
+        console.log("[node] bitcoind still alive after 30s SIGTERM for user", userId, "- leaving it to finish");
+        resolve();
+      }, 30_000);
+      proc.once("exit", () => { clearTimeout(timeout); resolve(); });
     });
-
-    if (!exited && proc.exitCode === null) {
-      console.log("[node] bitcoind did not exit after SIGTERM for user", userId, "- sending SIGKILL");
-      try {
-        proc.kill("SIGKILL");
-      } catch {}
-      // Wait for SIGKILL to take effect and filesystem to release locks
-      await new Promise((r) => setTimeout(r, 2000));
-    }
   }
 
   async restart(userId: UserId): Promise<void> {
     await this.stop(userId);
+    // Small extra wait after stop to let the filesystem release locks
+    await new Promise((r) => setTimeout(r, 1000));
     await this.getOrCreate(userId);
   }
 
