@@ -450,6 +450,36 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
   const inputTextColor = dark ? "text-slate-200" : "text-stone-800";
   const placeholderColor = dark ? "placeholder:text-slate-600" : "placeholder:text-stone-400";
 
+  // ── Restart node ───────────────────────────────────────────────────────
+
+  const restartNode = useCallback(async () => {
+    if (!sessionToken || provisioning) return;
+    setProvisioning(true);
+    setNodeReady(false);
+    setLines((prev) => [...prev, { type: "info", text: "Restarting node..." }]);
+
+    try {
+      const res = await fetch("/api/node/restart", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${sessionToken}`,
+        },
+      });
+      const data = await res.json();
+      if (data.running) {
+        setNodeReady(true);
+        setLines((prev) => [...prev, { type: "info", text: "Node restarted. Ready for commands." }]);
+      } else {
+        setLines((prev) => [...prev, { type: "error", text: data.error || "Restart failed" }]);
+      }
+    } catch (err: any) {
+      setLines((prev) => [...prev, { type: "error", text: "Restart failed: " + err.message }]);
+    } finally {
+      setProvisioning(false);
+    }
+  }, [sessionToken, provisioning]);
+
   // Listen for open event from Tools menu
   useEffect(() => {
     const handler = () => setIsOpen(true);
@@ -570,9 +600,23 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
     return (
       <Drawer open={isOpen} onOpenChange={(open) => setIsOpen(open)}>
         <DrawerContent className={`max-h-[95dvh] h-[95dvh] flex flex-col ${panelBg}`} data-testid="drawer-node-terminal">
-          <DrawerTitle className={`font-pixel text-xs ${goldText} px-4 pt-2 flex items-center gap-2`}>
-            Bitcoin Node
-            {provisioning && <span className="inline-block w-3 h-3 border-2 border-[#FFD700]/30 border-t-[#FFD700] rounded-full animate-spin" />}
+          <DrawerTitle className={`font-pixel text-xs ${goldText} px-4 pt-2 flex items-center justify-between`}>
+            <div className="flex items-center gap-2">
+              Bitcoin Node
+              {provisioning ? (
+                <span className="inline-block w-3 h-3 border-2 border-[#FFD700]/30 border-t-[#FFD700] rounded-full animate-spin" />
+              ) : (
+                <span className={`inline-block w-2 h-2 rounded-full ${nodeReady ? "bg-green-500" : "bg-red-500"}`} />
+              )}
+            </div>
+            <button
+              onClick={restartNode}
+              disabled={provisioning}
+              className={`font-pixel text-[10px] px-2 py-1 border transition-all cursor-pointer disabled:opacity-40
+                ${dark ? "border-[#2a3552] text-slate-400" : "border-[#d4c9a8] text-black/50"}`}
+            >
+              RESTART
+            </button>
           </DrawerTitle>
           {terminalContent}
         </DrawerContent>
@@ -600,9 +644,25 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
       <div className={`flex items-center justify-between px-4 py-2.5 border-b-2 ${panelBorder} ${dark ? "bg-[#0f1930]" : "bg-[#f0e8d8]"} shrink-0`}>
         <div className={`font-pixel text-xs ${goldText} flex items-center gap-2`}>
           Bitcoin Node
-          {provisioning && <span className="inline-block w-3 h-3 border-2 border-[#FFD700]/30 border-t-[#FFD700] rounded-full animate-spin" />}
+          {provisioning ? (
+            <span className="inline-block w-3 h-3 border-2 border-[#FFD700]/30 border-t-[#FFD700] rounded-full animate-spin" />
+          ) : (
+            <span
+              className={`inline-block w-2 h-2 rounded-full ${nodeReady ? "bg-green-500" : "bg-red-500"}`}
+              title={nodeReady ? "Node running" : "Node stopped"}
+            />
+          )}
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={restartNode}
+            disabled={provisioning}
+            className={`font-pixel text-[10px] px-2 py-1 border transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed
+              ${dark ? "border-[#2a3552] text-slate-400 hover:text-slate-200 hover:bg-[#132043]" : "border-[#d4c9a8] text-black/50 hover:text-black hover:bg-[#e8dcc8]"}`}
+            title="Restart Bitcoin node"
+          >
+            RESTART
+          </button>
           <button
             onClick={() => setShowHelp((v) => !v)}
             className={`font-pixel text-[10px] px-2 py-1 border transition-all cursor-pointer

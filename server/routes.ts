@@ -1788,6 +1788,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/node/restart", async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    const bypass = canBypassNodeLimiter(req);
+    if (!bypass && !nodeLimiter.check(ip)) {
+      return res.status(429).json({ error: "Too many requests" });
+    }
+    if (bypass) {
+      nodeManager.noteLimiterBypass();
+    }
+
+    try {
+      const user = await getAuthUser(req);
+      if (!user) return res.status(401).json({ error: "Not authenticated" });
+
+      await nodeManager.restart(user.id);
+      return res.json({ running: true });
+    } catch (err: any) {
+      const status = err.message?.includes("busy") ? 503 : 500;
+      return res.status(status).json({ error: err.message });
+    }
+  });
+
   app.post("/api/node/exec", async (req: Request, res: Response) => {
     const ip = getClientIp(req);
     const bypass = canBypassNodeLimiter(req);

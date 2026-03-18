@@ -69,7 +69,7 @@ const MAX_PORT = 18999;
 const DEFAULT_RPC_TIMEOUT_MS = 30_000;
 const RPC_TIMEOUT_OVERRIDES_MS: Record<string, number> = {
   scantxoutset: 120_000,
-  generateblock: 120_000,
+  generateblock: 30_000,
 };
 
 const BLOCKED_COMMANDS = new Set([
@@ -588,7 +588,7 @@ class NodeManager {
           "  validateaddress <addr>     - Validate a Bitcoin address",
           "  help <command>             - Get help for a specific command",
           "",
-          "  mine <n>                   - Mine n blocks (max 40 per command)",
+          "  mine <n>                   - Mine n blocks (max 20 per command)",
           "  clear                      - Clear terminal",
           "",
           "  Note: Wallet is disabled for performance. Use scantxoutset to find UTXOs",
@@ -638,13 +638,13 @@ class NodeManager {
   }
 
   private async _handleMine(instance: NodeInstance, args: string[]): Promise<{ result?: unknown; error?: string }> {
-    const MAX_MINE_BLOCKS = 40;
+    const MAX_MINE_BLOCKS = 20;
     const numBlocks = parseInt(args[0] || "1", 10);
     if (isNaN(numBlocks) || numBlocks < 1) {
-      return { error: "Usage: mine <number> (1-40)" };
+      return { error: "Usage: mine <number> (1-20)" };
     }
     if (numBlocks > MAX_MINE_BLOCKS) {
-      return { error: `For this course, mine is limited to ${MAX_MINE_BLOCKS} blocks at a time. Run 'mine ${MAX_MINE_BLOCKS}' multiple times if you need more.` };
+      return { error: `Mining is limited to ${MAX_MINE_BLOCKS} blocks at a time. Run 'mine ${MAX_MINE_BLOCKS}' multiple times if you need more.` };
     }
 
     try {
@@ -694,6 +694,11 @@ class NodeManager {
     }
 
     this.instances.delete(userId);
+  }
+
+  async restart(userId: UserId): Promise<void> {
+    await this.stop(userId);
+    await this.getOrCreate(userId);
   }
 
   getStatus(userId: UserId): { running: boolean; blockHeight?: number } {
