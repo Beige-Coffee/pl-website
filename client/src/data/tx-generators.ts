@@ -468,6 +468,7 @@ interface ScantxoutsetUtxo {
   txid: string;
   vout: number;
   amount: number;
+  coinbase: boolean;
   scriptPubKey: string;
   height: number;
 }
@@ -479,7 +480,7 @@ function selectFundingUtxo(unspent: ScantxoutsetUtxo[], currentHeight: number): 
     typeof utxo.txid === "string" &&
     Number.isInteger(utxo.vout) &&
     typeof utxo.amount === "number" &&
-    (currentHeight - utxo.height) >= COINBASE_MATURITY
+    (!utxo.coinbase || (currentHeight - utxo.height) >= COINBASE_MATURITY)
   );
   // Prefer exact 0.05 BTC UTXO (pre-split in snapshot) for clean 1-in/1-out tx
   const exact = mature.find((utxo) => utxo.amount === FUNDING_AMOUNT_BTC);

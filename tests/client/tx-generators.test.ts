@@ -46,8 +46,8 @@ describe("Funding transaction generator", () => {
           return {
             result: {
               unspents: [
-                { txid: "large-utxo", vout: 1, amount: 1.25, scriptPubKey: "0014abc", height: 10 },
-                { txid: "exact-utxo", vout: 0, amount: 0.05, scriptPubKey: "0014abc", height: 5 },
+                { txid: "large-utxo", vout: 1, amount: 1.25, coinbase: false, scriptPubKey: "0014abc", height: 10 },
+                { txid: "exact-utxo", vout: 0, amount: 0.05, coinbase: false, scriptPubKey: "0014abc", height: 5 },
               ],
             },
           };
@@ -119,7 +119,7 @@ describe("Funding transaction generator", () => {
           return {
             result: {
               unspents: [
-                { txid: "large-utxo", vout: 1, amount: 0.1, scriptPubKey: "0014abc", height: 10 },
+                { txid: "large-utxo", vout: 1, amount: 0.1, coinbase: true, scriptPubKey: "0014abc", height: 10 },
               ],
             },
           };
@@ -167,7 +167,7 @@ describe("Funding transaction generator", () => {
         case "getblockcount":
           return { result: 200 };
         case "scantxoutset":
-          return { result: { unspents: [{ txid: "tiny", vout: 0, amount: 0.01, scriptPubKey: "0014abc", height: 1 }] } };
+          return { result: { unspents: [{ txid: "tiny", vout: 0, amount: 0.01, coinbase: false, scriptPubKey: "0014abc", height: 1 }] } };
         default:
           throw new Error(`Unexpected RPC method: ${method}`);
       }
