@@ -30,7 +30,6 @@ const COMMANDS = [
   "getblockcount",
   "getblockchaininfo",
   "getmempoolinfo",
-  "gettransaction",
   "help",
   "clear",
 ];
@@ -741,7 +740,6 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
             {([
               ["decodescript", "hex", "Decode a hex-encoded script to see its opcodes and address."],
               ["testmempoolaccept", "raw tx hex", "Test if a transaction would be accepted to the mempool (without broadcasting)."],
-              ["gettransaction", "txid", "Get wallet transaction info (only for transactions involving wallet addresses)."],
             ] as [string, string, string][]).map(([cmd, args, desc]) => (
               <div key={cmd}>
                 <span className={`${dark ? "text-[#FFD700]" : "text-[#9a7200]"} font-bold`}>{cmd}</span>
