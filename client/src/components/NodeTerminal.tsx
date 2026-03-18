@@ -479,7 +479,8 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
     }
     setRunning(false);
     setProvisioning(true);
-    setNodeReady(false);
+    // Don't set nodeReady=false — that triggers the provisioning useEffect
+    // and causes duplicate "restarting" messages. provisioning=true disables input.
     setNodeUnresponsive(false);
     setLines((prev) => [...prev, { type: "info", text: "Restarting node..." }]);
 

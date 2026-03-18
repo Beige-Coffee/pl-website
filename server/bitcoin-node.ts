@@ -473,6 +473,13 @@ class NodeManager {
       throw err;
     }
 
+    const contentType = res.headers.get("content-type") || "";
+    if (!contentType.includes("application/json")) {
+      if (recordMetric) {
+        this.recordRpcMetric(method, Date.now() - startedAt, false, false);
+      }
+      throw new Error(`${method}: node returned non-JSON response (HTTP ${res.status})`);
+    }
     const data = (await res.json()) as RpcResponse;
     if (data.error) {
       if (recordMetric) {
