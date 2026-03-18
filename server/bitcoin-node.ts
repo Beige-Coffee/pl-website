@@ -1,5 +1,5 @@
 import { spawn, execSync, type ChildProcess } from "child_process";
-import { existsSync, mkdirSync, cpSync, rmSync, readdirSync, statSync } from "fs";
+import { existsSync, mkdirSync, cpSync, rmSync, readdirSync, statSync, writeFileSync, readFileSync } from "fs";
 import { createServer } from "net";
 import { join } from "path";
 import { randomInt } from "crypto";
@@ -12,6 +12,7 @@ interface NodeInstance {
   userId: UserId;
   process: ChildProcess;
   rpcPort: number;
+  p2pPort: number;
   dataDir: string;
   lastActivity: number;
   ready: boolean;
@@ -284,8 +285,7 @@ class NodeManager {
       // Detect dead/crashed process (e.g., OOM-killed or SIGKILL'd by host)
       if (existing.process.exitCode !== null || existing.process.killed) {
         console.log("[node] Detected dead process for user", userId, "- reprovisioning");
-        this.usedPorts.delete(existing.rpcPort);
-        this.instances.delete(userId);
+        this._releaseInstance(existing);
         // Fall through to provision a new node
       } else {
         existing.lastActivity = Date.now();
@@ -297,8 +297,7 @@ class NodeManager {
       // clean it up so we can try again instead of blocking forever.
       if (existing.process.exitCode !== null || existing.process.killed) {
         console.log("[node] Cleaning up failed provision for user", userId);
-        this.usedPorts.delete(existing.rpcPort);
-        this.instances.delete(userId);
+        this._releaseInstance(existing);
       } else {
         throw new Error("Node is still starting, try again in a few seconds");
       }
@@ -358,6 +357,7 @@ class NodeManager {
       userId,
       process: proc,
       rpcPort,
+      p2pPort,
       dataDir,
       lastActivity: Date.now(),
       ready: false,
@@ -367,12 +367,7 @@ class NodeManager {
 
     proc.on("exit", (code) => {
       console.log("[node] bitcoind exited for user", userId, "code", code);
-      this.usedPorts.delete(rpcPort);
-      this.usedPorts.delete(p2pPort);
-      const current = this.instances.get(userId);
-      if (current?.process === proc) {
-        this.instances.delete(userId);
-      }
+      this._releaseInstance(instance);
     });
 
     let stderrBuf = "";
@@ -555,11 +550,13 @@ class NodeManager {
 
     // If the command failed with a connection error (not a timeout), the node
     // process is likely dead. Stop it so the next call triggers a fresh re-provision.
-    // Timeouts are NOT treated as fatal — the node may still be alive and processing
-    // (e.g., generatetoaddress mining blocks slowly). Killing it mid-write can corrupt data.
+    // Guard: only stop if this instance is still current (a concurrent restart
+    // may have already replaced it).
     if (result.error && /ECONNREFUSED|ECONNRESET|socket hang up/i.test(result.error)) {
-      console.log("[node] Node appears dead for user", userId, "- stopping for re-provision on next call");
-      await this.stop(userId);
+      if (this.instances.get(userId) === instance) {
+        console.log("[node] Node appears dead for user", userId, "- stopping for re-provision on next call");
+        await this.stop(userId);
+      }
     }
 
     return result;
@@ -675,32 +672,31 @@ class NodeManager {
         await this._rpcCall(instance.rpcPort, "generateblock", [address, []]);
       }
 
-      const blockCount = await this._rpcCall(instance.rpcPort, "getblockcount", []);
+      const blockCount = (await this._rpcCall(instance.rpcPort, "getblockcount", [])) as number;
 
-      // Flush data to disk: bitcoind keeps block index and chainstate in memory
-      // and only writes to disk on clean shutdown. Without this explicit flush,
-      // a crash or restart loses all mined blocks.
-      // RPC "stop" flushes everything then exits. The next user command will
-      // auto-provision a fresh process with all data intact on disk.
-      try {
-        await this._rpcCallWithTimeout(instance.rpcPort, "stop", [], 10_000);
-        await this._waitForExit(instance.process, 10_000);
-      } catch {}
+      // Flush data to disk: bitcoind only writes to disk on clean shutdown.
+      // Guard: only stop if this instance is still current (a concurrent restart
+      // may have already replaced it — stopping the new one would be destructive).
+      let graceful = false;
+      if (this.instances.get(instance.userId) === instance) {
+        graceful = await this.stop(instance.userId);
+      }
 
-      return {
-        result: `Mined ${numBlocks} block${numBlocks > 1 ? "s" : ""}. Current height: ${blockCount}`,
-      };
+      const msg = `Mined ${numBlocks} block${numBlocks > 1 ? "s" : ""}. Current height: ${blockCount}`;
+      if (!graceful) {
+        return { result: `${msg} (warning: node did not shut down cleanly — some blocks may not be saved)` };
+      }
+      return { result: msg };
     } catch (err: any) {
-      // If timed out, the node is likely still processing (not dead).
-      // Poll getblockcount to report partial progress so the student knows
-      // blocks were mined even though the command appeared to fail.
       if (/timed out/i.test(err.message)) {
-        try {
-          const blockCount = await this._rpcCallWithTimeout(instance.rpcPort, "getblockcount", [], 10_000);
-          return { error: `Mining was slow but the node is still working. Current height: ${blockCount}. Try 'getblockcount' in a moment, then run 'mine' again for remaining blocks.` };
-        } catch {
-          return { error: `Mining timed out. The node may still be processing blocks. Wait a moment and try 'getblockcount' to check progress.` };
+        // Mining timed out — try to flush data before giving up.
+        // Guard: only stop if this instance is still current.
+        let flushed = false;
+        if (this.instances.get(instance.userId) === instance) {
+          try { flushed = await this.stop(instance.userId); } catch {}
         }
+        const detail = flushed ? " Data from previous commands was saved." : "";
+        return { error: `Mining timed out. Click RESTART to restart the node.${detail}` };
       }
       return { error: `Failed to mine: ${err.message}` };
     }
@@ -715,26 +711,41 @@ class NodeManager {
   }
 
   /**
-   * Stop a user's bitcoind process and wait for it to fully exit.
-   * The process 'exit' event handler (set up in getOrCreate) frees both
-   * ports and removes the instance from the map — we wait for that.
+   * Release an instance's ports and remove from the map — but only if
+   * the map still points to THIS instance. This identity check prevents
+   * a late exit from an old process from clobbering a newer instance.
    */
-  async stop(userId: UserId): Promise<void> {
+  private _releaseInstance(instance: NodeInstance): void {
+    this.usedPorts.delete(instance.rpcPort);
+    this.usedPorts.delete(instance.p2pPort);
+    const current = this.instances.get(instance.userId);
+    if (current === instance) {
+      this.instances.delete(instance.userId);
+    }
+  }
+
+  /**
+   * Stop a user's bitcoind process and wait for it to fully exit.
+   * Returns true if shutdown was graceful (RPC stop + clean exit = data flushed).
+   * Returns false if SIGTERM/SIGKILL was needed or process didn't exit.
+   */
+  async stop(userId: UserId): Promise<boolean> {
     const instance = this.instances.get(userId);
-    if (!instance) return;
+    if (!instance) return false;
 
     const proc = instance.process;
 
     // Already dead — ensure cleanup
     if (proc.exitCode !== null) {
-      this.usedPorts.delete(instance.rpcPort);
-      this.instances.delete(userId);
-      return;
+      this._releaseInstance(instance);
+      return false;
     }
 
     // Step 1: Try RPC "stop" (cleanest — flushes LevelDB before exiting)
+    let rpcStopSucceeded = false;
     try {
       await this._rpcCallWithTimeout(instance.rpcPort, "stop", [], 5_000);
+      rpcStopSucceeded = true;
     } catch {
       // Step 2: SIGTERM if RPC fails
       try { proc.kill("SIGTERM"); } catch {}
@@ -751,13 +762,15 @@ class NodeManager {
     }
 
     // Ensure cleanup even if exit event didn't fire
-    this.usedPorts.delete(instance.rpcPort);
-    this.instances.delete(userId);
+    this._releaseInstance(instance);
 
     // Give the filesystem a moment to release file handles after process death
     if (exited) {
       await new Promise((r) => setTimeout(r, 500));
     }
+
+    // Graceful = RPC stop succeeded AND process exited cleanly
+    return rpcStopSucceeded && exited;
   }
 
   /**
