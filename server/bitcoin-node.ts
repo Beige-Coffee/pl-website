@@ -680,20 +680,35 @@ class NodeManager {
     const instance = this.instances.get(userId);
     if (!instance) return;
 
+    const proc = instance.process;
+    const port = instance.rpcPort;
+    this.instances.delete(userId);
+
+    // Try RPC "stop" first — this is the cleanest shutdown path for bitcoind,
+    // flushing all LevelDB writes before exiting. Falls back to SIGTERM.
     try {
-      instance.process.kill("SIGTERM");
-    } catch {}
-
-    // Wait briefly for graceful shutdown
-    await new Promise((r) => setTimeout(r, 1000));
-
-    if (instance.process.exitCode === null) {
+      await this._rpcCallWithTimeout(port, "stop", [], 5_000);
+    } catch {
       try {
-        instance.process.kill("SIGKILL");
+        proc.kill("SIGTERM");
       } catch {}
     }
 
-    this.instances.delete(userId);
+    // Wait up to 10 seconds for the process to exit gracefully
+    const exited = await new Promise<boolean>((resolve) => {
+      if (proc.exitCode !== null) return resolve(true);
+      const timeout = setTimeout(() => resolve(false), 10_000);
+      proc.once("exit", () => { clearTimeout(timeout); resolve(true); });
+    });
+
+    if (!exited && proc.exitCode === null) {
+      console.log("[node] bitcoind did not exit after SIGTERM for user", userId, "- sending SIGKILL");
+      try {
+        proc.kill("SIGKILL");
+      } catch {}
+      // Wait for SIGKILL to take effect and filesystem to release locks
+      await new Promise((r) => setTimeout(r, 2000));
+    }
   }
 
   async restart(userId: UserId): Promise<void> {
