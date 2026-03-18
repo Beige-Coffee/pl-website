@@ -652,7 +652,11 @@ class NodeManager {
       const mempool = (await this._rpcCall(instance.rpcPort, "getrawmempool", [])) as string[];
       await this._rpcCall(instance.rpcPort, "generateblock", [address, mempool || []]);
 
+      // Small delay between blocks gives LevelDB time to flush writes to disk.
+      // Without this, 20 blocks fire in <0.2s and data stays in memory buffers —
+      // if the node crashes before flushing, those blocks are lost.
       for (let i = 1; i < numBlocks; i++) {
+        await new Promise((r) => setTimeout(r, 150));
         await this._rpcCall(instance.rpcPort, "generateblock", [address, []]);
       }
 
@@ -694,10 +698,11 @@ class NodeManager {
       } catch {}
     }
 
-    // Wait up to 10 seconds for the process to exit gracefully
+    // Wait up to 15 seconds for the process to exit gracefully.
+    // bitcoind needs time to flush LevelDB writes — cutting this short causes data loss.
     const exited = await new Promise<boolean>((resolve) => {
       if (proc.exitCode !== null) return resolve(true);
-      const timeout = setTimeout(() => resolve(false), 10_000);
+      const timeout = setTimeout(() => resolve(false), 15_000);
       proc.once("exit", () => { clearTimeout(timeout); resolve(true); });
     });
 
