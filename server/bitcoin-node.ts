@@ -293,7 +293,15 @@ class NodeManager {
       }
     }
     if (existing && !existing.ready) {
-      throw new Error("Node is still starting, try again in a few seconds");
+      // If there's a stuck not-ready instance (from a previous failed provision),
+      // clean it up so we can try again instead of blocking forever.
+      if (existing.process.exitCode !== null || existing.process.killed) {
+        console.log("[node] Cleaning up failed provision for user", userId);
+        this.usedPorts.delete(existing.rpcPort);
+        this.instances.delete(userId);
+      } else {
+        throw new Error("Node is still starting, try again in a few seconds");
+      }
     }
 
     if (this.instances.size >= MAX_CONCURRENT) {
@@ -686,45 +694,61 @@ class NodeManager {
 
   private _waitForExit(proc: ChildProcess, timeoutMs: number): Promise<boolean> {
     return new Promise((resolve) => {
-      if (proc.exitCode !== null || proc.killed) return resolve(true);
+      if (proc.exitCode !== null) return resolve(true);
       const timeout = setTimeout(() => resolve(false), timeoutMs);
       proc.once("exit", () => { clearTimeout(timeout); resolve(true); });
     });
   }
 
+  /**
+   * Stop a user's bitcoind process and wait for it to fully exit.
+   * The process 'exit' event handler (set up in getOrCreate) frees both
+   * ports and removes the instance from the map — we wait for that.
+   */
   async stop(userId: UserId): Promise<void> {
     const instance = this.instances.get(userId);
     if (!instance) return;
 
     const proc = instance.process;
-    this.instances.delete(userId);
 
-    if (proc.exitCode !== null || proc.killed) return;
+    // Already dead — ensure cleanup
+    if (proc.exitCode !== null) {
+      this.usedPorts.delete(instance.rpcPort);
+      this.instances.delete(userId);
+      return;
+    }
 
     // Step 1: Try RPC "stop" (cleanest — flushes LevelDB before exiting)
     try {
       await this._rpcCallWithTimeout(instance.rpcPort, "stop", [], 5_000);
     } catch {
-      // Step 2: SIGTERM if RPC fails (node is unresponsive)
+      // Step 2: SIGTERM if RPC fails
       try { proc.kill("SIGTERM"); } catch {}
     }
 
     // Step 3: Wait up to 15s for graceful exit
-    const exited = await this._waitForExit(proc, 15_000);
+    let exited = await this._waitForExit(proc, 15_000);
 
-    // Step 4: SIGKILL as last resort — may cause some data loss but
-    // without it the old process holds LOCK files and prevents restart entirely
+    // Step 4: SIGKILL as last resort
     if (!exited) {
       console.log("[node] bitcoind did not exit after 15s for user", userId, "- sending SIGKILL");
       try { proc.kill("SIGKILL"); } catch {}
-      await this._waitForExit(proc, 5_000);
+      exited = await this._waitForExit(proc, 5_000);
+    }
+
+    // Ensure cleanup even if exit event didn't fire
+    this.usedPorts.delete(instance.rpcPort);
+    this.instances.delete(userId);
+
+    // Give the filesystem a moment to release file handles after process death
+    if (exited) {
+      await new Promise((r) => setTimeout(r, 500));
     }
   }
 
   /**
    * Remove stale LevelDB LOCK files from the data directory.
-   * After SIGKILL or an unclean shutdown, bitcoind may leave LOCK files
-   * that prevent a new process from starting on the same data.
+   * After SIGKILL or crash, bitcoind leaves LOCK files that prevent restart.
    */
   private _cleanupStaleLocks(regtestDir: string): void {
     for (const subdir of ["blocks/index", "chainstate"]) {
