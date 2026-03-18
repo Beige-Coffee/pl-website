@@ -1744,11 +1744,11 @@ def test_bolt3_p2wsh_vectors():
     ]
     result = create_htlc_outputs(ck, offered, received)
     expected = [
-        (2000, 502, bytes.fromhex("0020ee453bd54ff1d64a1a71c96d67bd8311d117ee3f825e9b4c6a3ae6d8a22960d3")),
-        (3000, 503, bytes.fromhex("0020b4f9f7a1d4216ece933d9d4964bf825728d900246e424638b8822fcdeb308f47")),
-        (1000, 500, bytes.fromhex("002048054c44d6062c392bd99c3fdad87e2106ff5e6d25ac249bd0266d3b1b8918f7")),
-        (2000, 501, bytes.fromhex("002061a5d92908a300947864b8335fd42715f4eaf2e0125184e9ad18e3b7d2e19a9c")),
-        (4000, 504, bytes.fromhex("002035e5186238bb9d19f3fe1e27092ea1ddb1e4fefc0442a02f455940ed0552f7f4")),
+        (2000, 502, bytes.fromhex("0020403d394747cae42e98ff01734ad5c08f82ba123d3d9a620abda88989651e2ab5")),
+        (3000, 503, bytes.fromhex("0020c20b5d1f8584fd90443e7b7b720136174fa4b9333c261d04dbbd012635c0f419")),
+        (1000, 500, bytes.fromhex("002052bfef0479d7b293c27e0f1eb294bea154c63a3294ef092c19af51409bce0e2a")),
+        (2000, 501, bytes.fromhex("0020748eba944fedc8827f6b06bc44678f93c0f9e6078b35c6331ed31e75f8ce0c2d")),
+        (4000, 504, bytes.fromhex("00208c48d15160397c9731df9bc3b236656efb6665fbfe92b4a6878e88a499f741c4")),
     ]
     assert len(result) == 5, f"Expected 5 HTLC outputs, got {len(result)}"
     for actual, (value, cltv_expiry, script) in zip(result, expected):
@@ -1971,7 +1971,7 @@ def test_bolt3_five_htlc_vector():
     tx = create_commitment_tx(funding_txid, 0, 6_988_000, 3_000_000, ck, remote_pk, opener_bp, accepter_bp, 42, 144, 546, 0, offered_htlcs=offered, received_htlcs=received)
     witness = CScriptWitness([b'', local_sig, remote_sig, funding_script])
     tx.wit = CTxWitness([CTxInWitness(witness)])
-    expected_hex = "02000000000101bef67e4e2fb9ddeeb3461973cd4c62abb35050b1add772995b820b584a488489000000000038b02b8007e80300000000000022002048054c44d6062c392bd99c3fdad87e2106ff5e6d25ac249bd0266d3b1b8918f7d00700000000000022002061a5d92908a300947864b8335fd42715f4eaf2e0125184e9ad18e3b7d2e19a9cd007000000000000220020ee453bd54ff1d64a1a71c96d67bd8311d117ee3f825e9b4c6a3ae6d8a22960d3b80b000000000000220020b4f9f7a1d4216ece933d9d4964bf825728d900246e424638b8822fcdeb308f47a00f00000000000022002035e5186238bb9d19f3fe1e27092ea1ddb1e4fefc0442a02f455940ed0552f7f4c0c62d0000000000160014cc1b07838e387deacd0e5232e1e8b49f4c29e484e0a06a00000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e040047304402206fc2d1f10ea59951eefac0b4b7c396a3c3d87b71ff0b019796ef4535beaf36f902201765b0181e514d04f4c8ad75659d7037be26cdb3f8bb6f78fe61decef484c3ea01473044022009b048187705a8cbc9ad73adbe5af148c3d012e1f067961486c822c7af08158c022006d66f3704cfab3eb2dc49dae24e4aa22a6910fc9b424007583204e3621af2e501475221023da092f6980e58d2c037173180e9a465476026ee50f96695963e8efe436f54eb21030e9f7b623d2ccc7c9bd44d66d5ce21ce504c0acf6385a132cec6d3c39fa711c152ae3e195220"
+    expected_hex = "02000000000101bef67e4e2fb9ddeeb3461973cd4c62abb35050b1add772995b820b584a488489000000000038b02b8007e80300000000000022002052bfef0479d7b293c27e0f1eb294bea154c63a3294ef092c19af51409bce0e2ad007000000000000220020403d394747cae42e98ff01734ad5c08f82ba123d3d9a620abda88989651e2ab5d007000000000000220020748eba944fedc8827f6b06bc44678f93c0f9e6078b35c6331ed31e75f8ce0c2db80b000000000000220020c20b5d1f8584fd90443e7b7b720136174fa4b9333c261d04dbbd012635c0f419a00f0000000000002200208c48d15160397c9731df9bc3b236656efb6665fbfe92b4a6878e88a499f741c4c0c62d0000000000160014cc1b07838e387deacd0e5232e1e8b49f4c29e484e0a06a00000000002200204adb4e2f00643db396dd120d4e7dc17625f5f2c11a40d857accc862d6b7dd80e040047304402206fc2d1f10ea59951eefac0b4b7c396a3c3d87b71ff0b019796ef4535beaf36f902201765b0181e514d04f4c8ad75659d7037be26cdb3f8bb6f78fe61decef484c3ea01473044022009b048187705a8cbc9ad73adbe5af148c3d012e1f067961486c822c7af08158c022006d66f3704cfab3eb2dc49dae24e4aa22a6910fc9b424007583204e3621af2e501475221023da092f6980e58d2c037173180e9a465476026ee50f96695963e8efe436f54eb21030e9f7b623d2ccc7c9bd44d66d5ce21ce504c0acf6385a132cec6d3c39fa711c152ae3e195220"
     assert tx.serialize().hex() == expected_hex, "Commitment transaction with five HTLCs should match the BOLT 3 vector"
 `,
     hints: {
@@ -2037,7 +2037,7 @@ def test_bolt3_five_htlc_vector():
               OP_DROP 2 OP_SWAP <local_htlc_key> 2 OP_CHECKMULTISIG
           OP_ELSE
               OP_HASH160 <RIPEMD160(payment_hash)> OP_EQUALVERIFY
-              2 OP_SWAP <local_htlc_key> 2 OP_CHECKMULTISIG
+              OP_CHECKSIG
           OP_ENDIF
       OP_ENDIF
 
@@ -2068,7 +2068,7 @@ def test_bolt3_vector():
     ck = CommitmentKeys(bytes(33), rev_pk, bytes(33), local_htlc, remote_htlc)
     preimage = bytes([0x02] * 32)
     payment_hash = hashlib.sha256(preimage).digest()
-    expected = bytes.fromhex("76a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c820120876475527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae67a914b43e1b38138a41b37f7cd9a1d274bc63e3a9b5d188527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae6868")
+    expected = bytes.fromhex("76a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c820120876475527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae67a914b43e1b38138a41b37f7cd9a1d274bc63e3a9b5d188ac6868")
     result = create_offered_htlc_script(ck, payment_hash)
     assert result == expected, f"Script mismatch.\\nExpected: {expected.hex()}\\nGot:      {result.hex()}"
 
@@ -2084,9 +2084,9 @@ def test_script_length():
 `,
     hints: {
       conceptual:
-        "<p><strong>Goal:</strong> Create the <strong>offered HTLC witness script</strong> per BOLT 3, which has three spending paths.<br><br><strong>How it works:</strong> The <strong>revocation path</strong> uses <code>OP_DUP OP_HASH160</code> to check for the HASH160 of the revocation key. The inner condition uses <code>OP_NOTIF</code> (not <code>OP_IF</code>) to check the witness element size. The <strong>timeout path</strong> (under <code>OP_NOTIF</code>) uses <code>OP_DROP</code> then 2-of-2 CHECKMULTISIG. The <strong>preimage path</strong> (under <code>OP_ELSE</code>) verifies the payment preimage using <code>OP_HASH160</code> with the RIPEMD160 of the payment hash, then uses 2-of-2 CHECKMULTISIG.<br><br><strong>Tools you will need:</strong> <code>hash160()</code> for the revocation key hash, <code>_ripemd160()</code> for the payment hash, and keys from <code>commitment_keys.revocation_key</code>, <code>commitment_keys.local_htlc_key</code>, and <code>commitment_keys.remote_htlc_key</code>.<br><br>Reference: <a href='https://github.com/lightning/bolts/blob/master/03-transactions.md#offered-htlc-outputs'>BOLT 3 Offered HTLC Outputs</a></p>",
+        "<p><strong>Goal:</strong> Create the <strong>offered HTLC witness script</strong> per BOLT 3, which has three spending paths.<br><br><strong>How it works:</strong> The <strong>revocation path</strong> uses <code>OP_DUP OP_HASH160</code> to check for the HASH160 of the revocation key. The inner condition uses <code>OP_NOTIF</code> (not <code>OP_IF</code>) to check the witness element size. The <strong>timeout path</strong> (under <code>OP_NOTIF</code>) uses <code>OP_DROP</code> then 2-of-2 CHECKMULTISIG. The <strong>preimage path</strong> (under <code>OP_ELSE</code>) verifies the payment preimage using <code>OP_HASH160</code> with the RIPEMD160 of the payment hash, then uses <code>OP_CHECKSIG</code> (the remote HTLC key is already on the stack from before the <code>OP_NOTIF</code>).<br><br><strong>Tools you will need:</strong> <code>hash160()</code> for the revocation key hash, <code>_ripemd160()</code> for the payment hash, and keys from <code>commitment_keys.revocation_key</code>, <code>commitment_keys.local_htlc_key</code>, and <code>commitment_keys.remote_htlc_key</code>.<br><br>Reference: <a href='https://github.com/lightning/bolts/blob/master/03-transactions.md#offered-htlc-outputs'>BOLT 3 Offered HTLC Outputs</a></p>",
       steps:
-        '<ol><li>Compute the two hash values needed in the script: use <code>hash160()</code> on the revocation key, and <code>_ripemd160()</code> on the payment hash</li><li>Study the script template in the docstring carefully. The outer structure uses <code>OP_DUP</code>, <code>OP_HASH160</code>, the revocation key hash, and <code>OP_EQUAL</code> to check if the spending key matches. If yes, <code>OP_CHECKSIG</code>. If no, enter the <code>OP_ELSE</code> branch</li><li>In the ELSE branch, push the remote HTLC key, then use <code>OP_SWAP</code>, <code>OP_SIZE</code>, <code>32</code>, <code>OP_EQUAL</code> to check the witness element size. Use <code>OP_NOTIF</code> (not OP_IF) for the inner condition. The 0-byte path (timeout, under <code>OP_NOTIF</code>) uses <code>OP_DROP</code> then a 2-of-2 <code>OP_CHECKMULTISIG</code>. The 32-byte path (preimage, under <code>OP_ELSE</code>) uses <code>OP_HASH160</code> with the payment RIPEMD hash and <code>OP_EQUALVERIFY</code>, followed by a 2-of-2 <code>OP_CHECKMULTISIG</code></li><li>Build the entire script as a single <code>CScript()</code> list, placing each opcode, key, and hash value from the docstring template in order</li></ol>',
+        '<ol><li>Compute the two hash values needed in the script: use <code>hash160()</code> on the revocation key, and <code>_ripemd160()</code> on the payment hash</li><li>Study the script template in the docstring carefully. The outer structure uses <code>OP_DUP</code>, <code>OP_HASH160</code>, the revocation key hash, and <code>OP_EQUAL</code> to check if the spending key matches. If yes, <code>OP_CHECKSIG</code>. If no, enter the <code>OP_ELSE</code> branch</li><li>In the ELSE branch, push the remote HTLC key, then use <code>OP_SWAP</code>, <code>OP_SIZE</code>, <code>32</code>, <code>OP_EQUAL</code> to check the witness element size. Use <code>OP_NOTIF</code> (not OP_IF) for the inner condition. The 0-byte path (timeout, under <code>OP_NOTIF</code>) uses <code>OP_DROP</code> then a 2-of-2 <code>OP_CHECKMULTISIG</code>. The 32-byte path (preimage, under <code>OP_ELSE</code>) uses <code>OP_HASH160</code> with the payment RIPEMD hash and <code>OP_EQUALVERIFY</code>, followed by <code>OP_CHECKSIG</code> (the remote HTLC key is already on the stack)</li><li>Build the entire script as a single <code>CScript()</code> list, placing each opcode, key, and hash value from the docstring template in order</li></ol>',
       code: `def create_offered_htlc_script(commitment_keys, payment_hash):
     rev_hash = hash160(commitment_keys.revocation_key)
     payment_ripemd = _ripemd160(payment_hash)
@@ -2100,7 +2100,7 @@ def test_script_length():
                 OP_DROP, 2, OP_SWAP, commitment_keys.local_htlc_key, 2, OP_CHECKMULTISIG,
             OP_ELSE,
                 OP_HASH160, payment_ripemd, OP_EQUALVERIFY,
-                2, OP_SWAP, commitment_keys.local_htlc_key, 2, OP_CHECKMULTISIG,
+                OP_CHECKSIG,
             OP_ENDIF,
         OP_ENDIF,
     ])`,
@@ -2124,8 +2124,9 @@ def test_script_length():
     """
     Create a received HTLC script per BOLT 3.
 
-    Similar to offered HTLC but the timeout branch uses
-    OP_CHECKLOCKTIMEVERIFY and a single OP_CHECKSIG (not multisig).
+    Similar to offered HTLC but uses OP_IF (not OP_NOTIF) for the inner
+    condition, the preimage/success path comes first, and the timeout
+    branch uses OP_CHECKLOCKTIMEVERIFY with a single OP_CHECKSIG.
 
     Script:
       OP_DUP OP_HASH160 <HASH160(revocation_key)> OP_EQUAL
@@ -2133,12 +2134,12 @@ def test_script_length():
           OP_CHECKSIG
       OP_ELSE
           <remote_htlc_key> OP_SWAP OP_SIZE 32 OP_EQUAL
-          OP_NOTIF
-              OP_DROP <cltv_expiry> OP_CHECKLOCKTIMEVERIFY OP_DROP
-              OP_CHECKSIG
-          OP_ELSE
+          OP_IF
               OP_HASH160 <RIPEMD160(payment_hash)> OP_EQUALVERIFY
               2 OP_SWAP <local_htlc_key> 2 OP_CHECKMULTISIG
+          OP_ELSE
+              OP_DROP <cltv_expiry> OP_CHECKLOCKTIMEVERIFY OP_DROP
+              OP_CHECKSIG
           OP_ENDIF
       OP_ENDIF
 
@@ -2168,7 +2169,7 @@ def test_bolt3_vector():
     ck = CommitmentKeys(bytes(33), rev_pk, bytes(33), local_htlc, remote_htlc)
     preimage = bytes(32)  # HTLC #0
     payment_hash = hashlib.sha256(preimage).digest()
-    expected = bytes.fromhex("76a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c82012087647502f401b175ac67a914b8bcb07f6344b42ab04250c86a6e8b75d3fdbbc688527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae6868")
+    expected = bytes.fromhex("76a91414011f7254d96b819c76986c277d115efce6f7b58763ac67210394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b7c8201208763a914b8bcb07f6344b42ab04250c86a6e8b75d3fdbbc688527c21030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e752ae677502f401b175ac6868")
     result = create_received_htlc_script(ck, payment_hash, 500)
     assert result == expected, f"Script mismatch.\\nExpected: {expected.hex()}\\nGot:      {result.hex()}"
 
@@ -2184,9 +2185,9 @@ def test_script_returns_bytes():
 `,
     hints: {
       conceptual:
-        "<p><strong>Goal:</strong> Create the <strong>received HTLC witness script</strong> per BOLT 3. It is structurally similar to the offered HTLC script but differs in the timeout path.<br><br><strong>Key difference:</strong> Like the offered HTLC, the inner condition uses <code>OP_NOTIF</code>. The <strong>timeout path</strong> (under <code>OP_NOTIF</code>) uses <code>OP_DROP</code>, the CLTV expiry, <code>OP_CHECKLOCKTIMEVERIFY</code>, <code>OP_DROP</code>, and <code>OP_CHECKSIG</code> (single signature, not multisig). The <strong>preimage path</strong> (under <code>OP_ELSE</code>) still uses 2-of-2 CHECKMULTISIG.<br><br><strong>Tools you will need:</strong> The same <code>hash160()</code> and <code>_ripemd160()</code> helpers as the offered HTLC script. Extract keys from the <code>commitment_keys</code> object.<br><br>Reference: <a href='https://github.com/lightning/bolts/blob/master/03-transactions.md#received-htlc-outputs'>BOLT 3 Received HTLC Outputs</a></p>",
+        "<p><strong>Goal:</strong> Create the <strong>received HTLC witness script</strong> per BOLT 3. It is structurally similar to the offered HTLC script but differs in the inner conditional and the timeout path.<br><br><strong>Key difference:</strong> Unlike the offered HTLC which uses <code>OP_NOTIF</code>, the received HTLC uses <code>OP_IF</code> for the inner condition. The <strong>preimage/success path</strong> (under <code>OP_IF</code>) uses 2-of-2 CHECKMULTISIG. The <strong>timeout path</strong> (under <code>OP_ELSE</code>) uses <code>OP_DROP</code>, the CLTV expiry, <code>OP_CHECKLOCKTIMEVERIFY</code>, <code>OP_DROP</code>, and <code>OP_CHECKSIG</code> (single signature, not multisig).<br><br><strong>Tools you will need:</strong> The same <code>hash160()</code> and <code>_ripemd160()</code> helpers as the offered HTLC script. Extract keys from the <code>commitment_keys</code> object.<br><br>Reference: <a href='https://github.com/lightning/bolts/blob/master/03-transactions.md#received-htlc-outputs'>BOLT 3 Received HTLC Outputs</a></p>",
       steps:
-        '<ol><li>Compute the two hash values: use <code>hash160()</code> on the revocation key and <code>_ripemd160()</code> on the payment hash</li><li>The outer structure is identical to the offered HTLC script: revocation check via <code>OP_DUP</code>/<code>OP_HASH160</code>/<code>OP_EQUAL</code>, then <code>OP_CHECKSIG</code> for the revocation path</li><li>In the ELSE branch, use <code>OP_NOTIF</code> (not OP_IF) for the inner condition, just like the offered HTLC. The <strong>timeout path</strong> (under <code>OP_NOTIF</code>) uses <code>OP_DROP</code>, the <code>cltv_expiry</code> integer, <code>OP_CHECKLOCKTIMEVERIFY</code>, <code>OP_DROP</code>, then <code>OP_CHECKSIG</code> (single sig, not multisig). Pass the expiry integer directly in the <code>CScript</code> list. The <strong>preimage path</strong> (under <code>OP_ELSE</code>) uses 2-of-2 <code>OP_CHECKMULTISIG</code></li><li>Build the entire script as a single <code>CScript()</code> list following the docstring template exactly</li></ol>',
+        '<ol><li>Compute the two hash values: use <code>hash160()</code> on the revocation key and <code>_ripemd160()</code> on the payment hash</li><li>The outer structure is identical to the offered HTLC script: revocation check via <code>OP_DUP</code>/<code>OP_HASH160</code>/<code>OP_EQUAL</code>, then <code>OP_CHECKSIG</code> for the revocation path</li><li>In the ELSE branch, use <code>OP_IF</code> (not OP_NOTIF, unlike the offered HTLC) for the inner condition. The <strong>preimage/success path</strong> (under <code>OP_IF</code>) uses <code>OP_HASH160</code> with the payment RIPEMD hash, <code>OP_EQUALVERIFY</code>, then 2-of-2 <code>OP_CHECKMULTISIG</code>. The <strong>timeout path</strong> (under <code>OP_ELSE</code>) uses <code>OP_DROP</code>, the <code>cltv_expiry</code> integer, <code>OP_CHECKLOCKTIMEVERIFY</code>, <code>OP_DROP</code>, then <code>OP_CHECKSIG</code> (single sig, not multisig). Pass the expiry integer directly in the <code>CScript</code> list</li><li>Build the entire script as a single <code>CScript()</code> list following the docstring template exactly</li></ol>',
       code: `def create_received_htlc_script(commitment_keys, payment_hash, cltv_expiry):
     rev_hash = hash160(commitment_keys.revocation_key)
     payment_ripemd = _ripemd160(payment_hash)
@@ -2196,12 +2197,12 @@ def test_script_returns_bytes():
             OP_CHECKSIG,
         OP_ELSE,
             commitment_keys.remote_htlc_key, OP_SWAP, OP_SIZE, 32, OP_EQUAL,
-            OP_NOTIF,
-                OP_DROP, cltv_expiry, OP_CHECKLOCKTIMEVERIFY, OP_DROP,
-                OP_CHECKSIG,
-            OP_ELSE,
+            OP_IF,
                 OP_HASH160, payment_ripemd, OP_EQUALVERIFY,
                 2, OP_SWAP, commitment_keys.local_htlc_key, 2, OP_CHECKMULTISIG,
+            OP_ELSE,
+                OP_DROP, cltv_expiry, OP_CHECKLOCKTIMEVERIFY, OP_DROP,
+                OP_CHECKSIG,
             OP_ENDIF,
         OP_ENDIF,
     ])`,

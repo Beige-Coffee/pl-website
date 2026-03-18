@@ -261,14 +261,14 @@ const SIGNATURES: Record<string, SignatureInfo> = {
   },
   ".sign_input": {
     name: "sign_input",
-    params: "(tx, input_index, witness_script, amount_sat, privkey)",
+    params: "(tx_bytes, input_index, script, amount, secret_key)",
     description: "Create a SegWit v0 signature for a transaction input",
     paramDetails: [
-      { name: "tx", description: "The transaction (CMutableTransaction)" },
+      { name: "tx_bytes", description: "Raw transaction bytes (deserialized internally)" },
       { name: "input_index", description: "Index of the input to sign" },
-      { name: "witness_script", description: "The witness script (CScript)" },
-      { name: "amount_sat", description: "Value of the output being spent (satoshis)" },
-      { name: "privkey", description: "32-byte private key" },
+      { name: "script", description: "The witness script (raw bytes)" },
+      { name: "amount", description: "Value of the output being spent (satoshis)" },
+      { name: "secret_key", description: "32-byte private key" },
     ],
   },
   // ── Key derivation functions ─────────────────────────────────────────────

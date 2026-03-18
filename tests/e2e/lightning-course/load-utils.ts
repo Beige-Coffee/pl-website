@@ -60,7 +60,6 @@ export const LOAD_TEST_BOB_PUBKEY = Buffer.from(
 ).toString("hex");
 
 const FUNDING_AMOUNT_BTC = 0.05;
-const FUNDING_TX_FEE_BTC = 0.0000025;
 const REQUEST_TIMEOUT_MS = 180_000;
 
 const SNAPSHOT_WIF = "cMahea7zqjxrtgAbB7LSGbcQUr1uX1ojuat9jZodMN87JcbXMTcA";
@@ -201,15 +200,19 @@ export async function callLearnerNodeRpc<T>(baseURL: string, token: string, meth
 const COINBASE_MATURITY = 100;
 
 function selectFundingUtxo(unspent: ScantxoutsetUtxo[], currentHeight: number): ScantxoutsetUtxo | null {
-  const minAmount = FUNDING_AMOUNT_BTC + FUNDING_TX_FEE_BTC;
-  return [...unspent]
-    .filter((utxo) =>
-      typeof utxo.txid === "string" &&
-      Number.isInteger(utxo.vout) &&
-      typeof utxo.amount === "number" &&
-      utxo.amount >= minAmount &&
-      (currentHeight - utxo.height) >= COINBASE_MATURITY
-    )
+  const mature = unspent.filter((utxo) =>
+    typeof utxo.txid === "string" &&
+    Number.isInteger(utxo.vout) &&
+    typeof utxo.amount === "number" &&
+    (currentHeight - utxo.height) >= COINBASE_MATURITY
+  );
+  // Prefer exact 0.05 BTC UTXO (pre-split in snapshot) for clean 1-in/1-out tx
+  const exact = mature.find((utxo) => utxo.amount === FUNDING_AMOUNT_BTC);
+  if (exact) return exact;
+  // Fallback for older snapshots: smallest UTXO that covers amount + legacy fee
+  const LEGACY_FEE = 0.0000025;
+  return [...mature]
+    .filter((utxo) => utxo.amount >= FUNDING_AMOUNT_BTC + LEGACY_FEE)
     .sort((a, b) => a.amount - b.amount)[0] ?? null;
 }
 
@@ -262,16 +265,20 @@ export async function runNodeScenario(baseURL: string, learner: ProvisionedLearn
       throw new Error("No spendable UTXO available for funding test");
     }
 
-    const changeAddress = SNAPSHOT_ADDRESS;
-    const changeAmount = Number((utxo.amount - FUNDING_AMOUNT_BTC - FUNDING_TX_FEE_BTC).toFixed(8));
-    if (changeAmount <= 0) {
-      throw new Error("Selected UTXO is too small to complete the funding chain");
+    const isExactUtxo = utxo.amount === FUNDING_AMOUNT_BTC;
+    let outputs: Record<string, number>[];
+    if (isExactUtxo) {
+      outputs = [{ [multisig.address]: FUNDING_AMOUNT_BTC }];
+    } else {
+      const LEGACY_FEE = 0.0000025;
+      const changeAmount = Number((utxo.amount - FUNDING_AMOUNT_BTC - LEGACY_FEE).toFixed(8));
+      if (changeAmount <= 0) {
+        throw new Error("Selected UTXO is too small to complete the funding chain");
+      }
+      outputs = [{ [multisig.address]: FUNDING_AMOUNT_BTC }, { [SNAPSHOT_ADDRESS]: changeAmount }];
     }
 
-    const createResult = await recordRpc<string>("createrawtransaction", [[{ txid: utxo.txid, vout: utxo.vout }], [
-      { [multisig.address]: FUNDING_AMOUNT_BTC },
-      { [changeAddress]: changeAmount },
-    ]]);
+    const createResult = await recordRpc<string>("createrawtransaction", [[{ txid: utxo.txid, vout: utxo.vout }], outputs]);
     const prevout = { txid: utxo.txid, vout: utxo.vout, scriptPubKey: SNAPSHOT_SCRIPTPUBKEY, amount: utxo.amount };
     const signed = await recordRpc<{ complete: boolean; hex: string }>("signrawtransactionwithkey", [createResult, [SNAPSHOT_WIF], [prevout]]);
     if (!signed.complete) {

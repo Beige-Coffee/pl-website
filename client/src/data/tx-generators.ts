@@ -456,7 +456,6 @@ function parsePythonOutput(stdout: string): Record<string, string> {
 }
 
 const FUNDING_AMOUNT_BTC = 0.05; // 5,000,000 sats
-const FUNDING_TX_FEE_BTC = 0.0000025; // 250 sats, fixed for the generator's simple 1-in/2-out tx
 
 // Known key from the snapshot wallet — all pre-mined coins were sent to this key.
 // Wallet is disabled on the node for performance; we sign with the key directly.
@@ -476,15 +475,19 @@ interface ScantxoutsetUtxo {
 const COINBASE_MATURITY = 100; // regtest coinbase outputs need 100 confirmations
 
 function selectFundingUtxo(unspent: ScantxoutsetUtxo[], currentHeight: number): ScantxoutsetUtxo | null {
-  const minAmount = FUNDING_AMOUNT_BTC + FUNDING_TX_FEE_BTC;
-  return [...unspent]
-    .filter((utxo) =>
-      typeof utxo.txid === "string" &&
-      Number.isInteger(utxo.vout) &&
-      typeof utxo.amount === "number" &&
-      utxo.amount >= minAmount &&
-      (currentHeight - utxo.height) >= COINBASE_MATURITY
-    )
+  const mature = unspent.filter((utxo) =>
+    typeof utxo.txid === "string" &&
+    Number.isInteger(utxo.vout) &&
+    typeof utxo.amount === "number" &&
+    (currentHeight - utxo.height) >= COINBASE_MATURITY
+  );
+  // Prefer exact 0.05 BTC UTXO (pre-split in snapshot) for clean 1-in/1-out tx
+  const exact = mature.find((utxo) => utxo.amount === FUNDING_AMOUNT_BTC);
+  if (exact) return exact;
+  // Fallback for older snapshots: smallest UTXO that covers amount + legacy fee
+  const LEGACY_FEE = 0.0000025;
+  return [...mature]
+    .filter((utxo) => utxo.amount >= FUNDING_AMOUNT_BTC + LEGACY_FEE)
     .sort((a, b) => a.amount - b.amount)[0] ?? null;
 }
 
@@ -494,8 +497,8 @@ function selectFundingUtxo(unspent: ScantxoutsetUtxo[], currentHeight: number): 
  * 1. Derive Alice + Bob funding pubkeys via Python
  * 2. createmultisig("bech32") → native P2WSH address for the 2-of-2 multisig
  * 3. scantxoutset → find a spendable UTXO from snapshot coins (no wallet needed)
- * 4. Use known snapshot address for change
- * 5. createrawtransaction → build 1-in/2-out tx (funding output first, change second)
+ * 4. Use known snapshot address for change (if needed)
+ * 5. createrawtransaction → build 1-in/1-out tx (or 1-in/2-out for legacy snapshots)
  * 6. signrawtransactionwithkey → sign with the known snapshot private key
  * 7. decoderawtransaction → extract txid
  */
@@ -533,20 +536,24 @@ async function executeFundingGenerator(ctx: {
     throw new Error("No spendable UTXO is available. Mine a block in the Bitcoin Node, then try again.");
   }
 
-  // Step 4: Use the known snapshot address for change (no wallet needed).
-  const changeAddress = SNAPSHOT_ADDRESS;
-  const changeAmount = Number((utxo.amount - FUNDING_AMOUNT_BTC - FUNDING_TX_FEE_BTC).toFixed(8));
-  if (changeAmount <= 0) {
-    throw new Error("Selected UTXO is too small to fund the channel output and fee.");
+  // Step 4: Build outputs — clean 1-output tx for exact UTXOs, 2-output with change for legacy.
+  const isExactUtxo = utxo.amount === FUNDING_AMOUNT_BTC;
+  let outputs: Record<string, number>[];
+  if (isExactUtxo) {
+    outputs = [{ [msAddress]: FUNDING_AMOUNT_BTC }];
+  } else {
+    const LEGACY_FEE = 0.0000025;
+    const changeAmount = Number((utxo.amount - FUNDING_AMOUNT_BTC - LEGACY_FEE).toFixed(8));
+    if (changeAmount <= 0) {
+      throw new Error("Selected UTXO is too small to fund the channel output and fee.");
+    }
+    outputs = [{ [msAddress]: FUNDING_AMOUNT_BTC }, { [SNAPSHOT_ADDRESS]: changeAmount }];
   }
 
   // Step 5: Build a deterministic tx with the funding output at vout 0.
   const createResult = await nodeRpc("createrawtransaction", [
     [{ txid: utxo.txid, vout: utxo.vout }],
-    [
-      { [msAddress]: FUNDING_AMOUNT_BTC },
-      { [changeAddress]: changeAmount },
-    ],
+    outputs,
   ]);
   if (createResult.error) throw new Error(`createrawtransaction failed: ${createResult.error}`);
   const unsignedHex = createResult.result as string;

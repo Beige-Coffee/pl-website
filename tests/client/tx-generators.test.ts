@@ -25,7 +25,7 @@ describe("Signed Lightning transaction generators", () => {
 });
 
 describe("Funding transaction generator", () => {
-  it("builds a native P2WSH funding tx using walletless RPCs", async () => {
+  it("builds a 1-output funding tx when an exact 0.05 BTC UTXO is available", async () => {
     const generator = TX_GENERATORS["gen-funding"];
     const nodeRpc = vi.fn(async (method: string, params: unknown[]) => {
       switch (method) {
@@ -47,16 +47,15 @@ describe("Funding transaction generator", () => {
             result: {
               unspents: [
                 { txid: "large-utxo", vout: 1, amount: 1.25, scriptPubKey: "0014abc", height: 10 },
-                { txid: "selected-utxo", vout: 0, amount: 0.051, scriptPubKey: "0014abc", height: 5 },
+                { txid: "exact-utxo", vout: 0, amount: 0.05, scriptPubKey: "0014abc", height: 5 },
               ],
             },
           };
         case "createrawtransaction":
           expect(params).toEqual([
-            [{ txid: "selected-utxo", vout: 0 }],
+            [{ txid: "exact-utxo", vout: 0 }],
             [
               { bcrt1qfundingoutput: 0.05 },
-              { "bcrt1qw508d6qejxtdg4y5r3zarvary0c5xw7kygt080": 0.0009975 },
             ],
           ]);
           return { result: "unsigned-funding-hex" };
@@ -106,6 +105,57 @@ describe("Funding transaction generator", () => {
       "signrawtransactionwithkey",
       "decoderawtransaction",
     ]);
+  });
+
+  it("falls back to 2-output tx with change when no exact UTXO exists", async () => {
+    const generator = TX_GENERATORS["gen-funding"];
+    const nodeRpc = vi.fn(async (method: string, params: unknown[]) => {
+      switch (method) {
+        case "createmultisig":
+          return { result: { address: "bcrt1qfundingoutput" } };
+        case "getblockcount":
+          return { result: 200 };
+        case "scantxoutset":
+          return {
+            result: {
+              unspents: [
+                { txid: "large-utxo", vout: 1, amount: 0.1, scriptPubKey: "0014abc", height: 10 },
+              ],
+            },
+          };
+        case "createrawtransaction":
+          expect(params).toEqual([
+            [{ txid: "large-utxo", vout: 1 }],
+            [
+              { bcrt1qfundingoutput: 0.05 },
+              { "bcrt1qw508d6qejxtdg4y5r3zarvary0c5xw7kygt080": 0.0499975 },
+            ],
+          ]);
+          return { result: "unsigned-legacy-hex" };
+        case "signrawtransactionwithkey":
+          return { result: { complete: true, hex: "signed-legacy-hex" } };
+        case "decoderawtransaction":
+          return { result: { txid: "legacy-funding-txid" } };
+        default:
+          throw new Error(`Unexpected RPC method: ${method}`);
+      }
+    });
+
+    const runPython = vi.fn().mockResolvedValue({
+      output: "ALICE_FUNDING_PUB: 02alicefundingpub\nBOB_FUNDING_PUB: 03bobfundingpub",
+      error: null,
+    });
+
+    const result = await generator.execute!({
+      inputs: {},
+      nodeRpc,
+      runPython,
+    });
+
+    expect(result).toEqual({
+      TXID: "legacy-funding-txid",
+      HEX: "signed-legacy-hex",
+    });
   });
 
   it("surfaces a useful error when no spendable UTXO can fund the channel output", async () => {
