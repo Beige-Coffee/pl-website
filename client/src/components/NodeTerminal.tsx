@@ -176,9 +176,9 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
     }
   }, [isOpen, panel.activePanel]);
 
-  // Provision node on open
+  // Provision node on open (skip if restartNode is handling provisioning)
   useEffect(() => {
-    if (!isOpen || !authenticated || !sessionToken || nodeReady) return;
+    if (!isOpen || !authenticated || !sessionToken || nodeReady || provisioning) return;
 
     let cancelled = false;
     const isRestart = hadNodeRef.current;

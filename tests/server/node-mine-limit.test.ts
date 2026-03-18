@@ -28,20 +28,25 @@ describe("mine command limits", () => {
     });
   });
 
-  it("mine 10 uses generateblock and succeeds", async () => {
-    // mine 10 => 1 getrawmempool + 10 generateblock + 1 getblockcount = 12 calls
+  it("mine 10 uses generateblock, flushes, and succeeds", async () => {
+    // mine 10 => 1 getrawmempool + 10 generateblock + 1 getblockcount + 1 stop (flush) = 13 calls
     manager._rpcCall = vi.fn()
       .mockResolvedValueOnce([]) // getrawmempool (empty)
     for (let i = 0; i < 10; i++) {
       manager._rpcCall.mockResolvedValueOnce({ hash: "0".repeat(64) }); // generateblock
     }
     manager._rpcCall.mockResolvedValueOnce(140); // getblockcount
+    manager._rpcCall.mockResolvedValueOnce(null); // stop (flush to disk)
+
+    // Mock _waitForExit so it resolves immediately
+    manager._waitForExit = vi.fn().mockResolvedValue(true);
 
     const result = await manager.exec("test-user", "mine 10");
     expect(result.error).toBeUndefined();
     expect(result.result).toContain("Mined 10 blocks");
-    // 1 getrawmempool + 10 generateblock + 1 getblockcount
-    expect(manager._rpcCall).toHaveBeenCalledTimes(12);
+    expect(manager._rpcCall).toHaveBeenCalledTimes(13);
+    // Verify the last call was "stop" (flush)
+    expect(manager._rpcCall.mock.calls[12][1]).toBe("stop");
   });
 
   it("mine 11 returns the friendly error", async () => {

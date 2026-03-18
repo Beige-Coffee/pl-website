@@ -664,15 +664,22 @@ class NodeManager {
       const mempool = (await this._rpcCall(instance.rpcPort, "getrawmempool", [])) as string[];
       await this._rpcCall(instance.rpcPort, "generateblock", [address, mempool || []]);
 
-      // Delay between blocks gives LevelDB time to flush writes to disk.
-      // Without this, blocks fire too fast and data stays in memory buffers —
-      // if the node is restarted before flushing, those blocks are lost.
       for (let i = 1; i < numBlocks; i++) {
-        await new Promise((r) => setTimeout(r, 250));
         await this._rpcCall(instance.rpcPort, "generateblock", [address, []]);
       }
 
       const blockCount = await this._rpcCall(instance.rpcPort, "getblockcount", []);
+
+      // Flush data to disk: bitcoind keeps block index and chainstate in memory
+      // and only writes to disk on clean shutdown. Without this explicit flush,
+      // a crash or restart loses all mined blocks.
+      // RPC "stop" flushes everything then exits. The next user command will
+      // auto-provision a fresh process with all data intact on disk.
+      try {
+        await this._rpcCallWithTimeout(instance.rpcPort, "stop", [], 10_000);
+        await this._waitForExit(instance.process, 10_000);
+      } catch {}
+
       return {
         result: `Mined ${numBlocks} block${numBlocks > 1 ? "s" : ""}. Current height: ${blockCount}`,
       };
