@@ -331,7 +331,6 @@ class NodeManager {
       "-dbcache=100",
       "-maxmempool=5",
       "-maxconnections=0",
-      "-txindex=1",
       "-disablewallet",
       "-minrelaytxfee=0",
       "-persistmempool=0",
@@ -479,12 +478,48 @@ class NodeManager {
     return this._rpcCall(port, method, params, false, timeoutMs);
   }
 
+  /**
+   * getrawtransaction with fallback for when txindex is disabled.
+   * Tries the direct RPC first (works for mempool txs). If it fails because
+   * the tx is confirmed and txindex is off, searches recent blocks using
+   * the blockhash parameter which works without txindex.
+   */
+  private async _getrawtransactionWithFallback(port: number, params: unknown[]): Promise<unknown> {
+    try {
+      return await this._rpcCall(port, "getrawtransaction", params);
+    } catch (err: any) {
+      if (!/No such mempool transaction|txindex/i.test(err.message)) {
+        throw err;
+      }
+    }
+
+    // Fallback: search recent blocks for the confirmed transaction
+    const txid = params[0] as string;
+    const verbose = params.length > 1 ? params[1] : false;
+    const height = (await this._rpcCall(port, "getblockcount", [], false)) as number;
+    const searchDepth = Math.min(50, height);
+
+    for (let i = 0; i < searchDepth; i++) {
+      const blockHash = (await this._rpcCall(port, "getblockhash", [height - i], false)) as string;
+      try {
+        return await this._rpcCall(port, "getrawtransaction", [txid, verbose, blockHash], false);
+      } catch {
+        continue;
+      }
+    }
+
+    throw new Error(`Transaction ${txid} not found in mempool or last ${searchDepth} blocks`);
+  }
+
   async rpc(userId: UserId, method: string, params: unknown[]): Promise<unknown> {
     if (BLOCKED_COMMANDS.has(method)) {
       throw new Error(`Command '${method}' is not available in this environment.`);
     }
     const instance = await this.getOrCreate(userId);
     instance.lastActivity = Date.now();
+    if (method === "getrawtransaction") {
+      return this._getrawtransactionWithFallback(instance.rpcPort, params);
+    }
     return this._rpcCall(instance.rpcPort, method, params);
   }
 
@@ -583,6 +618,16 @@ class NodeManager {
       if (a === "false") return false;
       return a;
     });
+
+    // getrawtransaction fallback: search recent blocks when txindex is disabled
+    if (cmd === "getrawtransaction") {
+      try {
+        const result = await this._getrawtransactionWithFallback(instance.rpcPort, rpcArgs);
+        return { result };
+      } catch (err: any) {
+        return { error: err.message };
+      }
+    }
 
     try {
       const result = await this._rpcCall(instance.rpcPort, cmd, rpcArgs);

@@ -82,7 +82,6 @@ sh -c "ulimit -n 4096 2>/dev/null; exec \"$BITCOIND\" \
   -rpcpassword=$RPC_PASS \
   -rpcallowip=127.0.0.1 \
   -rpcbind=127.0.0.1 \
-  -txindex=1 \
   -disablewallet \
   -minrelaytxfee=0 \
   -maxconnections=0 \
