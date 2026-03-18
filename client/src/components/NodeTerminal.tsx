@@ -110,7 +110,6 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
   const [provisioning, setProvisioning] = useState(false);
   const [nodeReady, setNodeReady] = useState(false);
   const [nodeUnresponsive, setNodeUnresponsive] = useState(false);
-  const [showRestartConfirm, setShowRestartConfirm] = useState(false);
   const [history, setHistory] = useState<string[]>([]);
   const [historyIdx, setHistoryIdx] = useState(-1);
   const [showHelp, setShowHelp] = useState(false);
@@ -466,7 +465,6 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
 
   const restartNode = useCallback(async () => {
     if (!sessionToken || provisioning) return;
-    setShowRestartConfirm(false);
     setProvisioning(true);
     setNodeReady(false);
     setNodeUnresponsive(false);
@@ -515,42 +513,6 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
           <div className={`text-center ${textMuted}`} style={sansFont}>
             <div className={`font-pixel text-xs mb-3 ${goldText}`}>LOGIN REQUIRED</div>
             <div className="text-sm">Sign in to use the Bitcoin node terminal.</div>
-          </div>
-        </div>
-      )}
-
-      {/* Restart confirmation dialog */}
-      {showRestartConfirm && (
-        <div
-          className="absolute inset-0 z-20 flex items-center justify-center"
-          style={{
-            backgroundColor: dark ? "rgba(10,15,26,0.85)" : "rgba(250,246,238,0.9)",
-            backdropFilter: "blur(4px)",
-            top: isMobile ? 0 : 44,
-          }}
-        >
-          <div className={`max-w-xs mx-4 p-4 border-2 rounded ${panelBorder} ${panelBg}`} style={sansFont}>
-            <div className={`font-pixel text-xs ${goldText} mb-3`}>Restart Node?</div>
-            <div className={`text-sm ${dark ? "text-slate-300" : "text-stone-600"} space-y-2`}>
-              <p>This restarts your Bitcoin node from a fresh state. Your <strong>course progress, exercise solutions, and transaction history</strong> are not affected.</p>
-              <p>Use this if the node becomes unresponsive or commands stop working.</p>
-            </div>
-            <div className="flex gap-2 mt-4">
-              <button
-                onClick={restartNode}
-                className={`font-pixel text-[10px] px-3 py-1.5 border cursor-pointer transition-all
-                  ${dark ? "border-[#FFD700] text-[#FFD700] hover:bg-[#FFD700]/10" : "border-[#9a7200] text-[#9a7200] hover:bg-[#9a7200]/10"}`}
-              >
-                RESTART
-              </button>
-              <button
-                onClick={() => setShowRestartConfirm(false)}
-                className={`font-pixel text-[10px] px-3 py-1.5 border cursor-pointer transition-all
-                  ${dark ? "border-[#2a3552] text-slate-400 hover:text-slate-200" : "border-[#d4c9a8] text-black/50 hover:text-black"}`}
-              >
-                CANCEL
-              </button>
-            </div>
           </div>
         </div>
       )}
@@ -662,7 +624,7 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
               )}
             </div>
             <button
-              onClick={() => setShowRestartConfirm(true)}
+              onClick={restartNode}
               disabled={provisioning}
               className={`font-pixel text-[10px] px-2 py-1 border transition-all cursor-pointer disabled:opacity-40
                 ${dark ? "border-[#2a3552] text-slate-400" : "border-[#d4c9a8] text-black/50"}`}
@@ -708,15 +670,26 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
           )}
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowRestartConfirm(true)}
-            disabled={provisioning}
-            className={`font-pixel text-[10px] px-2 py-1 border transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed
-              ${dark ? "border-[#2a3552] text-slate-400 hover:text-slate-200 hover:bg-[#132043]" : "border-[#d4c9a8] text-black/50 hover:text-black hover:bg-[#e8dcc8]"}`}
-            title="Restart Bitcoin node"
-          >
-            RESTART
-          </button>
+          <div className="relative group">
+            <button
+              onClick={restartNode}
+              disabled={provisioning}
+              className={`font-pixel text-[10px] px-2 py-1 border transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed
+                ${dark ? "border-[#2a3552] text-slate-400 hover:text-slate-200 hover:bg-[#132043]" : "border-[#d4c9a8] text-black/50 hover:text-black hover:bg-[#e8dcc8]"}`}
+            >
+              RESTART
+            </button>
+            <div
+              className={`absolute right-0 top-full mt-2 w-64 p-3 border-2 rounded opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity z-50 ${panelBorder} ${panelBg}`}
+              style={sansFont}
+            >
+              <div className={`font-pixel text-xs ${goldText} mb-2`}>Restart Node?</div>
+              <div className={`text-xs ${dark ? "text-slate-300" : "text-stone-600"} space-y-1.5`}>
+                <p>This restarts your Bitcoin node from a fresh state. Your <strong>course progress, exercise solutions, and transaction history</strong> are not affected.</p>
+                <p>Use this if the node becomes unresponsive or commands stop working.</p>
+              </div>
+            </div>
+          </div>
           <button
             onClick={() => setShowHelp((v) => !v)}
             className={`font-pixel text-[10px] px-2 py-1 border transition-all cursor-pointer
