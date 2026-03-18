@@ -711,7 +711,7 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
       {/* Help overlay */}
       {showHelp && (
         <div
-          className="absolute inset-0 top-[44px] z-10 overflow-auto px-4 py-4"
+          className="absolute inset-0 top-[44px] z-30 overflow-auto px-4 py-4"
           style={{
             ...sansFont,
             backgroundColor: dark ? "#0a0f1acc" : "#faf6eeee",
