@@ -175,36 +175,45 @@ export default function Home() {
       </div>
 
       <div className="flex-1 flex flex-col items-center justify-start px-4 pt-8 md:pt-12 pb-8 relative">
-        {/* Continue Where You Left Off — floating button + popup */}
+        <header className="text-center mb-8 md:mb-10 w-full max-w-4xl">
+          <h1 className="text-3xl md:text-5xl font-pixel leading-tight mb-4 text-shadow-retro">
+            Programming<br />Lightning
+          </h1>
+          <p className="text-xl md:text-3xl font-mono font-bold text-foreground">
+            A Free, Open-Source Guide to Programming the Bitcoin Lightning Network
+          </p>
+        </header>
+
+        {/* Continue Where You Left Off */}
         {authenticated && continueData.length > 0 && (
-          <div className="absolute top-2 left-4 z-20">
+          <div className="w-full max-w-6xl mb-4 md:mb-5 relative">
             <button
               onClick={() => continueData.length === 1 ? navigate(continueData[0].path) : setShowContinue((s) => !s)}
-              className="flex items-start gap-2.5 bg-card border-2 border-border px-3 py-2 shadow-[2px_2px_0px_rgba(0,0,0,0.15)] hover:shadow-[2px_2px_0px_rgba(0,0,0,0.25)] hover:border-foreground/30 transition-all group cursor-pointer text-left"
+              className="w-full flex items-center gap-3 bg-card border-2 border-border px-4 py-3 shadow-[2px_2px_0px_rgba(0,0,0,0.15)] hover:shadow-[2px_2px_0px_rgba(0,0,0,0.25)] hover:border-foreground/30 transition-all group cursor-pointer text-left"
             >
-              <span className="text-[#b8860b] mt-0.5 text-base leading-none">&#9654;</span>
-              <div className="min-w-0">
+              <span className="text-[#b8860b] text-lg leading-none">&#9654;</span>
+              <div className="min-w-0 flex-1">
                 <span className="font-pixel text-[10px] text-foreground/45 block leading-none">RESUME</span>
                 <span
-                  className="text-sm font-semibold text-foreground/80 group-hover:text-foreground truncate block mt-0.5 max-w-[200px]"
+                  className="text-sm font-semibold text-foreground/80 group-hover:text-foreground truncate block mt-0.5"
                   style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}
                 >
                   {continueData[0].chapterTitle}
                 </span>
-                {continueData.length > 1 && (
-                  <span className="font-pixel text-[9px] text-foreground/35 block mt-0.5">+{continueData.length - 1} MORE ▾</span>
-                )}
               </div>
+              {continueData.length > 1 && (
+                <span className="font-pixel text-[9px] text-foreground/35 shrink-0">+{continueData.length - 1} MORE ▾</span>
+              )}
             </button>
             {showContinue && continueData.length > 1 && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setShowContinue(false)} />
-                <div className="absolute top-full left-0 mt-1 z-20 bg-card border-2 border-border shadow-md min-w-[240px]">
+                <div className="absolute top-full left-0 right-0 mt-1 z-20 bg-card border-2 border-border shadow-md">
                   {continueData.map((item) => (
                     <Link
                       key={item.path}
                       href={item.path}
-                      className="flex items-center gap-2.5 px-3 py-2.5 hover:bg-secondary transition-colors border-b last:border-b-0 border-border"
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-secondary transition-colors border-b last:border-b-0 border-border"
                       style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}
                       onClick={() => setShowContinue(false)}
                     >
@@ -220,14 +229,6 @@ export default function Home() {
             )}
           </div>
         )}
-        <header className="text-center mb-8 md:mb-10 w-full max-w-4xl">
-          <h1 className="text-3xl md:text-5xl font-pixel leading-tight mb-4 text-shadow-retro">
-            Programming<br />Lightning
-          </h1>
-          <p className="text-xl md:text-3xl font-mono font-bold text-foreground">
-            A Free, Open-Source Guide to Programming the Bitcoin Lightning Network
-          </p>
-        </header>
 
         <div className="w-full max-w-6xl space-y-4 md:space-y-5">
 
