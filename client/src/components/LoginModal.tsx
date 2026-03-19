@@ -293,6 +293,16 @@ function EmailLoginForm({
       >
         {loading ? "PLEASE WAIT..." : "LOG IN"}
       </button>
+
+      <div className="text-center">
+        <a
+          href="/reset-password"
+          className={`text-sm ${dark ? "text-slate-400 hover:text-slate-300" : "text-gray-500 hover:text-gray-700"} underline`}
+          style={{ fontFamily: sansFont }}
+        >
+          Forgot password?
+        </a>
+      </div>
     </form>
   );
 }
