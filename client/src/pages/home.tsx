@@ -11,6 +11,7 @@ import { chapters as noiseChapters } from "./noise-tutorial";
 
 export default function Home() {
   const [showCodeModal, setShowCodeModal] = useState(false);
+  const [showRustConfirm, setShowRustConfirm] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showContinue, setShowContinue] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -89,15 +90,67 @@ export default function Home() {
                   <li>Best for students who want to program in Rust and work towards protocol development. More challenging because it requires thinking about memory management and ownership.</li>
                   <li>Currently hosted on Replit and may be migrated to this website in the near future for a better learning experience.</li>
                 </ul>
-                <a
-                  href="https://replit.com/@austin-f/Programming-Lightning-Intro-to-Payment-Channels?v=1"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block w-full text-center bg-[#a72145] text-white px-3 py-2 font-pixel text-sm border-2 border-[#8b1a38] hover:bg-[#8b1a38] transition-colors pixel-shadow active:translate-x-[2px] active:translate-y-[2px] active:shadow-none"
+                <button
+                  onClick={() => setShowRustConfirm(true)}
+                  className="block w-full text-center bg-[#a72145] text-white px-3 py-2 font-pixel text-sm border-2 border-[#8b1a38] hover:bg-[#8b1a38] transition-colors pixel-shadow active:translate-x-[2px] active:translate-y-[2px] active:shadow-none cursor-pointer"
                 >
                   START IN RUST
-                </a>
+                </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rust Confirmation Modal */}
+      {showRustConfirm && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowRustConfirm(false); }}
+        >
+          <div className="bg-card border-4 border-border p-6 pixel-shadow max-w-lg w-full relative max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={() => setShowRustConfirm(false)}
+              className="absolute top-2 right-3 font-pixel text-xl hover:text-primary"
+            >
+              X
+            </button>
+            <h3 className="font-pixel text-lg mb-4">Before You Go</h3>
+            <div className="space-y-3 text-base text-foreground/80 mb-5" style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
+              <p>
+                The <strong>Rust version</strong> is the original course hosted on <strong>Replit</strong>. It covers the same material but is a simpler, older format.
+              </p>
+              <p>
+                The <strong>Python version</strong> is newer and built directly into this website with a richer learning experience, including:
+              </p>
+              <ul className="list-disc pl-5 space-y-1.5">
+                <li>Interactive code exercises with instant feedback</li>
+                <li>Built-in Bitcoin regtest node for broadcasting real transactions</li>
+                <li>Knowledge checkpoints with sat rewards</li>
+                <li>Scratch pad sandbox for experimenting with code</li>
+                <li>Auto-complete, signature hints, and file browser</li>
+                <li>Progress tracking across sessions</li>
+              </ul>
+              <p>
+                If you specifically want to learn Rust, the Replit version is a great choice. Otherwise, we recommend the Python version for the best experience.
+              </p>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <a
+                href="https://replit.com/@austin-f/Programming-Lightning-Intro-to-Payment-Channels?v=1"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => { setShowRustConfirm(false); setShowCodeModal(false); }}
+                className="flex-1 text-center bg-[#a72145] text-white px-3 py-3 font-pixel text-sm border-2 border-[#8b1a38] hover:bg-[#8b1a38] transition-colors pixel-shadow"
+              >
+                CONTINUE TO RUST
+              </a>
+              <button
+                onClick={() => { setShowRustConfirm(false); setShowCodeModal(false); navigate("/lightning-tutorial?mode=code"); }}
+                className="flex-1 bg-primary text-foreground px-3 py-3 font-pixel text-sm border-2 border-border hover:bg-primary/80 transition-colors pixel-shadow"
+              >
+                TRY PYTHON INSTEAD
+              </button>
             </div>
           </div>
         </div>
