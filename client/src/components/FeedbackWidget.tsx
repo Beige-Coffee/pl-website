@@ -130,7 +130,7 @@ export default function FeedbackWidget({ theme, chapterTitle, exerciseId, sessio
     <>
       <div
         data-feedback-widget="true"
-        className="fixed right-2 z-[100] select-none"
+        className="fixed right-2 z-[100] select-none hidden md:block"
         style={{ top: iconTop, transform: "translateY(-50%)" }}
       >
         <button
