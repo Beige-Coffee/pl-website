@@ -242,7 +242,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
     options: [
       "Every payment still settles on-chain, but payment channels let miners validate them in optimized batches for higher throughput",
       "Multiple unrelated channel pairs can merge their balances into one shared UTXO that updates globally, reducing total outputs",
-      "Two parties can transact unlimited times off-chain, needing only two on-chain transactions (open and close) for the entire lifetime",
+      "Two parties can transact nearly unlimited times off-chain, needing only two on-chain transactions (open and close) for the entire lifetime",
       "They remove the need for on-chain enforcement entirely, since the latest channel state is maintained only in memory by both parties",
     ],
     answer: 2,
