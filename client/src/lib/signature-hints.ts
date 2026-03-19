@@ -271,6 +271,203 @@ const SIGNATURES: Record<string, SignatureInfo> = {
       { name: "secret_key", description: "32-byte private key" },
     ],
   },
+  // ── Lightning exercise functions ─────────────────────────────────────────
+  create_funding_script: {
+    name: "create_funding_script",
+    params: "(pubkey1, pubkey2)",
+    description: "Create a 2-of-2 multisig funding script with lexicographically sorted pubkeys",
+    paramDetails: [
+      { name: "pubkey1", description: "33-byte compressed public key" },
+      { name: "pubkey2", description: "33-byte compressed public key" },
+    ],
+  },
+  create_funding_tx: {
+    name: "create_funding_tx",
+    params: "(input_txid, input_vout, funding_amount, pubkey1, pubkey2)",
+    description: "Create a funding transaction spending a UTXO into a P2WSH 2-of-2 multisig",
+    paramDetails: [
+      { name: "input_txid", description: "32-byte txid in internal byte order" },
+      { name: "input_vout", description: "Output index of the UTXO to spend" },
+      { name: "funding_amount", description: "Channel funding amount in satoshis" },
+      { name: "pubkey1", description: "33-byte compressed public key (opener)" },
+      { name: "pubkey2", description: "33-byte compressed public key (acceptor)" },
+    ],
+  },
+  derive_revocation_privkey: {
+    name: "derive_revocation_privkey",
+    params: "(revocation_basepoint_secret, per_commitment_secret, revocation_basepoint, per_commitment_point)",
+    description: "Derive the revocation private key using BOLT 3 two-party scalar formula",
+    paramDetails: [
+      { name: "revocation_basepoint_secret", description: "32-byte revocation basepoint private key" },
+      { name: "per_commitment_secret", description: "32-byte per-commitment secret" },
+      { name: "revocation_basepoint", description: "33-byte revocation basepoint public key" },
+      { name: "per_commitment_point", description: "33-byte per-commitment point" },
+    ],
+  },
+  create_to_remote_script: {
+    name: "create_to_remote_script",
+    params: "(remote_pubkey)",
+    description: "Create a P2WPKH script for the to_remote output",
+    paramDetails: [
+      { name: "remote_pubkey", description: "33-byte compressed remote payment key" },
+    ],
+  },
+  create_to_local_script: {
+    name: "create_to_local_script",
+    params: "(revocation_pubkey, local_delayedpubkey, to_self_delay)",
+    description: "Create a revocable script for the to_local output with CSV delay",
+    paramDetails: [
+      { name: "revocation_pubkey", description: "33-byte revocation public key" },
+      { name: "local_delayedpubkey", description: "33-byte local delayed payment key" },
+      { name: "to_self_delay", description: "CSV delay in blocks (e.g. 144)" },
+    ],
+  },
+  get_obscure_factor: {
+    name: "get_obscure_factor",
+    params: "(opener_payment_basepoint, accepter_payment_basepoint)",
+    description: "Compute the 6-byte obscuring factor for commitment numbers",
+    paramDetails: [
+      { name: "opener_payment_basepoint", description: "33-byte opener payment basepoint" },
+      { name: "accepter_payment_basepoint", description: "33-byte accepter payment basepoint" },
+    ],
+  },
+  set_obscured_commitment_number: {
+    name: "set_obscured_commitment_number",
+    params: "(tx, commitment_number, obscure_factor)",
+    description: "Encode the obscured commitment number into locktime and sequence fields",
+    paramDetails: [
+      { name: "tx", description: "CMutableTransaction to modify in-place" },
+      { name: "commitment_number", description: "Channel state number (int)" },
+      { name: "obscure_factor", description: "6-byte obscuring factor" },
+    ],
+  },
+  create_commitment_outputs: {
+    name: "create_commitment_outputs",
+    params: "(to_local_sat, to_remote_sat, commitment_keys, to_self_delay, dust_limit_sat)",
+    description: "Create to_local and to_remote outputs, filtering dust",
+    paramDetails: [
+      { name: "to_local_sat", description: "Local balance in satoshis" },
+      { name: "to_remote_sat", description: "Remote balance in satoshis" },
+      { name: "commitment_keys", description: "CommitmentKeys with derived keys" },
+      { name: "to_self_delay", description: "CSV delay in blocks" },
+      { name: "dust_limit_sat", description: "Dust threshold in satoshis" },
+    ],
+  },
+  sort_outputs: {
+    name: "sort_outputs",
+    params: "(outputs)",
+    description: "Sort transaction outputs by value, then script, then cltv_expiry (BIP 69 + BOLT 3)",
+    paramDetails: [
+      { name: "outputs", description: "List of dicts with 'output', 'cltv_expiry' keys" },
+    ],
+  },
+  create_commitment_tx: {
+    name: "create_commitment_tx",
+    params: "(funding_txid, funding_vout, to_local_sat, to_remote_sat, ...)",
+    description: "Create an unsigned commitment transaction with channel and HTLC outputs",
+    paramDetails: [
+      { name: "funding_txid", description: "32-byte funding txid in internal byte order" },
+      { name: "funding_vout", description: "Funding output index" },
+      { name: "to_local_sat", description: "Local balance in satoshis" },
+      { name: "to_remote_sat", description: "Remote balance in satoshis" },
+    ],
+  },
+  finalize_commitment_tx: {
+    name: "finalize_commitment_tx",
+    params: "(km, unsigned_tx, funding_script, funding_amount, remote_signature, is_local_initiator)",
+    description: "Add the 2-of-2 multisig witness to finalize a commitment transaction",
+    paramDetails: [
+      { name: "km", description: "ChannelKeyManager instance" },
+      { name: "unsigned_tx", description: "Raw unsigned commitment tx bytes" },
+      { name: "funding_script", description: "Funding script bytes (for sighash)" },
+      { name: "funding_amount", description: "Funding output value in satoshis" },
+      { name: "remote_signature", description: "Remote party's DER signature bytes" },
+      { name: "is_local_initiator", description: "True if local party is channel opener" },
+    ],
+  },
+  create_htlc_outputs: {
+    name: "create_htlc_outputs",
+    params: "(commitment_keys, offered_htlcs, received_htlcs)",
+    description: "Create P2WSH outputs for offered and received HTLCs",
+    paramDetails: [
+      { name: "commitment_keys", description: "CommitmentKeys with HTLC keys" },
+      { name: "offered_htlcs", description: "List of offered HTLC dicts with amount_msat, payment_hash, cltv_expiry" },
+      { name: "received_htlcs", description: "List of received HTLC dicts with amount_msat, payment_hash, cltv_expiry" },
+    ],
+  },
+  create_offered_htlc_script: {
+    name: "create_offered_htlc_script",
+    params: "(commitment_keys, payment_hash)",
+    description: "Create the witness script for an offered HTLC output (BOLT 3)",
+    paramDetails: [
+      { name: "commitment_keys", description: "CommitmentKeys with revocation, local_htlc, remote_htlc keys" },
+      { name: "payment_hash", description: "20-byte RIPEMD160(SHA256(preimage)) payment hash" },
+    ],
+  },
+  create_received_htlc_script: {
+    name: "create_received_htlc_script",
+    params: "(commitment_keys, payment_hash, cltv_expiry)",
+    description: "Create the witness script for a received HTLC output (BOLT 3)",
+    paramDetails: [
+      { name: "commitment_keys", description: "CommitmentKeys with revocation, local_htlc, remote_htlc keys" },
+      { name: "payment_hash", description: "20-byte RIPEMD160(SHA256(preimage)) payment hash" },
+      { name: "cltv_expiry", description: "Absolute block height for HTLC timeout" },
+    ],
+  },
+  create_htlc_timeout_tx: {
+    name: "create_htlc_timeout_tx",
+    params: "(commitment_txid, htlc_output_index, htlc_amount_sat, cltv_expiry, commitment_keys, to_self_delay, feerate_per_kw)",
+    description: "Create an unsigned HTLC-timeout second-stage transaction",
+    paramDetails: [
+      { name: "commitment_txid", description: "32-byte commitment txid in internal byte order" },
+      { name: "htlc_output_index", description: "Index of the HTLC output in the commitment tx" },
+      { name: "htlc_amount_sat", description: "HTLC value in satoshis" },
+      { name: "cltv_expiry", description: "Locktime for the timeout (block height)" },
+      { name: "commitment_keys", description: "CommitmentKeys for the output script" },
+      { name: "to_self_delay", description: "CSV delay in blocks" },
+      { name: "feerate_per_kw", description: "Fee rate in satoshis per kilo-weight unit" },
+    ],
+  },
+  create_htlc_success_tx: {
+    name: "create_htlc_success_tx",
+    params: "(commitment_txid, htlc_output_index, htlc_amount_sat, commitment_keys, to_self_delay, feerate_per_kw)",
+    description: "Create an unsigned HTLC-success second-stage transaction",
+    paramDetails: [
+      { name: "commitment_txid", description: "32-byte commitment txid in internal byte order" },
+      { name: "htlc_output_index", description: "Index of the HTLC output in the commitment tx" },
+      { name: "htlc_amount_sat", description: "HTLC value in satoshis" },
+      { name: "commitment_keys", description: "CommitmentKeys for the output script" },
+      { name: "to_self_delay", description: "CSV delay in blocks" },
+      { name: "feerate_per_kw", description: "Fee rate in satoshis per kilo-weight unit" },
+    ],
+  },
+  finalize_htlc_timeout: {
+    name: "finalize_htlc_timeout",
+    params: "(km, commitment_keys, unsigned_tx, htlc_script, htlc_amount, remote_htlc_signature)",
+    description: "Add the witness to finalize an HTLC-timeout transaction",
+    paramDetails: [
+      { name: "km", description: "ChannelKeyManager instance" },
+      { name: "commitment_keys", description: "CommitmentKeys for signing" },
+      { name: "unsigned_tx", description: "Raw unsigned HTLC-timeout tx bytes" },
+      { name: "htlc_script", description: "HTLC witness script bytes" },
+      { name: "htlc_amount", description: "HTLC output value in satoshis" },
+      { name: "remote_htlc_signature", description: "Remote party's HTLC signature bytes" },
+    ],
+  },
+  finalize_htlc_success: {
+    name: "finalize_htlc_success",
+    params: "(km, commitment_keys, unsigned_tx, htlc_script, htlc_amount, remote_htlc_signature, payment_preimage)",
+    description: "Add the witness to finalize an HTLC-success transaction",
+    paramDetails: [
+      { name: "km", description: "ChannelKeyManager instance" },
+      { name: "commitment_keys", description: "CommitmentKeys for signing" },
+      { name: "unsigned_tx", description: "Raw unsigned HTLC-success tx bytes" },
+      { name: "htlc_script", description: "HTLC witness script bytes" },
+      { name: "htlc_amount", description: "HTLC output value in satoshis" },
+      { name: "remote_htlc_signature", description: "Remote party's HTLC signature bytes" },
+      { name: "payment_preimage", description: "32-byte payment preimage" },
+    ],
+  },
   // ── Key derivation functions ─────────────────────────────────────────────
   derive_pubkey: {
     name: "derive_pubkey",
