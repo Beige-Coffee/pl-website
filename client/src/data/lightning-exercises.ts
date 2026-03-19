@@ -9,6 +9,7 @@ export interface CodeExerciseData {
     steps: string;
     code: string;
   };
+  sampleCode?: string; // Sent to the Scratchpad sandbox for experimentation
   rewardSats: number;
   group: string;       // e.g. "keys/derivation"
   groupOrder: number;  // 1-based position within the group
@@ -108,6 +109,28 @@ def test_different_channel_index():
         self.delayed_payment_basepoint = privkey_to_pubkey(self.delayed_payment_basepoint_secret)
         self.commitment_seed = bip32.get_privkey_from_path(f"m/1017h/0h/5h/0/{channel_index}")`,
     },
+    sampleCode: `# Explore BIP32 key derivation
+from bip32 import BIP32
+
+seed = bytes([0x01] * 32)
+bip32 = BIP32.from_seed(seed)
+
+# Derive a key at our Lightning path: m/1017h/0h/{family}h/0/{index}
+# Family 0 = funding, 1 = revocation, 2 = HTLC, 3 = payment, 4 = delayed_payment, 5 = commitment_seed
+funding_key = bip32.get_privkey_from_path("m/1017h/0h/0h/0/0")
+print("Funding private key:", funding_key.hex())
+print("Key length:", len(funding_key), "bytes")
+
+# Convert private key to public key
+funding_pubkey = privkey_to_pubkey(funding_key)
+print("Funding public key:", funding_pubkey.hex())
+print("Pubkey length:", len(funding_pubkey), "bytes (compressed)")
+
+# Try a different family
+htlc_key = bip32.get_privkey_from_path("m/1017h/0h/2h/0/0")
+print("\\nHTLC private key:", htlc_key.hex())
+print("Same as funding?", funding_key == htlc_key)  # Should be False
+`,
     rewardSats: 21,
     group: "keys/channel_key_manager",
     groupOrder: 1,
@@ -177,6 +200,23 @@ def test_script_structure():
     keys = sorted([pubkey1, pubkey2])
     return CScript([OP_2, keys[0], keys[1], OP_2, OP_CHECKMULTISIG])`,
     },
+    sampleCode: `# Explore CScript and Bitcoin opcodes
+from bitcoin.core.script import CScript, OP_2, OP_CHECKMULTISIG
+
+# sorted() works on bytes objects -- it compares byte by byte
+key_a = bytes.fromhex("03aaa1")
+key_b = bytes.fromhex("02bbb2")
+print("Sorted keys:", [k.hex() for k in sorted([key_a, key_b])])
+
+# Build a simple 2-of-2 multisig script manually
+pk1 = bytes.fromhex("023da092f6980e58d2c037173180e9a465476026ee50f96695963e8efe436f54eb")
+pk2 = bytes.fromhex("030e9f7b623d2ccc7c9bd44d66d5ce21ce504c0acf6385a132cec6d3c39fa711c1")
+script = CScript([OP_2, pk1, pk2, OP_2, OP_CHECKMULTISIG])
+print("Script hex:", script.hex())
+print("Script length:", len(script), "bytes")
+print("First byte (OP_2 = 0x52):", hex(script[0]))
+print("Last byte (OP_CHECKMULTISIG = 0xae):", hex(script[-1]))
+`,
     rewardSats: 21,
     group: "scripts/funding",
     groupOrder: 1,
@@ -268,6 +308,35 @@ def test_p2wsh_output():
     tx.nVersion = 2
     return tx`,
     },
+    sampleCode: `# Explore transaction building blocks
+from bitcoin.core import COutPoint, CTxIn, CTxOut, CMutableTransaction, CScript
+from bitcoin.core.script import OP_0
+import hashlib
+
+# Create an outpoint (reference to a previous output)
+txid = bytes.fromhex("8984484a580b825b9972d7adb15050b3ab624ccd731946b3eeddb92f4e7ef6be")[::-1]
+outpoint = COutPoint(txid, 0)
+print("Outpoint hash:", outpoint.hash.hex())
+print("Outpoint index:", outpoint.n)
+
+# Create a transaction input
+txin = CTxIn(outpoint)
+print("\\nInput prevout:", txin.prevout)
+
+# Create a P2WSH output (OP_0 + 32-byte hash)
+fake_script_hash = hashlib.sha256(b"hello").digest()
+p2wsh = CScript([OP_0, fake_script_hash])
+txout = CTxOut(500000, p2wsh)
+print("\\nOutput value:", txout.nValue, "sats")
+print("Output script length:", len(txout.scriptPubKey), "bytes")
+
+# Assemble a transaction
+tx = CMutableTransaction([txin], [txout])
+tx.nVersion = 2
+print("\\nTx version:", tx.nVersion)
+print("Num inputs:", len(tx.vin))
+print("Num outputs:", len(tx.vout))
+`,
     rewardSats: 21,
     group: "transactions/funding",
     groupOrder: 1,
@@ -394,6 +463,33 @@ def test_bolt3_commitment_signature_vector():
         )
         return sig + bytes([SIGHASH_ALL])`,
     },
+    sampleCode: `# Explore BIP143 signature hashing and ECDSA signing
+from bitcoin.core import CTransaction, CScript
+from bitcoin.core.script import SignatureHash, SIGHASH_ALL, SIGVERSION_WITNESS_V0
+from ecdsa import SECP256k1, SigningKey
+from ecdsa.util import sigencode_der_canonize
+import hashlib
+
+# A sample transaction (from BOLT 3 test vectors)
+tx_hex = "0200000001bef67e4e2fb9ddeeb3461973cd4c62abb35050b1add772995b820b584a4884890000000000ffffffff0120a1070000000000220020313220af947477a37bcbbf3bb5def854df44e93f8aaad1831ea13a7db215406a00000000"
+tx = CTransaction.deserialize(bytes.fromhex(tx_hex))
+
+# Compute the sighash digest (the message we sign)
+funding_script = bytes.fromhex("5221023da092f6980e58d2c037173180e9a465476026ee50f96695963e8efe436f54eb21030e9f7b623d2ccc7c9bd44d66d5ce21ce504c0acf6385a132cec6d3c39fa711c152ae")
+sighash = SignatureHash(CScript(funding_script), tx, 0, SIGHASH_ALL,
+                        amount=500000, sigversion=SIGVERSION_WITNESS_V0)
+print("Sighash digest:", sighash.hex())
+print("Digest length:", len(sighash), "bytes")
+
+# Sign with a test private key
+privkey = bytes.fromhex("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
+sk = SigningKey.from_string(privkey, curve=SECP256k1)
+sig = sk.sign_digest_deterministic(sighash, hashfunc=hashlib.sha256,
+                                    sigencode=sigencode_der_canonize)
+print("\\nDER signature:", sig.hex())
+print("Sig length:", len(sig), "bytes")
+print("With SIGHASH_ALL:", (sig + bytes([SIGHASH_ALL])).hex())
+`,
     rewardSats: 21,
     group: "keys/channel_key_manager",
     groupOrder: 2,
@@ -481,6 +577,35 @@ def test_uses_both_inputs():
     result = R * f1 + P * f2
     return point_to_pubkey(result)`,
     },
+    sampleCode: `# Explore the BOLT 3 revocation pubkey formula step by step
+import hashlib
+from ecdsa import SECP256k1
+from ecdsa.ellipticcurve import Point
+
+ORDER = SECP256k1.order
+
+# BOLT 3 test vectors
+R_bytes = bytes.fromhex("036d6caac248af96f6afa7f904f550253a0f3ef3f5aa2fe6838a95b216691468e2")
+P_bytes = bytes.fromhex("025f7117a78150fe2ef97db7cfc83bd57b2e2c0d0dd25eaf467a4a1c2a45ce1486")
+
+# Step 1: Compute the two scalar factors
+f1 = int.from_bytes(hashlib.sha256(R_bytes + P_bytes).digest(), 'big') % ORDER
+f2 = int.from_bytes(hashlib.sha256(P_bytes + R_bytes).digest(), 'big') % ORDER
+print("Factor 1 (R||P):", hex(f1))
+print("Factor 2 (P||R):", hex(f2))
+
+# Step 2: Decompress the points
+R_point = pubkey_to_point(R_bytes)
+P_point = pubkey_to_point(P_bytes)
+print("\\nR point x:", hex(R_point.x()))
+print("P point x:", hex(P_point.x()))
+
+# Step 3: R * f1 + P * f2
+result = R_point * f1 + P_point * f2
+result_bytes = point_to_pubkey(result)
+print("\\nRevocation pubkey:", result_bytes.hex())
+print("Expected:         02916e326636d19c33f13e8c0c3a03dd157f332f3e99c317c141dd865eb01f8ff0")
+`,
     rewardSats: 21,
     group: "keys/commitment",
     groupOrder: 1,
@@ -562,6 +687,36 @@ def test_pubkey_consistency():
     result = (rev_int * f1 + per_int * f2) % ORDER
     return result.to_bytes(32, 'big')`,
     },
+    sampleCode: `# Explore the revocation private key scalar formula
+import hashlib
+from ecdsa import SECP256k1
+
+ORDER = SECP256k1.order
+
+# BOLT 3 test vectors (private keys)
+rev_secret = bytes.fromhex("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
+per_secret = bytes.fromhex("1f1e1d1c1b1a191817161514131211100f0e0d0c0b0a09080706050403020100")
+
+# Compute corresponding public keys (needed for the hash inputs)
+rev_pub = privkey_to_pubkey(rev_secret)
+per_pub = privkey_to_pubkey(per_secret)
+print("Revocation pubkey:", rev_pub.hex())
+print("Per-commitment pubkey:", per_pub.hex())
+
+# Compute scalar factors (same hashes as pubkey version)
+f1 = int.from_bytes(hashlib.sha256(rev_pub + per_pub).digest(), 'big') % ORDER
+f2 = int.from_bytes(hashlib.sha256(per_pub + rev_pub).digest(), 'big') % ORDER
+
+# Scalar multiplication and addition (mod ORDER)
+rev_int = int.from_bytes(rev_secret, 'big')
+per_int = int.from_bytes(per_secret, 'big')
+result = (rev_int * f1 + per_int * f2) % ORDER
+print("\\nResult privkey:", result.to_bytes(32, 'big').hex())
+print("Expected:      d09ffff62ddb2297ab000cc85bcb4283fdeb6aa052affbc9dddcf33b61078110")
+
+# Verify: derived pubkey should match derive_revocation_pubkey output
+print("\\nDerived pubkey:", privkey_to_pubkey(result.to_bytes(32, 'big')).hex())
+`,
     rewardSats: 21,
     group: "keys/commitment",
     groupOrder: 2,
@@ -645,6 +800,44 @@ def test_deterministic():
                 seed = bytearray(hashlib.sha256(bytes(seed)).digest())
         return bytes(seed)`,
     },
+    sampleCode: `# Demonstrate the shachain bit-flipping algorithm with a small example
+import hashlib
+
+# Let's trace the algorithm with a 3-bit index (simplified)
+seed = bytes(32)  # all zeros
+index = 5  # binary: 101
+
+print("Seed:", seed.hex()[:16] + "...")
+print(f"Index: {index} = binary {index:03b}")
+print()
+
+# Walk through bit positions 2, 1, 0
+value = bytearray(seed)
+for i in range(2, -1, -1):
+    bit_set = (index >> i) & 1
+    print(f"Bit {i}: {'SET' if bit_set else 'not set'}", end="")
+    if bit_set:
+        byte_idx = i // 8
+        bit_idx = i % 8
+        value[byte_idx] ^= (1 << bit_idx)
+        value = bytearray(hashlib.sha256(bytes(value)).digest())
+        print(f" -> flip bit {i}, then SHA256 -> {bytes(value).hex()[:16]}...")
+    else:
+        print(" -> skip")
+
+print(f"\\nFinal secret: {bytes(value).hex()[:32]}...")
+
+# BOLT 3 test: seed=zeros, index=2^48-1
+seed = bytes(32)
+value = bytearray(seed)
+idx = (1 << 48) - 1  # all 48 bits set
+for i in range(47, -1, -1):
+    if (idx >> i) & 1:
+        value[i // 8] ^= (1 << (i % 8))
+        value = bytearray(hashlib.sha256(bytes(value)).digest())
+print("\\nBOLT 3 vector (index 2^48-1):", bytes(value).hex())
+print("Expected:                      02a40c85b6f28da08dfdbe0926c53fab2de6d28c10301f8f7c4073d5e42e3148")
+`,
     rewardSats: 21,
     group: "keys/channel_key_manager",
     groupOrder: 3,
@@ -743,6 +936,25 @@ def test_different_commitments():
         secret = self.build_commitment_secret(per_commitment_index)
         return privkey_to_pubkey(secret)`,
     },
+    sampleCode: `# Explore index conversion and privkey_to_pubkey
+MAX_INDEX = (1 << 48) - 1
+print(f"MAX_INDEX = 2^48 - 1 = {MAX_INDEX}")
+print(f"MAX_INDEX in hex: {hex(MAX_INDEX)}")
+
+# Channel state numbers count UP: 0, 1, 2, ...
+# BOLT shachain indices count DOWN: 2^48-1, 2^48-2, ...
+for cn in [0, 1, 42, 100]:
+    idx = MAX_INDEX - cn
+    print(f"\\nCommitment #{cn} -> shachain index {idx}")
+
+# Once we have a per-commitment secret, we convert it to a public key
+secret = bytes([0x42] * 32)
+pubkey = privkey_to_pubkey(secret)
+print(f"\\nExample secret: {secret.hex()[:16]}...")
+print(f"Public key:     {pubkey.hex()}")
+print(f"Prefix byte:    0x{pubkey[0]:02x} ({'even y' if pubkey[0] == 2 else 'odd y'})")
+print(f"Key length:     {len(pubkey)} bytes (compressed)")
+`,
     rewardSats: 21,
     group: "keys/channel_key_manager",
     groupOrder: 4,
@@ -838,6 +1050,33 @@ test_get_commitment_keys()`,
         return CommitmentKeys(per_commitment_point, revocation_key,
                               local_delayed_payment_key, local_htlc_key, remote_htlc_key)`,
     },
+    sampleCode: `# Explore CommitmentKeys and how the 5 keys are assembled
+
+# Set up two key managers (local and remote)
+seed = bytes.fromhex("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
+km = ChannelKeyManager(seed)
+
+remote_seed = bytes.fromhex("1f1e1d1c1b1a191817161514131211100f0e0d0c0b0a09080706050403020100")
+remote_km = ChannelKeyManager(remote_seed)
+
+# The per-commitment point drives all key derivation
+pcp = km.derive_per_commitment_point(0)
+print("Per-commitment point:", pcp.hex()[:20] + "...")
+
+# Derive each key individually to see how they're built
+rev_key = derive_revocation_pubkey(remote_km.revocation_basepoint, pcp)
+ldp_key = derive_pubkey(km.delayed_payment_basepoint, pcp)
+l_htlc = derive_pubkey(km.htlc_basepoint, pcp)
+r_htlc = derive_pubkey(remote_km.htlc_basepoint, pcp)
+
+# Package into CommitmentKeys
+ck = CommitmentKeys(pcp, rev_key, ldp_key, l_htlc, r_htlc)
+print("\\nCommitmentKeys fields:")
+print("  revocation_key:", ck.revocation_key.hex()[:20] + "...")
+print("  local_delayed:", ck.local_delayed_payment_key.hex()[:20] + "...")
+print("  local_htlc:", ck.local_htlc_key.hex()[:20] + "...")
+print("  remote_htlc:", ck.remote_htlc_key.hex()[:20] + "...")
+`,
     rewardSats: 21,
     group: "keys/channel_key_manager",
     groupOrder: 5,
@@ -902,6 +1141,33 @@ def test_returns_compressed():
     result = B + G * tweak
     return point_to_pubkey(result)`,
     },
+    sampleCode: `# Explore the BOLT 3 derive_pubkey formula step by step
+import hashlib
+from ecdsa import SECP256k1
+
+G = SECP256k1.generator
+ORDER = SECP256k1.order
+
+# BOLT 3 test vectors
+basepoint = bytes.fromhex("036d6caac248af96f6afa7f904f550253a0f3ef3f5aa2fe6838a95b216691468e2")
+per_cp = bytes.fromhex("025f7117a78150fe2ef97db7cfc83bd57b2e2c0d0dd25eaf467a4a1c2a45ce1486")
+
+# Step 1: Hash per_commitment_point || basepoint
+tweak_hash = hashlib.sha256(per_cp + basepoint).digest()
+tweak = int.from_bytes(tweak_hash, 'big') % ORDER
+print("Tweak scalar:", hex(tweak)[:20] + "...")
+
+# Step 2: Decompress basepoint
+B = pubkey_to_point(basepoint)
+print("Basepoint x:", hex(B.x())[:20] + "...")
+
+# Step 3: result = B + G * tweak
+result = B + G * tweak
+result_bytes = point_to_pubkey(result)
+print("\\nDerived pubkey:", result_bytes.hex())
+print("Expected:      0235f2dbfaa89b57ec7b055afe29849ef7ddfeb1cefdb9ebdc43f5494984db29e5")
+print("Match:", result_bytes.hex() == "0235f2dbfaa89b57ec7b055afe29849ef7ddfeb1cefdb9ebdc43f5494984db29e5")
+`,
     rewardSats: 21,
     group: "keys/commitment",
     groupOrder: 3,
@@ -970,6 +1236,34 @@ def test_returns_32_bytes():
     result = (secret_int + tweak) % ORDER
     return result.to_bytes(32, 'big')`,
     },
+    sampleCode: `# Explore the scalar derivation formula for private keys
+import hashlib
+from ecdsa import SECP256k1
+
+ORDER = SECP256k1.order
+
+# BOLT 3 test vectors
+secret = bytes.fromhex("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
+per_cp = bytes.fromhex("025f7117a78150fe2ef97db7cfc83bd57b2e2c0d0dd25eaf467a4a1c2a45ce1486")
+
+# Must compute the public basepoint for the hash input
+basepoint = privkey_to_pubkey(secret)
+print("Basepoint (pubkey):", basepoint.hex()[:20] + "...")
+
+# Compute the tweak (same hash as derive_pubkey)
+tweak = int.from_bytes(hashlib.sha256(per_cp + basepoint).digest(), 'big') % ORDER
+secret_int = int.from_bytes(secret, 'big')
+result = (secret_int + tweak) % ORDER
+result_bytes = result.to_bytes(32, 'big')
+
+print("Derived privkey:", result_bytes.hex())
+print("Expected:       cbced912d3b21bf196a766651e436aff192362621ce317704ea2f75d87e7be0f")
+
+# Verify: pubkey of derived privkey should match derive_pubkey output
+derived_pub = privkey_to_pubkey(result_bytes)
+print("\\nDerived pubkey:", derived_pub.hex())
+# This should match derive_pubkey(basepoint, per_cp)
+`,
     rewardSats: 21,
     group: "keys/commitment",
     groupOrder: 4,
@@ -1031,6 +1325,31 @@ def test_uses_hash160():
       code: `def create_to_remote_script(remote_pubkey):
     return CScript([OP_0, hash160(remote_pubkey)])`,
     },
+    sampleCode: `# Explore P2WPKH construction and hash160
+import hashlib
+from bitcoin.core.script import CScript, OP_0
+
+# P2WPKH = OP_0 <20-byte HASH160(pubkey)>
+# HASH160 = RIPEMD160(SHA256(data))
+pubkey = bytes.fromhex("032c0b7cf95324a07d05398b240174dc0c2be444d96b159aa6c7f7b1e668680991")
+
+# Step 1: SHA256 of the pubkey
+sha = hashlib.sha256(pubkey).digest()
+print("SHA256:", sha.hex()[:20] + "...")
+
+# Step 2: RIPEMD160 of the SHA256 (= HASH160)
+h160 = hash160(pubkey)
+print("HASH160:", h160.hex())
+print("Hash length:", len(h160), "bytes")
+
+# Step 3: Build the P2WPKH script
+script = CScript([OP_0, h160])
+print("\\nP2WPKH script:", script.hex())
+print("Expected:      0014cc1b07838e387deacd0e5232e1e8b49f4c29e484")
+print("Script length:", len(script), "bytes")
+print("First byte (OP_0):", hex(script[0]))
+print("Second byte (push 20):", hex(script[1]))
+`,
     rewardSats: 21,
     group: "scripts/commitment",
     groupOrder: 1,
@@ -1105,6 +1424,39 @@ def test_script_structure():
         OP_CHECKSIG
     ])`,
     },
+    sampleCode: `# Explore the to_local script structure with opcodes
+from bitcoin.core.script import (
+    CScript, OP_IF, OP_ELSE, OP_ENDIF, OP_CHECKSIG,
+    OP_CHECKSEQUENCEVERIFY, OP_DROP
+)
+
+# The script has two branches:
+# IF path:   revocation key holder can spend immediately
+# ELSE path: local party can spend after CSV delay
+rev_pk = bytes.fromhex("0212a140cd0c6539d07cd08dfe09984dec3251ea808b892efeac3ede9402bf2b19")
+delayed_pk = bytes.fromhex("03fd5960528dc152014952efdb702a88f71e3c1653b2314431701ec77e57fde83c")
+delay = 144  # blocks (~1 day)
+
+script = CScript([
+    OP_IF,
+        rev_pk,
+    OP_ELSE,
+        delay, OP_CHECKSEQUENCEVERIFY, OP_DROP,
+        delayed_pk,
+    OP_ENDIF,
+    OP_CHECKSIG
+])
+
+print("to_local script:", script.hex())
+print("Script length:", len(script), "bytes")
+print("\\nOpcode breakdown:")
+print("  OP_IF     = 0x63:", hex(script[0]))
+print("  OP_ELSE   = 0x67")
+print("  OP_ENDIF  = 0x68")
+print("  OP_CHECKSIG = 0xac (last byte):", hex(script[-1]))
+print("  OP_CSV    = 0xb2")
+print("\\nDelay value:", delay, "blocks (~", delay * 10 // 60, "hours)")
+`,
     rewardSats: 21,
     group: "scripts/commitment",
     groupOrder: 2,
@@ -1171,6 +1523,32 @@ def get_obscure_factor(opener_payment_basepoint, accepter_payment_basepoint):
     h = hashlib.sha256(opener_payment_basepoint + accepter_payment_basepoint).digest()
     return int.from_bytes(h[26:32], 'big')`,
     },
+    sampleCode: `# Explore SHA256 concatenation and extracting lower 48 bits
+import hashlib
+
+# BOLT 3 test vectors
+opener = bytes.fromhex("034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa")
+accepter = bytes.fromhex("032c0b7cf95324a07d05398b240174dc0c2be444d96b159aa6c7f7b1e668680991")
+
+# SHA256 of the concatenated basepoints
+digest = hashlib.sha256(opener + accepter).digest()
+print("Full SHA256:", digest.hex())
+print("Length:", len(digest), "bytes (256 bits)")
+
+# Extract the lower 48 bits = last 6 bytes
+last_6 = digest[26:32]
+print("\\nLast 6 bytes:", last_6.hex())
+
+# Convert to integer
+factor = int.from_bytes(last_6, 'big')
+print("As integer:", factor)
+print("As hex:", hex(factor))
+print("Expected:  0x2bb038521914")
+
+# Verify it fits in 48 bits
+print("\\nFits in 48 bits?", factor < (1 << 48))
+print("Max 48-bit value:", (1 << 48) - 1)
+`,
     rewardSats: 21,
     group: "transactions/commitment",
     groupOrder: 1,
@@ -1251,6 +1629,33 @@ def test_sequence_upper_byte():
     tx.nLockTime = (0x20 << 24) | (obscured & 0xFFFFFF)
     tx.vin[0].nSequence = (0x80 << 24) | ((obscured >> 24) & 0xFFFFFF)`,
     },
+    sampleCode: `# Explore XOR and bit splitting into locktime/sequence
+
+# XOR basics: flips bits where the values differ
+commitment_number = 42
+obscure_factor = 0x2bb038521914  # from exercise 14
+obscured = commitment_number ^ obscure_factor
+print(f"Commitment:    {commitment_number}")
+print(f"Factor:        {hex(obscure_factor)}")
+print(f"XOR result:    {hex(obscured)}")
+print(f"Verify XOR:    {obscured ^ obscure_factor} (should be {commitment_number})")
+
+# Split the 48-bit value into upper and lower 24 bits
+lower_24 = obscured & 0xFFFFFF
+upper_24 = (obscured >> 24) & 0xFFFFFF
+print(f"\\nLower 24 bits: {hex(lower_24)}")
+print(f"Upper 24 bits: {hex(upper_24)}")
+
+# Set the upper byte markers
+locktime = (0x20 << 24) | lower_24
+sequence = (0x80 << 24) | upper_24
+print(f"\\nnLockTime (0x20 | lower): {hex(locktime)}")
+print(f"nSequence (0x80 | upper): {hex(sequence)}")
+
+# Verify the upper bytes
+print(f"\\nLocktime upper byte: {hex(locktime >> 24)} (should be 0x20)")
+print(f"Sequence upper byte: {hex(sequence >> 24)} (should be 0x80)")
+`,
     rewardSats: 21,
     group: "transactions/commitment",
     groupOrder: 2,
@@ -1343,6 +1748,34 @@ def test_dust_filtering():
         outputs.append({"value": to_remote_sat, "script": bytes(p2wpkh), "cltv_expiry": None})
     return outputs`,
     },
+    sampleCode: `# Explore dust filtering and P2WSH wrapping
+import hashlib
+from bitcoin.core.script import CScript, OP_0
+
+# Dust limit: outputs below this are not relayed
+dust_limit = 546
+print(f"Dust limit: {dust_limit} sats")
+
+# Example: to_local after fee deduction
+to_local = 7_000_000
+fee = 10_000
+to_local_after_fee = to_local - fee
+print(f"\\nto_local: {to_local} - {fee} fee = {to_local_after_fee}")
+print(f"Above dust? {to_local_after_fee >= dust_limit}")
+
+# Example: dust output
+tiny_balance = 400
+print(f"\\nTiny balance: {tiny_balance}")
+print(f"Above dust? {tiny_balance >= dust_limit} -> would be omitted!")
+
+# P2WSH wrapping: OP_0 + SHA256(witness_script)
+witness_script = bytes.fromhex("63210212a140cd0c6539d07cd08dfe09984dec3251ea808b892efeac3ede9402bf2b1967029000b2752103fd5960528dc152014952efdb702a88f71e3c1653b2314431701ec77e57fde83c68ac")
+script_hash = hashlib.sha256(witness_script).digest()
+p2wsh = CScript([OP_0, script_hash])
+print(f"\\nWitness script: {len(witness_script)} bytes")
+print(f"P2WSH output:   {p2wsh.hex()}")
+print(f"P2WSH length:   {len(p2wsh)} bytes (always 34)")
+`,
     rewardSats: 21,
     group: "transactions/commitment",
     groupOrder: 3,
@@ -1413,6 +1846,33 @@ def test_none_cltv_treated_as_zero():
     outputs.sort(key=lambda o: (o["value"], o["script"], o["cltv_expiry"] or 0))
     return outputs`,
     },
+    sampleCode: `# Explore BIP 69 sorting with example outputs
+
+# BIP 69 sorts by: value (ascending), then script (lexicographic), then CLTV
+outputs = [
+    {"value": 5000, "script": b'\\x00\\x20\\xff', "cltv_expiry": None},
+    {"value": 3000, "script": b'\\x00\\x14\\xaa', "cltv_expiry": None},
+    {"value": 5000, "script": b'\\x00\\x20\\x01', "cltv_expiry": 500},
+    {"value": 5000, "script": b'\\x00\\x20\\x01', "cltv_expiry": 100},
+]
+
+print("Before sorting:")
+for i, o in enumerate(outputs):
+    print(f"  [{i}] value={o['value']}, script={o['script'].hex()}, cltv={o['cltv_expiry']}")
+
+# Sort with tuple key: (value, script, cltv_expiry)
+# Treat None as 0 for sorting
+sorted_outputs = sorted(outputs, key=lambda o: (o["value"], o["script"], o["cltv_expiry"] or 0))
+
+print("\\nAfter sorting:")
+for i, o in enumerate(sorted_outputs):
+    print(f"  [{i}] value={o['value']}, script={o['script'].hex()}, cltv={o['cltv_expiry']}")
+
+# Note: Python tuple comparison is left-to-right
+# If values are equal, it moves to the next element
+print("\\n(3000,) < (5000,):", (3000,) < (5000,))
+print("(5000, b'\\\\x01') < (5000, b'\\\\xff'):", (5000, b'\\x01') < (5000, b'\\xff'))
+`,
     rewardSats: 21,
     group: "transactions/commitment",
     groupOrder: 4,
@@ -1554,6 +2014,33 @@ def test_bolt3_unsigned_vector():
     set_obscured_commitment_number(tx, commitment_number, opener_bp, accepter_bp)
     return tx`,
     },
+    sampleCode: `# Explore the commitment transaction weight and fee formula
+
+# Base commitment weight (no HTLCs)
+BASE_WEIGHT = 724
+
+# Fee = weight * feerate_per_kw // 1000
+for feerate in [253, 1000, 5000, 15000]:
+    fee = BASE_WEIGHT * feerate // 1000
+    print(f"feerate={feerate:>5} sat/kw -> fee = {BASE_WEIGHT} * {feerate} // 1000 = {fee} sats")
+
+# With HTLCs, each adds 172 weight units
+print("\\nWith HTLCs (feerate=15000):")
+for num_htlcs in range(6):
+    weight = BASE_WEIGHT + 172 * num_htlcs
+    fee = weight * 15000 // 1000
+    print(f"  {num_htlcs} HTLCs: weight={weight}, fee={fee} sats")
+
+# Example: BOLT 3 test case
+feerate = 15000
+fee = BASE_WEIGHT * feerate // 1000
+to_local = 7_000_000 - fee
+to_remote = 3_000_000
+print(f"\\nBOLT 3 example (feerate={feerate}):")
+print(f"  Fee: {fee} sats")
+print(f"  to_local: 7,000,000 - {fee} = {to_local}")
+print(f"  to_remote: {to_remote}")
+`,
     rewardSats: 21,
     group: "transactions/commitment",
     groupOrder: 5,
@@ -1640,6 +2127,37 @@ def test_witness_order_respects_flag():
     mtx.wit = tx_witness
     return mtx`,
     },
+    sampleCode: `# Explore witness stack construction for P2WSH multisig
+from bitcoin.core import CScriptWitness, CTxInWitness, CTxWitness
+
+# The witness for a 2-of-2 multisig P2WSH has 4 items:
+# [empty, sig1, sig2, witness_script]
+
+# The empty bytes are for the CHECKMULTISIG off-by-one bug
+# (OP_CHECKMULTISIG pops one extra element from the stack)
+dummy = b''
+print("Dummy element:", repr(dummy), "- required by CHECKMULTISIG bug")
+
+# Example signatures (truncated for display)
+sig1 = bytes(71)  # typical DER sig + sighash byte
+sig2 = bytes(72)
+funding_script = bytes(71)  # 2-of-2 multisig
+
+# Build the witness structure
+witness = CScriptWitness([dummy, sig1, sig2, funding_script])
+print("\\nWitness items:", len(witness.stack))
+print("Item sizes:", [len(item) for item in witness.stack])
+
+# Wrap in CTxInWitness and CTxWitness
+in_witness = CTxInWitness(witness)
+tx_witness = CTxWitness([in_witness])
+print("\\nWitness inputs:", len(tx_witness.vtxinwit))
+
+# After building, attach to a mutable tx:
+# mtx = CMutableTransaction.from_tx(tx)
+# mtx.wit = tx_witness
+print("\\nNote: sig order depends on local_sig_first flag")
+`,
     rewardSats: 21,
     group: "transactions/commitment",
     groupOrder: 6,
@@ -1773,6 +2291,37 @@ def test_bolt3_p2wsh_vectors():
         outputs.append({"value": htlc["amount_sat"], "script": bytes(p2wsh), "cltv_expiry": htlc["cltv_expiry"]})
     return outputs`,
     },
+    sampleCode: `# Explore HTLC output dicts and P2WSH wrapping
+import hashlib
+from bitcoin.core.script import CScript, OP_0
+
+# Each HTLC is a dict with amount, payment_hash, and cltv_expiry
+preimage = bytes([0x02] * 32)
+payment_hash = hashlib.sha256(preimage).digest()
+print("Preimage:", preimage.hex()[:16] + "...")
+print("Payment hash:", payment_hash.hex()[:20] + "...")
+
+# HTLC input dict format
+htlc = {
+    "amount_sat": 2000,
+    "payment_hash": payment_hash,
+    "cltv_expiry": 502
+}
+print("\\nHTLC dict:", {k: v if not isinstance(v, bytes) else v.hex()[:16]+"..." for k, v in htlc.items()})
+
+# After creating the HTLC witness script, wrap it as P2WSH
+# P2WSH = OP_0 + SHA256(witness_script)
+fake_witness_script = bytes(100)  # placeholder
+script_hash = hashlib.sha256(fake_witness_script).digest()
+p2wsh = CScript([OP_0, script_hash])
+print("\\nP2WSH script:", p2wsh.hex()[:20] + "...")
+print("P2WSH length:", len(p2wsh), "bytes (always 34)")
+print("Starts with OP_0:", hex(p2wsh[0]))
+
+# Output dict format (what this exercise returns)
+output = {"value": htlc["amount_sat"], "script": bytes(p2wsh), "cltv_expiry": htlc["cltv_expiry"]}
+print("\\nOutput dict keys:", list(output.keys()))
+`,
     rewardSats: 21,
     group: "transactions/commitment",
     groupOrder: 7,
@@ -2009,6 +2558,46 @@ def test_bolt3_five_htlc_vector():
     set_obscured_commitment_number(tx, commitment_number, opener_bp, accepter_bp)
     return tx`,
     },
+    sampleCode: `# Explore dust trimming thresholds for HTLCs
+
+dust_limit = 546
+feerate = 1000  # sat/kw
+
+# Offered HTLC dust threshold: dust + timeout_fee
+# Timeout tx weight = 663
+offered_threshold = dust_limit + 663 * feerate // 1000
+print(f"Offered HTLC dust threshold: {dust_limit} + {663 * feerate // 1000} = {offered_threshold} sats")
+
+# Received HTLC dust threshold: dust + success_fee
+# Success tx weight = 703
+received_threshold = dust_limit + 703 * feerate // 1000
+print(f"Received HTLC dust threshold: {dust_limit} + {703 * feerate // 1000} = {received_threshold} sats")
+
+# Which HTLCs survive trimming?
+htlcs = [
+    {"type": "offered", "amount_sat": 1208, "label": "tiny offered"},
+    {"type": "offered", "amount_sat": 1209, "label": "at offered threshold"},
+    {"type": "offered", "amount_sat": 2000, "label": "normal offered"},
+    {"type": "received", "amount_sat": 1248, "label": "tiny received"},
+    {"type": "received", "amount_sat": 1249, "label": "at received threshold"},
+    {"type": "received", "amount_sat": 3000, "label": "normal received"},
+]
+print(f"\\nFiltering (feerate={feerate}):")
+untrimmed = 0
+for h in htlcs:
+    threshold = offered_threshold if h["type"] == "offered" else received_threshold
+    survives = h["amount_sat"] >= threshold
+    if survives:
+        untrimmed += 1
+    print(f"  {h['label']:>22}: {h['amount_sat']:>5} {'>=':>2} {threshold} -> {'KEEP' if survives else 'TRIM'}")
+
+# Fee formula with untrimmed HTLCs
+weight = 724 + 172 * untrimmed
+fee = weight * feerate // 1000
+print(f"\\nUntrimmed HTLCs: {untrimmed}")
+print(f"Weight: 724 + 172 * {untrimmed} = {weight}")
+print(f"Fee: {fee} sats")
+`,
     rewardSats: 21,
     group: "transactions/commitment",
     groupOrder: 8,
@@ -2105,6 +2694,39 @@ def test_script_length():
         OP_ENDIF,
     ])`,
     },
+    sampleCode: `# Explore the 3-path offered HTLC script structure
+import hashlib
+from bitcoin.core.script import (
+    CScript, OP_DUP, OP_HASH160, OP_EQUAL, OP_IF, OP_CHECKSIG,
+    OP_ELSE, OP_SWAP, OP_SIZE, OP_NOTIF, OP_DROP, OP_CHECKMULTISIG,
+    OP_EQUALVERIFY, OP_ENDIF
+)
+
+# Keys used in the script
+rev_pk = bytes.fromhex("0212a140cd0c6539d07cd08dfe09984dec3251ea808b892efeac3ede9402bf2b19")
+local_htlc = bytes.fromhex("030d417a46946384f88d5f3337267c5e579765875dc4daca813e21734b140639e7")
+remote_htlc = bytes.fromhex("0394854aa6eab5b2a8122cc726e9dded053a2184d88256816826d6231c068d4a5b")
+
+# The two hash values needed
+rev_hash = hash160(rev_pk)
+print("HASH160(revocation_key):", rev_hash.hex())
+
+preimage = bytes([0x02] * 32)
+payment_hash = hashlib.sha256(preimage).digest()
+payment_ripemd = hashlib.new('ripemd160', payment_hash, usedforsecurity=False).digest()
+print("RIPEMD160(payment_hash):", payment_ripemd.hex())
+
+# Three spending paths:
+print("\\nOffered HTLC has 3 spending paths:")
+print("  1. Revocation: spend with revocation key (immediate)")
+print("  2. Timeout:    2-of-2 multisig after OP_NOTIF (empty witness)")
+print("  3. Success:    preimage + remote sig via OP_CHECKSIG (32-byte witness)")
+
+print("\\nKey opcodes:")
+print(f"  OP_DUP=0x{OP_DUP:02x}, OP_HASH160=0x{OP_HASH160:02x}")
+print(f"  OP_NOTIF=0x{OP_NOTIF:02x} (opposite of OP_IF)")
+print(f"  OP_SIZE=0x{OP_SIZE:02x} (pushes length of top stack item)")
+`,
     rewardSats: 21,
     group: "scripts/htlc-offered",
     groupOrder: 1,
@@ -2207,6 +2829,37 @@ def test_script_returns_bytes():
         OP_ENDIF,
     ])`,
     },
+    sampleCode: `# Compare offered vs received HTLC script structures
+import hashlib
+from bitcoin.core.script import (
+    CScript, OP_IF, OP_NOTIF, OP_CHECKLOCKTIMEVERIFY, OP_CHECKMULTISIG
+)
+
+print("=== Offered HTLC ===")
+print("Inner condition: OP_NOTIF")
+print("  OP_NOTIF path (0 bytes): Timeout -> 2-of-2 CHECKMULTISIG")
+print("  OP_ELSE path (32 bytes): Success -> preimage + CHECKSIG")
+print()
+
+print("=== Received HTLC ===")
+print("Inner condition: OP_IF")
+print("  OP_IF path (32 bytes): Success -> preimage + 2-of-2 CHECKMULTISIG")
+print("  OP_ELSE path (0 bytes): Timeout -> CLTV + CHECKSIG (single sig)")
+print()
+
+print("Key differences:")
+print("  1. OP_NOTIF (offered) vs OP_IF (received) for inner branch")
+print("  2. Timeout: multisig (offered) vs single CHECKSIG (received)")
+print("  3. Received timeout uses OP_CHECKLOCKTIMEVERIFY for expiry")
+print(f"     OP_CHECKLOCKTIMEVERIFY = 0x{OP_CHECKLOCKTIMEVERIFY:02x}")
+print(f"     OP_CHECKMULTISIG = 0x{OP_CHECKMULTISIG:02x}")
+
+# CLTV expiry is passed as a script integer
+cltv_expiry = 500
+script_fragment = CScript([cltv_expiry, OP_CHECKLOCKTIMEVERIFY])
+print(f"\\nCLTV fragment for expiry {cltv_expiry}: {script_fragment.hex()}")
+print("(CScript encodes integers as minimal script numbers)")
+`,
     rewardSats: 21,
     group: "scripts/htlc-received",
     groupOrder: 1,
@@ -2311,6 +2964,37 @@ def test_bolt3_vector_second_offered_htlc():
     txout = CTxOut(output_value, p2wsh)
     return CMutableTransaction([txin], [txout], nLockTime=cltv_expiry, nVersion=2)`,
     },
+    sampleCode: `# Explore HTLC timeout transaction fee calculation
+
+# HTLC timeout weight is fixed at 663 weight units
+TIMEOUT_WEIGHT = 663
+
+print("HTLC Timeout Transaction:")
+print(f"  Fixed weight: {TIMEOUT_WEIGHT} weight units")
+print()
+
+# Fee at various feerates
+for feerate in [253, 1000, 5000, 15000]:
+    fee = TIMEOUT_WEIGHT * feerate // 1000
+    print(f"  feerate={feerate:>5} -> fee = {TIMEOUT_WEIGHT} * {feerate} // 1000 = {fee} sats")
+
+# Example: HTLC amount 2000, feerate 0 (BOLT 3 test)
+htlc_amount = 2000
+feerate = 0
+fee = TIMEOUT_WEIGHT * feerate // 1000
+output_value = htlc_amount - fee
+print(f"\\nBOLT 3 example:")
+print(f"  HTLC amount: {htlc_amount} sats")
+print(f"  Fee (feerate=0): {fee} sats")
+print(f"  Output value: {output_value} sats")
+
+# Transaction structure
+print(f"\\nTimeout TX structure:")
+print(f"  nVersion = 2")
+print(f"  nLockTime = cltv_expiry (e.g., 502)")
+print(f"  Input: spends offered HTLC from commitment tx, nSequence = 0")
+print(f"  Output: P2WSH of to_local script (revocation or delayed spend)")
+`,
     rewardSats: 21,
     group: "transactions/htlc-offered",
     groupOrder: 1,
@@ -2434,6 +3118,40 @@ def test_bolt3_vector_third_received_htlc():
     txout = CTxOut(output_value, p2wsh)
     return CMutableTransaction([txin], [txout], nVersion=2)`,
     },
+    sampleCode: `# Compare HTLC timeout (663) vs success (703) fee calculation
+
+TIMEOUT_WEIGHT = 663
+SUCCESS_WEIGHT = 703
+
+print("HTLC Timeout vs Success transactions:")
+print(f"  Timeout weight: {TIMEOUT_WEIGHT}")
+print(f"  Success weight: {SUCCESS_WEIGHT}")
+print(f"  Difference: {SUCCESS_WEIGHT - TIMEOUT_WEIGHT} weight units")
+print(f"  (Success is heavier because the preimage adds 32 bytes to the witness)")
+print()
+
+# Fee comparison at feerate=1000
+feerate = 1000
+timeout_fee = TIMEOUT_WEIGHT * feerate // 1000
+success_fee = SUCCESS_WEIGHT * feerate // 1000
+print(f"At feerate={feerate}:")
+print(f"  Timeout fee: {timeout_fee} sats")
+print(f"  Success fee: {success_fee} sats")
+print()
+
+# Key differences from timeout TX:
+print("Success TX differences from Timeout TX:")
+print("  1. nLockTime = 0 (not time-locked)")
+print("  2. Weight = 703 (not 663)")
+print("  3. No cltv_expiry parameter")
+
+# Example output value
+htlc_amount = 1000
+fee = SUCCESS_WEIGHT * 0 // 1000  # feerate=0 in BOLT 3 test
+print(f"\\nBOLT 3 example (feerate=0):")
+print(f"  HTLC amount: {htlc_amount} sats")
+print(f"  Output value: {htlc_amount - fee} sats")
+`,
     rewardSats: 21,
     group: "transactions/htlc-received",
     groupOrder: 1,
@@ -2551,6 +3269,42 @@ def test_witness_shape():
     unsigned_tx.wit = tx_witness
     return unsigned_tx`,
     },
+    sampleCode: `# Explore the HTLC timeout witness stack
+from bitcoin.core import CScriptWitness
+
+# The timeout witness has 5 items:
+# [empty, remote_sig, local_sig, empty, htlc_script]
+
+# Item 1: Empty bytes (CHECKMULTISIG bug dummy)
+item1 = b''
+print("Item 1 (dummy):", repr(item1), f"({len(item1)} bytes)")
+
+# Item 2: Remote HTLC signature (DER + SIGHASH_ALL)
+item2 = bytes(72)  # placeholder
+print("Item 2 (remote sig):", f"{len(item2)} bytes (typical DER sig)")
+
+# Item 3: Local HTLC signature (derived from km.htlc_basepoint_secret)
+item3 = bytes(71)  # placeholder
+print("Item 3 (local sig):", f"{len(item3)} bytes")
+
+# Item 4: Empty bytes -- this is the PATH SELECTOR
+# 0 bytes = timeout path (OP_NOTIF branch in offered HTLC)
+item4 = b''
+print("Item 4 (path):", repr(item4), f"({len(item4)} bytes) -> selects TIMEOUT path")
+
+# Item 5: The offered HTLC witness script
+item5 = bytes(133)  # placeholder
+print("Item 5 (script):", f"{len(item5)} bytes (offered HTLC script)")
+
+print("\\nHow the path selector works:")
+print("  OP_SIZE checks the length of the witness element")
+print("  0 bytes -> OP_SIZE pushes 0 -> OP_EQUAL(32) fails -> OP_NOTIF taken")
+print("  32 bytes -> OP_SIZE pushes 32 -> OP_EQUAL(32) succeeds -> OP_ELSE taken")
+
+# Key derivation for signing:
+# local_htlc_privkey = derive_privkey(km.htlc_basepoint_secret, per_commitment_point)
+print("\\nSigning key: derive_privkey(km.htlc_basepoint_secret, pcp)")
+`,
     rewardSats: 21,
     group: "transactions/htlc-offered",
     groupOrder: 2,
@@ -2691,6 +3445,42 @@ def test_witness_contains_preimage():
     unsigned_tx.wit = tx_witness
     return unsigned_tx`,
     },
+    sampleCode: `# Explore the HTLC success witness stack
+from bitcoin.core import CScriptWitness
+import hashlib
+
+# The success witness has 5 items:
+# [empty, remote_sig, local_sig, preimage, htlc_script]
+
+# Item 1: Empty bytes (CHECKMULTISIG bug dummy)
+item1 = b''
+print("Item 1 (dummy):", repr(item1))
+
+# Item 2: Remote HTLC signature
+print("Item 2 (remote sig): DER signature + SIGHASH_ALL byte")
+
+# Item 3: Local HTLC signature
+print("Item 3 (local sig): signed with derived HTLC privkey")
+
+# Item 4: The 32-byte payment preimage -- THIS IS THE KEY DIFFERENCE
+preimage = bytes(32)  # BOLT 3 test vector HTLC #0
+payment_hash = hashlib.sha256(preimage).digest()
+print(f"\\nItem 4 (preimage): {preimage.hex()[:16]}... ({len(preimage)} bytes)")
+print(f"  SHA256(preimage) = {payment_hash.hex()[:20]}...")
+print(f"  This is the payment_hash embedded in the HTLC script")
+print(f"  32 bytes -> OP_SIZE pushes 32 -> OP_EQUAL succeeds -> SUCCESS path")
+
+# Item 5: The received HTLC witness script
+print("\\nItem 5 (script): received HTLC witness script")
+
+# Compared to timeout:
+print("\\n=== Timeout vs Success witness ===")
+print("Timeout: [empty, remote_sig, local_sig, EMPTY,    htlc_script]")
+print("Success: [empty, remote_sig, local_sig, PREIMAGE, htlc_script]")
+print("\\nThe only difference is item 4:")
+print("  Empty (0 bytes)  -> timeout path")
+print("  Preimage (32 bytes) -> success path")
+`,
     rewardSats: 21,
     group: "transactions/htlc-received",
     groupOrder: 2,
