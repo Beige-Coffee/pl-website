@@ -1440,12 +1440,12 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
               {/* Mobile onboarding bubble for Tools FAB */}
               {toolsTooltipVisible && !mobileToolsOpen && (
                 <div
-                  className={`fixed bottom-[4.5rem] right-4 z-50 px-3 py-2 text-sm rounded border-2 shadow-lg max-w-[220px] animate-in fade-in duration-300 ${
+                  className={`fixed right-4 z-50 px-3 py-2 text-sm rounded border-2 shadow-lg max-w-[220px] animate-in fade-in duration-300 ${
                     theme === "dark"
                       ? "bg-[#0f1930] border-[#FFD700] text-slate-200"
                       : "bg-card border-[#b8860b] text-foreground"
                   }`}
-                  style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}
+                  style={{ bottom: "calc(4.5rem + env(safe-area-inset-bottom, 0px))", fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}
                   onClick={() => {
                     setToolsTooltipVisible(false);
                     try { localStorage.setItem("pl-tools-tooltip-shown", "true"); } catch {}
@@ -1465,11 +1465,12 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
                     try { localStorage.setItem("pl-tools-tooltip-shown", "true"); } catch {}
                   }
                 }}
-                className={`fixed bottom-4 right-4 z-50 w-12 h-12 rounded-full border-2 shadow-lg flex items-center justify-center ${
+                className={`fixed right-4 z-50 w-12 h-12 rounded-full border-2 shadow-lg flex items-center justify-center ${
                   theme === "dark"
                     ? "bg-[#0f1930] border-[#FFD700] text-[#FFD700]"
                     : "bg-[#fdf9f2] border-[#b8860b] text-[#9a7200]"
                 }`}
+                style={{ bottom: "calc(1rem + env(safe-area-inset-bottom, 0px))" }}
                 data-testid="button-mobile-tools-toggle"
               >
                 {mobileToolsOpen ? (

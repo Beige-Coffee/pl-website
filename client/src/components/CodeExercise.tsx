@@ -913,20 +913,18 @@ export default function CodeExercise({
     </div>
   ) : null;
 
-  // Mobile-only expand button — visible only on code tab when not already expanded
-  const mobileExpandButton = isMobile && !expanded && mobileTab === "code" ? (
-    <button
-      type="button"
+  // Mobile-only overlay on the code editor — tapping expands to fullscreen
+  const mobileExpandOverlay = isMobile && !expanded && mobileTab === "code" ? (
+    <div
+      className="absolute inset-0 z-10 flex items-center justify-center cursor-pointer"
+      style={{ backgroundColor: dark ? "rgba(15,25,48,0.6)" : "rgba(255,253,245,0.65)" }}
       onClick={() => setExpanded(true)}
-      className={`w-full py-2 flex items-center justify-center gap-2 font-pixel text-xs border-b transition-colors ${
-        dark
-          ? `${cardBorder} text-[#FFD700] hover:bg-[#FFD700]/10`
-          : `${cardBorder} text-[#9a7200] hover:bg-[#9a7200]/10`
-      }`}
     >
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" /><line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" /></svg>
-      EXPAND EDITOR
-    </button>
+      <div className={`flex flex-col items-center gap-2 ${dark ? "text-[#FFD700]" : "text-[#9a7200]"}`}>
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" /><line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" /></svg>
+        <span className="font-pixel text-sm">TAP TO EXPAND</span>
+      </div>
+    </div>
   ) : null;
 
   const exerciseContent = (
@@ -970,9 +968,8 @@ export default function CodeExercise({
         )}
       </div>
 
-      {/* Mobile tab bar + expand button */}
+      {/* Mobile tab bar */}
       {isMobile && mobileTabBar}
-      {mobileExpandButton}
 
       {/* ── CODE tab (or always on desktop) ── */}
       {(!isMobile || mobileTab === "code") && <>
@@ -1039,6 +1036,7 @@ export default function CodeExercise({
       {/* Code Editor */}
       <div className={`relative mb-3 ${expanded ? "flex-1 min-h-0" : ""}`}>
         <div ref={editorRef} className="h-full" />
+        {mobileExpandOverlay}
       </div>
 
       {/* Action buttons */}
