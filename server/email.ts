@@ -121,3 +121,81 @@ export async function sendVerificationEmail(
 
   return result;
 }
+
+export async function sendPasswordResetEmail(
+  toEmail: string,
+  resetUrl: string
+) {
+  const { client, fromEmail } = await getResendClient();
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+</head>
+<body style="margin:0;padding:0;background-color:#f5f0e1;font-family:'VT323',monospace;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f0e1;padding:40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background-color:#fffdf5;border:4px solid #b8860b;max-width:600px;">
+          <tr>
+            <td style="padding:32px 32px 24px;border-bottom:2px solid #b8860b;">
+              <h1 style="margin:0;font-family:'Press Start 2P',monospace;font-size:16px;color:#b8860b;letter-spacing:1px;">
+                PROGRAMMING LIGHTNING
+              </h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px;">
+              <h2 style="margin:0 0 16px;font-family:'Press Start 2P',monospace;font-size:13px;color:#b8860b;">
+                RESET YOUR PASSWORD
+              </h2>
+              <p style="margin:0 0 20px;font-family:'VT323',monospace;font-size:20px;color:#1a1a1a;line-height:1.5;">
+                We received a request to reset your password. Click the button below to choose a new password.
+              </p>
+              <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+                <tr>
+                  <td style="background-color:#FFD700;border:2px solid #b8860b;padding:14px 28px;">
+                    <a href="${resetUrl}" style="font-family:'Press Start 2P',monospace;font-size:12px;color:#000;text-decoration:none;display:block;">
+                      RESET PASSWORD
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:0 0 16px;font-family:'VT323',monospace;font-size:18px;color:#555;line-height:1.4;">
+                Or copy and paste this link into your browser:
+              </p>
+              <p style="margin:0 0 24px;font-family:monospace;font-size:13px;color:#333;word-break:break-all;background-color:#f0ead6;border:2px solid #b8860b;padding:12px;">
+                ${resetUrl}
+              </p>
+              <p style="margin:0;font-family:'VT323',monospace;font-size:16px;color:#777;line-height:1.4;">
+                This link expires in 1 hour. If you did not request a password reset, you can ignore this email.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 32px;border-top:2px solid #b8860b;">
+              <p style="margin:0;font-family:'VT323',monospace;font-size:16px;color:#777;text-align:center;">
+                programminglightning.com
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  const result = await client.emails.send({
+    from: fromEmail,
+    to: toEmail,
+    subject: "Reset your password - Programming Lightning",
+    html,
+  });
+
+  return result;
+}

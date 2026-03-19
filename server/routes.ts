@@ -10,7 +10,8 @@ import bcrypt from "bcryptjs";
 import { decode as decodeBolt11 } from "light-bolt11-decoder";
 import { emailAuthSchema, insertPageEventSchema, type Feedback } from "@shared/schema";
 import { existsSync } from "fs";
-import { sendVerificationEmail } from "./email";
+import { sendVerificationEmail, sendPasswordResetEmail } from "./email";
+import { createHash } from "crypto";
 import { nodeManager } from "./bitcoin-node";
 import { setupNoiseWebSocket, getServerPubkey } from "./noise-handshake-ws";
 import { hex as noiseHex } from "./noise-crypto";
@@ -376,6 +377,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // --- Password Reset ---
+
+  app.post("/api/auth/forgot-password", async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    if (!authLimiter.check(ip)) {
+      return res.status(429).json({ error: "Too many attempts, try again later" });
+    }
+
+    try {
+      const { email } = req.body;
+      if (!email || typeof email !== "string") {
+        return res.status(400).json({ error: "Email is required" });
+      }
+
+      // Always return success to prevent email enumeration
+      const user = await storage.getUserByEmail(email.toLowerCase().trim());
+      if (user && user.email) {
+        const token = randomBytes(32).toString("hex");
+        const tokenHash = createHash("sha256").update(token).digest("hex");
+        const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+        await storage.setResetToken(user.id, tokenHash, expiresAt);
+
+        const baseUrl = `${req.protocol}://${req.get("host")}`;
+        const resetUrl = `${baseUrl}/reset-password?token=${token}`;
+
+        try {
+          await sendPasswordResetEmail(user.email, resetUrl);
+        } catch (emailErr) {
+          console.error("[auth] Failed to send reset email:", emailErr);
+        }
+      }
+
+      res.json({ ok: true, message: "If an account exists with that email, a reset link has been sent." });
+    } catch (err) {
+      console.error("[auth] Forgot password error:", err);
+      res.status(500).json({ error: "Something went wrong" });
+    }
+  });
+
+  app.post("/api/auth/reset-password", async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    if (!authLimiter.check(ip)) {
+      return res.status(429).json({ error: "Too many attempts, try again later" });
+    }
+
+    try {
+      const { token, newPassword } = req.body;
+      if (!token || typeof token !== "string") {
+        return res.status(400).json({ error: "Reset token is required" });
+      }
+      if (!newPassword || typeof newPassword !== "string" || newPassword.length < 6) {
+        return res.status(400).json({ error: "Password must be at least 6 characters" });
+      }
+
+      const tokenHash = createHash("sha256").update(token).digest("hex");
+      const user = await storage.getUserByResetTokenHash(tokenHash);
+      if (!user) {
+        return res.status(400).json({ error: "Invalid or expired reset token" });
+      }
+
+      const passwordHash = await bcrypt.hash(newPassword, 10);
+      await storage.updateUserPassword(user.id, passwordHash);
+      await storage.clearResetToken(user.id);
+      await storage.deleteSessionsByUserId(user.id);
+
+      res.json({ ok: true, message: "Password reset successfully. Please log in." });
+    } catch (err) {
+      console.error("[auth] Reset password error:", err);
+      res.status(500).json({ error: "Something went wrong" });
+    }
+  });
+
   app.post("/api/auth/logout", async (req: Request, res: Response) => {
     const token = req.headers.authorization?.replace("Bearer ", "");
     if (token) {
@@ -614,7 +688,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const k1 = generateK1();
-      await storage.createWithdrawal(k1, user.id, String(REWARD_AMOUNT_MSATS));
+      const withdrawal = await storage.createWithdrawal(k1, user.id, String(REWARD_AMOUNT_MSATS));
+      if (!withdrawal) {
+        return res.status(400).json({ error: "Reward already claimed" });
+      }
 
       if (user.lightningAddress) {
         const result = await autoPayLightningAddress(user.lightningAddress, REWARD_AMOUNT_MSATS);
@@ -726,7 +803,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch {}
 
       const k1 = generateK1();
-      await storage.createWithdrawal(k1, user.id, String(rewardMsats), checkpointId);
+      const withdrawal = await storage.createWithdrawal(k1, user.id, String(rewardMsats), checkpointId);
+      if (!withdrawal) {
+        return res.status(400).json({ error: "Reward already claimed" });
+      }
 
       if (method !== "lnurl" && user.lightningAddress) {
         const result = await autoPayLightningAddress(user.lightningAddress, rewardMsats);
@@ -856,7 +936,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch {}
 
       const k1 = generateK1();
-      await storage.createWithdrawal(k1, user.id, String(rewardMsats), groupId);
+      const withdrawal = await storage.createWithdrawal(k1, user.id, String(rewardMsats), groupId);
+      if (!withdrawal) {
+        return res.status(400).json({ error: "Reward already claimed" });
+      }
 
       if (method !== "lnurl" && user.lightningAddress) {
         const result = await autoPayLightningAddress(user.lightningAddress, rewardMsats);
@@ -1116,6 +1199,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (challenge.used) {
         return res.json({ status: "ERROR", reason: "Challenge already used" });
       }
+      // Reject stale challenges (10-minute max age)
+      if (Date.now() - new Date(challenge.createdAt).getTime() > 10 * 60 * 1000) {
+        return res.json({ status: "ERROR", reason: "Challenge expired" });
+      }
 
       const k1Bytes = hexToBytes(k1);
       const sigBytes = hexToBytes(sig);
@@ -1163,8 +1250,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!challenge || !challenge.used || !challenge.pubkey || !challenge.sessionToken) {
         return res.json({ authenticated: false });
       }
+      // Reject stale challenges (10-minute max age)
+      if (Date.now() - new Date(challenge.createdAt).getTime() > 10 * 60 * 1000) {
+        return res.json({ authenticated: false });
+      }
 
       const user = await storage.getUserByPubkey(challenge.pubkey);
+
+      // Delete the challenge after first successful retrieval (one-time use)
+      await storage.deleteChallenge(k1);
 
       return res.json({
         authenticated: true,
@@ -1872,6 +1966,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   nodeManager.ensureBitcoindBinary().catch((err) => {
     console.log("[node] Binary pre-download deferred:", err.message);
   });
+
+  // Periodic cleanup: expired sessions and stale LNURL challenges (every hour)
+  setInterval(() => {
+    storage.deleteExpiredSessions().catch((err) => {
+      console.error("[cleanup] Failed to delete expired sessions:", err);
+    });
+    storage.deleteExpiredChallenges().catch((err) => {
+      console.error("[cleanup] Failed to delete expired challenges:", err);
+    });
+  }, 60 * 60 * 1000);
 
   // ── Feedback ────────────────────────────────────────────────────────────
 

@@ -14,14 +14,17 @@ export const users = pgTable("users", {
   emailVerified: boolean("email_verified").default(false).notNull(),
   verificationToken: text("verification_token"),
   verificationExpiry: timestamp("verification_expiry"),
+  resetTokenHash: varchar("reset_token_hash", { length: 64 }),
+  resetTokenExpiresAt: timestamp("reset_token_expires_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   lastActiveAt: timestamp("last_active_at"),
 });
 
 export const sessions = pgTable("sessions", {
   token: varchar("token", { length: 64 }).primaryKey(),
-  userId: varchar("user_id").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
 });
 
 export const lnAuthChallenges = pgTable("ln_auth_challenges", {
@@ -35,7 +38,7 @@ export const lnAuthChallenges = pgTable("ln_auth_challenges", {
 export const lnurlWithdrawals = pgTable("lnurl_withdrawals", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   k1: varchar("k1", { length: 64 }).notNull().unique(),
-  userId: varchar("user_id").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   amountMsats: text("amount_msats").notNull(),
   status: text("status").notNull().default("pending"),
   bolt11Invoice: text("bolt11_invoice"),
@@ -49,7 +52,7 @@ export const lnurlWithdrawals = pgTable("lnurl_withdrawals", {
 
 export const checkpointCompletions = pgTable("checkpoint_completions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   checkpointId: text("checkpoint_id").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
@@ -67,7 +70,7 @@ export const donations = pgTable("donations", {
 
 export const userProgress = pgTable("user_progress", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   key: text("key").notNull(),
   value: text("value").notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -77,7 +80,7 @@ export const userProgress = pgTable("user_progress", {
 
 export const pageEvents = pgTable("page_events", {
   id: serial("id").primaryKey(),
-  userId: varchar("user_id"),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }),
   sessionId: text("session_id"),
   page: text("page").notNull(),
   referrer: text("referrer"),
@@ -91,7 +94,7 @@ export type PageEvent = typeof pageEvents.$inferSelect;
 
 export const feedback = pgTable("feedback", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id"),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }),
   category: text("category").notNull(),
   message: text("message").notNull(),
   pageUrl: text("page_url").notNull(),

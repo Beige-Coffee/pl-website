@@ -1,5 +1,5 @@
 import { type User, type InsertUser, type LnAuthChallenge, type Session, type LnurlWithdrawal, type InsertPageEvent, type PageEvent, type CheckpointCompletion, type Donation, type UserProgress, type InsertFeedback, type Feedback, users, lnAuthChallenges, sessions, lnurlWithdrawals, pageEvents, checkpointCompletions, donations, userProgress, feedback } from "@shared/schema";
-import { eq, desc, inArray, and, sql, count } from "drizzle-orm";
+import { eq, desc, inArray, and, sql, count, gt, lt } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 
@@ -29,7 +29,7 @@ export interface IStorage {
   createChallenge(k1: string): Promise<LnAuthChallenge>;
   getChallenge(k1: string): Promise<LnAuthChallenge | undefined>;
   completeChallenge(k1: string, pubkey: string, sessionToken: string): Promise<void>;
-  createWithdrawal(k1: string, userId: string, amountMsats: string, checkpointId?: string): Promise<LnurlWithdrawal>;
+  createWithdrawal(k1: string, userId: string, amountMsats: string, checkpointId?: string): Promise<LnurlWithdrawal | null>;
   getWithdrawalByK1(k1: string): Promise<LnurlWithdrawal | undefined>;
   markWithdrawalClaimed(k1: string, bolt11Invoice: string): Promise<void>;
   markWithdrawalPaid(k1: string, paymentIndex: string): Promise<void>;
@@ -63,6 +63,12 @@ export interface IStorage {
   setFeedbackGithubUrl(id: string, url: string): Promise<void>;
   updateLastActive(userId: string): Promise<void>;
   deleteUser(userId: string): Promise<void>;
+  deleteExpiredSessions(): Promise<void>;
+  setResetToken(userId: string, tokenHash: string, expiresAt: Date): Promise<void>;
+  getUserByResetTokenHash(tokenHash: string): Promise<User | undefined>;
+  clearResetToken(userId: string): Promise<void>;
+  deleteChallenge(k1: string): Promise<void>;
+  deleteExpiredChallenges(): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -98,7 +104,8 @@ export class DatabaseStorage implements IStorage {
   async createSession(userId: string): Promise<Session> {
     const { randomBytes } = await import("crypto");
     const token = randomBytes(32).toString("hex");
-    const [session] = await db.insert(sessions).values({ token, userId }).returning();
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+    const [session] = await db.insert(sessions).values({ token, userId, expiresAt }).returning();
     return session;
   }
 
@@ -116,10 +123,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserBySessionToken(token: string): Promise<User | undefined> {
-    const [session] = await db.select().from(sessions).where(eq(sessions.token, token));
+    const [session] = await db.select().from(sessions)
+      .where(and(eq(sessions.token, token), gt(sessions.expiresAt, new Date())));
     if (!session) return undefined;
     const [user] = await db.select().from(users).where(eq(users.id, session.userId));
     return user;
+  }
+
+  async deleteExpiredSessions(): Promise<void> {
+    await db.delete(sessions).where(lt(sessions.expiresAt, new Date()));
   }
 
   async setRewardClaimed(userId: string): Promise<void> {
@@ -148,6 +160,24 @@ export class DatabaseStorage implements IStorage {
     await db.update(users).set({ lightningAddress }).where(eq(users.id, userId));
   }
 
+  async setResetToken(userId: string, tokenHash: string, expiresAt: Date): Promise<void> {
+    await db.update(users)
+      .set({ resetTokenHash: tokenHash, resetTokenExpiresAt: expiresAt })
+      .where(eq(users.id, userId));
+  }
+
+  async getUserByResetTokenHash(tokenHash: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users)
+      .where(and(eq(users.resetTokenHash, tokenHash), gt(users.resetTokenExpiresAt, new Date())));
+    return user;
+  }
+
+  async clearResetToken(userId: string): Promise<void> {
+    await db.update(users)
+      .set({ resetTokenHash: null, resetTokenExpiresAt: null })
+      .where(eq(users.id, userId));
+  }
+
   async setVerificationToken(userId: string, token: string, expiry: Date): Promise<void> {
     await db.update(users).set({ verificationToken: token, verificationExpiry: expiry }).where(eq(users.id, userId));
   }
@@ -171,17 +201,26 @@ export class DatabaseStorage implements IStorage {
     return challenge;
   }
 
+  async deleteChallenge(k1: string): Promise<void> {
+    await db.delete(lnAuthChallenges).where(eq(lnAuthChallenges.k1, k1));
+  }
+
+  async deleteExpiredChallenges(): Promise<void> {
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    await db.delete(lnAuthChallenges).where(lt(lnAuthChallenges.createdAt, oneHourAgo));
+  }
+
   async completeChallenge(k1: string, pubkey: string, sessionToken: string): Promise<void> {
     await db.update(lnAuthChallenges)
       .set({ used: true, pubkey, sessionToken })
       .where(eq(lnAuthChallenges.k1, k1));
   }
 
-  async createWithdrawal(k1: string, userId: string, amountMsats: string, checkpointId?: string): Promise<LnurlWithdrawal> {
+  async createWithdrawal(k1: string, userId: string, amountMsats: string, checkpointId?: string): Promise<LnurlWithdrawal | null> {
     const values: any = { k1, userId, amountMsats };
     if (checkpointId) values.checkpointId = checkpointId;
-    const [withdrawal] = await db.insert(lnurlWithdrawals).values(values).returning();
-    return withdrawal;
+    const rows = await db.insert(lnurlWithdrawals).values(values).onConflictDoNothing().returning();
+    return rows[0] ?? null;
   }
 
   async getWithdrawalByK1(k1: string): Promise<LnurlWithdrawal | undefined> {
@@ -414,13 +453,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteUser(userId: string): Promise<void> {
-    await db.delete(feedback).where(eq(feedback.userId, userId));
-    await db.delete(pageEvents).where(eq(pageEvents.userId, userId));
-    await db.delete(userProgress).where(eq(userProgress.userId, userId));
-    await db.delete(lnurlWithdrawals).where(eq(lnurlWithdrawals.userId, userId));
-    await db.delete(checkpointCompletions).where(eq(checkpointCompletions.userId, userId));
-    await db.delete(sessions).where(eq(sessions.userId, userId));
-    await db.delete(users).where(eq(users.id, userId));
+    // With FK CASCADE constraints, deleting the user cascades to all child tables.
+    // Wrapped in a transaction for atomicity as a safety net.
+    await db.transaction(async (tx) => {
+      await tx.delete(users).where(eq(users.id, userId));
+    });
   }
 
   async getUserCount(): Promise<number> {

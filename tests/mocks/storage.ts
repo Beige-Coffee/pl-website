@@ -77,6 +77,10 @@ export class MockStorage implements IStorage {
       emailVerified: false,
       verificationToken: null,
       verificationExpiry: null,
+      resetTokenHash: null,
+      resetTokenExpiresAt: null,
+      createdAt: new Date(),
+      lastActiveAt: null,
     };
     this.users.set(id, newUser);
     return newUser;
@@ -95,6 +99,10 @@ export class MockStorage implements IStorage {
       emailVerified: false,
       verificationToken: null,
       verificationExpiry: null,
+      resetTokenHash: null,
+      resetTokenExpiresAt: null,
+      createdAt: new Date(),
+      lastActiveAt: null,
     };
     this.users.set(id, newUser);
     return newUser;
@@ -108,6 +116,7 @@ export class MockStorage implements IStorage {
       token,
       userId,
       createdAt: new Date(),
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     };
     this.sessions.set(token, session);
     return session;
@@ -132,6 +141,7 @@ export class MockStorage implements IStorage {
   async getUserBySessionToken(token: string): Promise<User | undefined> {
     const session = this.sessions.get(token);
     if (!session) return undefined;
+    if (session.expiresAt < new Date()) return undefined;
     return this.users.get(session.userId);
   }
 
@@ -224,7 +234,7 @@ export class MockStorage implements IStorage {
 
   // ── LNURL Withdrawals ──
 
-  async createWithdrawal(k1: string, userId: string, amountMsats: string, checkpointId?: string): Promise<LnurlWithdrawal> {
+  async createWithdrawal(k1: string, userId: string, amountMsats: string, checkpointId?: string): Promise<LnurlWithdrawal | null> {
     const id = randomUUID();
     const withdrawal: LnurlWithdrawal = {
       id,
@@ -536,6 +546,72 @@ export class MockStorage implements IStorage {
     if (record) {
       this.feedbackRecords.set(id, { ...record, githubIssueUrl: url });
     }
+  }
+
+  // ── Session/challenge cleanup ──
+
+  async deleteExpiredSessions(): Promise<void> {
+    const now = new Date();
+    for (const [token, session] of this.sessions) {
+      if (session.expiresAt < now) this.sessions.delete(token);
+    }
+  }
+
+  async deleteChallenge(k1: string): Promise<void> {
+    this.challenges.delete(k1);
+  }
+
+  async deleteExpiredChallenges(): Promise<void> {
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    for (const [k1, challenge] of this.challenges) {
+      if (challenge.createdAt < oneHourAgo) this.challenges.delete(k1);
+    }
+  }
+
+  // ── Password reset ──
+
+  async setResetToken(userId: string, tokenHash: string, expiresAt: Date): Promise<void> {
+    const user = this.users.get(userId);
+    if (user) {
+      this.users.set(userId, { ...user, resetTokenHash: tokenHash, resetTokenExpiresAt: expiresAt });
+    }
+  }
+
+  async getUserByResetTokenHash(tokenHash: string): Promise<User | undefined> {
+    for (const user of this.users.values()) {
+      if (user.resetTokenHash === tokenHash && user.resetTokenExpiresAt && user.resetTokenExpiresAt > new Date()) {
+        return user;
+      }
+    }
+    return undefined;
+  }
+
+  async clearResetToken(userId: string): Promise<void> {
+    const user = this.users.get(userId);
+    if (user) {
+      this.users.set(userId, { ...user, resetTokenHash: null, resetTokenExpiresAt: null });
+    }
+  }
+
+  async updateLastActive(userId: string): Promise<void> {
+    const user = this.users.get(userId);
+    if (user) {
+      this.users.set(userId, { ...user, lastActiveAt: new Date() });
+    }
+  }
+
+  async deleteUser(userId: string): Promise<void> {
+    this.users.delete(userId);
+    for (const [token, session] of this.sessions) {
+      if (session.userId === userId) this.sessions.delete(token);
+    }
+    for (const [k1, w] of this.withdrawals) {
+      if (w.userId === userId) this.withdrawals.delete(k1);
+    }
+    for (const [key, cp] of this.checkpoints) {
+      if (cp.userId === userId) this.checkpoints.delete(key);
+    }
+    this.progress.delete(userId);
   }
 
   // ── Extra methods used by routes.ts (not in IStorage interface) ──
