@@ -53,10 +53,10 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
   "pubkey-sorting": {
     question: "Why does BOLT 3 require pubkeys in the funding script to be sorted lexicographically?",
     options: [
-      "It ensures both parties independently produce the exact same funding script, which is critical because the script determines the P2WSH address",
-      "Sorted keys are faster to verify in Bitcoin Script because the interpreter checks them in order",
+      "So both parties independently produce the same script, since the script hash determines the P2WSH address",
+      "Sorted keys let Bitcoin Script verify signatures faster, since the interpreter processes them in lexicographic order",
       "Lexicographic sorting makes it harder for an attacker to determine which key belongs to the channel opener",
-      "Bitcoin consensus rules require multisig pubkeys to be sorted; unsorted scripts are invalid",
+      "Bitcoin consensus rules require all multisig pubkeys to be lexicographically sorted; unsorted scripts are rejected",
     ],
     answer: 0,
     explanation: "Both parties must independently construct the same funding script because its SHA256 hash determines the P2WSH output address. If they used different key orderings, they'd compute different script hashes and disagree on which output to watch. Lexicographic sorting is a simple, deterministic rule that both parties can follow independently without any communication, ensuring they always produce identical scripts.",
@@ -64,10 +64,10 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
   "revocation-purpose": {
     question: "What does the revocation key enable in a Lightning channel?",
     options: [
-      "It allows the channel funder to reclaim their funds if the counterparty goes offline permanently",
-      "It enables either party to close the channel cooperatively without broadcasting to the blockchain",
-      "It allows a third-party watchtower to open new channels on behalf of the original parties",
-      "It gives the counterparty the ability to claim ALL channel funds if an old (revoked) commitment transaction is broadcast",
+      "It allows the channel funder to reclaim their entire balance if the counterparty goes offline for an extended period",
+      "It enables either party to close the channel cooperatively without needing to broadcast any transaction to the blockchain",
+      "It allows a third-party watchtower to open new payment channels on behalf of the original channel parties",
+      "It gives the counterparty the ability to claim ALL channel funds if an old, revoked commitment transaction is broadcast",
     ],
     answer: 3,
     explanation: "The revocation key is the enforcement mechanism behind Lightning's fairness protocol. When a channel state is updated, the old state is 'revoked' by sharing the per-commitment secret. If a party tries to cheat by broadcasting an old commitment transaction, the counterparty can use the revocation key (derived from the shared secret) to claim ALL funds in the channel as a penalty. This makes cheating economically irrational.",
@@ -75,10 +75,10 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
   "revocation-key-construction": {
     question: "Why can't Alice calculate the private key to the Revocation Public Key in her own `to_local` output?",
     options: [
-      "Because the revocation public key is generated randomly by the Bitcoin network",
-      "Because Alice uses a different elliptic curve than Bob for her keys",
-      "Because it is derived from Bob's Revocation Basepoint, and Bob will never reveal his Revocation Basepoint Secret to Alice",
-      "Because the revocation private key is destroyed after the commitment transaction is signed",
+      "Because the revocation public key is generated randomly by the Bitcoin network each time a new commitment is created",
+      "Because Alice and Bob use different elliptic curves for their key derivation, making cross-computation impossible",
+      "Because it is derived from Bob's Revocation Basepoint, and Bob never reveals the corresponding basepoint secret",
+      "Because the revocation private key is destroyed by both parties after the commitment transaction is signed and exchanged",
     ],
     answer: 2,
     explanation: "Alice's Revocation Public Key is created by combining Bob's Revocation Basepoint with Alice's Per-Commitment Point. Since Bob never reveals his Revocation Basepoint Secret, Alice can never compute the corresponding private key. Only Bob can derive it, and only after Alice reveals her Per-Commitment Secret when they advance to a new state. This is what makes the penalty mechanism trustless.",
@@ -86,10 +86,10 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
   "revocation-secret-exchange": {
     question: "When Alice and Bob advance from Channel State 1 to Channel State 2, what does Alice send to Bob?",
     options: [
-      "Her Revocation Basepoint Secret and her new Per-Commitment Point",
-      "Her Per-Commitment Secret for State 1 and her new Per-Commitment Point for the next channel state",
-      "Bob's Revocation Private Key from State 1",
-      "Her funding private key and a signed revocation transaction",
+      "Her Revocation Basepoint Secret along with her newly generated Per-Commitment Point for State 2",
+      "Her Per-Commitment Secret for State 1 and her new Per-Commitment Point for the next state",
+      "Bob's Revocation Private Key that was used in the State 1 commitment transaction outputs",
+      "Her funding private key along with a pre-signed revocation transaction for the old state",
     ],
     answer: 1,
     explanation: "When advancing states, Alice sends Bob two things: (1) her Per-Commitment Secret from the old state (State 1), which allows Bob to derive the Revocation Private Key for Alice's old commitment transaction, and (2) her new Per-Commitment Point for the next state (State 2), so Bob can construct the new Revocation Public Key. The Revocation Basepoint never changes and was already exchanged during channel opening.",
@@ -97,10 +97,10 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
   "csv-purpose": {
     question: "Why does BOLT 3 use OP_CHECKSEQUENCEVERIFY (CSV) in the to_local output?",
     options: [
-      "CSV adds a time-based expiration to the channel, automatically closing it after a set period",
-      "CSV is required by Bitcoin consensus for all SegWit transactions",
-      "CSV enforces a delay before the local party can spend their own balance, giving the counterparty time to detect and punish cheating",
-      "CSV prevents the transaction from being included in a block until a specific block height is reached",
+      "CSV sets a time-based expiration on the channel, automatically closing it and returning funds after a set number of blocks",
+      "CSV is required by Bitcoin consensus for all SegWit transactions that spend from P2WSH multisig outputs",
+      "CSV enforces a delay before the broadcaster can spend, giving the counterparty time to detect and penalize cheating",
+      "CSV prevents the commitment transaction from being included in a block until a specified absolute block height is reached",
     ],
     answer: 2,
     explanation: "The CSV delay in the to_local output creates a window of time during which the counterparty can check if this is an old (revoked) commitment transaction. If it is, they can use the revocation key to claim the funds before the delay expires. Without this delay, a cheating party could broadcast an old state and immediately sweep their to_local output before anyone could react. The delay is measured in blocks (typically 144 = ~1 day) and only applies to the broadcaster's own output.",
@@ -119,10 +119,10 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
   "bip32-derivation": {
     question: "Why does the Lightning key derivation scheme use hardened BIP32 derivation (indicated by h or ') for the key family level?",
     options: [
-      "Hardened derivation is faster because it skips the public key computation step",
-      "Hardened derivation produces longer keys (64 bytes vs 32 bytes), providing more security",
-      "Bitcoin Core only supports hardened derivation paths, so non-hardened paths would be incompatible",
-      "Hardened derivation prevents a leaked child key from being used to derive sibling keys or the parent key, isolating key families from each other",
+      "Hardened derivation is computationally faster because it skips the elliptic curve multiplication step during child key generation",
+      "Hardened derivation produces longer keys (64 bytes instead of 32), providing an additional layer of cryptographic security",
+      "Bitcoin Core's wallet only supports hardened derivation paths internally, so non-hardened paths would be incompatible",
+      "Hardened derivation prevents a leaked child key from being used to derive sibling keys or the parent key, isolating key families",
     ],
     answer: 3,
     explanation: "In non-hardened BIP32 derivation, knowing a child private key and the parent public key allows computing the parent private key (and thus all sibling keys). This is disastrous for Lightning: if an attacker compromises one channel key, they could derive keys for all other channels. Hardened derivation breaks this chain by using the parent private key directly in the derivation, ensuring that a compromised child key reveals nothing about its siblings or parent.",
@@ -130,10 +130,10 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
   "commitment-secret-algorithm": {
     question: "The BOLT 3 per-commitment secret generation uses a bit-flipping and hashing algorithm. What is the key advantage of this scheme?",
     options: [
-      "It allows compact storage of all previous secrets using O(log n) space instead of O(n), through a structure called a shachain",
-      "It makes the secrets deterministic, so both parties can regenerate any secret from the seed on demand",
-      "It ensures that each secret is exactly 32 bytes, matching the size of a SHA256 hash",
-      "It produces cryptographically stronger secrets than simple sequential hashing",
+      "It allows compact storage of all previous secrets in O(log n) space instead of O(n), using a structure called a shachain",
+      "It makes the secrets fully deterministic, so both channel parties can independently regenerate any secret from the shared seed",
+      "It ensures that each generated secret is exactly 32 bytes, matching the output size of SHA256 and fitting standard key formats",
+      "It produces cryptographically stronger secrets than sequential hashing by incorporating additional entropy at each derivation step",
     ],
     answer: 0,
     explanation: "The bit-flipping algorithm used in BOLT 3 is designed so that the receiver of revealed secrets can store them in a compact 'shachain' structure that uses only O(log n) space while being able to derive any previously revealed secret. This is critical for Lightning because a long-lived channel could have millions of state updates, and storing every individual per-commitment secret would be prohibitively expensive. The shachain allows a node to verify and store secrets efficiently.",
@@ -141,10 +141,10 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
   "htlc-dust": {
     question: "What makes an HTLC 'dust' (trimmed) in the context of commitment transactions?",
     options: [
-      "An HTLC is dust if its payment hash has already been revealed (preimage is known)",
-      "An HTLC is always dust if its value is below 546 satoshis, regardless of the channel type or fee structure",
-      "An HTLC is dust only if both channel parties explicitly agree to trim it during the commitment_signed exchange",
-      "For non-anchor channels, an HTLC is trimmed if its value minus the second-stage transaction fee falls below the dust limit. For anchor/zero-fee channels, only the dust limit itself matters",
+      "An HTLC is dust if its payment hash has already been revealed, since the preimage is known and the timeout path is void",
+      "An HTLC is always classified as dust whenever its value falls below 546 satoshis, regardless of the channel type or fee parameters",
+      "An HTLC is only trimmed if both channel parties explicitly negotiate and agree to trim it during the commitment_signed exchange",
+      "An HTLC is trimmed when its value minus the second-stage transaction fee drops below the dust limit (anchor channels exclude the fee)",
     ],
     answer: 3,
     explanation: "An HTLC output requires a second-stage transaction (HTLC-timeout or HTLC-success) to be claimed. For non-anchor channels, this second-stage transaction has its own fee cost deducted from the HTLC amount. If the resulting value falls below the dust limit (e.g., 330 sats for P2WSH), the HTLC is 'trimmed' and its value is added to the commitment transaction fee instead. For anchor/zero-fee channels, the second-stage fee is zero (fees are handled later via CPFP), so an HTLC is trimmed only if its raw value is below the dust limit. BOLT 3 specifies these rules in the 'Trimmed Outputs' section.",
@@ -152,10 +152,10 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
   "htlc-timeout-vs-success": {
     question: "What is the key difference between an HTLC-timeout transaction and an HTLC-success transaction?",
     options: [
-      "HTLC-timeout uses SIGHASH_SINGLE while HTLC-success uses SIGHASH_ALL",
-      "HTLC-timeout can only be broadcast by the remote party, while HTLC-success can only be broadcast by the local party",
-      "HTLC-timeout has a locktime set to the CLTV expiry and uses an empty preimage (timeout path), while HTLC-success has locktime 0 and includes the payment preimage (claim path)",
-      "HTLC-timeout creates a P2PKH output while HTLC-success creates a P2WSH output",
+      "HTLC-timeout uses SIGHASH_SINGLE to allow fee bumping, while HTLC-success uses SIGHASH_ALL to lock all inputs and outputs",
+      "HTLC-timeout can only be broadcast by the remote party after channel close, while HTLC-success can only be broadcast by the local party",
+      "HTLC-timeout uses locktime=cltv_expiry with an empty witness (timeout path), while HTLC-success uses locktime=0 with the preimage",
+      "HTLC-timeout creates a P2PKH output for the claiming party, while HTLC-success creates a P2WSH output requiring a revocation check",
     ],
     answer: 2,
     explanation: "Both HTLC-timeout and HTLC-success are second-stage transactions that spend HTLC outputs from commitment transactions. The HTLC-timeout transaction is used when the HTLC expires without being claimed: it has a locktime equal to the CLTV expiry and passes an empty byte string as the witness (choosing the timeout branch in the script). The HTLC-success transaction is used to claim the HTLC with the preimage: it has locktime 0 (can be broadcast immediately) and includes the 32-byte payment preimage in the witness.",
@@ -163,10 +163,10 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
   "htlc-preimage-purpose": {
     question: "In a multi-hop Lightning payment, why does the payment preimage flow backward (from receiver to sender)?",
     options: [
-      "It doesn't — the preimage flows forward from sender to receiver along with the payment",
-      "The receiver generates the preimage, so only they can reveal it. Each hop reveals it to claim their funds, propagating it back to the sender as proof of payment.",
-      "The preimage flows backward to allow each node to verify the payment hash before forwarding",
-      "The preimage is split into pieces, with each hop holding one piece for security",
+      "It doesn't flow backward — the preimage travels forward from sender to receiver alongside the payment, unlocking each hop in sequence",
+      "Only the receiver knows the preimage. Each hop reveals it to claim funds, creating a chain of settlements back to the sender",
+      "The backward flow lets each routing node verify the payment hash against their local records before committing to forward the payment",
+      "The preimage is split into cryptographic shares, with each hop holding one piece that must be combined at the destination for security",
     ],
     answer: 1,
     explanation: "The receiver (Dianne) generates a random preimage and includes its hash in the invoice. The sender (Alice) locks funds along each hop using this hash. Payments settle in reverse: Dianne reveals the preimage to Bob to claim her funds, then Bob uses that same preimage to claim funds from Alice. This backward flow is what makes the payment atomic — either every hop gets the preimage and settles, or none do.",
@@ -175,9 +175,9 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
     question: "In a multi-hop payment (Alice \u2192 Bob \u2192 Dianne), why must the same payment hash be used in every hop's HTLC?",
     options: [
       "It ensures atomicity: when Dianne reveals the preimage to Bob, Bob can immediately use it to claim from Alice",
-      "It reduces the number of public keys that need to be exchanged between parties",
-      "It allows Lightning nodes to route payments without knowing the preimage in advance",
-      "It makes the transaction smaller by reducing witness data size",
+      "It reduces the total number of public keys that need to be exchanged between routing nodes during channel setup",
+      "It allows intermediate Lightning nodes to route payments correctly without needing to know the preimage in advance",
+      "It makes each hop's HTLC transaction smaller by allowing witness data to be shared and deduplicated across the route",
     ],
     answer: 0,
     explanation: "Using the same payment hash at every hop is what makes Lightning payments atomic. When Dianne reveals the preimage to claim from Bob, Bob can immediately use that same preimage to claim from Alice, because Alice's HTLC uses the same hash. If different hashes were used, Bob would need a different preimage for Alice's HTLC, which Dianne wouldn't provide. The shared hash creates a chain reaction: once the preimage is revealed anywhere, it can unlock every HTLC along the route.",
@@ -185,10 +185,10 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
   "offered-vs-received": {
     question: "From the commitment transaction holder's perspective, what distinguishes an 'offered' HTLC from a 'received' HTLC?",
     options: [
-      "An offered HTLC uses OP_CHECKLOCKTIMEVERIFY while a received HTLC uses OP_CHECKSEQUENCEVERIFY",
-      "An offered HTLC is one where the holder is the payer (forwarding the payment), while a received HTLC is one where the holder is the payee (receiving the payment)",
-      "An offered HTLC is always larger in value than a received HTLC",
-      "An offered HTLC can be revoked but a received HTLC cannot",
+      "An offered HTLC always uses OP_CHECKLOCKTIMEVERIFY in its script, while a received HTLC always uses OP_CHECKSEQUENCEVERIFY instead",
+      "An offered HTLC is one where the holder is paying (forwarding out), while a received HTLC is one where the holder is being paid",
+      "An offered HTLC must always be larger in value than a received HTLC, because the routing fee is deducted from the offered amount",
+      "An offered HTLC can be revoked using the revocation key if the state updates, but a received HTLC cannot be revoked by either party",
     ],
     answer: 1,
     explanation: "In a commitment transaction, 'offered' and 'received' are relative to the holder. An offered HTLC means the holder has offered to pay (the payment is going out), while a received HTLC means the holder is receiving a payment. The scripts differ because the timeout/claim paths are reversed: for an offered HTLC, the holder reclaims via timeout while the counterparty claims with the preimage; for a received HTLC, the holder claims with the preimage while the counterparty reclaims via timeout.",
@@ -207,10 +207,10 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
   "fee-deduction": {
     question: "In our Alice-opener walkthrough, which output is reduced when Alice constructs her own commitment transaction at a higher feerate?",
     options: [
-      "Both `to_local` and `to_remote`, proportionally to their balances",
-      "Alice's `to_local`, because the opener pays the base commitment fee on their own commitment transaction",
-      "Bob's `to_remote`, because the non-broadcaster prepays the fee",
-      "A separate fee output, because commitment fees are never deducted from channel balances",
+      "Both `to_local` and `to_remote` are reduced proportionally based on each party's share of the channel balance",
+      "Alice's `to_local`, because the channel opener pays the base commitment fee on their own commitment transaction",
+      "Bob's `to_remote`, because the non-opening party is always responsible for prepaying the commitment transaction fee",
+      "A dedicated fee output is added to the transaction, because commitment fees are tracked separately from channel balances",
     ],
     answer: 1,
     explanation: "In BOLT 3, the channel opener pays the base commitment fee. In our walkthrough Alice is the opener, so on Alice's own commitment transaction the fee comes out of her `to_local` balance. On Bob's commitment transaction, the same rule would reduce Alice's balance on the `to_remote` side instead.",
@@ -218,10 +218,10 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
   "static-remotekey": {
     question: "The to_remote output uses the payment_basepoint directly (P2WPKH) rather than a per-commitment derived key. Why?",
     options: [
-      "Per-commitment derivation would make the output incompatible with standard Bitcoin wallets",
-      "The payment_basepoint is more secure because it uses a longer key derivation path",
-      "Using the basepoint directly reduces the transaction size by avoiding an extra hash operation",
-      "With `option_static_remotekey` (now mandatory), the remote party can always sweep their funds with a single key, simplifying recovery if they lose channel state",
+      "Per-commitment derivation makes each output unique to a specific state, making it incompatible with standard Bitcoin wallet recovery tools",
+      "The payment_basepoint provides stronger security because it is derived through a longer, more complex key derivation path than per-commitment keys",
+      "Using the basepoint directly produces a smaller witness and lower fees by skipping the hash operations needed for per-commitment key derivation",
+      "With `option_static_remotekey`, the remote party can always sweep their balance with one key, even if they lose channel state data",
     ],
     answer: 3,
     explanation: "Before `option_static_remotekey`, the to_remote output used a per-commitment derived key. This meant that if the remote party lost their channel state data, they couldn't spend their output because they wouldn't know which per-commitment point was used. With static remotekey (now mandatory in the spec), the to_remote output uses the payment_basepoint directly. This means the remote party can always recover their funds using their base private key alone, even without channel state. It's a major reliability improvement.",
@@ -229,10 +229,10 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
   "channel-fairness": {
     question: "In the \"cut and choose\" fairness protocol, why is the cutter incentivized to split the cake evenly?",
     options: [
-      "Because the chooser picks first, so an uneven cut lets the chooser take the better piece",
-      "Because a referee can later redistribute cake if the cutter was unfair",
-      "Because the protocol randomly assigns pieces after the cut",
-      "Because the cutter is required to make both pieces identical by weight",
+      "Because the chooser picks first, so an uneven cut guarantees the chooser takes the bigger piece",
+      "Because a neutral referee observes the cut and redistributes pieces if the split is judged to be unfair",
+      "Because the protocol assigns pieces randomly after the cut, so the cutter gains no advantage from cutting unevenly",
+      "Because external rules require the cutter to produce pieces identical by weight, with penalties for any deviation",
     ],
     answer: 0,
     explanation: "In \"cut and choose,\" the cutter's best strategy is to split evenly because the chooser gets to pick first. If the cutter makes one piece bigger, the chooser simply takes the larger piece, leaving the cutter with less. This is a fairness protocol: the rules themselves make cheating a losing strategy, with no need for a trusted third party to enforce fairness.",
@@ -240,10 +240,10 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
   "payment-channels-scaling": {
     question: "How do payment channels help Bitcoin scale?",
     options: [
-      "They let every payment remain on-chain, but miners can validate them more efficiently",
-      "They let many unrelated channel pairs merge their balances into one shared UTXO that updates globally",
-      "They allow essentially unlimited transactions between two parties using only two on-chain transactions (open and close), keeping the blockchain footprint small while supporting high throughput",
-      "They eliminate the need for on-chain enforcement, because the latest state exists only in memory",
+      "Every payment still settles on-chain, but payment channels let miners validate them in optimized batches for higher throughput",
+      "Multiple unrelated channel pairs can merge their balances into one shared UTXO that updates globally, reducing total outputs",
+      "Two parties can transact unlimited times off-chain, needing only two on-chain transactions (open and close) for the entire lifetime",
+      "They remove the need for on-chain enforcement entirely, since the latest channel state is maintained only in memory by both parties",
     ],
     answer: 2,
     explanation: "Payment channels allow two parties to transact an essentially unlimited number of times off-chain, with only the opening funding transaction and the final closing transaction appearing on the blockchain. This means thousands or millions of payments can occur with just two on-chain transactions, dramatically reducing blockchain load. The security comes from the fact that either party can always enforce the latest state on-chain if needed.",
@@ -251,10 +251,10 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
   "asymmetric-commits": {
     question: "Why do Lightning channels use asymmetric commitment transactions (each party holds a different version)?",
     options: [
-      "Asymmetric transactions reduce the total data that needs to be stored by each party",
-      "Each party's version makes their own output revocable (with a delay), ensuring the broadcaster takes on the risk while the counterparty can spend immediately",
-      "It allows both parties to use different fee rates for their transactions",
-      "Asymmetric transactions are required by the Bitcoin consensus rules for multisig spending",
+      "Asymmetric transactions reduce each party's storage requirements, since they only keep track of their own version of the state",
+      "The broadcaster's output is revocable and delayed, while the counterparty can spend immediately, putting the risk on whoever broadcasts",
+      "Asymmetry allows each party to independently set a different fee rate when constructing their own version of the commitment transaction",
+      "Bitcoin consensus rules for multisig spending require each signer to have a uniquely structured transaction to prevent double-spend conflicts",
     ],
     answer: 1,
     explanation: "In an asymmetric commitment scheme, Alice's version makes HER output delayed and revocable, while Bob's output is immediately spendable (and vice versa for Bob's version). This means the party who broadcasts takes on the risk: they must wait through the CSV delay (during which they can be punished if the state was revoked), while the other party gets their funds immediately. This asymmetry is fundamental to the Lightning penalty mechanism.",
