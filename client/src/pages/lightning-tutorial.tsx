@@ -117,7 +117,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
     explanation: "The obscured commitment number XORs the actual commitment number with a value derived from both parties' payment basepoints. This means the number is 'encrypted' in the sense that a random observer cannot determine the commitment number. However, either channel party (who knows both payment basepoints) can decode it. This is useful for identifying which commitment was broadcast and recovering the corresponding per-commitment secret for revocation.",
   },
   "bip32-derivation": {
-    question: "Why does the Lightning key derivation scheme use hardened BIP32 derivation (indicated by h or ') for the key family level?",
+    question: "Why does our Lightning key derivation scheme use hardened BIP32 derivation (indicated by h or ') for the key family level?",
     options: [
       "Hardened derivation is computationally faster because it skips the elliptic curve multiplication step during child key generation",
       "Hardened derivation produces longer keys (64 bytes instead of 32), providing an additional layer of cryptographic security",
