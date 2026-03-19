@@ -45,10 +45,10 @@ export default function Home() {
       {/* Code Language Modal */}
       {showCodeModal && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto"
           onClick={(e) => { if (e.target === e.currentTarget) setShowCodeModal(false); }}
         >
-          <div className="bg-card border-4 border-border p-6 pixel-shadow max-w-2xl w-full relative">
+          <div className="bg-card border-4 border-border p-6 pixel-shadow max-w-2xl w-full relative max-h-[90vh] overflow-y-auto">
             <button
               onClick={() => setShowCodeModal(false)}
               className="absolute top-2 right-3 font-pixel text-xl hover:text-primary"

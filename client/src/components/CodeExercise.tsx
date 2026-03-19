@@ -913,6 +913,22 @@ export default function CodeExercise({
     </div>
   ) : null;
 
+  // Mobile-only expand button — visible only on code tab when not already expanded
+  const mobileExpandButton = isMobile && !expanded && mobileTab === "code" ? (
+    <button
+      type="button"
+      onClick={() => setExpanded(true)}
+      className={`w-full py-2 flex items-center justify-center gap-2 font-pixel text-xs border-b transition-colors ${
+        dark
+          ? `${cardBorder} text-[#FFD700] hover:bg-[#FFD700]/10`
+          : `${cardBorder} text-[#9a7200] hover:bg-[#9a7200]/10`
+      }`}
+    >
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" /><line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" /></svg>
+      EXPAND EDITOR
+    </button>
+  ) : null;
+
   const exerciseContent = (
     <div className={expanded ? "flex flex-col flex-1 min-h-0" : `my-4 border-2 ${completedDisplay ? goldBorder : cardBorder} ${cardBg} ${isMobile ? "p-3" : "p-5"}`}>
       {/* Description + Expand button */}
@@ -954,8 +970,9 @@ export default function CodeExercise({
         )}
       </div>
 
-      {/* Mobile tab bar */}
+      {/* Mobile tab bar + expand button */}
       {isMobile && mobileTabBar}
+      {mobileExpandButton}
 
       {/* ── CODE tab (or always on desktop) ── */}
       {(!isMobile || mobileTab === "code") && <>

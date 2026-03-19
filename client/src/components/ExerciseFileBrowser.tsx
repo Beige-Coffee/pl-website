@@ -754,7 +754,7 @@ export default function ExerciseFileBrowser({
 
           {/* Exercise tabs within file (hidden for ln.py) */}
           {selectedGroup && !isLnModule && (
-            <div className={`px-3 py-1.5 border-b ${borderColor} flex items-center gap-1 overflow-x-auto shrink-0`}>
+            <div className={`px-2 py-1 border-b ${borderColor} flex items-center gap-1 overflow-x-auto shrink-0`}>
               {selectedGroup.exerciseIds.map((exId) => {
                 const exData = exercises[exId];
                 if (!exData) return null;
@@ -778,7 +778,7 @@ export default function ExerciseFileBrowser({
                         });
                       }
                     }}
-                    className={`text-sm px-2 py-1 whitespace-nowrap transition-colors cursor-pointer border ${
+                    className={`text-xs px-1.5 py-0.5 whitespace-nowrap transition-colors cursor-pointer border ${
                       isCurrent
                         ? `${dark ? "border-[#FFD700]/40 bg-[#FFD700]/10 text-[#FFD700]" : "border-[#b8860b]/30 bg-[#b8860b]/10 text-[#9a7200]"}`
                         : `${dark ? "border-transparent text-slate-500 hover:text-slate-300 hover:bg-[#0f1930]" : "border-transparent text-black/40 hover:text-black/70 hover:bg-[#f0e8d8]"}`

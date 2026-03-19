@@ -1437,8 +1437,34 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
                   </div>
                 </div>
               )}
+              {/* Mobile onboarding bubble for Tools FAB */}
+              {toolsTooltipVisible && !mobileToolsOpen && (
+                <div
+                  className={`fixed bottom-[4.5rem] right-4 z-50 px-3 py-2 text-sm rounded border-2 shadow-lg max-w-[220px] animate-in fade-in duration-300 ${
+                    theme === "dark"
+                      ? "bg-[#0f1930] border-[#FFD700] text-slate-200"
+                      : "bg-card border-[#b8860b] text-foreground"
+                  }`}
+                  style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}
+                  onClick={() => {
+                    setToolsTooltipVisible(false);
+                    try { localStorage.setItem("pl-tools-tooltip-shown", "true"); } catch {}
+                  }}
+                >
+                  Tap here for your Scratchpad, Bitcoin Node, and Transactions
+                  <div className={`absolute top-full left-[calc(100%-24px)] w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent ${
+                    theme === "dark" ? "border-t-[#FFD700]" : "border-t-[#b8860b]"
+                  }`} />
+                </div>
+              )}
               <button
-                onClick={() => setMobileToolsOpen((o) => !o)}
+                onClick={() => {
+                  setMobileToolsOpen((o) => !o);
+                  if (toolsTooltipVisible) {
+                    setToolsTooltipVisible(false);
+                    try { localStorage.setItem("pl-tools-tooltip-shown", "true"); } catch {}
+                  }
+                }}
                 className={`fixed bottom-4 right-4 z-50 w-12 h-12 rounded-full border-2 shadow-lg flex items-center justify-center ${
                   theme === "dark"
                     ? "bg-[#0f1930] border-[#FFD700] text-[#FFD700]"
@@ -1506,6 +1532,7 @@ function ImageBlock({
   theme: "light" | "dark";
   srcKey: string;
 }) {
+  const imgIsMobile = useIsMobile();
   const storageKey = `pl-img-zoom:${srcKey}`;
 
   const [open, setOpen] = useState(false);
@@ -1645,7 +1672,7 @@ function ImageBlock({
         } opacity-80`}
         data-testid={`text-img-zoomhint-${srcKey}`}
       >
-        <span className="font-pixel text-[10px] tracking-wide">HOVER + CLICK TO ZOOM</span>
+        <span className="font-pixel text-[10px] tracking-wide">{imgIsMobile ? "TAP TO ZOOM" : "HOVER + CLICK TO ZOOM"}</span>
         <span className="font-mono text-xs">(Esc to close)</span>
       </span>
 

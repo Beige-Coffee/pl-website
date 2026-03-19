@@ -37,9 +37,15 @@
   * {
     @apply border-border;
   }
+  html {
+    overflow-x: hidden;
+  }
+  html, body {
+    overscroll-behavior-x: none;
+  }
   body {
     @apply font-mono antialiased bg-background text-foreground min-h-screen;
-    background-image: 
+    background-image:
       linear-gradient(to right, rgba(0,0,0,0.05) 1px, transparent 1px),
       linear-gradient(to bottom, rgba(0,0,0,0.05) 1px, transparent 1px);
     background-size: 20px 20px;
