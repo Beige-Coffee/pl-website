@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link } from "wouter";
+import NotFound from "./not-found";
 import { type DashboardData } from "../components/admin/admin-data";
 import OverviewView from "../components/admin/OverviewView";
 import StudentsView from "../components/admin/StudentsView";
@@ -99,11 +100,7 @@ export default function AdminPage() {
   if (ipAllowed === null) return null;
 
   if (!ipAllowed) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="font-pixel text-sm text-foreground/40">404 - PAGE NOT FOUND</div>
-      </div>
-    );
+    return <NotFound />;
   }
 
   if (!authed) {
