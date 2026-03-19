@@ -163,7 +163,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
   "htlc-preimage-purpose": {
     question: "In a multi-hop Lightning payment, why does the payment preimage flow backward (from receiver to sender)?",
     options: [
-      "It doesn't flow backward — the preimage travels forward from sender to receiver alongside the payment, unlocking each hop in sequence",
+      "It doesn't flow backward. The preimage travels forward from sender to receiver alongside the payment, unlocking each hop in sequence",
       "Only the receiver knows the preimage. Each hop reveals it to claim funds, creating a chain of settlements back to the sender",
       "The backward flow lets each routing node verify the payment hash against their local records before committing to forward the payment",
       "The preimage is split into cryptographic shares, with each hop holding one piece that must be combined at the destination for security",
