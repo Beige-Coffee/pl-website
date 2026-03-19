@@ -228,6 +228,55 @@ export default function Home() {
       </div>
 
       <div className="flex-1 flex flex-col items-center justify-start px-4 pt-8 md:pt-12 pb-8 relative">
+        {/* Continue Where You Left Off — desktop: floating top-left, mobile: inline below header */}
+        {authenticated && continueData.length > 0 && (
+          <>
+            {/* Desktop: absolute positioned */}
+            <div className="hidden md:block absolute top-2 left-4 z-20">
+              <button
+                onClick={() => continueData.length === 1 ? navigate(continueData[0].path) : setShowContinue((s) => !s)}
+                className="flex items-start gap-2.5 bg-card border-2 border-border px-3 py-2 shadow-[2px_2px_0px_rgba(0,0,0,0.15)] hover:shadow-[2px_2px_0px_rgba(0,0,0,0.25)] hover:border-foreground/30 transition-all group cursor-pointer text-left"
+              >
+                <span className="text-[#b8860b] mt-0.5 text-base leading-none">&#9654;</span>
+                <div className="min-w-0">
+                  <span className="font-pixel text-[10px] text-foreground/45 block leading-none">RESUME</span>
+                  <span
+                    className="text-sm font-semibold text-foreground/80 group-hover:text-foreground truncate block mt-0.5 max-w-[200px]"
+                    style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}
+                  >
+                    {continueData[0].chapterTitle}
+                  </span>
+                  {continueData.length > 1 && (
+                    <span className="font-pixel text-[9px] text-foreground/35 block mt-0.5">+{continueData.length - 1} MORE ▾</span>
+                  )}
+                </div>
+              </button>
+              {showContinue && continueData.length > 1 && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setShowContinue(false)} />
+                  <div className="absolute top-full left-0 mt-1 z-20 bg-card border-2 border-border shadow-md min-w-[240px]">
+                    {continueData.map((item) => (
+                      <Link
+                        key={item.path}
+                        href={item.path}
+                        className="flex items-center gap-2.5 px-3 py-2.5 hover:bg-secondary transition-colors border-b last:border-b-0 border-border"
+                        style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}
+                        onClick={() => setShowContinue(false)}
+                      >
+                        <span className="text-[#b8860b] text-xs leading-none">&#9654;</span>
+                        <div className="min-w-0">
+                          <span className="font-pixel text-[9px] text-foreground/40 block leading-none">{item.course === "Intro to Payment Channels" ? "LIGHTNING" : "NOISE"}</span>
+                          <span className="text-sm font-semibold text-foreground/80 truncate block mt-0.5">{item.chapterTitle}</span>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </>
+        )}
+
         <header className="text-center mb-8 md:mb-10 w-full max-w-4xl">
           <h1 className="text-3xl md:text-5xl font-pixel leading-tight mb-4 text-shadow-retro">
             Programming<br />Lightning
@@ -237,9 +286,9 @@ export default function Home() {
           </p>
         </header>
 
-        {/* Continue Where You Left Off */}
+        {/* Mobile: inline resume card below header */}
         {authenticated && continueData.length > 0 && (
-          <div className="w-full max-w-6xl mb-4 md:mb-5 relative">
+          <div className="md:hidden w-full max-w-6xl mb-4 relative">
             <button
               onClick={() => continueData.length === 1 ? navigate(continueData[0].path) : setShowContinue((s) => !s)}
               className="w-full flex items-center gap-3 bg-card border-2 border-border px-4 py-3 shadow-[2px_2px_0px_rgba(0,0,0,0.15)] hover:shadow-[2px_2px_0px_rgba(0,0,0,0.25)] hover:border-foreground/30 transition-all group cursor-pointer text-left"
