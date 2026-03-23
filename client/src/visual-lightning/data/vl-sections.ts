@@ -98,7 +98,7 @@ export const VL_SECTIONS: VLSectionDef[] = [
       {
         type: "text",
         content:
-          "Visa processes around 1,700 transactions per second on average, with the capacity for much more. The Bitcoin base layer was never designed to match this throughput. Increasing block size has its own tradeoffs: larger blocks mean fewer people can run full nodes, which threatens decentralization.",
+          "Visa processes over 8,000 transactions per second on average, with a network capacity of 65,000+. The Bitcoin base layer was never designed to match this throughput. Increasing block size has its own tradeoffs: larger blocks mean fewer people can run full nodes, which threatens decentralization.",
       },
       {
         type: "callout",
