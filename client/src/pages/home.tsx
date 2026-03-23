@@ -364,7 +364,7 @@ export default function Home() {
                         </span>
                       </TooltipTrigger>
                       <TooltipContent side="right" align="start" className="bg-card text-foreground border-4 border-border text-lg px-4 py-3 pixel-shadow max-w-xs rounded-none font-sans">
-                        Coming March 2026
+                        Coming April 2026
                       </TooltipContent>
                     </Tooltip>
                     <Tooltip delayDuration={0}>
@@ -469,7 +469,7 @@ export default function Home() {
                       <TooltipContent side="right" align="start" className="bg-card text-foreground border-4 border-border text-lg px-4 py-3 pixel-shadow max-w-xs rounded-none font-sans">
                         {auth.email === "francis.austin@proton.me"
                           ? "Build the Noise Protocol from scratch with hands-on Python exercises."
-                          : "Coming March 2026"}
+                          : "Coming April 2026"}
                       </TooltipContent>
                     </Tooltip>
                   </div>
