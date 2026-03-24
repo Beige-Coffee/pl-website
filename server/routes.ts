@@ -55,6 +55,16 @@ const adminLimiter = new RateLimiter(5, 60_000);
 const feedbackLimiter = new RateLimiter(5, 600_000);
 
 function getClientIp(req: Request): string {
+  // In production (Replit autoscale), multiple proxy hops mean req.ip may resolve
+  // to an internal GCP IP. Read the leftmost entry from x-forwarded-for instead,
+  // which is always the original client IP.
+  const forwarded = req.headers["x-forwarded-for"];
+  if (forwarded) {
+    const first = (Array.isArray(forwarded) ? forwarded[0] : forwarded)
+      .split(",")[0]
+      .trim();
+    if (first) return first.replace(/^::ffff:/, "");
+  }
   const ip = req.ip || req.socket.remoteAddress || "";
   if (!ip) return "unknown";
   return ip.replace(/^::ffff:/, "");
