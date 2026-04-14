@@ -25,6 +25,47 @@ import NonceReuseLab from "../components/NonceReuseLab";
 import { PanelStateContext, usePanelStateProvider } from "../hooks/use-panel-state";
 import { useIsMobile } from "../hooks/use-mobile";
 
+// Whitelist of custom course tag names that should never be wrapped in <p>.
+// CommonMark wraps custom HTML element names (which are not in the block-level
+// whitelist) in <p> tags. The custom tag handlers below render React components
+// that contain <div> and <form> descendants, which would produce invalid
+// <p><div>...</div></p> nesting and React validateDOMNesting warnings.
+// Keep this list in sync with the components map below in ReactMarkdown.
+const CUSTOM_BLOCK_TAGS = new Set([
+  "server-probe",
+  "capstone-panel",
+  "nonce-reuse-lab",
+  "code-intro",
+  "code-outro",
+  "checkpoint",
+  "checkpoint-group",
+  "handshake-diagram",
+  "byte-inspector",
+]);
+
+function rehypeUnwrapCustomBlockTags() {
+  return (tree: any) => {
+    const visit = (node: any) => {
+      if (!node.children) return;
+      for (let i = 0; i < node.children.length; i++) {
+        const child = node.children[i];
+        // Recurse first so deeper paragraphs are unwrapped before we look at this level.
+        visit(child);
+        if (
+          child.type === "element" &&
+          child.tagName === "p" &&
+          child.children?.length === 1 &&
+          child.children[0].type === "element" &&
+          CUSTOM_BLOCK_TAGS.has(child.children[0].tagName)
+        ) {
+          node.children[i] = child.children[0];
+        }
+      }
+    };
+    visit(tree);
+  };
+}
+
 // --- Checkpoint questions embedded inline in tutorial chapters ---
 export const CHECKPOINT_QUESTIONS: Record<string, {
   question: string;
@@ -468,7 +509,7 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
       data-theme={theme}
       style={{ paddingRight: panelPadding, transition: panelTransition }}
     >
-      <div className={`w-full border-b-4 ${t.headerBorder} ${t.headerBg} px-2 py-2 md:px-4 md:py-3 flex items-center justify-between sticky top-0 z-50`}>
+      <div className={`w-full border-b-4 ${t.headerBorder} ${t.headerBg} px-2 py-2 md:px-4 md:py-3 flex items-center justify-between fixed top-0 left-0 z-50`}>
         <div className="flex items-center gap-2 md:gap-3">
           <button
             type="button"
@@ -596,7 +637,7 @@ function NoiseTutorialShell({ activeId }: { activeId: string }) {
       </div>
 
       <div
-        className="mx-auto w-full max-w-7xl grid gap-0"
+        className="mx-auto w-full max-w-7xl grid gap-0 pt-[68px]"
         style={{
           gridTemplateColumns: isMobile ? '1fr' : (sidebarCollapsed ? `60px minmax(0, 1fr)` : `360px minmax(0, 1fr)`),
         }}
@@ -2470,7 +2511,7 @@ function ChapterContent({
     <div className={`noise-md noise-md-${theme}`} data-testid="container-markdown">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
-        rehypePlugins={[rehypeRaw, rehypeHighlight]}
+        rehypePlugins={[rehypeRaw, rehypeUnwrapCustomBlockTags, rehypeHighlight]}
         components={{
           img: ({ style, width, height, ...props }: any) => {
             const rawSrc = String(props.src ?? "");

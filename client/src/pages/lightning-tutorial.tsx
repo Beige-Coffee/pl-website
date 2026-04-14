@@ -940,7 +940,7 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
       className={`min-h-screen ${t.pageBg} ${t.pageText}`}
       data-theme={theme}
     >
-      <div className={`w-full border-b-4 ${t.headerBorder} ${t.headerBg} px-2 py-2 md:px-4 md:py-3 flex items-center justify-between sticky top-0 z-50`}>
+      <div className={`w-full border-b-4 ${t.headerBorder} ${t.headerBg} px-2 py-2 md:px-4 md:py-3 flex items-center justify-between fixed top-0 left-0 z-50`}>
         <div className="flex items-center gap-2 md:gap-3">
           <button
             type="button"
@@ -1070,7 +1070,7 @@ function LightningTutorialShell({ activeId }: { activeId: string }) {
 
       <div style={{ paddingRight: panelPadding, transition: panelTransition }}>
       <div
-        className="mx-auto w-full max-w-7xl grid gap-0"
+        className="mx-auto w-full max-w-7xl grid gap-0 pt-[68px]"
         style={{
           gridTemplateColumns: isMobile ? '1fr' : (sidebarCollapsed ? `60px minmax(0, 1fr)` : `360px minmax(0, 1fr)`),
         }}
