@@ -13,7 +13,7 @@ import {
 import { CODE_EXERCISES } from "../../client/src/data/code-exercises";
 import { CHECKPOINT_ANSWER_KEY } from "../../server/routes";
 
-const TUTORIAL_DIR = path.resolve(__dirname, "../../client/noise_tutorial");
+const TUTORIAL_DIR = path.resolve(__dirname, "../../client/public/noise_tutorial");
 const IMAGE_DIR = path.join(TUTORIAL_DIR, "tutorial_images");
 
 /** Read all markdown files referenced by chapters and return {chapterId, filePath, content} */
@@ -21,7 +21,7 @@ function loadMarkdownFiles() {
   const results: { chapterId: string; filePath: string; content: string }[] = [];
   for (const ch of chapters) {
     if (ch.file) {
-      const absPath = path.resolve(__dirname, "../../client", ch.file.replace(/^\//, ""));
+      const absPath = path.resolve(__dirname, "../../client/public", ch.file.replace(/^\//, ""));
       if (fs.existsSync(absPath)) {
         results.push({ chapterId: ch.id, filePath: absPath, content: fs.readFileSync(absPath, "utf-8") });
       }
@@ -132,7 +132,7 @@ describe("Noise Content Integrity", () => {
     for (const ch of chapters) {
       if (ch.file) {
         it(`${ch.id}: file "${ch.file}" exists`, () => {
-          const absPath = path.resolve(__dirname, "../../client", ch.file!.replace(/^\//, ""));
+          const absPath = path.resolve(__dirname, "../../client/public", ch.file!.replace(/^\//, ""));
           expect(fs.existsSync(absPath)).toBe(true);
         });
       }
