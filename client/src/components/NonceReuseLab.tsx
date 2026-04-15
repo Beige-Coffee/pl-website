@@ -309,33 +309,48 @@ function AttackPanel({ c1, c2, p1, p2, p1Text, recoveredText, attackStep, dark }
           <div className="text-sm font-bold uppercase tracking-wide mb-3" style={{ color: fgColor, fontFamily: SANS }}>
             Byte-by-byte recovery
           </div>
-          <div className="text-sm leading-[2]" style={{ color: fgColor, fontFamily: SANS }}>
+          <div className="text-sm leading-[1.8]" style={{ color: fgColor, fontFamily: SANS }}>
             <div style={{ color: labelColor }}>
-              Eve knows Plaintext (1), so for each byte:
+              Eve knows Plaintext (1). Here's how she recovers one byte of Plaintext (2):
             </div>
-            <div className="mt-2 py-2 px-3" style={{ fontFamily: MONO, fontSize: 13, backgroundColor: dark ? "#1e293b" : "#f5f3ee", borderLeft: `3px solid ${dark ? "#475569" : "#ccc"}` }}>
-              <div>
-                <span style={{ color: mutedColor }}>C1[0] XOR C2[0]</span>{" "}
-                <span style={{ color: fgColor }}>=</span>{" "}
-                <span style={{ color: dark ? "#fbbf24" : "#92400e", fontWeight: 700 }}>{hexByte(exC1)}</span>{" "}
-                <span style={{ color: mutedColor }}>&#8853;</span>{" "}
-                <span style={{ color: dark ? "#fbbf24" : "#92400e", fontWeight: 700 }}>{hexByte(exC2)}</span>{" "}
-                <span style={{ color: fgColor }}>=</span>{" "}
-                <span style={{ color: dark ? "#f87171" : "#dc2626", fontWeight: 700 }}>{hexByte(exXor)}</span>
-              </div>
-              <div className="mt-1">
-                <span style={{ color: mutedColor }}>(P1 &#8853; P2)[0] XOR P1[0]</span>{" "}
-                <span style={{ color: fgColor }}>=</span>{" "}
-                <span style={{ color: dark ? "#f87171" : "#dc2626", fontWeight: 700 }}>{hexByte(exXor)}</span>{" "}
-                <span style={{ color: mutedColor }}>&#8853;</span>{" "}
-                <span style={{ fontWeight: 700 }}>{hexByte(exP1)}</span>{" "}
-                <span style={{ color: mutedColor }}>("{exP1Char}")</span>{" "}
-                <span style={{ color: fgColor }}>=</span>{" "}
-                <span style={{ color: dark ? "#f87171" : "#dc2626", fontWeight: 700, fontSize: 15 }}>{hexByte(exP2)}</span>{" "}
-                <span style={{ color: dark ? "#f87171" : "#dc2626", fontWeight: 700, fontSize: 15 }}>("{exP2Char}")</span>
-              </div>
+
+            {/* Step 1: XOR the ciphertexts */}
+            <div className="mt-3 mb-1 text-[11px] font-bold uppercase tracking-wide" style={{ color: mutedColor }}>
+              Step 1: XOR the two ciphertexts
             </div>
-            <div className="mt-2" style={{ color: labelColor }}>
+            <div className="py-2 px-3" style={{ fontFamily: MONO, fontSize: 13, backgroundColor: dark ? "#1e293b" : "#f5f3ee", borderLeft: `3px solid ${dark ? "#475569" : "#ccc"}` }}>
+              <span style={{ color: mutedColor }}>C1[0] &#8853; C2[0]</span>{" "}
+              <span style={{ color: fgColor }}>=</span>{" "}
+              <span style={{ color: dark ? "#fbbf24" : "#92400e", fontWeight: 700 }}>{hexByte(exC1)}</span>{" "}
+              <span style={{ color: mutedColor }}>&#8853;</span>{" "}
+              <span style={{ color: dark ? "#fbbf24" : "#92400e", fontWeight: 700 }}>{hexByte(exC2)}</span>{" "}
+              <span style={{ color: fgColor }}>=</span>{" "}
+              <span style={{ color: dark ? "#f87171" : "#dc2626", fontWeight: 700 }}>{hexByte(exXor)}</span>
+            </div>
+            <div className="text-[11px] mt-1" style={{ color: labelColor }}>
+              The keystream cancels out. This gives us P1[0] &#8853; P2[0].
+            </div>
+
+            {/* Step 2: XOR with known plaintext */}
+            <div className="mt-3 mb-1 text-[11px] font-bold uppercase tracking-wide" style={{ color: mutedColor }}>
+              Step 2: XOR the result with the known plaintext byte
+            </div>
+            <div className="py-2 px-3" style={{ fontFamily: MONO, fontSize: 13, backgroundColor: dark ? "#1e293b" : "#f5f3ee", borderLeft: `3px solid ${dark ? "#475569" : "#ccc"}` }}>
+              <span style={{ color: mutedColor }}>(P1 &#8853; P2)[0] &#8853; P1[0]</span>{" "}
+              <span style={{ color: fgColor }}>=</span>{" "}
+              <span style={{ color: dark ? "#f87171" : "#dc2626", fontWeight: 700 }}>{hexByte(exXor)}</span>{" "}
+              <span style={{ color: mutedColor }}>&#8853;</span>{" "}
+              <span style={{ fontWeight: 700 }}>{hexByte(exP1)}</span>{" "}
+              <span style={{ color: mutedColor }}>("{exP1Char}")</span>{" "}
+              <span style={{ color: fgColor }}>=</span>{" "}
+              <span style={{ color: dark ? "#f87171" : "#dc2626", fontWeight: 700, fontSize: 15 }}>{hexByte(exP2)}</span>{" "}
+              <span style={{ color: dark ? "#f87171" : "#dc2626", fontWeight: 700, fontSize: 15 }}>("{exP2Char}")</span>
+            </div>
+            <div className="text-[11px] mt-1" style={{ color: labelColor }}>
+              P1 cancels out, leaving just P2[0]. Eve now knows the first byte of Message 2.
+            </div>
+
+            <div className="mt-3 pt-2" style={{ borderTop: `1px solid ${dark ? "#334155" : "#e0ddd5"}`, color: labelColor }}>
               Repeat for every byte position to recover the full message.
             </div>
           </div>
