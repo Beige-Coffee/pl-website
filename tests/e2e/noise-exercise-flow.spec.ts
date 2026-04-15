@@ -3,12 +3,11 @@ import { expandExercise, waitForPyodide } from "./helpers";
 
 test.describe("Noise exercise flow", () => {
   test.beforeEach(async ({ page }) => {
-    // Set tutorial mode to "code" BEFORE the page loads
-    await page.addInitScript(() => {
-      localStorage.setItem("pl-tutorial-mode", "code");
-    });
-    // Use handshake-setup: it has a single exercise (no CollapsibleGroup wrapping)
-    await page.goto("/noise-tutorial/handshake-setup");
+    // Use ?mode=code URL param to enter the noise tutorial in coding mode.
+    // This matches the supported public flow (e.g. links from the blog) and
+    // doesn't depend on knowing the internal localStorage key name.
+    // Use handshake-setup: it has a single exercise (no CollapsibleGroup wrapping).
+    await page.goto("/noise-tutorial/handshake-setup?mode=code");
     await expect(page.getByTestId("container-article")).toBeVisible({ timeout: 10_000 });
     // Expand the first exercise collapsible to reveal the CodeMirror editor
     await expandExercise(page, 0);

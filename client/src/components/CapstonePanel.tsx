@@ -1,10 +1,14 @@
 /**
  * CapstonePanel — Live Connection Lab
  *
- * Three-panel layout for the Noise Protocol capstone:
- *   1. Top: Handshake Visualizer (two nodes + animated arrows)
- *   2. Middle: Byte Inspector (one per completed act)
- *   3. Bottom: Encrypted Terminal (send/receive messages)
+ * Unified card layout for the Noise Protocol capstone:
+ *   A. Card header (status indicator + completion badge)
+ *   B. Collapsible handshake visualizer (acts + byte inspector)
+ *   C. Inline CipherStateInspector (nonce progress toward key rotation)
+ *   D. Dark-bg message log + input area (BOLT commands, burst, free text)
+ *
+ * After the handshake completes, the acts auto-collapse (~2s) so the student
+ * focuses on the encrypted channel. Everything lives in one card.
  *
  * Wired to NoiseOrchestrator which coordinates Pyodide + WebSocket.
  */
@@ -26,6 +30,8 @@ import {
   type BurstProgressInfo,
 } from "@/lib/noise-orchestrator";
 import { CODE_EXERCISES } from "@/data/code-exercises";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
 // Sans-serif override — the site's font-mono maps to VT323 (retro terminal),
 // but the capstone lab should use a clean sans-serif for readability.
@@ -73,6 +79,7 @@ const EXERCISE_IDS = [
   "exercise-act2-responder",
   "exercise-act2-initiator",
   "exercise-act3-initiator",
+  "exercise-act3-responder",
   "exercise-encrypt",
   "exercise-decrypt",
   "exercise-key-rotation",
@@ -88,6 +95,7 @@ const EXERCISE_CHAPTER_MAP: Record<string, string> = {
   "exercise-act2-responder": "act-2",
   "exercise-act2-initiator": "act-2",
   "exercise-act3-initiator": "act-3",
+  "exercise-act3-responder": "act-3",
   "exercise-encrypt": "sending-messages",
   "exercise-decrypt": "receiving-messages",
   "exercise-key-rotation": "key-rotation",
@@ -95,12 +103,67 @@ const EXERCISE_CHAPTER_MAP: Record<string, string> = {
 
 // Real Lightning BOLT message types as quick commands
 const QUICK_COMMANDS = [
-  { cmd: "init", label: "init", desc: "BOLT 1 · type 16" },
-  { cmd: "ping", label: "ping", desc: "BOLT 1 · type 18" },
-  { cmd: "node_announcement", label: "node_ann", desc: "BOLT 7 · type 257" },
+  { cmd: "ping", label: "ping", desc: "BOLT 1 · type 18 · request/response" },
+  { cmd: "node_announcement", label: "node_announcement", desc: "BOLT 7 · type 257 · gossip broadcast" },
+  { cmd: "channel_announcement", label: "channel_announcement", desc: "BOLT 7 · type 256 · gossip broadcast" },
+  { cmd: "channel_update", label: "channel_update", desc: "BOLT 7 · type 258 · gossip broadcast" },
 ] as const;
 
+// Gossip messages that don't get a reply (fire-and-forget)
+const GOSSIP_COMMANDS = new Set(["node_announcement", "channel_announcement", "channel_update"]);
+
+// BOLT fields shown in sent gossip bubbles (educational display of what the message contains)
+const GOSSIP_FIELDS: Record<string, [string, string][]> = {
+  node_announcement: [
+    ["type", "257"],
+    ["node_id", "compressed public key"],
+    ["alias", "human-readable node name"],
+    ["rgb_color", "3 bytes for graph display"],
+    ["features", "supported protocol features"],
+    ["addresses", "IPv4, IPv6, Tor v3, or DNS"],
+    ["timestamp", "ordering for newer announcements"],
+  ],
+  channel_announcement: [
+    ["type", "256"],
+    ["short_channel_id", "block height + tx index + output"],
+    ["node_id_1", "first node's public key"],
+    ["node_id_2", "second node's public key"],
+    ["bitcoin_key_1", "first node's funding key"],
+    ["bitcoin_key_2", "second node's funding key"],
+    ["features", "channel feature bits"],
+    ["chain_hash", "identifies Bitcoin mainnet"],
+  ],
+  channel_update: [
+    ["type", "258"],
+    ["short_channel_id", "which channel this updates"],
+    ["timestamp", "ordering for newer updates"],
+    ["channel_flags", "direction + disabled bit"],
+    ["cltv_expiry_delta", "timelock for routing"],
+    ["htlc_minimum_msat", "min routable amount"],
+    ["fee_base_msat", "base routing fee"],
+    ["fee_proportional_millionths", "proportional fee rate"],
+  ],
+};
+
 // ── Helpers ─────────────────────────────────────────────────────────────────
+
+/** Format a server JSON response as structured key-value display. */
+function formatServerMessage(plaintext: string): { title: string; fields: [string, string][] } | null {
+  try {
+    const obj = JSON.parse(plaintext);
+    if (typeof obj !== "object" || obj === null) return null;
+    const msgName = (obj.message ?? obj.type ?? "response").toString();
+    const fields: [string, string][] = [];
+    for (const [k, v] of Object.entries(obj)) {
+      if (k === "message") continue; // already shown as title
+      const val = typeof v === "object" ? JSON.stringify(v) : String(v);
+      fields.push([k, val]);
+    }
+    return { title: msgName, fields };
+  } catch {
+    return null;
+  }
+}
 
 // ── Component ───────────────────────────────────────────────────────────────
 
@@ -127,13 +190,15 @@ export default function CapstonePanel({ getProgress, theme }: CapstonePanelProps
   const [handshakeInProgress, setHandshakeInProgress] = useState(false);
   const [actData, setActData] = useState<ActData[]>([]);
   const [messages, setMessages] = useState<TerminalMessage[]>([]);
-  const [terminalInput, setTerminalInput] = useState("");
   const [error, setError] = useState<{ message: string; exerciseLink?: string } | null>(null);
   const [selectedAct, setSelectedAct] = useState<(1 | 2 | 3) | null>(null);
   const [selectedTransportId, setSelectedTransportId] = useState<number | null>(null);
   const [celebrated, setCelebrated] = useState(false);
   const [hasSentMessage, setHasSentMessage] = useState(false);
   const [studentPubkey, setStudentPubkey] = useState<string | null>(null);
+
+  // ── Mobile drawer mode for byte inspectors ──
+  const isMobile = useIsMobile();
 
   // ── Cipher State ──
   const [sendCipherState, setSendCipherState] = useState<CipherStateSnapshot | null>(null);
@@ -162,12 +227,12 @@ export default function CapstonePanel({ getProgress, theme }: CapstonePanelProps
   const terminalContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    terminalEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    const timer = window.setTimeout(() => {
+      terminalEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, 350);
 
-  // Transport packet auto-scroll
-  const transportEndRef = useRef<HTMLDivElement>(null);
-  const transportPrevCountRef = useRef(0);
+    return () => window.clearTimeout(timer);
+  }, [messages]);
 
   // ── Cleanup ──
   useEffect(() => {
@@ -233,6 +298,11 @@ export default function CapstonePanel({ getProgress, theme }: CapstonePanelProps
               });
             }
 
+            console.log(
+              "%c[Noise XK] Handshake complete — encrypted channel established",
+              "color: #8cb369; font-weight: bold"
+            );
+
             // Add hint message to terminal
             setMessages((prev) => [
               ...prev,
@@ -248,6 +318,10 @@ export default function CapstonePanel({ getProgress, theme }: CapstonePanelProps
           break;
 
         case "act_complete":
+          console.log(
+            `%c[Noise XK] Act ${event.act} complete — ${event.bytes.length} bytes ${event.act === 2 ? "received" : "sent"}`,
+            "color: #b8860b; font-weight: bold"
+          );
           setActData((prev) => [
             ...prev,
             { act: event.act, bytes: event.bytes, timestamp: new Date() },
@@ -266,6 +340,12 @@ export default function CapstonePanel({ getProgress, theme }: CapstonePanelProps
           break;
 
         case "message_sent":
+          if (!burstRunning) {
+            console.log(
+              `%c[Noise XK] Sent "${event.plaintext}"`,
+              "color: #b8860b; font-weight: bold"
+            );
+          }
           setMessages((prev) => [
             ...prev,
             {
@@ -308,6 +388,12 @@ export default function CapstonePanel({ getProgress, theme }: CapstonePanelProps
               credentials: "include",
             }).catch(() => { /* ignore — user may not be logged in */ });
             break;
+          }
+          if (!burstRunning) {
+            console.log(
+              `%c[Noise XK] Received "${event.plaintext.slice(0, 60)}"`,
+              "color: #b8860b; font-weight: bold"
+            );
           }
           setMessages((prev) => [
             ...prev,
@@ -475,6 +561,35 @@ export default function CapstonePanel({ getProgress, theme }: CapstonePanelProps
     await orchestratorRef.current.startHandshake();
   }, []);
 
+  const sendBoltCommand = useCallback(async (cmd: string) => {
+    if (!orchestratorRef.current || !cmd.trim()) return;
+    try {
+      await orchestratorRef.current.sendMessage(cmd.trim());
+      // For gossip broadcasts, add a system message explaining no reply is expected
+      if (GOSSIP_COMMANDS.has(cmd)) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: ++msgIdRef.current,
+            direction: "system" as const,
+            plaintext: `Gossip broadcast sent. Real Lightning nodes receive this silently with no reply.`,
+            timestamp: new Date(),
+          },
+        ]);
+      }
+    } catch (err) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: ++msgIdRef.current,
+          direction: "system",
+          plaintext: `Error: ${err instanceof Error ? err.message : String(err)}`,
+          timestamp: new Date(),
+        },
+      ]);
+    }
+  }, []);
+
   const sendMessage = useCallback(async (text: string) => {
     if (!orchestratorRef.current || !text.trim()) return;
     try {
@@ -571,17 +686,6 @@ export default function CapstonePanel({ getProgress, theme }: CapstonePanelProps
     }
   }, []);
 
-  const handleTerminalSubmit = useCallback(
-    (e: React.FormEvent) => {
-      e.preventDefault();
-      if (terminalInput.trim()) {
-        sendMessage(terminalInput.trim());
-        setTerminalInput("");
-      }
-    },
-    [terminalInput, sendMessage]
-  );
-
   const retry = useCallback(() => {
     replayAbortRef.current = true;
     bufferingRef.current = false;
@@ -594,6 +698,7 @@ export default function CapstonePanel({ getProgress, theme }: CapstonePanelProps
     setSelectedTransportId(null);
     setMessages([]);
     setPackets([]);
+    setCelebrated(false);
     setAllPreflightPassed(false);
     setPreflight((prev) => prev.map((p) => ({ ...p, passed: null })));
     orchestratorRef.current?.destroy();
@@ -624,29 +729,15 @@ export default function CapstonePanel({ getProgress, theme }: CapstonePanelProps
     }));
   }, [actData, orchState]);
 
-  // ── Transport packets (non-system messages for display) ──
-  const transportMessages = useMemo(
-    () => messages.filter((m) => m.direction !== "system"),
-    [messages]
-  );
-
   const selectedTransportMsg = useMemo(
-    () => transportMessages.find((m) => m.id === selectedTransportId) ?? null,
-    [transportMessages, selectedTransportId]
+    () => messages.find((m) => m.id === selectedTransportId) ?? null,
+    [messages, selectedTransportId]
   );
 
   const handleTransportClick = useCallback((msgId: number) => {
     setSelectedTransportId((prev) => (prev === msgId ? null : msgId));
     setSelectedAct(null);
   }, []);
-
-  // Auto-scroll transport list when new messages arrive
-  useEffect(() => {
-    if (transportMessages.length > transportPrevCountRef.current) {
-      transportEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    }
-    transportPrevCountRef.current = transportMessages.length;
-  }, [transportMessages.length]);
 
   function formatTime(date: Date): string {
     return date.toLocaleTimeString([], {
@@ -720,6 +811,8 @@ export default function CapstonePanel({ getProgress, theme }: CapstonePanelProps
         inputBorder: "border-[#333]",
       };
 
+  const reserveHandshakeSpace = phase === "handshake";
+
   return (
     <div className="mt-8 space-y-6" style={{ fontFamily: SANS }}>
       {/* ── Error Banner ── */}
@@ -771,253 +864,366 @@ export default function CapstonePanel({ getProgress, theme }: CapstonePanelProps
         )}
       </AnimatePresence>
 
-      {/* ── Section 1: Handshake Visualizer ── */}
+      {/* ── Unified Card ── */}
       <div
         className={cn(
           "border-[1.5px] overflow-hidden",
           colors.cardBorder,
           colors.cardBg
         )}
+        style={reserveHandshakeSpace ? { minHeight: 680 } : undefined}
       >
-        {/* Inverted header */}
+        {/* ── A. Card header ── */}
         <div
           className={cn(
-            "px-4 py-2 flex items-center gap-2",
+            "px-4 py-2 flex items-center justify-between",
             colors.headerBg
           )}
         >
-          <div
-            className={cn(
-              "w-1.5 h-1.5 rounded-full",
-              orchState === "transport_ready"
-                ? "bg-[#8cb369]"
-                : handshakeInProgress
-                  ? "bg-amber-400 animate-pulse"
-                  : "bg-white/40"
-            )}
-          />
-          <span className={cn("text-sm font-bold tracking-[0.08em] uppercase", colors.headerText)}>
-            Noise XK Handshake
-          </span>
+          <div className="flex items-center gap-2">
+            <div
+              className={cn(
+                "w-1.5 h-1.5 rounded-full",
+                orchState === "transport_ready"
+                  ? "bg-[#8cb369]"
+                  : handshakeInProgress
+                    ? "bg-amber-400 animate-pulse"
+                    : "bg-white/40"
+              )}
+            />
+            <span className={cn("text-sm font-bold tracking-[0.08em] uppercase", colors.headerText)}>
+              Noise XK Handshake
+            </span>
+          </div>
+          {phase === "transport" && (
+            <span className="text-xs font-bold tracking-wider uppercase text-[#8cb369]">
+              {"\u2713"} Complete
+            </span>
+          )}
         </div>
 
-        {/* Visualizer body */}
+        {/* ── B. Handshake acts section ── */}
         <div className="p-4 sm:p-6">
-          {/* Nodes + arrows */}
-          <div className="flex items-center justify-between gap-2 sm:gap-4">
-            {/* "You" node — inverted box */}
-            <div className="flex flex-col items-center gap-1 shrink-0">
-              <div
-                className={cn(
-                  "w-16 h-10 sm:w-20 sm:h-11 flex items-center justify-center border-[1.5px] transition-all duration-700",
-                  celebrated
-                    ? "border-[#b8860b] bg-[#b8860b] text-white"
-                    : "border-black bg-black text-white"
-                )}
-              >
-                <span className="text-sm font-bold tracking-[0.05em] uppercase">
-                  You
-                </span>
-              </div>
-              <span className={cn("text-xs tracking-wide", colors.textDim)}>
-                initiator
-              </span>
-            </div>
-
-            {/* Act arrows */}
-            <div className="flex-1 flex flex-col gap-2 sm:gap-3 min-w-0 px-1 sm:px-4">
-              {actStatus.map(({ act, status }) => {
-                const isAct1or3 = act === 1 || act === 3;
-                const label = `Act ${act}`;
-                const ecdh = act === 1 ? "es" : act === 2 ? "ee" : "se";
-                const completedActData = actData.find((a) => a.act === act);
-
-                return (
-                  <div
-                    key={act}
-                    className={cn(
-                      "flex items-center gap-1.5 sm:gap-2 transition-all duration-200",
-                      selectedAct !== null && selectedAct !== act && actData.length > 0 && "opacity-50"
-                    )}
-                  >
-                    {/* Status indicator — square, not circle */}
+                {/* Nodes + arrows */}
+                <div className="flex items-center justify-between gap-2 sm:gap-4">
+                  {/* "You" node — inverted box */}
+                  <div className="flex flex-col items-center gap-1 shrink-0">
                     <div
                       className={cn(
-                        "w-5 h-5 flex items-center justify-center shrink-0 text-xs font-bold border-[1.5px] transition-colors duration-500",
-                        status === "complete"
-                          ? celebrated
-                            ? "bg-[#b8860b] border-[#b8860b] text-white"
-                            : selectedAct === act
-                              ? "bg-[#b8860b] border-[#b8860b] text-white"
-                              : "bg-black border-black text-white"
-                          : status === "in-progress"
-                            ? "bg-white border-black text-black animate-pulse"
-                            : isDark
-                              ? "bg-slate-800 border-slate-700 text-slate-600"
-                              : "bg-white border-[#9a8b78] text-[#9a8b78]"
+                        "w-16 h-10 sm:w-20 sm:h-11 flex items-center justify-center border-[1.5px] transition-all duration-700",
+                        celebrated
+                          ? "border-[#b8860b] bg-[#b8860b] text-white"
+                          : "border-black bg-black text-white"
                       )}
                     >
-                      {status === "complete" ? "\u2713" : act}
+                      <span className="text-sm font-bold tracking-[0.05em] uppercase">
+                        You
+                      </span>
                     </div>
+                    <span className={cn("text-xs tracking-wide", colors.textDim)}>
+                      initiator
+                    </span>
+                  </div>
 
-                    {/* Arrow: segmented field bar when complete, line when pending */}
-                    <div className="flex-1 relative flex items-center min-h-[20px]">
-                      <AnimatePresence mode="wait">
-                        {status === "complete" && completedActData ? (
-                          <motion.div
-                            key={`bar-${act}`}
-                            initial={{ scaleX: 0, opacity: 0 }}
-                            animate={{ scaleX: 1, opacity: 1 }}
-                            transition={{ duration: 0.4, ease: "easeOut" }}
-                            className="w-full"
-                            style={{ originX: isAct1or3 ? 0 : 1 }}
-                          >
-                            <SegmentedFieldBar
-                              actNumber={act}
-                              bytes={completedActData.bytes}
-                              messageType={`act${act}` as "act1" | "act2" | "act3"}
-                              isSelected={selectedAct === act}
-                              onClick={() => { setSelectedAct((prev) => prev === act ? null : act); setSelectedTransportId(null); }}
-                              theme={theme}
-                              direction={isAct1or3 ? "ltr" : "rtl"}
-                            />
-                          </motion.div>
-                        ) : status === "complete" ? (
-                          <motion.div
-                            key={`line-${act}`}
-                            initial={{ scaleX: 0 }}
-                            animate={{ scaleX: 1 }}
-                            transition={{ duration: 0.4, ease: "easeOut" }}
-                            className="absolute inset-y-0 flex items-center w-full"
-                            style={{ originX: isAct1or3 ? 0 : 1 }}
-                          >
-                            <div className={cn("h-[1.5px] w-full", celebrated ? "bg-[#b8860b]" : "bg-black")} />
-                          </motion.div>
-                        ) : null}
-                      </AnimatePresence>
-                      {status !== "complete" && (
+                  {/* Act arrows */}
+                  <div className="flex-1 flex flex-col gap-2 sm:gap-3 min-w-0 px-1 sm:px-4">
+                    {actStatus.map(({ act, status }) => {
+                      const isAct1or3 = act === 1 || act === 3;
+                      const label = `Act ${act}`;
+                      const ecdh = act === 1 ? "es" : act === 2 ? "ee" : "se";
+                      const completedActData = actData.find((a) => a.act === act);
+
+                      return (
                         <div
+                          key={act}
                           className={cn(
-                            "h-px w-full",
-                            status === "in-progress"
-                              ? "bg-black/30"
-                              : isDark ? "bg-slate-700" : "bg-[#e8dcc8]"
+                            "flex items-center gap-1.5 sm:gap-2 transition-all duration-200",
+                            selectedAct !== null && selectedAct !== act && actData.length > 0 && "opacity-50"
                           )}
+                        >
+                          {/* Status indicator — square, not circle */}
+                          <div
+                            className={cn(
+                              "w-5 h-5 flex items-center justify-center shrink-0 text-xs font-bold border-[1.5px] transition-colors duration-500",
+                              status === "complete"
+                                ? celebrated
+                                  ? "bg-[#b8860b] border-[#b8860b] text-white"
+                                  : selectedAct === act
+                                    ? "bg-[#b8860b] border-[#b8860b] text-white"
+                                    : "bg-black border-black text-white"
+                                : status === "in-progress"
+                                  ? "bg-white border-black text-black animate-pulse"
+                                  : isDark
+                                    ? "bg-slate-800 border-slate-700 text-slate-600"
+                                    : "bg-white border-[#9a8b78] text-[#9a8b78]"
+                            )}
+                          >
+                            {status === "complete" ? "\u2713" : act}
+                          </div>
+
+                          {/* Arrow: segmented field bar when complete, line when pending */}
+                          <div className="flex-1 relative flex items-center min-h-[20px]">
+                            <AnimatePresence mode="wait">
+                              {status === "complete" && completedActData ? (
+                                <motion.div
+                                  key={`bar-${act}`}
+                                  initial={{ scaleX: 0, opacity: 0 }}
+                                  animate={{ scaleX: 1, opacity: 1 }}
+                                  transition={{ duration: 0.4, ease: "easeOut" }}
+                                  className="w-full"
+                                  style={{ originX: isAct1or3 ? 0 : 1 }}
+                                >
+                                  <SegmentedFieldBar
+                                    actNumber={act}
+                                    bytes={completedActData.bytes}
+                                    messageType={`act${act}` as "act1" | "act2" | "act3"}
+                                    isSelected={selectedAct === act}
+                                    onClick={() => { setSelectedAct((prev) => prev === act ? null : act); setSelectedTransportId(null); }}
+                                    theme={theme}
+                                    direction={isAct1or3 ? "ltr" : "rtl"}
+                                  />
+                                </motion.div>
+                              ) : status === "complete" ? (
+                                <motion.div
+                                  key={`line-${act}`}
+                                  initial={{ scaleX: 0 }}
+                                  animate={{ scaleX: 1 }}
+                                  transition={{ duration: 0.4, ease: "easeOut" }}
+                                  className="absolute inset-y-0 flex items-center w-full"
+                                  style={{ originX: isAct1or3 ? 0 : 1 }}
+                                >
+                                  <div className={cn("h-[1.5px] w-full", celebrated ? "bg-[#b8860b]" : "bg-black")} />
+                                </motion.div>
+                              ) : null}
+                            </AnimatePresence>
+                            {status !== "complete" && (
+                              <div
+                                className={cn(
+                                  "h-px w-full",
+                                  status === "in-progress"
+                                    ? "bg-black/30"
+                                    : isDark ? "bg-slate-700" : "bg-[#e8dcc8]"
+                                )}
+                              />
+                            )}
+                          </div>
+
+                          {/* Arrowhead */}
+                          {status === "complete" && (
+                            <div
+                              className={cn(
+                                "w-0 h-0 shrink-0",
+                                isAct1or3
+                                  ? "border-l-[5px] border-y-[3px] border-y-transparent"
+                                  : "border-r-[5px] border-y-[3px] border-y-transparent",
+                                celebrated || selectedAct === act
+                                  ? isAct1or3 ? "border-l-[#b8860b]" : "border-r-[#b8860b]"
+                                  : isAct1or3 ? "border-l-black" : "border-r-black"
+                              )}
+                            />
+                          )}
+
+                          {/* Label + timestamp */}
+                          <div className="shrink-0 w-16 sm:w-20 text-right">
+                            <span
+                              className={cn(
+                                "text-sm font-semibold tracking-wide",
+                                status === "complete"
+                                  ? celebrated || selectedAct === act ? "text-[#b8860b]" : colors.text
+                                  : status === "in-progress"
+                                    ? colors.text
+                                    : colors.textDim
+                              )}
+                            >
+                              {label} ({ecdh})
+                            </span>
+                            {status === "complete" && completedActData?.timestamp && (
+                              <div className={cn("text-[10px]", isDark ? "text-slate-600" : "text-[#9a8b78]")}
+                                style={{ fontFamily: '"JetBrains Mono", monospace' }}
+                              >
+                                {formatTime(completedActData.timestamp)}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* "Server" node — always black */}
+                  <div className="flex flex-col items-center gap-1 shrink-0">
+                    <div
+                      className="w-16 h-10 sm:w-20 sm:h-11 flex items-center justify-center border-[1.5px] border-black bg-black text-white"
+                    >
+                      <span className="text-sm font-bold tracking-[0.05em] uppercase">
+                        Server
+                      </span>
+                    </div>
+                    <span className={cn("text-xs tracking-wide", colors.textDim)}>
+                      responder
+                    </span>
+                  </div>
+                </div>
+
+                {/* Byte grid for selected act — drawer on mobile, inline on desktop */}
+                {isMobile ? (
+                  <Sheet
+                    open={selectedAct !== null}
+                    onOpenChange={(open) => { if (!open) setSelectedAct(null); }}
+                  >
+                    <SheetContent side="bottom" className="h-[80vh] overflow-y-auto">
+                      <SheetHeader>
+                        <SheetTitle>Act {selectedAct} Bytes</SheetTitle>
+                      </SheetHeader>
+                      {selectedAct && actData.find((a) => a.act === selectedAct) && (
+                        <InlineByteGrid
+                          act={selectedAct}
+                          bytes={actData.find((a) => a.act === selectedAct)!.bytes}
+                          messageType={`act${selectedAct}` as "act1" | "act2" | "act3"}
+                          theme={theme}
                         />
                       )}
-                    </div>
-
-                    {/* Arrowhead */}
-                    {status === "complete" && (
-                      <div
-                        className={cn(
-                          "w-0 h-0 shrink-0",
-                          isAct1or3
-                            ? "border-l-[5px] border-y-[3px] border-y-transparent"
-                            : "border-r-[5px] border-y-[3px] border-y-transparent",
-                          celebrated || selectedAct === act
-                            ? isAct1or3 ? "border-l-[#b8860b]" : "border-r-[#b8860b]"
-                            : isAct1or3 ? "border-l-black" : "border-r-black"
-                        )}
-                      />
-                    )}
-
-                    {/* Label + timestamp */}
-                    <div className="shrink-0 w-16 sm:w-20 text-right">
-                      <span
-                        className={cn(
-                          "text-sm font-semibold tracking-wide",
-                          status === "complete"
-                            ? celebrated || selectedAct === act ? "text-[#b8860b]" : colors.text
-                            : status === "in-progress"
-                              ? colors.text
-                              : colors.textDim
-                        )}
+                    </SheetContent>
+                  </Sheet>
+                ) : (
+                  <AnimatePresence mode="wait">
+                    {selectedAct && actData.find((a) => a.act === selectedAct) && (
+                      <motion.div
+                        key={`byte-grid-${selectedAct}`}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="mt-3"
                       >
-                        {label} ({ecdh})
-                      </span>
-                      {status === "complete" && completedActData?.timestamp && (
-                        <div className={cn("text-[10px]", isDark ? "text-slate-600" : "text-[#9a8b78]")}
-                          style={{ fontFamily: '"JetBrains Mono", monospace' }}
-                        >
-                          {formatTime(completedActData.timestamp)}
-                        </div>
+                        <InlineByteGrid
+                          act={selectedAct}
+                          bytes={actData.find((a) => a.act === selectedAct)!.bytes}
+                          messageType={`act${selectedAct}` as "act1" | "act2" | "act3"}
+                          theme={theme}
+                        />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                )}
+
+                {/* Begin Handshake button — sketch style */}
+                <div className="mt-6 flex flex-col items-center gap-2">
+                  {phase === "preflight" && (
+                    <button
+                      onClick={startHandshake}
+                      disabled={!allPreflightPassed || preflightRunning}
+                      className={cn(
+                        "px-6 py-2.5 text-sm font-bold uppercase tracking-[0.05em] border-[1.5px] transition-all",
+                        !allPreflightPassed || preflightRunning
+                          ? "opacity-50 cursor-not-allowed border-[#9a8b78] text-[#9a8b78]"
+                          : "border-black bg-black text-white hover:bg-white hover:text-black"
                       )}
+                    >
+                      {preflightRunning ? "Verifying exercises..." : "Begin Handshake"}
+                    </button>
+                  )}
+                  {phase === "handshake" && (
+                    <div className={cn("text-sm", "text-amber-400")}>
+                      Handshake in progress...
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* "Server" node — always black */}
-            <div className="flex flex-col items-center gap-1 shrink-0">
-              <div
-                className="w-16 h-10 sm:w-20 sm:h-11 flex items-center justify-center border-[1.5px] border-black bg-black text-white"
-              >
-                <span className="text-sm font-bold tracking-[0.05em] uppercase">
-                  Server
-                </span>
+                  )}
+                </div>
               </div>
-              <span className={cn("text-xs tracking-wide", colors.textDim)}>
-                responder
-              </span>
-            </div>
-          </div>
-
-          {/* Inline byte grid for selected act */}
-          <AnimatePresence>
-            {selectedAct && actData.find((a) => a.act === selectedAct) && (
-              <motion.div
-                key={`byte-grid-${selectedAct}`}
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                transition={{ duration: 0.25 }}
-                className="overflow-hidden mt-3"
-              >
-                <InlineByteGrid
-                  act={selectedAct}
-                  bytes={actData.find((a) => a.act === selectedAct)!.bytes}
-                  messageType={`act${selectedAct}` as "act1" | "act2" | "act3"}
+        {/* ── C. Inline Cipher State Inspector ── */}
+        <AnimatePresence>
+          {phase === "transport" && (sendCipherState || recvCipherState) && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.3 }}
+              className="overflow-hidden"
+            >
+              <div className={cn("border-t", isDark ? "border-[#2a3552]" : "border-black/10")}>
+                <CipherStateInspector
+                  sendState={sendCipherState}
+                  recvState={recvCipherState}
+                  rotatedSide={rotatedSide}
                   theme={theme}
+                  embedded
                 />
-              </motion.div>
-            )}
-          </AnimatePresence>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-          {/* Transport messages — visual arrows between nodes */}
-          <AnimatePresence>
-            {phase === "transport" && transportMessages.length > 0 && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                transition={{ duration: 0.3 }}
-                className="overflow-hidden"
-              >
-                {/* Divider */}
+        {/* ── D. Merged message log + input area ── */}
+        <AnimatePresence>
+          {(phase === "transport" || messages.length > 0) && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.3 }}
+            >
+              <div className={cn("border-t", isDark ? "border-[#2a3552]" : "border-black/10")}>
+                {/* ── encrypted transport ── divider */}
                 <div
                   className={cn(
-                    "mt-2 mb-1 py-1 text-center text-xs tracking-widest font-bold border-t",
-                    isDark ? "text-slate-600 border-white/5" : "text-[#9a8b78] border-black/5"
+                    "py-1.5 text-center text-xs tracking-widest font-bold",
+                    isDark ? "text-slate-600" : "text-[#9a8b78]"
                   )}
                 >
                   {"\u2500\u2500\u2500"} encrypted transport {"\u2500\u2500\u2500"}
                 </div>
 
-                {/* Scrollable transport rows — message bubble style */}
-                <div className="max-h-[200px] overflow-y-auto space-y-1.5 px-1">
-                  {transportMessages.map((msg) => {
+                {/* Message log — chat bubble style */}
+                <div
+                  ref={terminalContainerRef}
+                  className="px-3 sm:px-4 pb-3 max-h-[400px] overflow-y-auto space-y-1.5"
+                >
+                  {messages.length === 0 && (
+                    <div className={cn("italic text-sm text-center py-2", colors.textDim)}>
+                      Waiting for transport connection...
+                    </div>
+                  )}
+                  {messages.map((msg) => {
                     const isSent = msg.direction === "sent";
+                    const isSystem = msg.direction === "system";
                     const isSelected = selectedTransportId === msg.id;
+
+                    if (isSystem) {
+                      return (
+                        <div key={msg.id} className="flex justify-center py-0.5">
+                          <div className={cn(
+                            "text-xs italic text-center px-3 py-1",
+                            msg.plaintext.startsWith("[KEY ROTATION]")
+                              ? isDark ? "text-[#FFD700] font-bold" : "text-[#b8860b] font-bold"
+                              : msg.plaintext.startsWith("[BURST]")
+                                ? "text-[#b8860b]"
+                                : isDark ? "text-[#c97a5a]" : "text-[#9a8b78]"
+                          )}>
+                            {msg.plaintext}
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    const parsed = !isSent ? formatServerMessage(msg.plaintext) : null;
+                    const gossipFields = isSent ? GOSSIP_FIELDS[msg.plaintext.trim()] : undefined;
+
                     return (
                       <motion.div
                         key={msg.id}
                         initial={{ opacity: 0, y: 6 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.2 }}
-                        className={cn("flex", isSent ? "justify-start" : "justify-end")}
+                        className={cn("flex flex-col", isSent ? "items-end" : "items-start")}
                       >
+                        {/* Sender label */}
+                        <span className={cn(
+                          "text-[10px] font-bold uppercase tracking-[0.08em] mb-0.5 px-1",
+                          isSent
+                            ? isDark ? "text-slate-500" : "text-[#9a8b78]"
+                            : isDark ? "text-slate-500" : "text-[#6b5d4f]"
+                        )}>
+                          {isSent ? "you" : "server"}
+                        </span>
                         <button
                           onClick={() => handleTransportClick(msg.id)}
                           className={cn(
@@ -1028,100 +1234,141 @@ export default function CapstonePanel({ getProgress, theme }: CapstonePanelProps
                                 ? isDark ? "border-slate-700 hover:border-slate-500" : "border-black/15 hover:border-black/30"
                                 : isDark ? "border-slate-700 hover:border-slate-500" : "border-black/80 hover:border-black",
                             isSent
-                              ? isDark ? "bg-[#0f1930]" : "bg-white"
+                              ? isDark ? "bg-[#0f1930]" : "bg-[#faf8f5]"
                               : isDark ? "bg-slate-800" : "bg-black text-white"
                           )}
                         >
-                          {/* Plaintext */}
-                          <div className={cn(
-                            "text-xs sm:text-sm",
-                            isSent
-                              ? isDark ? "text-slate-200" : "text-[#2a1f0d]"
-                              : isDark ? "text-slate-200" : "text-white"
-                          )}>
-                            {msg.plaintext}
+                          <div
+                            className={cn(
+                              "text-xs sm:text-sm font-bold",
+                              isSelected
+                                ? "text-[#b8860b]"
+                                : isSent
+                                  ? isDark ? "text-slate-200" : "text-[#2a1f0d]"
+                                  : isDark ? "text-slate-200" : "text-white"
+                            )}
+                          >
+                            {parsed ? parsed.title : msg.plaintext}
                           </div>
-                          {/* Meta line: byte count + timestamp */}
-                          <div className={cn(
-                            "flex items-center gap-2 mt-0.5 text-[10px]",
-                            isSent
-                              ? isDark ? "text-slate-600" : "text-[#9a8b78]"
-                              : isDark ? "text-slate-500" : "text-white/50"
-                          )} style={{ fontFamily: '"JetBrains Mono", monospace' }}>
-                            <span>{isSent ? "\u2192 sent" : "\u2190 received"}</span>
-                            <span>{msg.ciphertext?.length ?? 0}B encrypted</span>
-                            <span>{formatTime(msg.timestamp)}</span>
-                          </div>
+                          {gossipFields && (
+                            <div className={cn(
+                              "mt-1 space-y-0.5 text-[10px] sm:text-xs",
+                              isDark ? "text-slate-400" : "text-[#6b5d4f]"
+                            )} style={{ fontFamily: '"JetBrains Mono", "Fira Code", monospace' }}>
+                              {gossipFields.map(([k, v]) => (
+                                <div key={k} className="flex gap-1.5">
+                                  <span className={isDark ? "text-slate-600" : "text-[#9a8b78]"}>{k}:</span>
+                                  <span>{v}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </button>
+                        <div className={cn(
+                          "flex items-center gap-2 mt-0.5 px-1 text-[10px]",
+                          isDark ? "text-slate-600" : "text-[#b8a890]"
+                        )}>
+                          <span>{formatTime(msg.timestamp)}</span>
+                          <span className="italic">click to inspect</span>
+                        </div>
+
+                        {/* Inline byte grid for selected message */}
+                        {isSelected && msg.ciphertext && !isMobile && (
+                          <AnimatePresence>
+                            <motion.div
+                              key={`transport-grid-${msg.id}`}
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: "auto" }}
+                              exit={{ opacity: 0, height: 0 }}
+                              transition={{ duration: 0.25 }}
+                              className={cn("overflow-hidden mt-1", isSent ? "self-end" : "self-start", "max-w-[85%]")}
+                            >
+                              <InlineByteGrid
+                                bytes={msg.ciphertext}
+                                messageType="transport"
+                                theme={theme}
+                                label={`Transport (${msg.ciphertext.length} bytes) ${isSent ? "\u2192 sent" : "\u2190 received"}`}
+                              />
+                            </motion.div>
+                          </AnimatePresence>
+                        )}
                       </motion.div>
                     );
                   })}
-                  <div ref={transportEndRef} />
+                  <div ref={terminalEndRef} />
                 </div>
 
-                {/* Inline byte grid for selected transport packet */}
-                <AnimatePresence>
-                  {selectedTransportMsg && selectedTransportMsg.ciphertext && (
-                    <motion.div
-                      key={`transport-grid-${selectedTransportMsg.id}`}
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
-                      exit={{ opacity: 0, height: 0 }}
-                      transition={{ duration: 0.25 }}
-                      className="overflow-hidden"
-                    >
-                      <InlineByteGrid
-                        bytes={selectedTransportMsg.ciphertext}
-                        messageType="transport"
-                        theme={theme}
-                        label={`Transport (${selectedTransportMsg.ciphertext.length} bytes) ${selectedTransportMsg.direction === "sent" ? "\u2192 sent" : "\u2190 received"}`}
-                      />
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Begin Handshake button — sketch style */}
-          <div className="mt-6 flex flex-col items-center gap-2">
-            {phase === "preflight" && (
-              <button
-                onClick={startHandshake}
-                disabled={!allPreflightPassed || preflightRunning}
-                className={cn(
-                  "px-6 py-2.5 text-sm font-bold uppercase tracking-[0.05em] border-[1.5px] transition-all",
-                  !allPreflightPassed || preflightRunning
-                    ? "opacity-50 cursor-not-allowed border-[#9a8b78] text-[#9a8b78]"
-                    : "border-black bg-black text-white hover:bg-white hover:text-black"
+                {/* Mobile Sheet for transport byte inspection */}
+                {isMobile && (
+                  <Sheet
+                    open={selectedTransportMsg !== null && selectedTransportMsg.ciphertext !== undefined}
+                    onOpenChange={(open) => { if (!open) setSelectedTransportId(null); }}
+                  >
+                    <SheetContent side="bottom" className="h-[80vh] overflow-y-auto">
+                      <SheetHeader>
+                        <SheetTitle>
+                          Transport ({selectedTransportMsg?.ciphertext?.length ?? 0} bytes) {selectedTransportMsg?.direction === "sent" ? "\u2192 sent" : "\u2190 received"}
+                        </SheetTitle>
+                      </SheetHeader>
+                      {selectedTransportMsg && selectedTransportMsg.ciphertext && (
+                        <InlineByteGrid
+                          bytes={selectedTransportMsg.ciphertext}
+                          messageType="transport"
+                          theme={theme}
+                          label={`Transport (${selectedTransportMsg.ciphertext.length} bytes) ${selectedTransportMsg.direction === "sent" ? "\u2192 sent" : "\u2190 received"}`}
+                        />
+                      )}
+                    </SheetContent>
+                  </Sheet>
                 )}
-              >
-                {preflightRunning ? "Verifying exercises..." : "Begin Handshake"}
-              </button>
-            )}
-            {phase === "handshake" && (
-              <div className={cn("text-sm", "text-amber-400")}>
-                Handshake in progress...
-              </div>
-            )}
-            {phase === "transport" && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, ease: "easeOut" }}
-                className="text-center"
-              >
-                <div className={cn("text-sm font-bold uppercase tracking-[0.08em]", celebrated ? "text-[#b8860b]" : colors.text)}>
-                  Secure Channel Established
-                </div>
-                <div className={cn("text-sm mt-1", colors.textMuted)}>
-                  Every byte was encrypted by YOUR code.
-                </div>
-              </motion.div>
-            )}
-          </div>
 
-        </div>
+                {/* Input area */}
+                <div className={cn(
+                  "border-t px-3 sm:px-4 py-3",
+                  isDark ? "border-[#2a3552]" : "border-black/10"
+                )}>
+                  {/* Quick commands */}
+                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-2.5">
+                    <span className={cn("text-sm uppercase tracking-wider shrink-0 font-semibold", colors.text)}>BOLT msgs:</span>
+                    {QUICK_COMMANDS.map(({ cmd, label, desc }) => (
+                      <button
+                        key={cmd}
+                        onClick={() => sendBoltCommand(cmd)}
+                        disabled={orchState !== "transport_ready"}
+                        title={desc}
+                        className={cn(
+                          "px-2.5 sm:px-3 py-1 text-xs sm:text-sm border-[1.5px] transition-colors",
+                          orchState === "transport_ready"
+                            ? isDark
+                              ? "border-white/40 text-white hover:border-white/60"
+                              : "border-black/40 text-black hover:border-black/60"
+                            : isDark
+                              ? "border-white/10 text-white/25 cursor-not-allowed"
+                              : "border-black/10 text-black/25 cursor-not-allowed"
+                        )}
+                        style={{ borderRadius: 999 }}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Burst send control */}
+                  <div>
+                    <BurstSendControl
+                      currentSendNonce={sendCipherState?.nonce ?? 0}
+                      isReady={orchState === "transport_ready" && !burstRunning}
+                      isBurstRunning={burstRunning}
+                      burstProgress={burstProgress}
+                      onBurst={handleBurst}
+                      theme={theme}
+                    />
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* ── Incomplete exercises notification ── */}
@@ -1166,179 +1413,6 @@ export default function CapstonePanel({ getProgress, theme }: CapstonePanelProps
                       )}
                     </div>
                   ))}
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ── Cipher State Inspector ── */}
-      <AnimatePresence>
-        {phase === "transport" && (sendCipherState || recvCipherState) && (
-          <CipherStateInspector
-            sendState={sendCipherState}
-            recvState={recvCipherState}
-            rotatedSide={rotatedSide}
-            theme={theme}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* ── Section 2: Encrypted Terminal ── */}
-      <AnimatePresence>
-        {(phase === "transport" || messages.length > 0) && (
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            <div
-              className={cn(
-                "border-[1.5px] overflow-hidden",
-                colors.terminalBorder,
-                colors.terminalBg
-              )}
-            >
-              {/* Terminal header */}
-              <div className="px-4 py-2 flex items-center justify-between bg-black">
-                <span className="text-sm font-bold tracking-[0.08em] uppercase text-white">
-                  Encrypted Terminal
-                </span>
-                <span className={cn("text-xs uppercase tracking-wider", orchState === "transport_ready" ? "text-[#8cb369]" : "text-white/30")}>
-                  {orchState === "transport_ready" ? "connected" : "disconnected"}
-                </span>
-              </div>
-
-              {/* Message log */}
-              <div
-                ref={terminalContainerRef}
-                className="p-3 sm:p-4 h-[200px] sm:h-[240px] overflow-y-auto text-xs sm:text-sm"
-                style={{ fontFamily: '"JetBrains Mono", "Fira Code", "Cascadia Code", monospace' }}
-              >
-                {messages.length === 0 && (
-                  <div className="text-slate-600 italic">
-                    Waiting for transport connection...
-                  </div>
-                )}
-                {messages.map((msg) => (
-                  <div
-                    key={msg.id}
-                    className={cn(
-                      "py-1.5 border-b last:border-b-0",
-                      isDark ? "border-[#1a2540]/50" : "border-gray-700/30"
-                    )}
-                  >
-                    <div className="flex items-start gap-2">
-                      <span
-                        className={cn(
-                          "shrink-0 font-bold w-4 text-center",
-                          msg.direction === "sent"
-                            ? "text-[#d4a574]"
-                            : msg.direction === "received"
-                              ? "text-[#c9985f]"
-                              : "text-slate-500"
-                        )}
-                      >
-                        {msg.direction === "sent"
-                          ? "\u2191"
-                          : msg.direction === "received"
-                            ? "\u2193"
-                            : "\u2022"}
-                      </span>
-                      <span
-                        className={cn(
-                          "flex-1 min-w-0",
-                          msg.direction === "system"
-                            ? msg.plaintext.startsWith("[KEY ROTATION]")
-                              ? "text-[#FFD700] font-bold"
-                              : msg.plaintext.startsWith("[BURST]")
-                                ? "text-[#b8860b] italic"
-                                : "text-[#c97a5a] italic"
-                            : "text-green-300"
-                        )}
-                      >
-                        {msg.plaintext}
-                      </span>
-                      <span className="shrink-0 text-xs text-slate-700">
-                        {formatTime(msg.timestamp)}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-                <div ref={terminalEndRef} />
-              </div>
-
-              {/* Input area */}
-              <div className={cn("border-t border-[#333] px-3 sm:px-4 py-3")}>
-                {/* Quick commands */}
-                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-2.5">
-                  <span className="text-sm text-white/90 uppercase tracking-wider shrink-0 font-semibold">BOLT msgs:</span>
-                  {QUICK_COMMANDS.map(({ cmd, label, desc }) => (
-                    <button
-                      key={cmd}
-                      onClick={() => sendMessage(cmd)}
-                      disabled={orchState !== "transport_ready"}
-                      title={desc}
-                      className={cn(
-                        "px-2.5 sm:px-3 py-1 text-xs sm:text-sm border-[1.5px] transition-colors",
-                        orchState === "transport_ready"
-                          ? "border-white/40 text-white hover:border-white/60 hover:text-white"
-                          : "border-white/10 text-white/25 cursor-not-allowed"
-                      )}
-                      style={{ borderRadius: 999 }}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Burst send control */}
-                <div className="mb-2.5">
-                  <BurstSendControl
-                    currentSendNonce={sendCipherState?.nonce ?? 0}
-                    isReady={orchState === "transport_ready" && !burstRunning}
-                    isBurstRunning={burstRunning}
-                    burstProgress={burstProgress}
-                    onBurst={handleBurst}
-                    theme="dark"
-                  />
-                </div>
-
-                {/* Input field */}
-                <form onSubmit={handleTerminalSubmit} className="flex gap-2 items-center">
-                  <span className="text-sm text-green-500 shrink-0">
-                    {"\u276F"}
-                  </span>
-                  <input
-                    type="text"
-                    value={terminalInput}
-                    onChange={(e) => setTerminalInput(e.target.value)}
-                    disabled={orchState !== "transport_ready"}
-                    placeholder={
-                      orchState === "transport_ready"
-                        ? "Type a message..."
-                        : "Complete handshake first"
-                    }
-                    className={cn(
-                      "flex-1 bg-transparent text-sm outline-none placeholder:text-slate-600",
-                      orchState === "transport_ready"
-                        ? "text-green-300"
-                        : "text-slate-600 cursor-not-allowed"
-                    )}
-                  />
-                  <button
-                    type="submit"
-                    disabled={orchState !== "transport_ready" || !terminalInput.trim()}
-                    className={cn(
-                      "px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider border-[1.5px] transition-colors",
-                      orchState === "transport_ready" && terminalInput.trim()
-                        ? "border-white/40 text-white hover:bg-white/10"
-                        : "border-white/10 text-white/25 cursor-not-allowed"
-                    )}
-                  >
-                    Send
-                  </button>
-                </form>
               </div>
             </div>
           </motion.div>

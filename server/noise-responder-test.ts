@@ -8,7 +8,7 @@
  * Run: npx tsx server/noise-responder-test.ts
  */
 
-import { NoiseResponder } from "./noise-responder";
+import { NoiseResponder, CipherState } from "./noise-responder";
 import { hex, fromHex } from "./noise-crypto";
 import { getPublicKey } from "@noble/secp256k1";
 
@@ -132,27 +132,80 @@ test("Responder recvKey matches BOLT 8 sk vector", () => {
   assertEqual(responder.recvKey, expected_sk, "recvKey");
 });
 
-console.log("\n--- Transport Encrypt/Decrypt Round-trip ---");
+console.log("\n--- Transport Round-trip (real) ---");
 
-test("Encrypt then decrypt produces original message", () => {
-  // Create a fresh responder pair to test transport
-  const respA = new NoiseResponder(rs_priv, re_priv);
-  respA.processAct1(act1_msg);
-  respA.generateAct2();
-  respA.processAct3(act3_msg);
+test("Bidirectional encrypt/decrypt round-trip", () => {
+  const r = new NoiseResponder(rs_priv, re_priv);
+  r.processAct1(act1_msg);
+  r.generateAct2();
+  r.processAct3(act3_msg);
 
-  const original = "Hello from the encrypted channel!";
-  const encrypted = respA.encryptMessage(original);
+  const ck = r.chainingKey;
+  // Per BOLT 8 Split: the responder uses sk for receive and rk for send.
+  // The initiator uses sk for send and rk for receive (roles flipped).
+  const responderSend = new CipherState(r.sendKey, ck);
+  const responderRecv = new CipherState(r.recvKey, ck);
+  const initiatorSend = new CipherState(r.recvKey, ck);
+  const initiatorRecv = new CipherState(r.sendKey, ck);
 
-  // To decrypt, we need a second responder simulating the other side.
-  // Instead, verify the message structure is correct (length prefix + body).
-  // The encrypted message should be 18 (encrypted 2-byte len + 16-byte tag)
-  //                                  + original.length + 16 (body + tag)
-  const expectedLen = 18 + original.length + 16;
-  assert(
-    encrypted.length === expectedLen,
-    `Encrypted message should be ${expectedLen} bytes, got ${encrypted.length}`
-  );
+  const msg1 = "initiator says hello";
+  const ct1 = initiatorSend.encrypt(new TextEncoder().encode(msg1));
+  const pt1 = responderRecv.decrypt(ct1);
+  assert(new TextDecoder().decode(pt1) === msg1, "i->r decrypt");
+
+  const msg2 = "responder says hi back";
+  const ct2 = responderSend.encrypt(new TextEncoder().encode(msg2));
+  const pt2 = initiatorRecv.decrypt(ct2);
+  assert(new TextDecoder().decode(pt2) === msg2, "r->i decrypt");
+});
+
+test("501 messages crossing rotation boundary", () => {
+  const r = new NoiseResponder(rs_priv, re_priv);
+  r.processAct1(act1_msg);
+  r.generateAct2();
+  r.processAct3(act3_msg);
+
+  const ck = r.chainingKey;
+  const initiatorSend = new CipherState(r.recvKey, ck);
+  const responderRecv = new CipherState(r.recvKey, ck);
+
+  for (let i = 0; i < 501; i++) {
+    const msg = `message ${i}`;
+    const ct = initiatorSend.encrypt(new TextEncoder().encode(msg));
+    const pt = responderRecv.decrypt(ct);
+    assert(new TextDecoder().decode(pt) === msg, `roundtrip at i=${i}`);
+  }
+  // The fact that messages 500 and 501 both decrypted correctly proves the
+  // rotation worked. No need to inspect the rotated key value directly.
+});
+
+test("Tamper detection after rotation", () => {
+  const r = new NoiseResponder(rs_priv, re_priv);
+  r.processAct1(act1_msg);
+  r.generateAct2();
+  r.processAct3(act3_msg);
+
+  const ck = r.chainingKey;
+  const initiatorSend = new CipherState(r.recvKey, ck);
+  const responderRecv = new CipherState(r.recvKey, ck);
+
+  // Cross the rotation boundary
+  for (let i = 0; i < 500; i++) {
+    const ct = initiatorSend.encrypt(new TextEncoder().encode("x"));
+    responderRecv.decrypt(ct);
+  }
+
+  // Now tamper with a fresh post-rotation message
+  const ct = initiatorSend.encrypt(new TextEncoder().encode("secret"));
+  const tampered = Uint8Array.from(ct);
+  tampered[tampered.length - 1] ^= 0xff;
+  let threw = false;
+  try {
+    responderRecv.decrypt(tampered);
+  } catch {
+    threw = true;
+  }
+  assert(threw, "tamper detection must still work after rotation");
 });
 
 console.log("\n--- Error Handling ---");

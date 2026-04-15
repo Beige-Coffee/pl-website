@@ -109,10 +109,7 @@ export default function Blog() {
                 <div className="flex flex-col gap-2 shrink-0">
                   <button
                     type="button"
-                    onClick={() => {
-                      localStorage.removeItem("pl-tutorial-mode");
-                      setLocation(post.href);
-                    }}
+                    onClick={() => setLocation(`${post.href}?mode=read`)}
                     className="bg-primary text-foreground px-6 py-3 font-pixel text-base md:text-lg border-2 border-border text-center hover:brightness-110 transition-all cursor-pointer"
                     data-testid="badge-read"
                   >
@@ -120,10 +117,7 @@ export default function Blog() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      localStorage.setItem("pl-tutorial-mode", "code");
-                      setLocation(post.href);
-                    }}
+                    onClick={() => setLocation(`${post.href}?mode=code`)}
                     className="bg-[#1a1a2e] text-white px-6 py-3 font-pixel text-base md:text-lg border-2 border-white/30 text-center hover:border-white/60 hover:bg-[#1a1a2e]/80 transition-all cursor-pointer"
                     data-testid="badge-code"
                   >

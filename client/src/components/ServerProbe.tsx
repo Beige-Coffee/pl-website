@@ -85,6 +85,11 @@ export default function ServerProbe({ theme, onPacketCaptured }: ServerProbeProp
         const code = event.code;
         const reason = event.reason || `code ${code}`;
 
+        console.log(
+          `%c[Server Probe] WebSocket closed, code: ${code}, reason: "${reason}"`,
+          "color: #b8860b; font-weight: bold"
+        );
+
         setCloseCode(code);
         setCloseReason(reason);
         updateStep("rejected");
@@ -128,13 +133,13 @@ export default function ServerProbe({ theme, onPacketCaptured }: ServerProbeProp
         textMuted: "text-slate-400",
         textDim: "text-slate-600",
         green: "text-[#8cb369]",
-        greenBg: "bg-[#5a7a2f]/10",
-        greenBorder: "border-[#5a7a2f]/30",
+        greenBg: "bg-white/[0.02]",
+        greenBorder: "border-white/10",
         red: "text-[#c97a5a]",
-        redBg: "bg-[#a0522d]/10",
-        redBorder: "border-[#a0522d]/30",
-        yellowBg: "bg-yellow-500/5",
-        yellowBorder: "border-[#b8860b]/30",
+        redBg: "bg-white/[0.02]",
+        redBorder: "border-white/10",
+        yellowBg: "bg-white/[0.02]",
+        yellowBorder: "border-white/10",
         yellow: "text-yellow-400",
         codeBg: "bg-black",
         codeBorder: "border-[#333]",
@@ -148,13 +153,13 @@ export default function ServerProbe({ theme, onPacketCaptured }: ServerProbeProp
         textMuted: "text-[#6b5d4f]",
         textDim: "text-[#9a8b78]",
         green: "text-[#5a7a2f]",
-        greenBg: "bg-[#5a7a2f]/8",
-        greenBorder: "border-[#5a7a2f]/25",
+        greenBg: "bg-white",
+        greenBorder: "border-black/15",
         red: "text-[#a0522d]",
-        redBg: "bg-[#a0522d]/8",
-        redBorder: "border-[#a0522d]/25",
-        yellowBg: "bg-[#b8860b]/5",
-        yellowBorder: "border-[#b8860b]/20",
+        redBg: "bg-white",
+        redBorder: "border-black/15",
+        yellowBg: "bg-white",
+        yellowBorder: "border-black/15",
         yellow: "text-[#b8860b]",
         codeBg: "bg-black",
         codeBorder: "border-black",
@@ -369,7 +374,7 @@ export default function ServerProbe({ theme, onPacketCaptured }: ServerProbeProp
                     (1-byte version + 33-byte ephemeral public key + 16-byte MAC).
                     We sent 5 bytes of ASCII text. The server can't parse it, so it closes the connection.
                   </span>
-                  <div className={cn("mt-2 pt-2 border-t", isDark ? "border-yellow-500/20" : "border-yellow-300")}>
+                  <div className={cn("mt-2 pt-2 border-t", isDark ? "border-white/10" : "border-black/10")}>
                     <span className={cn("font-bold", colors.text)}>This proves two things: </span>
                     <span className={colors.textMuted}>
                       the server is real and listening, and it only speaks Noise Protocol.

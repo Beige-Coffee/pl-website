@@ -279,11 +279,16 @@ export function setupNoiseWebSocket(httpServer: HttpServer): void {
               type: 16,
               message: "init",
               globalfeatures: "0x",
-              features: "0x2200",
+              // BOLT 9 feature bits (optional/odd variants):
+              //   bit 1  = option_data_loss_protect
+              //   bit 15 = option_static_remotekey
+              //   bit 23 = option_anchors_zero_fee_htlc_tx
+              // 0x808002 = (1<<1) | (1<<15) | (1<<23)
+              features: "0x808002",
               features_supported: [
-                "option_data_loss_protect (0)",
-                "option_static_remotekey (12)",
-                "option_anchors_zero_fee_htlc_tx (22)",
+                "option_data_loss_protect (1)",
+                "option_static_remotekey (15)",
+                "option_anchors_zero_fee_htlc_tx (23)",
               ],
               tlv: { networks: ["mainnet (43497fd7f826)"] },
             }, null, 2);
@@ -295,17 +300,17 @@ export function setupNoiseWebSocket(httpServer: HttpServer): void {
               byteslen: 4,
             }, null, 2);
           } else if (trimmed === "node_announcement" || trimmed === "node_ann") {
-            // BOLT 7, type 257: Node identity broadcast
-            response = JSON.stringify({
-              type: 257,
-              message: "node_announcement",
-              node_id: hex(getServerPubkey()).slice(0, 32) + "...",
-              alias: "ProgrammingLN",
-              color: "#FFD700",
-              features: "0x2200",
-              addresses: [{ type: "ipv4", addr: "127.0.0.1:9735" }],
-              timestamp: Math.floor(Date.now() / 1000),
-            }, null, 2);
+            // BOLT 7, type 257: Gossip broadcast — no reply (fire-and-forget)
+            log("Received node_announcement gossip (no reply)");
+            return;
+          } else if (trimmed === "channel_announcement" || trimmed === "channel_ann") {
+            // BOLT 7, type 256: Gossip broadcast — no reply (fire-and-forget)
+            log("Received channel_announcement gossip (no reply)");
+            return;
+          } else if (trimmed === "channel_update") {
+            // BOLT 7, type 258: Gossip broadcast — no reply (fire-and-forget)
+            log("Received channel_update gossip (no reply)");
+            return;
           } else if (trimmed === "open_channel") {
             // BOLT 2, type 33: Accept channel parameters
             response = JSON.stringify({

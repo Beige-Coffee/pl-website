@@ -70,7 +70,7 @@ export default function BurstSendControl({
             />
           </div>
         </div>
-        <span className={cn("text-xs tabular-nums shrink-0", isDark ? "text-white/90" : "text-black/50")} style={{ fontFamily: MONO }}>
+        <span className={cn("text-xs tabular-nums shrink-0", isDark ? "text-white/90" : "text-black/80")} style={{ fontFamily: MONO }}>
           {label} (nonce: {burstProgress.sendNonce})
         </span>
       </div>
@@ -79,11 +79,11 @@ export default function BurstSendControl({
 
   return (
     <form onSubmit={handleSubmit} className="flex items-center gap-2">
-      <Zap className={cn("w-3.5 h-3.5 shrink-0", isDark ? "text-white/80" : "text-black/25")} />
-      <span className={cn("text-xs uppercase tracking-wider shrink-0 font-semibold", isDark ? "text-white/90" : "text-black/40")}>
+      <Zap className={cn("w-3.5 h-3.5 shrink-0", isDark ? "text-white/80" : "text-[#b8860b]")} />
+      <span className={cn("text-xs uppercase tracking-wider shrink-0 font-semibold", isDark ? "text-white/90" : "text-[#2a1f0d]")}>
         Burst:
       </span>
-      <span className={cn("text-xs shrink-0", isDark ? "text-white/90" : "text-black/50")}>
+      <span className={cn("text-xs shrink-0", isDark ? "text-white/90" : "text-[#2a1f0d]")}>
         Send
       </span>
       <input
@@ -98,12 +98,12 @@ export default function BurstSendControl({
           "w-16 text-center text-sm py-0.5 rounded border outline-none tabular-nums",
           isDark
             ? "bg-white/5 border-white/30 text-white placeholder:text-white/50"
-            : "bg-black/5 border-black/15 text-black/80 placeholder:text-black/35",
+            : "bg-black/5 border-black/30 text-[#2a1f0d] placeholder:text-black/40",
           (!isReady || isBurstRunning) && "opacity-40 cursor-not-allowed"
         )}
         style={{ fontFamily: MONO }}
       />
-      <span className={cn("text-xs shrink-0", isDark ? "text-white/90" : "text-black/50")}>
+      <span className={cn("text-xs shrink-0", isDark ? "text-white/90" : "text-[#2a1f0d]")}>
         pings
       </span>
       <button
@@ -117,13 +117,13 @@ export default function BurstSendControl({
               : "border-[#b8860b]/40 text-[#b8860b]/80 hover:border-[#b8860b]/70 hover:text-[#b8860b]"
             : isDark
               ? "border-white/10 text-white/25 cursor-not-allowed"
-              : "border-black/10 text-black/25 cursor-not-allowed"
+              : "border-black/20 text-black/40 cursor-not-allowed"
         )}
         style={{ borderRadius: 999 }}
       >
         GO
       </button>
-      <span className={cn("text-xs italic shrink-0 hidden sm:inline", isDark ? "text-white/70" : "text-black/30")}>
+      <span className={cn("text-xs italic shrink-0 hidden sm:inline", isDark ? "text-white/70" : "text-[#6b5d4f]")}>
         {messagesToRotation} to next send key rotation
       </span>
     </form>

@@ -40,7 +40,7 @@ type HandshakeState = "initialized" | "act1_done" | "act2_done" | "complete";
 
 // ─── Cipher State (for transport phase) ─────────────────────────────────────
 
-class CipherState {
+export class CipherState {
   private key: Uint8Array;
   private nonce: number = 0;
   private ck: Uint8Array;
@@ -461,6 +461,13 @@ export class NoiseResponder {
       throw new Error("Handshake not complete");
     }
     return this._recvKey;
+  }
+
+  get chainingKey(): Uint8Array {
+    if (this.state !== "complete") {
+      throw new Error("Handshake not complete");
+    }
+    return this.ck;
   }
 
   get initiatorStaticPubkey(): Uint8Array {

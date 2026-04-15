@@ -754,27 +754,48 @@ print(_ct.hex())
         }
       }
 
-      // Drain phase: decrypt buffered server responses to keep recv CipherState in sync
-      this._burstMode = false;
-      const buffer = [...this._burstIncomingBuffer];
-      this._burstIncomingBuffer = [];
+      // Drain phase: keep _burstMode = true so newly arriving frames continue
+      // to buffer instead of racing the drain loop on _orch_recv_cs.
+      let firstDrainIteration = true;
+      while (this._burstIncomingBuffer.length > 0) {
+        const buffer = this._burstIncomingBuffer;
+        this._burstIncomingBuffer = [];
 
-      if (buffer.length > 0) {
-        onProgress({
-          phase: "drain",
-          sent: count,
-          total: count,
-          sendNonce: state.send.nonce,
-          recvNonce: state.recv.nonce,
-          sendRotated: false,
-        });
+        if (firstDrainIteration) {
+          onProgress({
+            phase: "drain",
+            sent: count,
+            total: count,
+            sendNonce: state.send.nonce,
+            recvNonce: state.recv.nonce,
+            sendRotated: false,
+          });
+          firstDrainIteration = false;
+        }
 
         for (const ct of buffer) {
+          // No silent swallow. If a decrypt fails during drain, that is a real
+          // transport error and must surface the same way the direct handler
+          // surfaces it: by calling transitionToError directly so the
+          // orchestrator leaves transport_ready and the user sees the failure.
           try {
             await this.decryptTransportMessage(ct);
-          } catch { /* ignore */ }
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            this.transitionToError(`Burst drain decrypt failed: ${message}`);
+            // Re-throw so the outer try/finally still runs (resetting
+            // _burstMode and clearing the buffer) and so the caller's promise
+            // also rejects with the same error.
+            throw err;
+          }
         }
+        // Loop body finished. Check the buffer again: more frames may have
+        // arrived during the awaits above. If so, drain those too.
       }
+
+      // Buffer is verifiably empty in this synchronous tick. Safe to switch
+      // off burst mode now: any future frame goes through the direct path.
+      this._burstMode = false;
 
       // Final state update — detect recv rotation from draining pong responses
       state = await this.queryCipherState();
@@ -1020,15 +1041,22 @@ print(_ct.hex())
   ): Promise<string> {
     const ctHex = bytesToHex(ciphertext);
 
-    const result = await this.runPythonAndParse<string>(
+    const ptHex = await this.runPythonAndParse<string>(
       `
 _ct = bytes.fromhex("${ctHex}")
 _pt = _orch_recv_cs.decrypt_message(_ct)
-print(_pt.decode("utf-8"))
+print(_pt.hex())
 `,
       (raw: string) => raw.trim()
     );
 
-    return result;
+    // Decode the hex bytes to a UTF-8 string. This is byte-exact for the
+    // hex round-trip itself, and the TextDecoder step correctly preserves
+    // newlines and multi-byte UTF-8 sequences in the multi-line BOLT JSON
+    // responses. The function still returns a string, so binary payloads
+    // (which BOLT 8 transport allows but the current course does not send)
+    // would still be lossy if any byte is not valid UTF-8.
+    const ptBytes = hexToBytes(ptHex);
+    return new TextDecoder("utf-8").decode(ptBytes);
   }
 }

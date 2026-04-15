@@ -21,6 +21,7 @@ interface CipherStateInspectorProps {
   recvState: CipherStateSnapshot | null;
   rotatedSide: "send" | "recv" | null;
   theme: "light" | "dark";
+  embedded?: boolean;
 }
 
 /** Truncate 64-char hex to first 8 + "..." + last 8 */
@@ -196,18 +197,20 @@ export default function CipherStateInspector({
   recvState,
   rotatedSide,
   theme,
+  embedded = false,
 }: CipherStateInspectorProps) {
   const isDark = theme === "dark";
   const [collapsed, setCollapsed] = useState(false);
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12 }}
+      initial={{ opacity: 0, y: embedded ? 0 : 12 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay: 0.2 }}
+      transition={{ duration: 0.4, delay: embedded ? 0 : 0.2 }}
       className={cn(
-        "rounded-lg border overflow-hidden",
-        isDark ? "border-white/10 bg-[#0a0e1a]" : "border-black/10 bg-white"
+        "overflow-hidden",
+        !embedded && "rounded-lg border",
+        !embedded && (isDark ? "border-white/10 bg-[#0a0e1a]" : "border-black/10 bg-white")
       )}
       style={{ fontFamily: SANS }}
     >
@@ -216,7 +219,9 @@ export default function CipherStateInspector({
         onClick={() => setCollapsed(!collapsed)}
         className={cn(
           "w-full flex items-center justify-between px-4 py-2.5 transition-colors",
-          isDark ? "bg-black/40 hover:bg-black/50" : "bg-[#f5f0e8] hover:bg-[#ede5d8]"
+          embedded
+            ? isDark ? "hover:bg-white/5" : "hover:bg-black/[0.02]"
+            : isDark ? "bg-black/40 hover:bg-black/50" : "bg-[#f5f0e8] hover:bg-[#ede5d8]"
         )}
       >
         <div className="flex items-center gap-2">
