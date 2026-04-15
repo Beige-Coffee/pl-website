@@ -482,9 +482,7 @@ export default function NonceReuseLab({ theme }: NonceReuseLabProps) {
               <input
                 type="text"
                 value={msg1Text}
-                onChange={e => { if (phase === "input1") setMsg1Text(e.target.value.slice(0, 14)); }}
-                onKeyDown={e => { if (e.key === "Enter") handleEncryptMsg1(); }}
-                placeholder="e.g. RESISTANCE"
+                readOnly
                 disabled={phase !== "input1"}
                 className="flex-1 min-w-0 px-2.5 py-1 text-sm outline-none transition-colors"
                 style={{
@@ -531,9 +529,7 @@ export default function NonceReuseLab({ theme }: NonceReuseLabProps) {
               <input
                 type="text"
                 value={msg2Text}
-                onChange={e => { if (phase === "input2") setMsg2Text(e.target.value.slice(0, 14)); }}
-                onKeyDown={e => { if (e.key === "Enter") handleEncryptMsg2(); }}
-                placeholder="e.g. MEETATSUNUP"
+                readOnly
                 disabled={phase !== "input2"}
                 className="flex-1 min-w-0 px-2.5 py-1 text-sm outline-none transition-colors"
                 style={{
