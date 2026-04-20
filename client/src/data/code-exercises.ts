@@ -1847,20 +1847,14 @@ print("Match?", recovered_pub == is_pub)
     id: "exercise-encrypt",
     title: "Exercise 11: Encrypt Transport Messages",
     description:
-      "Implement the <code>CipherState</code> constructor and <code>encrypt_message()</code> method. The constructor stores the encryption key, chaining key, and nonce. The encrypt method frames each message as an encrypted 2-byte length prefix followed by an encrypted body, using ChaCha20-Poly1305 with incrementing nonces.<br><br><strong><code>__init__</code> inputs:</strong><br>• <code>key</code> - 32-byte encryption key<br>• <code>chaining_key</code> - 32-byte chaining key for key rotation<br><br><strong><code>encrypt_message</code> inputs:</strong><br>• <code>plaintext</code> - bytes to encrypt<br><br><strong>Returns:</strong><br>• encrypted length (18 bytes) + encrypted body (len + 16 bytes)",
+      "Implement <code>encrypt_message()</code> for the <code>CipherState</code> class. The constructor and <code>_maybe_rotate()</code> are already provided for you. The constructor stores the encryption key, chaining key, and initializes the nonce to 0. The <code>_maybe_rotate()</code> method is a placeholder that you'll implement in the Key Rotation exercise.<br><br>Your job is to encrypt a Lightning transport message by producing an encrypted 2-byte length prefix followed by the encrypted message body, using ChaCha20-Poly1305 with incrementing nonces.<br><br><strong>Inputs:</strong><br>• <code>plaintext</code> - bytes to encrypt<br><br><strong>Returns:</strong><br>• encrypted length (18 bytes) + encrypted body (len + 16 bytes)",
     starterCode: `    def __init__(self, key, chaining_key):
-        """
-        Initialize the CipherState.
-
-        Args:
-            key:          32-byte ChaCha20-Poly1305 encryption key
-            chaining_key: 32-byte chaining key (used for key rotation)
-        """
-        # TODO: Store key, chaining_key, and initialize nonce to 0
-        pass
+        self.key = key
+        self.chaining_key = chaining_key
+        self.nonce = 0
 
     def _maybe_rotate(self):
-        """Key rotation placeholder (implemented in a later exercise)."""
+        # Placeholder - you'll implement key rotation in a later exercise
         pass
 
     def encrypt_message(self, plaintext):
@@ -1981,9 +1975,9 @@ print("Next nonce: 2 (each message consumes 2 nonces)")
 `,
     hints: {
       conceptual:
-        "<p><strong>Goal:</strong> Initialize a <code>CipherState</code> and encrypt a Lightning transport message by producing an encrypted length prefix followed by the encrypted message body.<br><br><strong>Key details:</strong> Lightning frames each message with a 2-byte big-endian length prefix, then the message body. Both parts are encrypted separately with ChaCha20-Poly1305, each consuming one nonce (so a single message uses two sequential nonces). This hides the message size from observers. No associated data is used.<br><br><strong>Tools you will need:</strong> <code>struct.pack()</code> to encode the length as 2 bytes, <code>ChaCha20Poly1305</code> for encryption, and the provided <code>bolt8_nonce()</code> helper for nonce encoding.</p>",
+        "<p><strong>Goal:</strong> Encrypt a Lightning transport message by producing an encrypted length prefix followed by the encrypted message body. The constructor and <code>_maybe_rotate()</code> are already provided.<br><br><strong>Key details:</strong> Lightning frames each message with a 2-byte big-endian length prefix, then the message body. Both parts are encrypted separately with ChaCha20-Poly1305, each consuming one nonce (so a single message uses two sequential nonces). This hides the message size from observers. No associated data is used.<br><br><strong>Tools you will need:</strong> <code>struct.pack()</code> to encode the length as 2 bytes, <code>ChaCha20Poly1305</code> for encryption, and the provided <code>bolt8_nonce()</code> helper for nonce encoding.</p>",
       steps:
-        '<ol><li><strong><code>__init__</code></strong>: Store <code>key</code>, <code>chaining_key</code>, and set <code>nonce = 0</code> as instance attributes</li><li><strong><code>encrypt_message</code></strong>: After the <code>self._maybe_rotate()</code> call, encode the plaintext length as a 2-byte big-endian unsigned integer using <code>struct.pack()</code> with the <code>">H"</code> format</li><li>Encrypt the length bytes using <code>ChaCha20Poly1305(self.key)</code> with <code>bolt8_nonce(self.nonce)</code> and empty associated data</li><li>Encrypt the message body using <code>bolt8_nonce(self.nonce + 1)</code> and empty associated data</li><li>Advance <code>self.nonce</code> by 2 and return the concatenated ciphertext</li></ol>',
+        '<ol><li>After the <code>self._maybe_rotate()</code> call, encode the plaintext length as a 2-byte big-endian unsigned integer using <code>struct.pack()</code> with the <code>">H"</code> format</li><li>Encrypt the length bytes using <code>ChaCha20Poly1305(self.key)</code> with <code>bolt8_nonce(self.nonce)</code> and empty associated data</li><li>Encrypt the message body using <code>bolt8_nonce(self.nonce + 1)</code> and empty associated data</li><li>Advance <code>self.nonce</code> by 2 and return the concatenated ciphertext</li></ol>',
       code: `    def __init__(self, key, chaining_key):
         self.key = key
         self.chaining_key = chaining_key
