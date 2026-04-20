@@ -228,7 +228,10 @@ export default function CapstonePanel({ getProgress, theme }: CapstonePanelProps
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      terminalEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      const container = terminalContainerRef.current;
+      if (container) {
+        container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+      }
     }, 350);
 
     return () => window.clearTimeout(timer);
