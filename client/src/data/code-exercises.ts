@@ -532,8 +532,8 @@ print("Final ck:", ck.hex(), "(unchanged)")
     Steps:
       1. MixHash(e_pub):   h = SHA256(h || e_pub)
       2. ECDH(e, rs):      es = ECDH(e_priv, rs_pub)
-      3. MixKey(es):        ck, temp_k = HKDF(ck, es)
-      4. Encrypt:           c = ChaCha20Poly1305(temp_k, nonce=0, ad=h, pt=b"")
+      3. MixKey(es):        ck, temp_k1 = HKDF(ck, es)
+      4. Encrypt:           c = ChaCha20Poly1305(temp_k1, nonce=0, ad=h, pt=b"")
       5. MixHash(c):        h = SHA256(h || c)
       6. Message:           0x00 || e_pub || c
 
@@ -550,7 +550,7 @@ print("Final ck:", ck.hex(), "(unchanged)")
     """
     # TODO: Step 1  -  MixHash the ephemeral public key
     # TODO: Step 2  -  Perform ECDH between ephemeral and responder's static key
-    # TODO: Step 3  -  MixKey: derive new ck and temp_k using HKDF
+    # TODO: Step 3  -  MixKey: derive new ck and temp_k1 using HKDF
     # TODO: Step 4  -  Encrypt empty payload with ChaCha20Poly1305
     #                 nonce = bolt8_nonce(0), ad = h, plaintext = b""
     # TODO: Step 5  -  MixHash the ciphertext
@@ -724,9 +724,9 @@ print("Length:", len(msg), "bytes (1 + 33 + 16 = 50)")
     # 2. ECDH(e, rs)
     es = ecdh(e_priv, rs_pub)
     # 3. MixKey
-    ck, temp_k = hkdf_two_keys(ck, es)
+    ck, temp_k1 = hkdf_two_keys(ck, es)
     # 4. Encrypt empty payload
-    c = ChaCha20Poly1305(temp_k).encrypt(bolt8_nonce(0), b"", h)
+    c = ChaCha20Poly1305(temp_k1).encrypt(bolt8_nonce(0), b"", h)
     # 5. MixHash ciphertext
     h = hashlib.sha256(h + c).digest()
     # 6. Assemble: version(1) + e_pub(33) + tag(16) = 50 bytes
@@ -753,8 +753,8 @@ print("Length:", len(msg), "bytes (1 + 33 + 16 = 50)")
       2. Check version == 0x00
       3. MixHash(re_pub):   h = SHA256(h || re_pub)
       4. ECDH(s, re):       es = ECDH(s_priv, re_pub)
-      5. MixKey(es):         ck, temp_k = HKDF(ck, es)
-      6. Decrypt & verify:   plaintext = Decrypt(temp_k, nonce=0, ad=h, ct=c)
+      5. MixKey(es):         ck, temp_k1 = HKDF(ck, es)
+      6. Decrypt & verify:   plaintext = Decrypt(temp_k1, nonce=0, ad=h, ct=c)
       7. MixHash(c):         h = SHA256(h || c)
 
     Args:
@@ -953,8 +953,8 @@ print("Tag verified successfully!")
     c = message[34:]
     h = hashlib.sha256(h + re_pub).digest()
     es = ecdh(s_priv, re_pub)
-    ck, temp_k = hkdf_two_keys(ck, es)
-    ChaCha20Poly1305(temp_k).decrypt(bolt8_nonce(0), c, h)  # verify tag
+    ck, temp_k1 = hkdf_two_keys(ck, es)
+    ChaCha20Poly1305(temp_k1).decrypt(bolt8_nonce(0), c, h)  # verify tag
     h = hashlib.sha256(h + c).digest()
     return (re_pub, h, ck)`,
     },
@@ -978,8 +978,8 @@ print("Tag verified successfully!")
     Steps:
       1. MixHash(e_pub):   h = SHA256(h || e_pub)
       2. ECDH(e, re):      ee = ECDH(e_priv, re_pub)  [ee DH]
-      3. MixKey(ee):        ck, temp_k = HKDF(ck, ee)
-      4. Encrypt:           c = ChaCha20Poly1305(temp_k, nonce=0, ad=h, pt=b"")
+      3. MixKey(ee):        ck, temp_k2 = HKDF(ck, ee)
+      4. Encrypt:           c = ChaCha20Poly1305(temp_k2, nonce=0, ad=h, pt=b"")
       5. MixHash(c):        h = SHA256(h || c)
       6. Message:           0x00 || e_pub || c
 
@@ -1148,9 +1148,9 @@ print("Length:", len(msg), "bytes")
     # 2. ee DH
     ee = ecdh(e_priv, re_pub)
     # 3. MixKey
-    ck, temp_k = hkdf_two_keys(ck, ee)
+    ck, temp_k2 = hkdf_two_keys(ck, ee)
     # 4. Encrypt empty payload
-    c = ChaCha20Poly1305(temp_k).encrypt(bolt8_nonce(0), b"", h)
+    c = ChaCha20Poly1305(temp_k2).encrypt(bolt8_nonce(0), b"", h)
     # 5. MixHash ciphertext
     h = hashlib.sha256(h + c).digest()
     # 6. Assemble: version(1) + e_pub(33) + tag(16) = 50 bytes
@@ -1177,8 +1177,8 @@ print("Length:", len(msg), "bytes")
       2. Check version == 0x00
       3. MixHash(re_pub):   h = SHA256(h || re_pub)
       4. ECDH(e, re):       ee = ECDH(e_priv, re_pub)  [ee DH]
-      5. MixKey(ee):         ck, temp_k = HKDF(ck, ee)
-      6. Decrypt & verify:   Decrypt(temp_k, nonce=0, ad=h, ct=c)
+      5. MixKey(ee):         ck, temp_k2 = HKDF(ck, ee)
+      6. Decrypt & verify:   Decrypt(temp_k2, nonce=0, ad=h, ct=c)
       7. MixHash(c):         h = SHA256(h || c)
 
     Args:
@@ -1316,8 +1316,8 @@ print("  - Same temp_k (from ee ECDH)")
     c = message[34:]
     h = hashlib.sha256(h + re_pub).digest()
     ee = ecdh(e_priv, re_pub)
-    ck, temp_k = hkdf_two_keys(ck, ee)
-    ChaCha20Poly1305(temp_k).decrypt(bolt8_nonce(0), c, h)
+    ck, temp_k2 = hkdf_two_keys(ck, ee)
+    ChaCha20Poly1305(temp_k2).decrypt(bolt8_nonce(0), c, h)
     h = hashlib.sha256(h + c).digest()
     return (re_pub, h, ck)`,
     },
