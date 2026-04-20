@@ -155,11 +155,11 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
     options: [
       "Nonce 0 is reserved for the HKDF extract phase. ChaCha20 uses counter 0 to derive the Poly1305 authentication keys, so nonce 0 refers to this internal counter, not an external nonce",
       "The Noise Protocol always starts nonces at 1 to distinguish handshake messages from transport messages, which start at 0",
-      "Bob already used `temp_k2` with nonce = 0 in Act 2 to create his authentication MAC, so reusing the same key and nonce would produce identical Poly1305 authentication keys, breaking both confidentiality and authentication",
+      "Bob already used `temp_k2` with nonce = 0 in Act 2 to create his authentication MAC, so reusing the same key and nonce would produce an identical Poly1305 one-time key, breaking authentication",
       "Alice's nonce counter was already incremented to 1 during the HKDF derivation of `temp_k2`, since HKDF internally calls ChaCha20 with nonce 0",
     ],
     answer: 2,
-    explanation: "In Act 2, Bob used `temp_k2` with nonce = 0 to encrypt a zero-length plaintext and produce his authentication MAC. Now in Act 3, Alice needs to use the same `temp_k2` to encrypt her static public key. If she also used nonce = 0, ChaCha20 would generate the same internal state, producing identical Poly1305 authentication keys (r, s). With two message-tag pairs under the same Poly1305 key, an attacker can forge valid MACs for arbitrary messages, completely breaking authentication. The identical keystream would also be used to encrypt Alice's static key, potentially exposing it. By using nonce = 1, Alice ensures completely different Poly1305 keys and a fresh keystream, keeping her encrypted static public key secure.",
+    explanation: "In Act 2, Bob used `temp_k2` with nonce = 0 to encrypt a zero-length plaintext and produce his authentication MAC. Now in Act 3, Alice needs to use the same `temp_k2` to encrypt her static public key. If she also used nonce = 0, ChaCha20 would generate the same internal state, producing an identical Poly1305 one-time key. With two message-tag pairs under the same Poly1305 key, an attacker can recover the key and forge valid MACs for arbitrary messages, completely breaking authentication. Note: since Act 2's plaintext was empty, no encryption keystream bytes were consumed, so the confidentiality risk from keystream reuse does not apply here. The critical issue is purely the Poly1305 key reuse. By using nonce = 1, Alice ensures a completely different Poly1305 key, keeping her encrypted static public key secure.",
   },
   "message-length-limit": {
     question: "What happens if a Lightning node needs to send a message that is 70,000 bytes long?",
