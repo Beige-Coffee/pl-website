@@ -1872,11 +1872,11 @@ print("Match?", recovered_pub == is_pub)
             bytes: encrypted_length + encrypted_body
         """
         self._maybe_rotate()
-        # TODO: Save self.nonce to a local variable (each message uses two nonces)
         # TODO: Encode the length of plaintext as 2-byte big-endian
-        # TODO: Encrypt the length bytes with ChaCha20Poly1305 using bolt8_nonce(n)
-        # TODO: Encrypt the plaintext body with ChaCha20Poly1305 using bolt8_nonce(n + 1)
-        # TODO: Set self.nonce = n + 2
+        # TODO: Encrypt the length bytes with ChaCha20Poly1305 using bolt8_nonce(self.nonce)
+        # TODO: Increment self.nonce
+        # TODO: Encrypt the plaintext body with ChaCha20Poly1305 using bolt8_nonce(self.nonce)
+        # TODO: Increment self.nonce
         # TODO: Return encrypted_length + encrypted_body
         pass
 `,
@@ -1978,7 +1978,7 @@ print("Next nonce: 2 (each message consumes 2 nonces)")
       conceptual:
         "<p><strong>Goal:</strong> Encrypt a Lightning transport message by producing an encrypted length prefix followed by the encrypted message body. The constructor and <code>_maybe_rotate()</code> are already provided.<br><br><strong>Key details:</strong> Lightning frames each message with a 2-byte big-endian length prefix, then the message body. Both parts are encrypted separately with ChaCha20-Poly1305, each consuming one nonce (so a single message uses two sequential nonces). This hides the message size from observers. No associated data is used.<br><br><strong>Tools you will need:</strong> <code>struct.pack()</code> to encode the length as 2 bytes, <code>ChaCha20Poly1305</code> for encryption, and the provided <code>bolt8_nonce()</code> helper for nonce encoding.</p>",
       steps:
-        '<ol><li>Save <code>self.nonce</code> to a local variable <code>n</code> (each message consumes two nonces, so we capture the starting value first)</li><li>Encode the plaintext length as a 2-byte big-endian unsigned integer using <code>struct.pack()</code> with the <code>">H"</code> format</li><li>Encrypt the length bytes using <code>ChaCha20Poly1305(self.key)</code> with <code>bolt8_nonce(n)</code> and empty associated data</li><li>Encrypt the message body using <code>bolt8_nonce(n + 1)</code> and empty associated data</li><li>Set <code>self.nonce = n + 2</code> and return the concatenated ciphertext</li></ol>',
+        '<ol><li>Encode the plaintext length as a 2-byte big-endian unsigned integer using <code>struct.pack()</code> with the <code>">H"</code> format</li><li>Encrypt the length bytes using <code>ChaCha20Poly1305(self.key)</code> with <code>bolt8_nonce(self.nonce)</code> and empty associated data, then increment <code>self.nonce</code></li><li>Encrypt the message body using <code>bolt8_nonce(self.nonce)</code> and empty associated data, then increment <code>self.nonce</code></li><li>Return the concatenated ciphertext</li></ol>',
       code: `    def __init__(self, key, chaining_key):
         self.key = key
         self.chaining_key = chaining_key
@@ -1991,11 +1991,10 @@ print("Next nonce: 2 (each message consumes 2 nonces)")
         self._maybe_rotate()
         length_bytes = struct.pack(">H", len(plaintext))
         cipher = ChaCha20Poly1305(self.key)
-        # Each message consumes two nonces: one for the length, one for the body
-        n = self.nonce
-        enc_len = cipher.encrypt(bolt8_nonce(n), length_bytes, b"")
-        enc_body = cipher.encrypt(bolt8_nonce(n + 1), plaintext, b"")
-        self.nonce = n + 2
+        enc_len = cipher.encrypt(bolt8_nonce(self.nonce), length_bytes, b"")
+        self.nonce += 1
+        enc_body = cipher.encrypt(bolt8_nonce(self.nonce), plaintext, b"")
+        self.nonce += 1
         return enc_len + enc_body`,
     },
     rewardSats: 21,
@@ -2024,12 +2023,12 @@ print("Next nonce: 2 (each message consumes 2 nonces)")
             bytes: the original plaintext
         """
         self._maybe_rotate()
-        # TODO: Save self.nonce to a local variable (each message uses two nonces)
         # TODO: Split ciphertext into encrypted_length (first 18 bytes) and encrypted_body
-        # TODO: Decrypt the length field using bolt8_nonce(n)
+        # TODO: Decrypt the length field using bolt8_nonce(self.nonce)
+        # TODO: Increment self.nonce
         # TODO: Parse the 2-byte big-endian length
-        # TODO: Decrypt the body using bolt8_nonce(n + 1)
-        # TODO: Set self.nonce = n + 2
+        # TODO: Decrypt the body using bolt8_nonce(self.nonce)
+        # TODO: Increment self.nonce
         # TODO: Return the plaintext
         pass
 `,
@@ -2150,18 +2149,17 @@ print("Match:", recovered == plaintext)
       conceptual:
         "<p><strong>Goal:</strong> Decrypt a Lightning transport message by recovering the length prefix, then the message body.<br><br><strong>Key details:</strong> Decryption mirrors encryption. The ciphertext starts with 18 bytes: the encrypted 2-byte length prefix plus a 16-byte MAC. After decrypting the length, the remaining bytes contain the encrypted message body with its own MAC. Each decryption consumes two nonces, matching what encryption produced.<br><br><strong>Tools you will need:</strong> <code>ChaCha20Poly1305</code> for decryption, <code>struct.unpack()</code> to parse the recovered length, and byte slicing to split the ciphertext.</p>",
       steps:
-        '<ol><li>Save <code>self.nonce</code> to a local variable <code>n</code></li><li>Split the ciphertext: the first 18 bytes are the encrypted length (2 + 16-byte MAC), the rest is the encrypted body</li><li>Decrypt the length prefix using <code>ChaCha20Poly1305(self.key)</code> with <code>bolt8_nonce(n)</code> and empty associated data</li><li>Parse the decrypted length bytes into an integer using <code>struct.unpack()</code> with the <code>">H"</code> format</li><li>Decrypt the message body using <code>bolt8_nonce(n + 1)</code> and empty associated data</li><li>Set <code>self.nonce = n + 2</code> and return the plaintext</li></ol>',
+        '<ol><li>Split the ciphertext: the first 18 bytes are the encrypted length (2 + 16-byte MAC), the rest is the encrypted body</li><li>Decrypt the length prefix using <code>ChaCha20Poly1305(self.key)</code> with <code>bolt8_nonce(self.nonce)</code> and empty associated data, then increment <code>self.nonce</code></li><li>Parse the decrypted length bytes into an integer using <code>struct.unpack()</code> with the <code>">H"</code> format</li><li>Decrypt the message body using <code>bolt8_nonce(self.nonce)</code> and empty associated data, then increment <code>self.nonce</code></li><li>Return the plaintext</li></ol>',
       code: `    def decrypt_message(self, ciphertext):
         self._maybe_rotate()
         cipher = ChaCha20Poly1305(self.key)
-        # Each message consumes two nonces: one for the length, one for the body
-        n = self.nonce
         enc_len = ciphertext[:18]
-        length_bytes = cipher.decrypt(bolt8_nonce(n), enc_len, b"")
+        length_bytes = cipher.decrypt(bolt8_nonce(self.nonce), enc_len, b"")
+        self.nonce += 1
         msg_len = struct.unpack(">H", length_bytes)[0]
         enc_body = ciphertext[18:]
-        plaintext = cipher.decrypt(bolt8_nonce(n + 1), enc_body, b"")
-        self.nonce = n + 2
+        plaintext = cipher.decrypt(bolt8_nonce(self.nonce), enc_body, b"")
+        self.nonce += 1
         return plaintext`,
     },
     rewardSats: 21,
