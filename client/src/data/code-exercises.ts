@@ -1346,7 +1346,7 @@ print("  - Same temp_k (from ee ECDH)")
       2. MixHash(c1):         h = SHA256(h || c1)
       3. ECDH(s, re):         se = ecdh(s_priv, re_pub)  [se DH]
       4. MixKey(se):           ck, temp_k3 = HKDF(ck, se)
-      5. Encrypt auth tag:    c2 = encrypt(temp_k3, nonce=0, ad=h, pt=b"")
+      5. Encrypt auth tag:    t = encrypt(temp_k3, nonce=0, ad=h, pt=b"")
       6. Split:               send_key, recv_key = HKDF(ck, b"")
 
     Args:
@@ -1369,9 +1369,9 @@ print("  - Same temp_k (from ee ECDH)")
     # TODO: MixHash(c1): h = SHA256(h || c1)
     # TODO: ECDH(s, re): se = ecdh(s_priv, re_pub)  [se token]
     # TODO: MixKey: ck, temp_k3 = HKDF(ck, se)
-    # TODO: c2 = ChaCha20Poly1305(temp_k3).encrypt(bolt8_nonce(0), b"", h)
+    # TODO: t = ChaCha20Poly1305(temp_k3).encrypt(bolt8_nonce(0), b"", h)
     # TODO: Split: send_key, recv_key = HKDF(ck, b"")
-    # TODO: Assemble 66-byte wire message: b"\\x00" + c1 + c2
+    # TODO: Assemble 66-byte wire message: b"\\x00" + c1 + t
     # TODO: Return (message, send_key, recv_key)
     pass
 `,
@@ -1562,11 +1562,11 @@ print("Handshake complete! Ready for encrypted transport.")
     se = ecdh(s_priv, re_pub)
     ck, temp_k3 = hkdf_two_keys(ck, se)
     # Auth tag with temp_k3 at nonce=0
-    c2 = ChaCha20Poly1305(temp_k3).encrypt(bolt8_nonce(0), b"", h)
+    t = ChaCha20Poly1305(temp_k3).encrypt(bolt8_nonce(0), b"", h)
     # Split into transport keys
     send_key, recv_key = hkdf_two_keys(ck, b"")
-    # version(1) + c1(49) + c2(16) = 66 bytes
-    message = b'\\x00' + c1 + c2
+    # version(1) + c1(49) + t(16) = 66 bytes
+    message = b'\\x00' + c1 + t
     return (message, send_key, recv_key)`,
     },
     rewardSats: 21,
@@ -1585,13 +1585,13 @@ print("Handshake complete! Ready for encrypted transport.")
     Process Act 3 message (responder side) and derive transport keys.
 
     Steps:
-      1. Parse: version(1) || c1(49) || c2(16)
+      1. Parse: version(1) || c(49) || t(16)
       2. Check version == 0x00
-      3. Decrypt static key: is_pub = Decrypt(temp_k2, nonce=1, ad=h, ct=c1)
-      4. MixHash(c1):         h = SHA256(h || c1)
+      3. Decrypt static key: is_pub = Decrypt(temp_k2, nonce=1, ad=h, ct=c)
+      4. MixHash(c):          h = SHA256(h || c)
       5. ECDH(re, is):        se = ECDH(re_priv, is_pub)  [se token]
       6. MixKey(se):           ck, temp_k3 = HKDF(ck, se)
-      7. Verify auth tag:     Decrypt(temp_k3, nonce=0, ad=h, ct=c2)
+      7. Verify auth tag:     Decrypt(temp_k3, nonce=0, ad=h, ct=t)
       8. Split:               recv_key, send_key = HKDF(ck, b"")
 
     Note: The responder's key order from Split is REVERSED compared to
@@ -1614,13 +1614,13 @@ print("Handshake complete! Ready for encrypted transport.")
     Raises:
         ValueError if version is wrong or any tag verification fails.
     """
-    # TODO: Parse the 66-byte message: version(1) + c1(49) + c2(16)
+    # TODO: Parse the 66-byte message: version(1) + c(49) + t(16)
     # TODO: Check version byte == 0x00
     # TODO: Decrypt initiator's static public key using temp_k2 at bolt8_nonce(1)
-    # TODO: MixHash(c1)
+    # TODO: MixHash(c)
     # TODO: ECDH(re_priv, is_pub) - the 'se' token
     # TODO: MixKey: ck, temp_k3 = HKDF(ck, se)
-    # TODO: Verify auth tag by decrypting c2 with temp_k3 at bolt8_nonce(0)
+    # TODO: Verify auth tag by decrypting t with temp_k3 at bolt8_nonce(0)
     # TODO: Split: recv_key, send_key = HKDF(ck, b"")
     #       (reversed vs initiator!)
     # TODO: Return (is_pub, send_key, recv_key)
@@ -1817,22 +1817,22 @@ print("Match?", recovered_pub == is_pub)
       conceptual:
         "<p><strong>Goal:</strong> Process the 66-byte Act 3 message from the responder's side. Decrypt the initiator's static public key, verify their identity via the <code>se</code> ECDH, and derive transport keys.<br><br><strong>Key details:</strong> The encrypted static key uses <code>temp_k2</code> at <strong>nonce=1</strong> (same key as Act 2, incremented nonce). The <code>se</code> ECDH proves the initiator possesses their claimed static key. The transport key order is <strong>reversed</strong> compared to the initiator: the first HKDF output is the responder's <code>recv_key</code> (the initiator's <code>send_key</code>).<br><br><strong>Tools you will need:</strong> <code>ChaCha20Poly1305</code> for decryption (twice: nonce=1 and nonce=0), <code>ecdh()</code>, <code>hkdf_two_keys()</code>, and <code>hashlib.sha256()</code>.</p>",
       steps:
-        '<ol><li><strong>Parse</strong> the 66-byte message: version (1 byte) + encrypted static key (49 bytes) + auth tag (16 bytes)</li><li><strong>Check version</strong>: raise <code>ValueError</code> if not <code>0x00</code></li><li><strong>Decrypt</strong> the initiator\'s static public key using <code>ChaCha20Poly1305</code> with <code>temp_k2</code> at nonce=1 and the handshake hash as associated data</li><li><strong>MixHash</strong> the ciphertext (c1) into the handshake hash</li><li><strong>ECDH</strong>: Compute <code>se</code> using <code>ecdh()</code> with your ephemeral private key and the decrypted static public key</li><li><strong>MixKey</strong>: Derive <code>temp_k3</code> using <code>hkdf_two_keys()</code></li><li><strong>Verify</strong> the auth tag by decrypting c2 with <code>temp_k3</code> at nonce=0. If it fails, the initiator\'s identity is not authenticated</li><li><strong>Split</strong>: <code>recv_key, send_key = hkdf_two_keys(ck, b"")</code>. Note the reversed order compared to the initiator!</li></ol>',
+        '<ol><li><strong>Parse</strong> the 66-byte message: version (1 byte) + encrypted static key (49 bytes) + auth tag (16 bytes)</li><li><strong>Check version</strong>: raise <code>ValueError</code> if not <code>0x00</code></li><li><strong>Decrypt</strong> the initiator\'s static public key using <code>ChaCha20Poly1305</code> with <code>temp_k2</code> at nonce=1 and the handshake hash as associated data</li><li><strong>MixHash</strong> the ciphertext (<code>c</code>) into the handshake hash</li><li><strong>ECDH</strong>: Compute <code>se</code> using <code>ecdh()</code> with your ephemeral private key and the decrypted static public key</li><li><strong>MixKey</strong>: Derive <code>temp_k3</code> using <code>hkdf_two_keys()</code></li><li><strong>Verify</strong> the auth tag by decrypting <code>t</code> with <code>temp_k3</code> at nonce=0. If it fails, the initiator\'s identity is not authenticated</li><li><strong>Split</strong>: <code>recv_key, send_key = hkdf_two_keys(ck, b"")</code>. Note the reversed order compared to the initiator!</li></ol>',
       code: `def act_three_responder(h, ck, temp_k2, re_priv, message):
-    # Parse: version(1) + c1(49) + c2(16) = 66 bytes
+    # Parse: version(1) + c(49) + t(16) = 66 bytes
     version = message[0:1]
     if version != b'\\x00':
         raise ValueError("Bad version")
-    c1 = message[1:50]
-    c2 = message[50:]
+    c = message[1:50]
+    t = message[50:]
     # Decrypt initiator's static key with temp_k2 at nonce=1
-    is_pub = ChaCha20Poly1305(temp_k2).decrypt(bolt8_nonce(1), c1, h)
-    h = hashlib.sha256(h + c1).digest()
+    is_pub = ChaCha20Poly1305(temp_k2).decrypt(bolt8_nonce(1), c, h)
+    h = hashlib.sha256(h + c).digest()
     # se ECDH
     se = ecdh(re_priv, is_pub)
     ck, temp_k3 = hkdf_two_keys(ck, se)
     # Verify auth tag
-    ChaCha20Poly1305(temp_k3).decrypt(bolt8_nonce(0), c2, h)
+    ChaCha20Poly1305(temp_k3).decrypt(bolt8_nonce(0), t, h)
     # Split (reversed vs initiator!)
     recv_key, send_key = hkdf_two_keys(ck, b"")
     return (is_pub, send_key, recv_key)`,
