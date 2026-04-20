@@ -1579,7 +1579,7 @@ print("Handshake complete! Ready for encrypted transport.")
     id: "exercise-act3-responder",
     title: "Exercise 10: Act 3  -  Responder Side",
     description:
-      "Process the initiator's Act 3 message from the responder's perspective. Decrypt the initiator's static public key, perform the 'se' ECDH to verify their identity, verify the authentication MAC, and derive the transport encryption keys. Raise <code>ValueError(\"Bad version\")</code> if the version is not <code>0x00</code>.<br><br><strong>Inputs:</strong><br>• <code>h</code> - 32-byte handshake hash after Act 2<br>• <code>ck</code> - 32-byte chaining key after Act 2<br>• <code>temp_k2</code> - 32-byte encryption key from Act 2's MixKey<br>• <code>re_priv</code> - 32-byte responder's ephemeral private key<br>• <code>message</code> - 66-byte Act 3 message<br><br><strong>Returns:</strong><br>• <code>(is_pub, send_key, recv_key)</code> - 33-byte initiator's static public key, 32-byte sending key, 32-byte receiving key",
+      "Process the initiator's Act 3 message from the responder's perspective. Decrypt the initiator's static public key, perform the 'se' ECDH to verify their identity, verify the authentication MAC, and derive the transport encryption keys. Raise <code>ValueError(\"Bad version\")</code> if the version is not <code>0x00</code>.<br><br><strong>Inputs:</strong><br>• <code>h</code> - 32-byte handshake hash after Act 2<br>• <code>ck</code> - 32-byte chaining key after Act 2<br>• <code>temp_k2</code> - 32-byte encryption key from Act 2's MixKey<br>• <code>re_priv</code> - 32-byte responder's ephemeral private key<br>• <code>message</code> - 66-byte Act 3 message<br><br><strong>Returns:</strong><br>• <code>(initiator_static_pub, send_key, recv_key)</code> - 33-byte initiator's static public key, 32-byte sending key, 32-byte receiving key",
     starterCode: `def act_three_responder(h, ck, temp_k2, re_priv, message):
     """
     Process Act 3 message (responder side) and derive transport keys.
@@ -1587,9 +1587,9 @@ print("Handshake complete! Ready for encrypted transport.")
     Steps:
       1. Parse: version(1) || c(49) || t(16)
       2. Check version == 0x00
-      3. Decrypt static key: is_pub = Decrypt(temp_k2, nonce=1, ad=h, ct=c)
+      3. Decrypt static key: initiator_static_pub = Decrypt(temp_k2, nonce=1, ad=h, ct=c)
       4. MixHash(c):          h = SHA256(h || c)
-      5. ECDH(re, is):        se = ECDH(re_priv, is_pub)  [se token]
+      5. ECDH(re, is):        se = ECDH(re_priv, initiator_static_pub)  [se token]
       6. MixKey(se):           ck, temp_k3 = HKDF(ck, se)
       7. Verify auth tag:     Decrypt(temp_k3, nonce=0, ad=h, ct=t)
       8. Split:               recv_key, send_key = HKDF(ck, b"")
@@ -1606,8 +1606,8 @@ print("Handshake complete! Ready for encrypted transport.")
         message:  66-byte Act 3 message
 
     Returns:
-        tuple: (is_pub, send_key, recv_key)
-            is_pub    -  33-byte initiator's static public key (decrypted)
+        tuple: (initiator_static_pub, send_key, recv_key)
+            initiator_static_pub  -  33-byte initiator's static public key (decrypted)
             send_key  -  32-byte key for responder -> initiator messages
             recv_key  -  32-byte key for initiator -> responder messages
 
@@ -1618,12 +1618,12 @@ print("Handshake complete! Ready for encrypted transport.")
     # TODO: Check version byte == 0x00
     # TODO: Decrypt initiator's static public key using temp_k2 at bolt8_nonce(1)
     # TODO: MixHash(c)
-    # TODO: ECDH(re_priv, is_pub) - the 'se' token
+    # TODO: ECDH(re_priv, initiator_static_pub) - the 'se' token
     # TODO: MixKey: ck, temp_k3 = HKDF(ck, se)
     # TODO: Verify auth tag by decrypting t with temp_k3 at bolt8_nonce(0)
     # TODO: Split: recv_key, send_key = HKDF(ck, b"")
     #       (reversed vs initiator!)
-    # TODO: Return (is_pub, send_key, recv_key)
+    # TODO: Return (initiator_static_pub, send_key, recv_key)
     pass
 `,
     testCode: `
@@ -1826,16 +1826,16 @@ print("Match?", recovered_pub == is_pub)
     c = message[1:50]
     t = message[50:]
     # Decrypt initiator's static key with temp_k2 at nonce=1
-    is_pub = ChaCha20Poly1305(temp_k2).decrypt(bolt8_nonce(1), c, h)
+    initiator_static_pub = ChaCha20Poly1305(temp_k2).decrypt(bolt8_nonce(1), c, h)
     h = hashlib.sha256(h + c).digest()
     # se ECDH
-    se = ecdh(re_priv, is_pub)
+    se = ecdh(re_priv, initiator_static_pub)
     ck, temp_k3 = hkdf_two_keys(ck, se)
     # Verify auth tag
     ChaCha20Poly1305(temp_k3).decrypt(bolt8_nonce(0), t, h)
     # Split (reversed vs initiator!)
     recv_key, send_key = hkdf_two_keys(ck, b"")
-    return (is_pub, send_key, recv_key)`,
+    return (initiator_static_pub, send_key, recv_key)`,
     },
     rewardSats: 21,
   },
