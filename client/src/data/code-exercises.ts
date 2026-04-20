@@ -522,7 +522,7 @@ print("Final ck:", ck.hex(), "(unchanged)")
     id: "exercise-act1-initiator",
     title: "Exercise 5: Act 1  -  Initiator Side",
     description:
-      "Implement Act 1 of the XK handshake from Alice's (initiator) perspective. Mix the ephemeral public key into h, perform ECDH with the responder's static key (the 'es' token), derive a temporary key via HKDF, encrypt an empty payload, and produce the 50-byte Act 1 message.",
+      "Implement Act 1 of the XK handshake from Alice's (initiator) perspective. Mix the ephemeral public key into h, perform ECDH with the responder's static key (the 'es' token), derive a temporary key via HKDF, encrypt an empty payload using <code>ChaCha20Poly1305</code>, and produce the 50-byte Act 1 message.<br><br>For encryption, <code>ChaCha20Poly1305(key).encrypt(nonce, plaintext, associated_data)</code> takes a key, a 12-byte nonce, the data to encrypt, and associated data that is authenticated but not encrypted. Use the provided <code>bolt8_nonce()</code> helper (defined in <strong>crypto/primitives.py</strong> in the file explorer) to encode nonces in BOLT 8 format.",
     starterCode: `def act_one_initiator(h, ck, e_priv, e_pub, rs_pub):
     """
     Construct Act 1 message (initiator -> responder).
@@ -552,9 +552,9 @@ print("Final ck:", ck.hex(), "(unchanged)")
     # TODO: Step 2  -  Perform ECDH between ephemeral and responder's static key
     # TODO: Step 3  -  MixKey: derive new ck and temp_k using HKDF
     # TODO: Step 4  -  Encrypt empty payload with ChaCha20Poly1305
-    #                 nonce = b'\\x00' * 4 + (0).to_bytes(8, 'little'), ad = h, plaintext = b""
+    #                 nonce = bolt8_nonce(0), ad = h, plaintext = b""
     # TODO: Step 5  -  MixHash the ciphertext
-    # TODO: Step 6  -  Assemble message: version byte (0x00) + e_pub + ciphertext
+    # TODO: Step 6  -  Assemble the 50-byte wire message: version byte (0x00) + e_pub + ciphertext
     # TODO: Return (message, h, ck)
     pass
 `,
@@ -715,9 +715,9 @@ print("Length:", len(msg), "bytes (1 + 33 + 16 = 50)")
 `,
     hints: {
       conceptual:
-        "<p><strong>Goal:</strong> Construct the 50-byte Act 1 message as the initiator. This message commits your ephemeral public key and proves you know the responder's static public key.<br><br><strong>How it works:</strong> The Noise <code>e, es</code> pattern means: (1) MixHash your ephemeral public key, (2) perform ECDH between your ephemeral key and the responder's static key, (3) derive a temporary key via HKDF, and (4) encrypt an empty payload to produce a 16-byte authentication tag. The final message is: version byte + ephemeral public key (33 bytes) + tag (16 bytes).<br><br><strong>Tools you will need:</strong> <code>hashlib.sha256()</code> for MixHash, <code>ecdh()</code> and <code>hkdf_two_keys()</code> from earlier exercises, and <code>ChaCha20Poly1305</code> for authenticated encryption with BOLT 8 nonce encoding (4 zero bytes + 8-byte little-endian counter).</p>",
+        "<p><strong>Goal:</strong> Construct the 50-byte Act 1 message as the initiator. This message commits your ephemeral public key and proves you know the responder's static public key.<br><br><strong>How it works:</strong> The Noise <code>e, es</code> pattern means: (1) MixHash your ephemeral public key, (2) perform ECDH between your ephemeral key and the responder's static key, (3) derive a temporary key via HKDF, and (4) encrypt an empty payload to produce a 16-byte authentication tag. The final message is: version byte + ephemeral public key (33 bytes) + tag (16 bytes).<br><br><strong>Tools you will need:</strong> <code>hashlib.sha256()</code> for MixHash, <code>ecdh()</code> and <code>hkdf_two_keys()</code> from earlier exercises, <code>ChaCha20Poly1305</code> for authenticated encryption, and the provided <code>bolt8_nonce()</code> helper for nonce encoding.</p>",
       steps:
-        '<ol><li><strong>MixHash</strong> the ephemeral public key into the handshake hash using <code>hashlib.sha256()</code></li><li><strong>ECDH</strong>: Compute the shared secret using <code>ecdh()</code> with your ephemeral private key and the responder\'s static public key</li><li><strong>MixKey</strong>: Derive a new chaining key and temporary encryption key using <code>hkdf_two_keys()</code></li><li><strong>Encrypt</strong>: Use <code>ChaCha20Poly1305</code> with the temporary key to encrypt an empty plaintext, passing the handshake hash as associated data and nonce 0 (BOLT 8 format: 4 zero bytes + 8-byte little-endian)</li><li><strong>MixHash</strong> the ciphertext (authentication tag) into the handshake hash</li><li>Assemble the 50-byte message: version byte (<code>0x00</code>) + ephemeral public key + authentication tag</li></ol>',
+        '<ol><li><strong>MixHash</strong> the ephemeral public key into the handshake hash using <code>hashlib.sha256()</code></li><li><strong>ECDH</strong>: Compute the shared secret using <code>ecdh()</code> with your ephemeral private key and the responder\'s static public key</li><li><strong>MixKey</strong>: Derive a new chaining key and temporary encryption key using <code>hkdf_two_keys()</code></li><li><strong>Encrypt</strong>: Use <code>ChaCha20Poly1305</code> with the temporary key to encrypt an empty plaintext, passing the handshake hash as associated data and <code>bolt8_nonce(0)</code> as the nonce</li><li><strong>MixHash</strong> the ciphertext (authentication tag) into the handshake hash</li><li>Assemble the 50-byte wire message into a variable: version byte (<code>0x00</code>) + ephemeral public key + authentication tag</li></ol>',
       code: `def act_one_initiator(h, ck, e_priv, e_pub, rs_pub):
     # 1. MixHash ephemeral (33-byte compressed secp256k1 key)
     h = hashlib.sha256(h + e_pub).digest()
@@ -726,13 +726,12 @@ print("Length:", len(msg), "bytes (1 + 33 + 16 = 50)")
     # 3. MixKey
     ck, temp_k = hkdf_two_keys(ck, es)
     # 4. Encrypt empty payload
-    cipher = ChaCha20Poly1305(temp_k)
-    nonce = b'\\x00' * 4 + (0).to_bytes(8, 'little')
-    c = cipher.encrypt(nonce, b"", h)
+    c = ChaCha20Poly1305(temp_k).encrypt(bolt8_nonce(0), b"", h)
     # 5. MixHash ciphertext
     h = hashlib.sha256(h + c).digest()
     # 6. Assemble: version(1) + e_pub(33) + tag(16) = 50 bytes
-    return (b'\\x00' + e_pub + c, h, ck)`,
+    message = b'\\x00' + e_pub + c
+    return (message, h, ck)`,
     },
     rewardSats: 21,
   },
@@ -955,9 +954,7 @@ print("Tag verified successfully!")
     h = hashlib.sha256(h + re_pub).digest()
     es = ecdh(s_priv, re_pub)
     ck, temp_k = hkdf_two_keys(ck, es)
-    cipher = ChaCha20Poly1305(temp_k)
-    nonce = b'\\x00' * 4 + (0).to_bytes(8, 'little')
-    cipher.decrypt(nonce, c, h)  # verify tag
+    ChaCha20Poly1305(temp_k).decrypt(bolt8_nonce(0), c, h)  # verify tag
     h = hashlib.sha256(h + c).digest()
     return (re_pub, h, ck)`,
     },
@@ -1152,11 +1149,13 @@ print("Length:", len(msg), "bytes")
     ee = ecdh(e_priv, re_pub)
     # 3. MixKey
     ck, temp_k = hkdf_two_keys(ck, ee)
-    cipher = ChaCha20Poly1305(temp_k)
-    c = cipher.encrypt(b'\\x00' * 4 + (0).to_bytes(8, 'little'), b"", h)
+    # 4. Encrypt empty payload
+    c = ChaCha20Poly1305(temp_k).encrypt(bolt8_nonce(0), b"", h)
+    # 5. MixHash ciphertext
     h = hashlib.sha256(h + c).digest()
-    # version(1) + e_pub(33) + tag(16) = 50 bytes
-    return (b'\\x00' + e_pub + c, h, ck)`,
+    # 6. Assemble: version(1) + e_pub(33) + tag(16) = 50 bytes
+    message = b'\\x00' + e_pub + c
+    return (message, h, ck)`,
     },
     rewardSats: 21,
   },
@@ -1318,7 +1317,7 @@ print("  - Same temp_k (from ee ECDH)")
     h = hashlib.sha256(h + re_pub).digest()
     ee = ecdh(e_priv, re_pub)
     ck, temp_k = hkdf_two_keys(ck, ee)
-    ChaCha20Poly1305(temp_k).decrypt(b'\\x00' * 4 + (0).to_bytes(8, 'little'), c, h)
+    ChaCha20Poly1305(temp_k).decrypt(bolt8_nonce(0), c, h)
     h = hashlib.sha256(h + c).digest()
     return (re_pub, h, ck)`,
     },
@@ -1365,16 +1364,17 @@ print("  - Same temp_k (from ee ECDH)")
             send_key  -  32-byte key for initiator -> responder messages
             recv_key  -  32-byte key for responder -> initiator messages
     """
-    # TODO: Encrypt static public key using temp_k2 with nonce=1
+    # TODO: Encrypt static public key using temp_k2 with bolt8_nonce(1)
     #       (nonce=0 was consumed in Act 2)
-    #       c1 = ChaCha20Poly1305(temp_k2, nonce=1, ad=h, pt=s_pub)
+    #       c1 = ChaCha20Poly1305(temp_k2).encrypt(bolt8_nonce(1), s_pub, h)
     # TODO: MixHash(c1): h = SHA256(h || c1)
     # TODO: ECDH(s, re): se = ecdh(s_priv, re_pub)  [se token]
     # TODO: MixKey: ck, temp_k3 = HKDF(ck, se)
-    # TODO: c2 = ChaCha20Poly1305(temp_k3, nonce=0, ad=h, pt=b"")
+    # TODO: c2 = ChaCha20Poly1305(temp_k3).encrypt(bolt8_nonce(0), b"", h)
     # TODO: MixHash(c2): h = SHA256(h || c2)
     # TODO: Split: send_key, recv_key = HKDF(ck, b"")
-    # TODO: Return (b"\\x00" + c1 + c2, send_key, recv_key)
+    # TODO: Assemble 66-byte wire message: b"\\x00" + c1 + c2
+    # TODO: Return (message, send_key, recv_key)
     pass
 `,
     testCode: `
@@ -1558,20 +1558,19 @@ print("Handshake complete! Ready for encrypted transport.")
       code: `def act_three_initiator(h, ck, temp_k2, s_priv, s_pub, re_pub):
     # Encrypt static key with temp_k2 at nonce=1
     # (nonce=0 was used in Act 2's empty payload encryption)
-    c1 = ChaCha20Poly1305(temp_k2).encrypt(
-        b'\\x00' * 4 + (1).to_bytes(8, 'little'), s_pub, h)
+    c1 = ChaCha20Poly1305(temp_k2).encrypt(bolt8_nonce(1), s_pub, h)
     h = hashlib.sha256(h + c1).digest()
     # se ECDH
     se = ecdh(s_priv, re_pub)
     ck, temp_k3 = hkdf_two_keys(ck, se)
     # Auth tag with temp_k3 at nonce=0
-    c2 = ChaCha20Poly1305(temp_k3).encrypt(
-        b'\\x00' * 4 + (0).to_bytes(8, 'little'), b"", h)
+    c2 = ChaCha20Poly1305(temp_k3).encrypt(bolt8_nonce(0), b"", h)
     h = hashlib.sha256(h + c2).digest()
     # Split into transport keys
     send_key, recv_key = hkdf_two_keys(ck, b"")
     # version(1) + c1(49) + c2(16) = 66 bytes
-    return (b'\\x00' + c1 + c2, send_key, recv_key)`,
+    message = b'\\x00' + c1 + c2
+    return (message, send_key, recv_key)`,
     },
     rewardSats: 21,
   },
@@ -1621,11 +1620,11 @@ print("Handshake complete! Ready for encrypted transport.")
     """
     # TODO: Parse the 66-byte message: version(1) + c1(49) + c2(16)
     # TODO: Check version byte == 0x00
-    # TODO: Decrypt initiator's static public key using temp_k2 at nonce=1
+    # TODO: Decrypt initiator's static public key using temp_k2 at bolt8_nonce(1)
     # TODO: MixHash(c1)
     # TODO: ECDH(re_priv, is_pub) - the 'se' token
     # TODO: MixKey: ck, temp_k3 = HKDF(ck, se)
-    # TODO: Verify auth tag by decrypting c2 with temp_k3 at nonce=0
+    # TODO: Verify auth tag by decrypting c2 with temp_k3 at bolt8_nonce(0)
     # TODO: MixHash(c2)
     # TODO: Split: recv_key, send_key = HKDF(ck, b"")
     #       (reversed vs initiator!)
@@ -1832,15 +1831,13 @@ print("Match?", recovered_pub == is_pub)
     c1 = message[1:50]
     c2 = message[50:]
     # Decrypt initiator's static key with temp_k2 at nonce=1
-    is_pub = ChaCha20Poly1305(temp_k2).decrypt(
-        b'\\x00' * 4 + (1).to_bytes(8, 'little'), c1, h)
+    is_pub = ChaCha20Poly1305(temp_k2).decrypt(bolt8_nonce(1), c1, h)
     h = hashlib.sha256(h + c1).digest()
     # se ECDH
     se = ecdh(re_priv, is_pub)
     ck, temp_k3 = hkdf_two_keys(ck, se)
     # Verify auth tag
-    ChaCha20Poly1305(temp_k3).decrypt(
-        b'\\x00' * 4 + (0).to_bytes(8, 'little'), c2, h)
+    ChaCha20Poly1305(temp_k3).decrypt(bolt8_nonce(0), c2, h)
     h = hashlib.sha256(h + c2).digest()
     # Split (reversed vs initiator!)
     recv_key, send_key = hkdf_two_keys(ck, b"")
@@ -1888,8 +1885,8 @@ print("Match?", recovered_pub == is_pub)
         """
         self._maybe_rotate()
         # TODO: Encode the length of plaintext as 2-byte big-endian
-        # TODO: Encrypt the length bytes with ChaCha20Poly1305 using self.nonce
-        # TODO: Encrypt the plaintext body with ChaCha20Poly1305 using self.nonce+1
+        # TODO: Encrypt the length bytes with ChaCha20Poly1305 using bolt8_nonce(self.nonce)
+        # TODO: Encrypt the plaintext body with ChaCha20Poly1305 using bolt8_nonce(self.nonce + 1)
         # TODO: Advance self.nonce by 2
         # TODO: Return encrypted_length + encrypted_body
         pass
@@ -1990,9 +1987,9 @@ print("Next nonce: 2 (each message consumes 2 nonces)")
 `,
     hints: {
       conceptual:
-        "<p><strong>Goal:</strong> Initialize a <code>CipherState</code> and encrypt a Lightning transport message by producing an encrypted length prefix followed by the encrypted message body.<br><br><strong>Key details:</strong> Lightning frames each message with a 2-byte big-endian length prefix, then the message body. Both parts are encrypted separately with ChaCha20-Poly1305, each consuming one nonce (so a single message uses two sequential nonces). This hides the message size from observers. Nonces are 12 bytes per BOLT 8: 4 zero bytes followed by an 8-byte little-endian counter. No associated data is used.<br><br><strong>Tools you will need:</strong> <code>struct.pack()</code> to encode the length as 2 bytes, <code>ChaCha20Poly1305</code> for encryption, and <code>int.to_bytes()</code> for nonce encoding.</p>",
+        "<p><strong>Goal:</strong> Initialize a <code>CipherState</code> and encrypt a Lightning transport message by producing an encrypted length prefix followed by the encrypted message body.<br><br><strong>Key details:</strong> Lightning frames each message with a 2-byte big-endian length prefix, then the message body. Both parts are encrypted separately with ChaCha20-Poly1305, each consuming one nonce (so a single message uses two sequential nonces). This hides the message size from observers. No associated data is used.<br><br><strong>Tools you will need:</strong> <code>struct.pack()</code> to encode the length as 2 bytes, <code>ChaCha20Poly1305</code> for encryption, and the provided <code>bolt8_nonce()</code> helper for nonce encoding.</p>",
       steps:
-        '<ol><li><strong><code>__init__</code></strong>: Store <code>key</code>, <code>chaining_key</code>, and set <code>nonce = 0</code> as instance attributes</li><li><strong><code>encrypt_message</code></strong>: After the <code>self._maybe_rotate()</code> call, encode the plaintext length as a 2-byte big-endian unsigned integer using <code>struct.pack()</code> with the <code>">H"</code> format</li><li>Encrypt the length bytes using <code>ChaCha20Poly1305(self.key)</code> with the current nonce (BOLT 8 format: 4 zero bytes + 8-byte little-endian) and empty associated data</li><li>Encrypt the message body using the next nonce (<code>self.nonce + 1</code>) and empty associated data</li><li>Advance <code>self.nonce</code> by 2 and return the concatenated ciphertext</li></ol>',
+        '<ol><li><strong><code>__init__</code></strong>: Store <code>key</code>, <code>chaining_key</code>, and set <code>nonce = 0</code> as instance attributes</li><li><strong><code>encrypt_message</code></strong>: After the <code>self._maybe_rotate()</code> call, encode the plaintext length as a 2-byte big-endian unsigned integer using <code>struct.pack()</code> with the <code>">H"</code> format</li><li>Encrypt the length bytes using <code>ChaCha20Poly1305(self.key)</code> with <code>bolt8_nonce(self.nonce)</code> and empty associated data</li><li>Encrypt the message body using <code>bolt8_nonce(self.nonce + 1)</code> and empty associated data</li><li>Advance <code>self.nonce</code> by 2 and return the concatenated ciphertext</li></ol>',
       code: `    def __init__(self, key, chaining_key):
         self.key = key
         self.chaining_key = chaining_key
@@ -2005,10 +2002,8 @@ print("Next nonce: 2 (each message consumes 2 nonces)")
         self._maybe_rotate()
         length_bytes = struct.pack(">H", len(plaintext))
         cipher = ChaCha20Poly1305(self.key)
-        nonce_bytes = b'\\x00' * 4 + self.nonce.to_bytes(8, 'little')
-        enc_len = cipher.encrypt(nonce_bytes, length_bytes, b"")
-        nonce_bytes2 = b'\\x00' * 4 + (self.nonce + 1).to_bytes(8, 'little')
-        enc_body = cipher.encrypt(nonce_bytes2, plaintext, b"")
+        enc_len = cipher.encrypt(bolt8_nonce(self.nonce), length_bytes, b"")
+        enc_body = cipher.encrypt(bolt8_nonce(self.nonce + 1), plaintext, b"")
         self.nonce += 2
         return enc_len + enc_body`,
     },
@@ -2039,9 +2034,9 @@ print("Next nonce: 2 (each message consumes 2 nonces)")
         """
         self._maybe_rotate()
         # TODO: Split ciphertext into encrypted_length (first 18 bytes) and encrypted_body
-        # TODO: Decrypt the length field using self.nonce
+        # TODO: Decrypt the length field using bolt8_nonce(self.nonce)
         # TODO: Parse the 2-byte big-endian length
-        # TODO: Decrypt the body using self.nonce+1
+        # TODO: Decrypt the body using bolt8_nonce(self.nonce + 1)
         # TODO: Advance self.nonce by 2
         # TODO: Return the plaintext
         pass
@@ -2163,17 +2158,15 @@ print("Match:", recovered == plaintext)
       conceptual:
         "<p><strong>Goal:</strong> Decrypt a Lightning transport message by recovering the length prefix, then the message body.<br><br><strong>Key details:</strong> Decryption mirrors encryption. The ciphertext starts with 18 bytes: the encrypted 2-byte length prefix plus a 16-byte MAC. After decrypting the length, the remaining bytes contain the encrypted message body with its own MAC. Each decryption consumes two nonces, matching what encryption produced.<br><br><strong>Tools you will need:</strong> <code>ChaCha20Poly1305</code> for decryption, <code>struct.unpack()</code> to parse the recovered length, and byte slicing to split the ciphertext.</p>",
       steps:
-        '<ol><li>After the <code>self._maybe_rotate()</code> call, split the ciphertext: the first 18 bytes are the encrypted length (2 + 16-byte MAC), the rest is the encrypted body</li><li>Decrypt the length prefix using <code>ChaCha20Poly1305(self.key)</code> with the current nonce and empty associated data</li><li>Parse the decrypted length bytes into an integer using <code>struct.unpack()</code> with the <code>">H"</code> format</li><li>Decrypt the message body using the next nonce (<code>self.nonce + 1</code>) and empty associated data</li><li>Advance <code>self.nonce</code> by 2 and return the plaintext</li></ol>',
+        '<ol><li>After the <code>self._maybe_rotate()</code> call, split the ciphertext: the first 18 bytes are the encrypted length (2 + 16-byte MAC), the rest is the encrypted body</li><li>Decrypt the length prefix using <code>ChaCha20Poly1305(self.key)</code> with <code>bolt8_nonce(self.nonce)</code> and empty associated data</li><li>Parse the decrypted length bytes into an integer using <code>struct.unpack()</code> with the <code>">H"</code> format</li><li>Decrypt the message body using <code>bolt8_nonce(self.nonce + 1)</code> and empty associated data</li><li>Advance <code>self.nonce</code> by 2 and return the plaintext</li></ol>',
       code: `    def decrypt_message(self, ciphertext):
         self._maybe_rotate()
         cipher = ChaCha20Poly1305(self.key)
         enc_len = ciphertext[:18]
-        nonce_bytes = b'\\x00' * 4 + self.nonce.to_bytes(8, 'little')
-        length_bytes = cipher.decrypt(nonce_bytes, enc_len, b"")
+        length_bytes = cipher.decrypt(bolt8_nonce(self.nonce), enc_len, b"")
         msg_len = struct.unpack(">H", length_bytes)[0]
         enc_body = ciphertext[18:]
-        nonce_bytes2 = b'\\x00' * 4 + (self.nonce + 1).to_bytes(8, 'little')
-        plaintext = cipher.decrypt(nonce_bytes2, enc_body, b"")
+        plaintext = cipher.decrypt(bolt8_nonce(self.nonce + 1), enc_body, b"")
         self.nonce += 2
         return plaintext`,
     },

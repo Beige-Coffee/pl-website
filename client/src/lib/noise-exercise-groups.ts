@@ -24,25 +24,47 @@ export interface NoiseExerciseGroup {
 // When the student's ecdh() from primitives.py runs inside handshake.py,
 // it needs SigningKey/SECP256k1 in scope. These imports ensure that.
 
+const BOLT8_NONCE_HELPER = `
+def bolt8_nonce(counter):
+    """Encode a nonce for BOLT 8 ChaCha20-Poly1305 (4 zero bytes + 8-byte LE counter)."""
+    return b'\\x00' * 4 + counter.to_bytes(8, 'little')`;
+
 const HANDSHAKE_SETUP = `from ecdsa import SigningKey, VerifyingKey, SECP256k1
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
-import hashlib, hmac`;
+import hashlib, hmac
+${BOLT8_NONCE_HELPER}`;
 
-const TRANSPORT_SETUP = `import hmac, hashlib`;
+const TRANSPORT_SETUP = `import hmac, hashlib
+${BOLT8_NONCE_HELPER}`;
 
 // ─── Visible Preambles (shown in editor, read-only) ────────────────────────
 
 const PRIMITIVES_PREAMBLE = `from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from ecdsa import SigningKey, VerifyingKey, SECP256k1
-import hashlib, hmac`;
+import hashlib, hmac
 
-const HANDSHAKE_PREAMBLE = `# ecdh() and hkdf_two_keys() are available from your crypto/primitives.py
+def bolt8_nonce(counter):
+    """
+    Encode a nonce for BOLT 8's ChaCha20-Poly1305.
+
+    BOLT 8 requires a 12-byte nonce: 4 zero bytes of padding followed
+    by an 8-byte little-endian counter.
+
+    Args:
+        counter: int - the nonce counter value (e.g. 0, 1, 2, ...)
+
+    Returns:
+        bytes: 12-byte nonce for ChaCha20-Poly1305
+    """
+    return b'\\x00' * 4 + counter.to_bytes(8, 'little')`;
+
+const HANDSHAKE_PREAMBLE = `# ecdh(), hkdf_two_keys(), and bolt8_nonce() are defined in crypto/primitives.py
 import hashlib
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305`;
 
-const TRANSPORT_PREAMBLE = `# hkdf_two_keys() is available from your crypto/primitives.py
+const TRANSPORT_PREAMBLE = `# hkdf_two_keys() and bolt8_nonce() are defined in crypto/primitives.py
 import struct, hmac, hashlib
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 
