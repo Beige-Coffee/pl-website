@@ -115,7 +115,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
       "Using the shared secret directly would allow an attacker to brute-force it, since ECDH outputs are not resistant to offline attacks without HKDF",
     ],
     answer: 0,
-    explanation: "The Noise Protocol needs multiple independent keys from each ECDH shared secret for different cryptographic operations, such as encryption and authentication. Using the same key for multiple purposes can create subtle vulnerabilities. HKDF's two-phase design (extract then expand) takes a single input and produces multiple cryptographically independent keys, ensuring that compromising one derived key doesn't compromise the others. As a bonus, HKDF's extract phase also ensures the derived keys are uniformly random, removing any structural bias that may be present in the raw ECDH output.",
+    explanation: "The Noise Protocol needs multiple independent keys from each ECDH shared secret for different purposes: one for encryption, another for updating the chaining key. Reusing a single key across both would open the door to subtle attacks. HKDF's two-phase design (extract then expand) takes a single input and produces cryptographically independent keys, so compromising one doesn't compromise the other. The extract phase also scrubs any structural bias from the raw ECDH output, producing uniformly random keys.",
   },
   "nonce-reuse": {
     question: "If Alice encrypts two different messages using ChaCha20 (not AEAD) with the same key and nonce, what can an attacker who intercepts both ciphertexts do?",
@@ -137,7 +137,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
       "The handshake would complete normally, but Alice and Bob would have different handshake hashes, which they would only discover when the first encrypted message fails to decrypt",
     ],
     answer: 1,
-    explanation: "In the handshake setup, both Alice and Bob independently mix Bob's static public key into their handshake hash. If Alice uses the wrong key, her hash diverges from Bob's from the very start. When she computes the `es` ECDH shared secret using the wrong key in Act 1, she derives a different `temp_k1` than Bob would. The MAC she creates with this wrong key and her divergent handshake hash (used as associated data) will fail verification on Bob's side, and he will immediately terminate the connection. This is exactly why the setup phase exists: it catches identity mismatches before any real data is exchanged.",
+    explanation: "Both Alice and Bob independently mix Bob's static public key into their handshake hash during setup. If Alice uses the wrong key, her hash diverges from Bob's from the very start. She'll also compute a different `es` ECDH shared secret, which means a different `temp_k1`. The MAC she creates will fail verification on Bob's side because both the key and the associated data (the handshake hash) are wrong. Bob terminates the connection immediately. The setup phase catches this kind of identity mismatch before any real data is exchanged.",
   },
   "act2-both-ephemeral": {
     question: "In Act 2, Bob generates his own ephemeral key pair and performs an `ee` ECDH with Alice's ephemeral key. Why can't they just reuse the `es` shared secret from Act 1 for the rest of the connection?",
@@ -170,7 +170,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
       "The message is compressed using zlib before encryption to bring it under the 65,535-byte limit, as required by BOLT 1's message compression extension",
     ],
     answer: 0,
-    explanation: "This is a design constraint, not a limitation to work around. BOLT 8 explicitly states: 'The maximum size of any Lightning message MUST NOT exceed 65535 bytes.' The 2-byte length prefix can represent values from 0 to 65,535 (the maximum for an unsigned 16-bit integer), and the protocol was intentionally designed with this ceiling. The motivation is practical: a hard maximum simplifies testing, makes memory management predictable, and prevents a malicious peer from exhausting a node's memory by advertising enormous messages. No splitting, compression, or extended headers exist in the protocol.",
+    explanation: "BOLT 8 explicitly states: 'The maximum size of any Lightning message MUST NOT exceed 65535 bytes.' The 2-byte length prefix can represent values from 0 to 65,535 (the maximum for an unsigned 16-bit integer), and the protocol was designed with this hard ceiling on purpose. Capping the size keeps memory usage predictable, makes implementations easier to test, and stops a malicious peer from sending a giant message to exhaust your node's memory. The protocol has no mechanism for splitting, compressing, or extending the length field.",
   },
 };
 
