@@ -125,7 +125,7 @@ def generate_keypair():
   // ═══════════════════════════════════════════════════════════════════════════
   "exercise-ecdh": {
     id: "exercise-ecdh",
-    title: "Exercise 2: Perform ECDH Key Exchange",
+    title: "Exercise 2: ECDH Key Exchange (BOLT 8 Variant)",
     description:
       "Implement the secp256k1 ECDH exchange as defined in BOLT 8. Given your 32-byte private key and a remote party's 33-byte compressed public key, compute the 32-byte shared secret. BOLT 8 defines ECDH as: compute the shared point, represent it in compressed format, then return its SHA-256 hash. This is the core operation behind every handshake token (ee, es, se, ss).",
     starterCode: `def ecdh(local_private_key_bytes, remote_public_key_bytes):
@@ -272,7 +272,7 @@ print("Match:", bolt8_secret_ab == bolt8_secret_ba)
     id: "exercise-hkdf",
     title: "Exercise 3: Implement HKDF (Key Derivation)",
     description:
-      "Implement the Noise Protocol's variant of HKDF-SHA256. Given a salt (chaining key) and input key material, produce two 32-byte derived keys. Use only the hmac and hashlib modules  -  no high-level HKDF wrappers.",
+      "Implement the Noise Protocol's variant of HKDF-SHA256. Given a salt (chaining key) and input key material, produce two 32-byte derived keys. Use only the hmac and hashlib modules  -  no high-level HKDF wrappers.<br><br><a href=\"https://github.com/lightning/bolts/blob/master/08-transport.md\">BOLT 8</a> defines HKDF as: \"a function defined in <a href=\"https://www.rfc-editor.org/rfc/rfc5869\">RFC 5869</a>, evaluated with a zero-length <code>info</code> field. All invocations of HKDF implicitly return 64 bytes of cryptographic randomness using the extract-and-expand component.\" 64 bytes = two 32-byte keys (SHA-256 digest size).<br><br>The <a href=\"https://noiseprotocol.org/noise.html#hash-functions\">Noise Protocol spec</a> (Section 4.3) specifies the exact formula:<br><code>temp_key = HMAC-HASH(chaining_key, input_key_material)</code><br><code>output1 = HMAC-HASH(temp_key, byte(0x01))</code><br><code>output2 = HMAC-HASH(temp_key, output1 || byte(0x02))</code><br><br>Standard RFC 5869 expand includes an <code>info</code> parameter: <code>T(1) = HMAC(PRK, T(0) || info || 0x01)</code>. With <code>info</code> always empty and <code>T(0)</code> being the empty string, these reduce to the formulas above. The Noise/BOLT 8 variant is a strict subset of RFC 5869, not a deviation from it.",
     starterCode: `def hkdf_two_keys(salt, input_key_material):
     """
     Noise Protocol's HKDF: extract-then-expand producing 2 x 32-byte keys.
@@ -531,8 +531,8 @@ print("Final ck:", ck.hex(), "(unchanged)")
 
     Steps:
       1. MixHash(e_pub):   h = SHA256(h || e_pub)
-      2. ECDH(e, rs):      ss = ECDH(e_priv, rs_pub)
-      3. MixKey(ss):        ck, temp_k = HKDF(ck, ss)
+      2. ECDH(e, rs):      es = ECDH(e_priv, rs_pub)
+      3. MixKey(es):        ck, temp_k = HKDF(ck, es)
       4. Encrypt:           c = ChaCha20Poly1305(temp_k, nonce=0, ad=h, pt=b"")
       5. MixHash(c):        h = SHA256(h || c)
       6. Message:           0x00 || e_pub || c
@@ -694,11 +694,11 @@ h = hashlib.sha256(h + e_pub).digest()
 print("h after MixHash(e_pub):", h.hex()[:32] + "...")
 
 # Step 2: ECDH(e, rs) - the 'es' token
-ss = _ecdh(e_priv, rs_pub)
-print("es shared secret:", ss.hex()[:32] + "...")
+es = _ecdh(e_priv, rs_pub)
+print("es shared secret:", es.hex()[:32] + "...")
 
 # Step 3: MixKey
-ck, temp_k = _hkdf(ck, ss)
+ck, temp_k = _hkdf(ck, es)
 
 # Step 4: Encrypt empty payload
 c = ChaCha20Poly1305(temp_k).encrypt(b'\\x00' * 4 + (0).to_bytes(8, 'little'), b"", h)
@@ -722,9 +722,9 @@ print("Length:", len(msg), "bytes (1 + 33 + 16 = 50)")
     # 1. MixHash ephemeral (33-byte compressed secp256k1 key)
     h = hashlib.sha256(h + e_pub).digest()
     # 2. ECDH(e, rs)
-    ss = ecdh(e_priv, rs_pub)
+    es = ecdh(e_priv, rs_pub)
     # 3. MixKey
-    ck, temp_k = hkdf_two_keys(ck, ss)
+    ck, temp_k = hkdf_two_keys(ck, es)
     # 4. Encrypt empty payload
     cipher = ChaCha20Poly1305(temp_k)
     nonce = b'\\x00' * 4 + (0).to_bytes(8, 'little')
@@ -753,8 +753,8 @@ print("Length:", len(msg), "bytes (1 + 33 + 16 = 50)")
       1. Parse: version(1) || re_pub(33) || c(16)
       2. Check version == 0x00
       3. MixHash(re_pub):   h = SHA256(h || re_pub)
-      4. ECDH(s, re):       ss = ECDH(s_priv, re_pub)
-      5. MixKey(ss):         ck, temp_k = HKDF(ck, ss)
+      4. ECDH(s, re):       es = ECDH(s_priv, re_pub)
+      5. MixKey(es):         ck, temp_k = HKDF(ck, es)
       6. Decrypt & verify:   plaintext = Decrypt(temp_k, nonce=0, ad=h, ct=c)
       7. MixHash(c):         h = SHA256(h || c)
 
@@ -914,8 +914,8 @@ h_saved, ck_saved = h, ck
 
 # Build Act 1 (initiator)
 h = hashlib.sha256(h + e_pub).digest()
-ss = _ecdh(e_priv, rs_pub)
-ck, temp_k = _hkdf(ck, ss)
+es = _ecdh(e_priv, rs_pub)
+ck, temp_k = _hkdf(ck, es)
 c = ChaCha20Poly1305(temp_k).encrypt(b'\\x00' * 4 + (0).to_bytes(8, 'little'), b"", h)
 h = hashlib.sha256(h + c).digest()
 msg = b'\\x00' + e_pub + c
@@ -933,11 +933,11 @@ print("Ephemeral key:", re_pub.hex())
 print("Tag:", tag.hex())
 
 h_r = hashlib.sha256(h_r + re_pub).digest()
-ss_r = _ecdh(rs_priv, re_pub)  # s, re (commutativity!)
+es_r = _ecdh(rs_priv, re_pub)  # s, re (commutativity!)
 print()
-print("ECDH(s, re) == ECDH(e, rs)?", ss_r == ss)
+print("ECDH(s, re) == ECDH(e, rs)?", es_r == es)
 
-ck_r, temp_k_r = _hkdf(ck_r, ss_r)
+ck_r, temp_k_r = _hkdf(ck_r, es_r)
 ChaCha20Poly1305(temp_k_r).decrypt(b'\\x00' * 4 + (0).to_bytes(8, 'little'), tag, h_r)
 print("Tag verified successfully!")
 `,
@@ -953,8 +953,8 @@ print("Tag verified successfully!")
     re_pub = message[1:34]  # 33-byte compressed secp256k1 key
     c = message[34:]
     h = hashlib.sha256(h + re_pub).digest()
-    ss = ecdh(s_priv, re_pub)
-    ck, temp_k = hkdf_two_keys(ck, ss)
+    es = ecdh(s_priv, re_pub)
+    ck, temp_k = hkdf_two_keys(ck, es)
     cipher = ChaCha20Poly1305(temp_k)
     nonce = b'\\x00' * 4 + (0).to_bytes(8, 'little')
     cipher.decrypt(nonce, c, h)  # verify tag
@@ -980,8 +980,8 @@ print("Tag verified successfully!")
 
     Steps:
       1. MixHash(e_pub):   h = SHA256(h || e_pub)
-      2. ECDH(e, re):      ss = ECDH(e_priv, re_pub)  [ee DH]
-      3. MixKey(ss):        ck, temp_k = HKDF(ck, ss)
+      2. ECDH(e, re):      ee = ECDH(e_priv, re_pub)  [ee DH]
+      3. MixKey(ee):        ck, temp_k = HKDF(ck, ee)
       4. Encrypt:           c = ChaCha20Poly1305(temp_k, nonce=0, ad=h, pt=b"")
       5. MixHash(c):        h = SHA256(h || c)
       6. Message:           0x00 || e_pub || c
@@ -1127,11 +1127,11 @@ print("Responder ephemeral:", re_pub.hex())
 
 # Act 2: MixHash, ee ECDH, MixKey, Encrypt
 h = hashlib.sha256(h + re_pub).digest()
-ss_ee = _ecdh(re_priv, ie_pub)
-print("ee shared secret:", ss_ee.hex()[:32] + "...")
+ee = _ecdh(re_priv, ie_pub)
+print("ee shared secret:", ee.hex()[:32] + "...")
 print("(This is ephemeral-ephemeral = forward secrecy!)")
 
-ck, temp_k = _hkdf(ck, ss_ee)
+ck, temp_k = _hkdf(ck, ee)
 c = ChaCha20Poly1305(temp_k).encrypt(b'\\x00' * 4 + (0).to_bytes(8, 'little'), b"", h)
 h = hashlib.sha256(h + c).digest()
 
@@ -1149,9 +1149,9 @@ print("Length:", len(msg), "bytes")
     # 1. MixHash ephemeral (33-byte compressed secp256k1)
     h = hashlib.sha256(h + e_pub).digest()
     # 2. ee DH
-    ss = ecdh(e_priv, re_pub)
+    ee = ecdh(e_priv, re_pub)
     # 3. MixKey
-    ck, temp_k = hkdf_two_keys(ck, ss)
+    ck, temp_k = hkdf_two_keys(ck, ee)
     cipher = ChaCha20Poly1305(temp_k)
     c = cipher.encrypt(b'\\x00' * 4 + (0).to_bytes(8, 'little'), b"", h)
     h = hashlib.sha256(h + c).digest()
@@ -1177,8 +1177,8 @@ print("Length:", len(msg), "bytes")
       1. Parse: version(1) || re_pub(33) || c(16)
       2. Check version == 0x00
       3. MixHash(re_pub):   h = SHA256(h || re_pub)
-      4. ECDH(e, re):       ss = ECDH(e_priv, re_pub)  [ee DH]
-      5. MixKey(ss):         ck, temp_k = HKDF(ck, ss)
+      4. ECDH(e, re):       ee = ECDH(e_priv, re_pub)  [ee DH]
+      5. MixKey(ee):         ck, temp_k = HKDF(ck, ee)
       6. Decrypt & verify:   Decrypt(temp_k, nonce=0, ad=h, ct=c)
       7. MixHash(c):         h = SHA256(h || c)
 
@@ -1291,7 +1291,7 @@ print("  1. Parse: version(1) || re_pub(33) || c(16)")
 print("  2. Check version == 0x00")
 print("  3. MixHash(re_pub)")
 print("  4. ECDH(e_priv, re_pub) -- ee DH (forward secrecy!)")
-print("  5. MixKey: ck, temp_k = HKDF(ck, ss)")
+print("  5. MixKey: ck, temp_k = HKDF(ck, ee)")
 print("  6. Decrypt & verify tag")
 print("  7. MixHash(c)")
 print()
@@ -1316,8 +1316,8 @@ print("  - Same temp_k (from ee ECDH)")
     re_pub = message[1:34]  # 33-byte compressed secp256k1 key
     c = message[34:]
     h = hashlib.sha256(h + re_pub).digest()
-    ss = ecdh(e_priv, re_pub)
-    ck, temp_k = hkdf_two_keys(ck, ss)
+    ee = ecdh(e_priv, re_pub)
+    ck, temp_k = hkdf_two_keys(ck, ee)
     ChaCha20Poly1305(temp_k).decrypt(b'\\x00' * 4 + (0).to_bytes(8, 'little'), c, h)
     h = hashlib.sha256(h + c).digest()
     return (re_pub, h, ck)`,
@@ -1345,8 +1345,8 @@ print("  - Same temp_k (from ee ECDH)")
     Steps:
       1. Encrypt static key:  c1 = encrypt(temp_k2, nonce=1, ad=h, pt=s_pub)
       2. MixHash(c1):         h = SHA256(h || c1)
-      3. ECDH(s, re):         ss = ecdh(s_priv, re_pub)  [se DH]
-      4. MixKey(ss):           ck, temp_k3 = HKDF(ck, ss)
+      3. ECDH(s, re):         se = ecdh(s_priv, re_pub)  [se DH]
+      4. MixKey(se):           ck, temp_k3 = HKDF(ck, se)
       5. Encrypt auth tag:    c2 = encrypt(temp_k3, nonce=0, ad=h, pt=b"")
       6. MixHash(c2):         h = SHA256(h || c2)
       7. Split:               send_key, recv_key = HKDF(ck, b"")
@@ -1369,8 +1369,8 @@ print("  - Same temp_k (from ee ECDH)")
     #       (nonce=0 was consumed in Act 2)
     #       c1 = ChaCha20Poly1305(temp_k2, nonce=1, ad=h, pt=s_pub)
     # TODO: MixHash(c1): h = SHA256(h || c1)
-    # TODO: ECDH(s, re): ss = ecdh(s_priv, re_pub)  [se token]
-    # TODO: MixKey: ck, temp_k3 = HKDF(ck, ss)
+    # TODO: ECDH(s, re): se = ecdh(s_priv, re_pub)  [se token]
+    # TODO: MixKey: ck, temp_k3 = HKDF(ck, se)
     # TODO: c2 = ChaCha20Poly1305(temp_k3, nonce=0, ad=h, pt=b"")
     # TODO: MixHash(c2): h = SHA256(h || c2)
     # TODO: Split: send_key, recv_key = HKDF(ck, b"")
@@ -1535,8 +1535,8 @@ print("Length:", len(enc_s), "bytes (33 + 16 MAC)")
 h = hashlib.sha256(h + enc_s).digest()
 
 # Step 3: se ECDH
-ss_se = _ecdh(is_priv, re_pub)
-ck, tk3 = _hkdf(ck, ss_se)
+se = _ecdh(is_priv, re_pub)
+ck, tk3 = _hkdf(ck, se)
 
 # Step 5: Auth tag
 auth = ChaCha20Poly1305(tk3).encrypt(b'\\x00' * 4 + (0).to_bytes(8, 'little'), b"", h)
@@ -1562,8 +1562,8 @@ print("Handshake complete! Ready for encrypted transport.")
         b'\\x00' * 4 + (1).to_bytes(8, 'little'), s_pub, h)
     h = hashlib.sha256(h + c1).digest()
     # se ECDH
-    ss = ecdh(s_priv, re_pub)
-    ck, temp_k3 = hkdf_two_keys(ck, ss)
+    se = ecdh(s_priv, re_pub)
+    ck, temp_k3 = hkdf_two_keys(ck, se)
     # Auth tag with temp_k3 at nonce=0
     c2 = ChaCha20Poly1305(temp_k3).encrypt(
         b'\\x00' * 4 + (0).to_bytes(8, 'little'), b"", h)
@@ -1593,8 +1593,8 @@ print("Handshake complete! Ready for encrypted transport.")
       2. Check version == 0x00
       3. Decrypt static key: is_pub = Decrypt(temp_k2, nonce=1, ad=h, ct=c1)
       4. MixHash(c1):         h = SHA256(h || c1)
-      5. ECDH(re, is):        ss = ECDH(re_priv, is_pub)  [se token]
-      6. MixKey(ss):           ck, temp_k3 = HKDF(ck, ss)
+      5. ECDH(re, is):        se = ECDH(re_priv, is_pub)  [se token]
+      6. MixKey(se):           ck, temp_k3 = HKDF(ck, se)
       7. Verify auth tag:     Decrypt(temp_k3, nonce=0, ad=h, ct=c2)
       8. MixHash(c2):         h = SHA256(h || c2)
       9. Split:               recv_key, send_key = HKDF(ck, b"")
@@ -1624,7 +1624,7 @@ print("Handshake complete! Ready for encrypted transport.")
     # TODO: Decrypt initiator's static public key using temp_k2 at nonce=1
     # TODO: MixHash(c1)
     # TODO: ECDH(re_priv, is_pub) - the 'se' token
-    # TODO: MixKey: ck, temp_k3 = HKDF(ck, ss)
+    # TODO: MixKey: ck, temp_k3 = HKDF(ck, se)
     # TODO: Verify auth tag by decrypting c2 with temp_k3 at nonce=0
     # TODO: MixHash(c2)
     # TODO: Split: recv_key, send_key = HKDF(ck, b"")
@@ -1798,8 +1798,8 @@ print("=== Responder processes Act 3 ===")
 enc_s = ChaCha20Poly1305(tk2).encrypt(
     b'\\x00' * 4 + (1).to_bytes(8, 'little'), is_pub, h)
 h_i = hashlib.sha256(h + enc_s).digest()
-ss_se = _ecdh(is_priv, re_pub)
-ck_i, tk3 = _hkdf(ck, ss_se)
+se = _ecdh(is_priv, re_pub)
+ck_i, tk3 = _hkdf(ck, se)
 auth = ChaCha20Poly1305(tk3).encrypt(
     b'\\x00' * 4 + (0).to_bytes(8, 'little'), b"", h_i)
 act3_msg = b'\\x00' + enc_s + auth
@@ -1836,8 +1836,8 @@ print("Match?", recovered_pub == is_pub)
         b'\\x00' * 4 + (1).to_bytes(8, 'little'), c1, h)
     h = hashlib.sha256(h + c1).digest()
     # se ECDH
-    ss = ecdh(re_priv, is_pub)
-    ck, temp_k3 = hkdf_two_keys(ck, ss)
+    se = ecdh(re_priv, is_pub)
+    ck, temp_k3 = hkdf_two_keys(ck, se)
     # Verify auth tag
     ChaCha20Poly1305(temp_k3).decrypt(
         b'\\x00' * 4 + (0).to_bytes(8, 'little'), c2, h)
