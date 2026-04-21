@@ -1944,6 +1944,7 @@ import struct, os
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 
 key = os.urandom(32)
+nonce = 0
 print("Transport key:", key.hex()[:32] + "...")
 
 # Encrypt a message
@@ -1956,15 +1957,15 @@ length_bytes = struct.pack(">H", len(plaintext))
 print()
 print("Length prefix:", length_bytes.hex(), f"({len(plaintext)} in big-endian)")
 
-# Step 2: Encrypt length with nonce=0
+# Step 2: Encrypt length, then increment nonce
 cipher = ChaCha20Poly1305(key)
-nonce_0 = b'\\x00' * 4 + (0).to_bytes(8, 'little')
-enc_len = cipher.encrypt(nonce_0, length_bytes, b"")
+enc_len = cipher.encrypt(bolt8_nonce(nonce), length_bytes, b"")
+nonce += 1
 print("Encrypted length:", enc_len.hex(), f"({len(enc_len)} bytes = 2 + 16 MAC)")
 
-# Step 3: Encrypt body with nonce=1
-nonce_1 = b'\\x00' * 4 + (1).to_bytes(8, 'little')
-enc_body = cipher.encrypt(nonce_1, plaintext, b"")
+# Step 3: Encrypt body, then increment nonce
+enc_body = cipher.encrypt(bolt8_nonce(nonce), plaintext, b"")
+nonce += 1
 print("Encrypted body:", enc_body.hex()[:32] + "...")
 print(f"({len(enc_body)} bytes = {len(plaintext)} + 16 MAC)")
 
@@ -1972,7 +1973,7 @@ print(f"({len(enc_body)} bytes = {len(plaintext)} + 16 MAC)")
 ct = enc_len + enc_body
 print()
 print("Full ciphertext:", len(ct), "bytes")
-print("Next nonce: 2 (each message consumes 2 nonces)")
+print("Nonce is now:", nonce, "(each message consumes 2 nonces)")
 `,
     hints: {
       conceptual:
@@ -2112,20 +2113,23 @@ import struct, os
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 
 key = os.urandom(32)
+nonce = 0
 
 # First encrypt a message (so we have something to decrypt)
 plaintext = b"Decrypt me!"
 cipher = ChaCha20Poly1305(key)
-enc_len = cipher.encrypt(b'\\x00' * 4 + (0).to_bytes(8, 'little'),
-    struct.pack(">H", len(plaintext)), b"")
-enc_body = cipher.encrypt(b'\\x00' * 4 + (1).to_bytes(8, 'little'), plaintext, b"")
+enc_len = cipher.encrypt(bolt8_nonce(nonce), struct.pack(">H", len(plaintext)), b"")
+nonce += 1
+enc_body = cipher.encrypt(bolt8_nonce(nonce), plaintext, b"")
+nonce += 1
 ciphertext = enc_len + enc_body
 
 print("Ciphertext:", ciphertext.hex())
 print("Total length:", len(ciphertext), "bytes")
 print()
 
-# Now decrypt step by step
+# Now decrypt step by step (reset nonce to match sender)
+nonce = 0
 print("=== Decryption ===")
 
 # Step 1: Split into length (18 bytes) and body
@@ -2134,14 +2138,17 @@ ct_body = ciphertext[18:]
 print("Encrypted length:", ct_len.hex(), f"({len(ct_len)} bytes)")
 print("Encrypted body:  ", ct_body.hex(), f"({len(ct_body)} bytes)")
 
-# Step 2: Decrypt length with nonce=0
-length_bytes = cipher.decrypt(b'\\x00' * 4 + (0).to_bytes(8, 'little'), ct_len, b"")
+# Step 2: Decrypt length, then increment nonce
+length_bytes = cipher.decrypt(bolt8_nonce(nonce), ct_len, b"")
+nonce += 1
+# struct.unpack returns a tuple, so grab the first element with [0]
 msg_len = struct.unpack(">H", length_bytes)[0]
 print()
 print("Decrypted length:", msg_len, "bytes")
 
-# Step 3: Decrypt body with nonce=1
-recovered = cipher.decrypt(b'\\x00' * 4 + (1).to_bytes(8, 'little'), ct_body, b"")
+# Step 3: Decrypt body, then increment nonce
+recovered = cipher.decrypt(bolt8_nonce(nonce), ct_body, b"")
+nonce += 1
 print("Decrypted body:", recovered)
 print("Match:", recovered == plaintext)
 `,
@@ -2291,9 +2298,10 @@ for i in range(500):
     # Encrypt (simulated)
     cipher = ChaCha20Poly1305(key)
     length_bytes = struct.pack(">H", 1)
-    cipher.encrypt(b'\\x00' * 4 + nonce.to_bytes(8, 'little'), length_bytes, b"")
-    cipher.encrypt(b'\\x00' * 4 + (nonce + 1).to_bytes(8, 'little'), b"x", b"")
-    nonce += 2
+    cipher.encrypt(bolt8_nonce(nonce), length_bytes, b"")
+    nonce += 1
+    cipher.encrypt(bolt8_nonce(nonce), b"x", b"")
+    nonce += 1
 
     if nonce >= ROTATION_THRESHOLD:
         old_key = key
