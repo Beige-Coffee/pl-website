@@ -186,7 +186,7 @@ interface CodeExerciseProps {
   classMethodExercises?: Array<{ id: string; starterCode: string }>; // CKM class methods — after setupCode's class decl
   priorInGroupExercises?: Array<{ id: string; starterCode: string }>; // Same-group priors — after preamble
   futureExercises?: Array<{ id: string; starterCode: string }>;
-  tutorialType?: "lightning" | "noise";
+  tutorialType?: "lightning" | "noise" | "onion-routing";
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────

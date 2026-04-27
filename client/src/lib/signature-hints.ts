@@ -356,6 +356,42 @@ const SIGNATURES: Record<string, SignatureInfo> = {
     description: "Get the public key from a private key",
   },
 
+  // ── Onion routing helpers ────────────────────────────────────────────────
+  generate_cipher_stream: {
+    name: "generate_cipher_stream",
+    params: "(key, length)",
+    description: "Generate a pseudo-random byte stream using ChaCha20 with zero nonce",
+    paramDetails: [
+      { name: "key", description: "32-byte key for ChaCha20" },
+      { name: "length", description: "Number of bytes to generate" },
+    ],
+  },
+  xor_bytes: {
+    name: "xor_bytes",
+    params: "(a, b)",
+    description: "XOR two byte sequences element-wise",
+    paramDetails: [
+      { name: "a", description: "First byte sequence" },
+      { name: "b", description: "Second byte sequence" },
+    ],
+  },
+  encode_bigsize: {
+    name: "encode_bigsize",
+    params: "(value)",
+    description: "Encode an integer as a BOLT bigsize variable-length value",
+    paramDetails: [
+      { name: "value", description: "Integer to encode" },
+    ],
+  },
+  encode_tu64: {
+    name: "encode_tu64",
+    params: "(value)",
+    description: "Encode an integer as a truncated uint64 (minimal big-endian)",
+    paramDetails: [
+      { name: "value", description: "Integer to encode (0 returns empty bytes)" },
+    ],
+  },
+
   // ── Standard library ──────────────────────────────────────────────────────
   "hashlib.sha256": {
     name: "hashlib.sha256",

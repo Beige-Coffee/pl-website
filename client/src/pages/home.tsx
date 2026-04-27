@@ -8,6 +8,7 @@ import { useAuth } from "../hooks/use-auth";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { chapters as lightningChapters } from "./lightning-tutorial";
 import { chapters as noiseChapters } from "./noise-tutorial";
+import { chapters as onionChapters } from "./onion-routing-tutorial";
 
 export default function Home() {
   const [showCodeModal, setShowCodeModal] = useState(false);
@@ -31,6 +32,11 @@ export default function Home() {
       if (noiseChapterId) {
         const ch = noiseChapters.find((c) => c.id === noiseChapterId);
         if (ch) items.push({ course: "Noise Protocol", chapterId: noiseChapterId, chapterTitle: ch.title, path: `/noise-tutorial/${noiseChapterId}` });
+      }
+      const onionChapterId = localStorage.getItem("pl-onion-last-chapter");
+      if (onionChapterId) {
+        const ch = onionChapters.find((c) => c.id === onionChapterId);
+        if (ch) items.push({ course: "Onion Routing", chapterId: onionChapterId, chapterTitle: ch.title, path: `/onion-routing-tutorial/${onionChapterId}` });
       }
       return items;
     } catch { return []; }
@@ -210,7 +216,7 @@ export default function Home() {
                     >
                       <span className="text-[#b8860b] text-xs leading-none">&#9654;</span>
                       <div className="min-w-0">
-                        <span className="font-pixel text-[9px] text-foreground/40 block leading-none">{item.course === "Intro to Payment Channels" ? "LIGHTNING" : "NOISE"}</span>
+                        <span className="font-pixel text-[9px] text-foreground/40 block leading-none">{item.course === "Intro to Payment Channels" ? "LIGHTNING" : item.course === "Onion Routing" ? "ONION ROUTING" : "NOISE"}</span>
                         <span className="text-sm font-semibold text-foreground/80 truncate block mt-0.5">{item.chapterTitle}</span>
                       </div>
                     </Link>
@@ -395,14 +401,33 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Coming Soon: Onion Routing */}
+          {/* Course 3: Onion Routing */}
           <div>
             <div className="flex items-stretch gap-0">
-              <div className="bg-muted border-4 border-muted-foreground/30 p-4 opacity-75 cursor-not-allowed relative overflow-hidden flex-1 min-w-0">
-                <div className="absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.05)_50%)] bg-[length:100%_4px] pointer-events-none" />
-                <h2 className="text-lg md:text-xl font-pixel text-muted-foreground">
-                  Coming Soon... Onion Routing & Lightning Payments
-                </h2>
+              <div className="bg-card border-4 border-border p-4 pixel-shadow flex-1 min-w-0">
+                <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
+                  <div className="flex items-start md:items-center gap-3 md:gap-4 flex-1 min-w-0">
+                    <div className="w-14 h-14 md:w-28 md:h-28 shrink-0 flex items-center justify-center text-4xl md:text-6xl">
+                      🧅
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h2 className="text-base md:text-xl font-pixel leading-relaxed">
+                        Onion Routing & Lightning Payments
+                      </h2>
+                      <p className="hidden md:block text-base text-foreground/70 mt-2" style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
+                        How Lightning routes payments across multiple hops using layered encryption, without any single node learning the full path.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-row md:flex-col gap-2 shrink-0">
+                    <Link
+                      href="/onion-routing-tutorial"
+                      className="bg-primary text-foreground px-6 py-2.5 font-pixel text-sm border-2 border-border hover:bg-primary/80 transition-colors pixel-shadow active:translate-x-[2px] active:translate-y-[2px] active:shadow-none text-center flex-1 md:flex-none"
+                    >
+                      READ
+                    </Link>
+                  </div>
+                </div>
               </div>
               {/* Bracket annotation — large screens */}
               <div className="hidden lg:flex items-center shrink-0">
