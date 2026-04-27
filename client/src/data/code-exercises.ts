@@ -28,7 +28,7 @@ export const CODE_EXERCISES: Record<string, CodeExerciseData> = {
     id: "exercise-generate-keypair",
     title: "Exercise 1: Generate a secp256k1 Keypair",
     description:
-      "Implement secp256k1 keypair generation - the foundation of all Diffie-Hellman operations in Lightning's Noise Protocol. Lightning uses secp256k1 (the same curve as Bitcoin). Return a 32-byte private key and a 33-byte compressed public key.",
+      "Implement secp256k1 keypair generation - the foundation of all Diffie-Hellman operations in Lightning's Noise Protocol. Lightning uses secp256k1 (the same curve as Bitcoin). Return a 32-byte private key and a 33-byte compressed public key.<br><br><strong>Inputs:</strong> None (generates a fresh random keypair).<br><br><strong>Returns:</strong><br>• <code>(private_key_bytes, public_key_bytes)</code> - 32-byte private key and 33-byte compressed public key",
     starterCode: `def generate_keypair():
     """
     Generate a random secp256k1 keypair.
@@ -125,9 +125,9 @@ def generate_keypair():
   // ═══════════════════════════════════════════════════════════════════════════
   "exercise-ecdh": {
     id: "exercise-ecdh",
-    title: "Exercise 2: Perform ECDH Key Exchange",
+    title: "Exercise 2: ECDH Key Exchange (BOLT 8 Variant)",
     description:
-      "Implement the secp256k1 ECDH exchange as defined in BOLT 8. Given your 32-byte private key and a remote party's 33-byte compressed public key, compute the 32-byte shared secret. BOLT 8 defines ECDH as: compute the shared point, represent it in compressed format, then return its SHA-256 hash. This is the core operation behind every handshake token (ee, es, se, ss).",
+      "Implement the secp256k1 ECDH exchange as defined in BOLT 8. BOLT 8 defines ECDH as: compute the shared point, represent it in compressed format, then return its SHA-256 hash. This is the core operation behind every handshake token (ee, es, se, ss).<br><br><strong>Inputs:</strong><br>• <code>local_private_key_bytes</code> - 32-byte private key<br>• <code>remote_public_key_bytes</code> - 33-byte compressed public key<br><br><strong>Returns:</strong><br>• 32-byte shared secret (SHA-256 of compressed shared point)",
     starterCode: `def ecdh(local_private_key_bytes, remote_public_key_bytes):
     """
     Perform secp256k1 ECDH key exchange (BOLT 8 variant).
@@ -272,7 +272,7 @@ print("Match:", bolt8_secret_ab == bolt8_secret_ba)
     id: "exercise-hkdf",
     title: "Exercise 3: Implement HKDF (Key Derivation)",
     description:
-      "Implement the Noise Protocol's variant of HKDF-SHA256. Given a salt (chaining key) and input key material, produce two 32-byte derived keys. Use only the hmac and hashlib modules  -  no high-level HKDF wrappers.",
+      "Implement the Noise Protocol's variant of HKDF-SHA256. Given a salt (chaining key) and input key material, produce two 32-byte derived keys. Use only the hmac and hashlib modules  -  no high-level HKDF wrappers.<br><br><a href=\"https://github.com/lightning/bolts/blob/master/08-transport.md\">BOLT 8</a> defines HKDF as: \"a function defined in <a href=\"https://www.rfc-editor.org/rfc/rfc5869\">RFC 5869</a>, evaluated with a zero-length <code>info</code> field. All invocations of HKDF implicitly return 64 bytes of cryptographic randomness using the extract-and-expand component.\" 64 bytes = two 32-byte keys (SHA-256 digest size).<br><br>The <a href=\"https://noiseprotocol.org/noise.html#hash-functions\">Noise Protocol spec</a> (Section 4.3) specifies the exact formula:<br><code>temp_key = HMAC-HASH(chaining_key, input_key_material)</code><br><code>output1 = HMAC-HASH(temp_key, byte(0x01))</code><br><code>output2 = HMAC-HASH(temp_key, output1 || byte(0x02))</code><br><br>Standard RFC 5869 expand includes an <code>info</code> parameter: <code>T(1) = HMAC(PRK, T(0) || info || 0x01)</code>. With <code>info</code> always empty and <code>T(0)</code> being the empty string, these reduce to the formulas above. The Noise/BOLT 8 variant is a strict subset of RFC 5869, not a deviation from it.<br><br><strong>Inputs:</strong><br>• <code>salt</code> - bytes, the chaining key<br>• <code>input_key_material</code> - bytes, typically an ECDH shared secret<br><br><strong>Returns:</strong><br>• <code>(key1, key2)</code> - two 32-byte derived keys",
     starterCode: `def hkdf_two_keys(salt, input_key_material):
     """
     Noise Protocol's HKDF: extract-then-expand producing 2 x 32-byte keys.
@@ -387,7 +387,7 @@ def hkdf_two_keys(salt, input_key_material):
     id: "exercise-init-state",
     title: "Exercise 4: Initialize the Handshake State",
     description:
-      "Initialize the SymmetricState for the Noise XK handshake. Compute the initial handshake hash (h) and chaining key (ck) from the protocol name, then mix in the prologue and the responder's static public key.",
+      "Initialize the SymmetricState for the Noise XK handshake. Compute the initial handshake hash (h) and chaining key (ck) from the protocol name, then mix in the prologue and the responder's static public key.<br><br><strong>Inputs:</strong><br>• <code>responder_static_pubkey</code> - 33-byte compressed public key<br><br><strong>Returns:</strong><br>• <code>(h, ck)</code> - 32-byte handshake hash and 32-byte chaining key",
     starterCode: `def initialize_symmetric_state(responder_static_pubkey):
     """
     Initialize the Noise XK handshake state.
@@ -522,7 +522,7 @@ print("Final ck:", ck.hex(), "(unchanged)")
     id: "exercise-act1-initiator",
     title: "Exercise 5: Act 1  -  Initiator Side",
     description:
-      "Implement Act 1 of the XK handshake from Alice's (initiator) perspective. Mix the ephemeral public key into h, perform ECDH with the responder's static key (the 'es' token), derive a temporary key via HKDF, encrypt an empty payload, and produce the 50-byte Act 1 message.",
+      "Implement Act 1 of the XK handshake from Alice's (initiator) perspective. Mix the ephemeral public key into h, perform ECDH with the responder's static key (the 'es' token), derive a temporary key via HKDF, encrypt an empty payload using <code>ChaCha20Poly1305</code>, and produce the 50-byte Act 1 message.<br><br><strong>Inputs:</strong><br>• <code>h</code> - 32-byte handshake hash<br>• <code>ck</code> - 32-byte chaining key<br>• <code>e_priv</code> - 32-byte ephemeral private key<br>• <code>e_pub</code> - 33-byte ephemeral public key<br>• <code>rs_pub</code> - 33-byte responder's static public key<br><br><strong>Returns:</strong><br>• <code>(message, h, ck)</code> - 50-byte wire message, updated handshake hash, updated chaining key<br><br>For encryption, <code>ChaCha20Poly1305(key).encrypt(nonce, plaintext, associated_data)</code> takes a key, a 12-byte nonce, the data to encrypt, and associated data that is authenticated but not encrypted. Use the provided <code>bolt8_nonce()</code> helper (defined in <strong>crypto/primitives.py</strong> in the file explorer) to encode nonces in BOLT 8 format.",
     starterCode: `def act_one_initiator(h, ck, e_priv, e_pub, rs_pub):
     """
     Construct Act 1 message (initiator -> responder).
@@ -531,9 +531,9 @@ print("Final ck:", ck.hex(), "(unchanged)")
 
     Steps:
       1. MixHash(e_pub):   h = SHA256(h || e_pub)
-      2. ECDH(e, rs):      ss = ECDH(e_priv, rs_pub)
-      3. MixKey(ss):        ck, temp_k = HKDF(ck, ss)
-      4. Encrypt:           c = ChaCha20Poly1305(temp_k, nonce=0, ad=h, pt=b"")
+      2. ECDH(e, rs):      es = ECDH(e_priv, rs_pub)
+      3. MixKey(es):        ck, temp_k1 = HKDF(ck, es)
+      4. Encrypt:           c = ChaCha20Poly1305(temp_k1, nonce=0, ad=h, pt=b"")
       5. MixHash(c):        h = SHA256(h || c)
       6. Message:           0x00 || e_pub || c
 
@@ -550,11 +550,11 @@ print("Final ck:", ck.hex(), "(unchanged)")
     """
     # TODO: Step 1  -  MixHash the ephemeral public key
     # TODO: Step 2  -  Perform ECDH between ephemeral and responder's static key
-    # TODO: Step 3  -  MixKey: derive new ck and temp_k using HKDF
+    # TODO: Step 3  -  MixKey: derive new ck and temp_k1 using HKDF
     # TODO: Step 4  -  Encrypt empty payload with ChaCha20Poly1305
-    #                 nonce = b'\\x00' * 4 + (0).to_bytes(8, 'little'), ad = h, plaintext = b""
+    #                 nonce = bolt8_nonce(0), ad = h, plaintext = b""
     # TODO: Step 5  -  MixHash the ciphertext
-    # TODO: Step 6  -  Assemble message: version byte (0x00) + e_pub + ciphertext
+    # TODO: Step 6  -  Assemble the 50-byte wire message: version byte (0x00) + e_pub + ciphertext
     # TODO: Return (message, h, ck)
     pass
 `,
@@ -694,11 +694,11 @@ h = hashlib.sha256(h + e_pub).digest()
 print("h after MixHash(e_pub):", h.hex()[:32] + "...")
 
 # Step 2: ECDH(e, rs) - the 'es' token
-ss = _ecdh(e_priv, rs_pub)
-print("es shared secret:", ss.hex()[:32] + "...")
+es = _ecdh(e_priv, rs_pub)
+print("es shared secret:", es.hex()[:32] + "...")
 
 # Step 3: MixKey
-ck, temp_k = _hkdf(ck, ss)
+ck, temp_k = _hkdf(ck, es)
 
 # Step 4: Encrypt empty payload
 c = ChaCha20Poly1305(temp_k).encrypt(b'\\x00' * 4 + (0).to_bytes(8, 'little'), b"", h)
@@ -715,24 +715,23 @@ print("Length:", len(msg), "bytes (1 + 33 + 16 = 50)")
 `,
     hints: {
       conceptual:
-        "<p><strong>Goal:</strong> Construct the 50-byte Act 1 message as the initiator. This message commits your ephemeral public key and proves you know the responder's static public key.<br><br><strong>How it works:</strong> The Noise <code>e, es</code> pattern means: (1) MixHash your ephemeral public key, (2) perform ECDH between your ephemeral key and the responder's static key, (3) derive a temporary key via HKDF, and (4) encrypt an empty payload to produce a 16-byte authentication tag. The final message is: version byte + ephemeral public key (33 bytes) + tag (16 bytes).<br><br><strong>Tools you will need:</strong> <code>hashlib.sha256()</code> for MixHash, <code>ecdh()</code> and <code>hkdf_two_keys()</code> from earlier exercises, and <code>ChaCha20Poly1305</code> for authenticated encryption with BOLT 8 nonce encoding (4 zero bytes + 8-byte little-endian counter).</p>",
+        "<p><strong>Goal:</strong> Construct the 50-byte Act 1 message as the initiator. This message commits your ephemeral public key and proves you know the responder's static public key.<br><br><strong>How it works:</strong> The Noise <code>e, es</code> pattern means: (1) MixHash your ephemeral public key, (2) perform ECDH between your ephemeral key and the responder's static key, (3) derive a temporary key via HKDF, and (4) encrypt an empty payload to produce a 16-byte authentication tag. The final message is: version byte + ephemeral public key (33 bytes) + tag (16 bytes).<br><br><strong>Tools you will need:</strong> <code>hashlib.sha256()</code> for MixHash, <code>ecdh()</code> and <code>hkdf_two_keys()</code> from earlier exercises, <code>ChaCha20Poly1305</code> for authenticated encryption, and the provided <code>bolt8_nonce()</code> helper for nonce encoding.</p>",
       steps:
-        '<ol><li><strong>MixHash</strong> the ephemeral public key into the handshake hash using <code>hashlib.sha256()</code></li><li><strong>ECDH</strong>: Compute the shared secret using <code>ecdh()</code> with your ephemeral private key and the responder\'s static public key</li><li><strong>MixKey</strong>: Derive a new chaining key and temporary encryption key using <code>hkdf_two_keys()</code></li><li><strong>Encrypt</strong>: Use <code>ChaCha20Poly1305</code> with the temporary key to encrypt an empty plaintext, passing the handshake hash as associated data and nonce 0 (BOLT 8 format: 4 zero bytes + 8-byte little-endian)</li><li><strong>MixHash</strong> the ciphertext (authentication tag) into the handshake hash</li><li>Assemble the 50-byte message: version byte (<code>0x00</code>) + ephemeral public key + authentication tag</li></ol>',
+        '<ol><li><strong>MixHash</strong> the ephemeral public key into the handshake hash using <code>hashlib.sha256()</code></li><li><strong>ECDH</strong>: Compute the shared secret using <code>ecdh()</code> with your ephemeral private key and the responder\'s static public key</li><li><strong>MixKey</strong>: Derive a new chaining key and temporary encryption key using <code>hkdf_two_keys()</code></li><li><strong>Encrypt</strong>: Use <code>ChaCha20Poly1305</code> with the temporary key to encrypt an empty plaintext, passing the handshake hash as associated data and <code>bolt8_nonce(0)</code> as the nonce</li><li><strong>MixHash</strong> the ciphertext (authentication tag) into the handshake hash</li><li>Assemble the 50-byte wire message into a variable: version byte (<code>0x00</code>) + ephemeral public key + authentication tag</li></ol>',
       code: `def act_one_initiator(h, ck, e_priv, e_pub, rs_pub):
     # 1. MixHash ephemeral (33-byte compressed secp256k1 key)
     h = hashlib.sha256(h + e_pub).digest()
     # 2. ECDH(e, rs)
-    ss = ecdh(e_priv, rs_pub)
+    es = ecdh(e_priv, rs_pub)
     # 3. MixKey
-    ck, temp_k = hkdf_two_keys(ck, ss)
+    ck, temp_k1 = hkdf_two_keys(ck, es)
     # 4. Encrypt empty payload
-    cipher = ChaCha20Poly1305(temp_k)
-    nonce = b'\\x00' * 4 + (0).to_bytes(8, 'little')
-    c = cipher.encrypt(nonce, b"", h)
+    c = ChaCha20Poly1305(temp_k1).encrypt(bolt8_nonce(0), b"", h)
     # 5. MixHash ciphertext
     h = hashlib.sha256(h + c).digest()
     # 6. Assemble: version(1) + e_pub(33) + tag(16) = 50 bytes
-    return (b'\\x00' + e_pub + c, h, ck)`,
+    message = b'\\x00' + e_pub + c
+    return (message, h, ck)`,
     },
     rewardSats: 21,
   },
@@ -744,7 +743,7 @@ print("Length:", len(msg), "bytes (1 + 33 + 16 = 50)")
     id: "exercise-act1-responder",
     title: "Exercise 6: Act 1  -  Responder Side",
     description:
-      "Implement the responder's processing of Act 1. Parse the message, extract the initiator's ephemeral public key, perform the ECDH (using your static private key), derive the temporary key, and verify the authentication tag.",
+      "Implement the responder's processing of Act 1. Parse the 50-byte message, check the version byte, extract the initiator's ephemeral public key, perform the ECDH (using your static private key), derive the temporary key, and verify the authentication tag. Raise <code>ValueError(\"Bad version\")</code> if the version is not <code>0x00</code>.<br><br><strong>Inputs:</strong><br>• <code>h</code> - 32-byte handshake hash<br>• <code>ck</code> - 32-byte chaining key<br>• <code>s_priv</code> - 32-byte responder's static private key<br>• <code>message</code> - 50-byte Act 1 message<br><br><strong>Returns:</strong><br>• <code>(re_pub, h, ck)</code> - 33-byte initiator's ephemeral public key, updated handshake hash, updated chaining key",
     starterCode: `def act_one_responder(h, ck, s_priv, message):
     """
     Process Act 1 message (responder side).
@@ -753,9 +752,9 @@ print("Length:", len(msg), "bytes (1 + 33 + 16 = 50)")
       1. Parse: version(1) || re_pub(33) || c(16)
       2. Check version == 0x00
       3. MixHash(re_pub):   h = SHA256(h || re_pub)
-      4. ECDH(s, re):       ss = ECDH(s_priv, re_pub)
-      5. MixKey(ss):         ck, temp_k = HKDF(ck, ss)
-      6. Decrypt & verify:   plaintext = Decrypt(temp_k, nonce=0, ad=h, ct=c)
+      4. ECDH(s, re):       es = ECDH(s_priv, re_pub)
+      5. MixKey(es):         ck, temp_k1 = HKDF(ck, es)
+      6. Decrypt & verify:   plaintext = Decrypt(temp_k1, nonce=0, ad=h, ct=c)
       7. MixHash(c):         h = SHA256(h || c)
 
     Args:
@@ -914,8 +913,8 @@ h_saved, ck_saved = h, ck
 
 # Build Act 1 (initiator)
 h = hashlib.sha256(h + e_pub).digest()
-ss = _ecdh(e_priv, rs_pub)
-ck, temp_k = _hkdf(ck, ss)
+es = _ecdh(e_priv, rs_pub)
+ck, temp_k = _hkdf(ck, es)
 c = ChaCha20Poly1305(temp_k).encrypt(b'\\x00' * 4 + (0).to_bytes(8, 'little'), b"", h)
 h = hashlib.sha256(h + c).digest()
 msg = b'\\x00' + e_pub + c
@@ -933,11 +932,11 @@ print("Ephemeral key:", re_pub.hex())
 print("Tag:", tag.hex())
 
 h_r = hashlib.sha256(h_r + re_pub).digest()
-ss_r = _ecdh(rs_priv, re_pub)  # s, re (commutativity!)
+es_r = _ecdh(rs_priv, re_pub)  # s, re (commutativity!)
 print()
-print("ECDH(s, re) == ECDH(e, rs)?", ss_r == ss)
+print("ECDH(s, re) == ECDH(e, rs)?", es_r == es)
 
-ck_r, temp_k_r = _hkdf(ck_r, ss_r)
+ck_r, temp_k_r = _hkdf(ck_r, es_r)
 ChaCha20Poly1305(temp_k_r).decrypt(b'\\x00' * 4 + (0).to_bytes(8, 'little'), tag, h_r)
 print("Tag verified successfully!")
 `,
@@ -953,11 +952,9 @@ print("Tag verified successfully!")
     re_pub = message[1:34]  # 33-byte compressed secp256k1 key
     c = message[34:]
     h = hashlib.sha256(h + re_pub).digest()
-    ss = ecdh(s_priv, re_pub)
-    ck, temp_k = hkdf_two_keys(ck, ss)
-    cipher = ChaCha20Poly1305(temp_k)
-    nonce = b'\\x00' * 4 + (0).to_bytes(8, 'little')
-    cipher.decrypt(nonce, c, h)  # verify tag
+    es = ecdh(s_priv, re_pub)
+    ck, temp_k1 = hkdf_two_keys(ck, es)
+    ChaCha20Poly1305(temp_k1).decrypt(bolt8_nonce(0), c, h)  # verify tag
     h = hashlib.sha256(h + c).digest()
     return (re_pub, h, ck)`,
     },
@@ -971,7 +968,7 @@ print("Tag verified successfully!")
     id: "exercise-act2-responder",
     title: "Exercise 7: Act 2  -  Responder Side",
     description:
-      "Implement Act 2 from the responder's perspective. Generate and send the responder's ephemeral public key, perform the 'ee' ECDH (ephemeral-ephemeral), derive a new temporary key, and encrypt an empty payload. This introduces forward secrecy.",
+      "Implement Act 2 from the responder's perspective. Mix your ephemeral public key into h, perform the 'ee' ECDH (ephemeral-ephemeral), derive a new temporary key, encrypt an empty payload, and produce the 50-byte Act 2 message. This introduces forward secrecy.<br><br><strong>Inputs:</strong><br>• <code>h</code> - 32-byte handshake hash after Act 1<br>• <code>ck</code> - 32-byte chaining key after Act 1<br>• <code>e_priv</code> - 32-byte responder's ephemeral private key<br>• <code>e_pub</code> - 33-byte responder's ephemeral public key<br>• <code>re_pub</code> - 33-byte initiator's ephemeral public key from Act 1<br><br><strong>Returns:</strong><br>• <code>(message, h, ck)</code> - 50-byte wire message, updated handshake hash, updated chaining key",
     starterCode: `def act_two_responder(h, ck, e_priv, e_pub, re_pub):
     """
     Construct Act 2 message (responder -> initiator).
@@ -980,9 +977,9 @@ print("Tag verified successfully!")
 
     Steps:
       1. MixHash(e_pub):   h = SHA256(h || e_pub)
-      2. ECDH(e, re):      ss = ECDH(e_priv, re_pub)  [ee DH]
-      3. MixKey(ss):        ck, temp_k = HKDF(ck, ss)
-      4. Encrypt:           c = ChaCha20Poly1305(temp_k, nonce=0, ad=h, pt=b"")
+      2. ECDH(e, re):      ee = ECDH(e_priv, re_pub)  [ee DH]
+      3. MixKey(ee):        ck, temp_k2 = HKDF(ck, ee)
+      4. Encrypt:           c = ChaCha20Poly1305(temp_k2, nonce=0, ad=h, pt=b"")
       5. MixHash(c):        h = SHA256(h || c)
       6. Message:           0x00 || e_pub || c
 
@@ -1127,11 +1124,11 @@ print("Responder ephemeral:", re_pub.hex())
 
 # Act 2: MixHash, ee ECDH, MixKey, Encrypt
 h = hashlib.sha256(h + re_pub).digest()
-ss_ee = _ecdh(re_priv, ie_pub)
-print("ee shared secret:", ss_ee.hex()[:32] + "...")
+ee = _ecdh(re_priv, ie_pub)
+print("ee shared secret:", ee.hex()[:32] + "...")
 print("(This is ephemeral-ephemeral = forward secrecy!)")
 
-ck, temp_k = _hkdf(ck, ss_ee)
+ck, temp_k = _hkdf(ck, ee)
 c = ChaCha20Poly1305(temp_k).encrypt(b'\\x00' * 4 + (0).to_bytes(8, 'little'), b"", h)
 h = hashlib.sha256(h + c).digest()
 
@@ -1149,14 +1146,16 @@ print("Length:", len(msg), "bytes")
     # 1. MixHash ephemeral (33-byte compressed secp256k1)
     h = hashlib.sha256(h + e_pub).digest()
     # 2. ee DH
-    ss = ecdh(e_priv, re_pub)
+    ee = ecdh(e_priv, re_pub)
     # 3. MixKey
-    ck, temp_k = hkdf_two_keys(ck, ss)
-    cipher = ChaCha20Poly1305(temp_k)
-    c = cipher.encrypt(b'\\x00' * 4 + (0).to_bytes(8, 'little'), b"", h)
+    ck, temp_k2 = hkdf_two_keys(ck, ee)
+    # 4. Encrypt empty payload
+    c = ChaCha20Poly1305(temp_k2).encrypt(bolt8_nonce(0), b"", h)
+    # 5. MixHash ciphertext
     h = hashlib.sha256(h + c).digest()
-    # version(1) + e_pub(33) + tag(16) = 50 bytes
-    return (b'\\x00' + e_pub + c, h, ck)`,
+    # 6. Assemble: version(1) + e_pub(33) + tag(16) = 50 bytes
+    message = b'\\x00' + e_pub + c
+    return (message, h, ck)`,
     },
     rewardSats: 21,
   },
@@ -1168,7 +1167,7 @@ print("Length:", len(msg), "bytes")
     id: "exercise-act2-initiator",
     title: "Exercise 8: Act 2  -  Initiator Side",
     description:
-      "Implement the initiator's processing of Act 2. Parse the responder's message, extract their ephemeral public key, perform the 'ee' ECDH, derive the temporary key, and verify the tag.",
+      "Implement the initiator's processing of Act 2. Parse the responder's 50-byte message, check the version byte, extract their ephemeral public key, perform the 'ee' ECDH, derive the temporary key, and verify the tag. Raise <code>ValueError(\"Bad version\")</code> if the version is not <code>0x00</code>.<br><br><strong>Inputs:</strong><br>• <code>h</code> - 32-byte handshake hash after Act 1<br>• <code>ck</code> - 32-byte chaining key after Act 1<br>• <code>e_priv</code> - 32-byte initiator's ephemeral private key<br>• <code>message</code> - 50-byte Act 2 message<br><br><strong>Returns:</strong><br>• <code>(re_pub, h, ck)</code> - 33-byte responder's ephemeral public key, updated handshake hash, updated chaining key",
     starterCode: `def act_two_initiator(h, ck, e_priv, message):
     """
     Process Act 2 message (initiator side).
@@ -1177,9 +1176,9 @@ print("Length:", len(msg), "bytes")
       1. Parse: version(1) || re_pub(33) || c(16)
       2. Check version == 0x00
       3. MixHash(re_pub):   h = SHA256(h || re_pub)
-      4. ECDH(e, re):       ss = ECDH(e_priv, re_pub)  [ee DH]
-      5. MixKey(ss):         ck, temp_k = HKDF(ck, ss)
-      6. Decrypt & verify:   Decrypt(temp_k, nonce=0, ad=h, ct=c)
+      4. ECDH(e, re):       ee = ECDH(e_priv, re_pub)  [ee DH]
+      5. MixKey(ee):         ck, temp_k2 = HKDF(ck, ee)
+      6. Decrypt & verify:   Decrypt(temp_k2, nonce=0, ad=h, ct=c)
       7. MixHash(c):         h = SHA256(h || c)
 
     Args:
@@ -1291,7 +1290,7 @@ print("  1. Parse: version(1) || re_pub(33) || c(16)")
 print("  2. Check version == 0x00")
 print("  3. MixHash(re_pub)")
 print("  4. ECDH(e_priv, re_pub) -- ee DH (forward secrecy!)")
-print("  5. MixKey: ck, temp_k = HKDF(ck, ss)")
+print("  5. MixKey: ck, temp_k = HKDF(ck, ee)")
 print("  6. Decrypt & verify tag")
 print("  7. MixHash(c)")
 print()
@@ -1316,9 +1315,9 @@ print("  - Same temp_k (from ee ECDH)")
     re_pub = message[1:34]  # 33-byte compressed secp256k1 key
     c = message[34:]
     h = hashlib.sha256(h + re_pub).digest()
-    ss = ecdh(e_priv, re_pub)
-    ck, temp_k = hkdf_two_keys(ck, ss)
-    ChaCha20Poly1305(temp_k).decrypt(b'\\x00' * 4 + (0).to_bytes(8, 'little'), c, h)
+    ee = ecdh(e_priv, re_pub)
+    ck, temp_k2 = hkdf_two_keys(ck, ee)
+    ChaCha20Poly1305(temp_k2).decrypt(bolt8_nonce(0), c, h)
     h = hashlib.sha256(h + c).digest()
     return (re_pub, h, ck)`,
     },
@@ -1332,7 +1331,7 @@ print("  - Same temp_k (from ee ECDH)")
     id: "exercise-act3-initiator",
     title: "Exercise 9: Act 3  -  Identity Reveal & Key Split",
     description:
-      "Implement Act 3 (BOLT 8), where the initiator reveals their identity by encrypting their static public key with temp_k2 at nonce=1 (since nonce=0 was used in Act 2). Then perform the final 'se' ECDH and derive the transport encryption keys via Split().",
+      "Implement Act 3 (BOLT 8), where the initiator reveals their identity by encrypting their static public key with <code>temp_k2</code> at nonce=1 (since nonce=0 was used in Act 2). Then perform the final 'se' ECDH and derive the transport encryption keys via Split().<br><br><strong>Inputs:</strong><br>• <code>h</code> - 32-byte handshake hash after Act 2<br>• <code>ck</code> - 32-byte chaining key after Act 2<br>• <code>temp_k2</code> - 32-byte encryption key from Act 2's MixKey<br>• <code>s_priv</code> - 32-byte initiator's static private key<br>• <code>s_pub</code> - 33-byte initiator's static public key<br>• <code>re_pub</code> - 33-byte responder's ephemeral public key<br><br><strong>Returns:</strong><br>• <code>(message, send_key, recv_key)</code> - 66-byte wire message, 32-byte sending key, 32-byte receiving key",
     starterCode: `def act_three_initiator(h, ck, temp_k2, s_priv, s_pub, re_pub):
     """
     Construct Act 3 message and derive transport keys (BOLT 8).
@@ -1345,11 +1344,10 @@ print("  - Same temp_k (from ee ECDH)")
     Steps:
       1. Encrypt static key:  c1 = encrypt(temp_k2, nonce=1, ad=h, pt=s_pub)
       2. MixHash(c1):         h = SHA256(h || c1)
-      3. ECDH(s, re):         ss = ecdh(s_priv, re_pub)  [se DH]
-      4. MixKey(ss):           ck, temp_k3 = HKDF(ck, ss)
-      5. Encrypt auth tag:    c2 = encrypt(temp_k3, nonce=0, ad=h, pt=b"")
-      6. MixHash(c2):         h = SHA256(h || c2)
-      7. Split:               send_key, recv_key = HKDF(ck, b"")
+      3. ECDH(s, re):         se = ecdh(s_priv, re_pub)  [se DH]
+      4. MixKey(se):           ck, temp_k3 = HKDF(ck, se)
+      5. Encrypt auth tag:    t = encrypt(temp_k3, nonce=0, ad=h, pt=b"")
+      6. Split:               send_key, recv_key = HKDF(ck, b"")
 
     Args:
         h:        32-byte handshake hash (after Act 2)
@@ -1365,16 +1363,16 @@ print("  - Same temp_k (from ee ECDH)")
             send_key  -  32-byte key for initiator -> responder messages
             recv_key  -  32-byte key for responder -> initiator messages
     """
-    # TODO: Encrypt static public key using temp_k2 with nonce=1
+    # TODO: Encrypt static public key using temp_k2 with bolt8_nonce(1)
     #       (nonce=0 was consumed in Act 2)
-    #       c1 = ChaCha20Poly1305(temp_k2, nonce=1, ad=h, pt=s_pub)
+    #       c1 = ChaCha20Poly1305(temp_k2).encrypt(bolt8_nonce(1), s_pub, h)
     # TODO: MixHash(c1): h = SHA256(h || c1)
-    # TODO: ECDH(s, re): ss = ecdh(s_priv, re_pub)  [se token]
-    # TODO: MixKey: ck, temp_k3 = HKDF(ck, ss)
-    # TODO: c2 = ChaCha20Poly1305(temp_k3, nonce=0, ad=h, pt=b"")
-    # TODO: MixHash(c2): h = SHA256(h || c2)
+    # TODO: ECDH(s, re): se = ecdh(s_priv, re_pub)  [se token]
+    # TODO: MixKey: ck, temp_k3 = HKDF(ck, se)
+    # TODO: t = ChaCha20Poly1305(temp_k3).encrypt(bolt8_nonce(0), b"", h)
     # TODO: Split: send_key, recv_key = HKDF(ck, b"")
-    # TODO: Return (b"\\x00" + c1 + c2, send_key, recv_key)
+    # TODO: Assemble 66-byte wire message: b"\\x00" + c1 + t
+    # TODO: Return (message, send_key, recv_key)
     pass
 `,
     testCode: `
@@ -1535,8 +1533,8 @@ print("Length:", len(enc_s), "bytes (33 + 16 MAC)")
 h = hashlib.sha256(h + enc_s).digest()
 
 # Step 3: se ECDH
-ss_se = _ecdh(is_priv, re_pub)
-ck, tk3 = _hkdf(ck, ss_se)
+se = _ecdh(is_priv, re_pub)
+ck, tk3 = _hkdf(ck, se)
 
 # Step 5: Auth tag
 auth = ChaCha20Poly1305(tk3).encrypt(b'\\x00' * 4 + (0).to_bytes(8, 'little'), b"", h)
@@ -1554,45 +1552,309 @@ print("Handshake complete! Ready for encrypted transport.")
       conceptual:
         "<p><strong>Goal:</strong> Construct the 66-byte Act 3 message and derive the final transport encryption keys. This act encrypts your static public key, performs the <code>se</code> ECDH for mutual authentication, and splits the chaining key into send/receive keys.<br><br><strong>Key details:</strong> The static key is encrypted with <code>temp_k2</code> (from Act 2) at <strong>nonce=1</strong> (nonce=0 was consumed in Act 2). The <code>se</code> ECDH (static-ephemeral) provides mutual authentication. Finally, <code>Split()</code> derives transport keys by running HKDF on the chaining key with empty input. Since the static key is encrypted with keys derived from prior ECDH operations, eavesdroppers cannot learn the initiator's identity.<br><br><strong>Tools you will need:</strong> <code>ChaCha20Poly1305</code> for encryption (used twice: once at nonce=1, once at nonce=0), <code>ecdh()</code>, <code>hkdf_two_keys()</code>, and <code>hashlib.sha256()</code>.</p>",
       steps:
-        '<ol><li><strong>Encrypt static key</strong>: Use <code>ChaCha20Poly1305</code> with <code>temp_k2</code> at nonce=1 to encrypt your static public key, passing the handshake hash as associated data. This produces 49 bytes (33 encrypted + 16 MAC)</li><li><strong>MixHash</strong> the ciphertext into the handshake hash</li><li><strong>ECDH</strong>: Compute the <code>se</code> shared secret using <code>ecdh()</code> with your static private key and the remote ephemeral public key</li><li><strong>MixKey</strong>: Derive a new chaining key and <code>temp_k3</code> using <code>hkdf_two_keys()</code></li><li><strong>Auth tag</strong>: Encrypt an empty plaintext with <code>ChaCha20Poly1305</code> using <code>temp_k3</code> at nonce=0 and the handshake hash as associated data</li><li><strong>MixHash</strong> the second ciphertext into the handshake hash</li><li><strong>Split</strong>: Derive the transport keys by calling <code>hkdf_two_keys()</code> with the chaining key and an empty byte string</li><li>Assemble the 66-byte message: version byte + encrypted static key (49 bytes) + auth tag (16 bytes). Return with the send and receive keys</li></ol>',
+        '<ol><li><strong>Encrypt static key</strong>: Use <code>ChaCha20Poly1305</code> with <code>temp_k2</code> at nonce=1 to encrypt your static public key, passing the handshake hash as associated data. This produces 49 bytes (33 encrypted + 16 MAC)</li><li><strong>MixHash</strong> the ciphertext into the handshake hash</li><li><strong>ECDH</strong>: Compute the <code>se</code> shared secret using <code>ecdh()</code> with your static private key and the remote ephemeral public key</li><li><strong>MixKey</strong>: Derive a new chaining key and <code>temp_k3</code> using <code>hkdf_two_keys()</code></li><li><strong>Auth tag</strong>: Encrypt an empty plaintext with <code>ChaCha20Poly1305</code> using <code>temp_k3</code> at nonce=0 and the handshake hash as associated data</li><li><strong>Split</strong>: Derive the transport keys by calling <code>hkdf_two_keys()</code> with the chaining key and an empty byte string</li><li>Assemble the 66-byte message: version byte + encrypted static key (49 bytes) + auth tag (16 bytes). Return with the send and receive keys</li></ol>',
       code: `def act_three_initiator(h, ck, temp_k2, s_priv, s_pub, re_pub):
     # Encrypt static key with temp_k2 at nonce=1
     # (nonce=0 was used in Act 2's empty payload encryption)
-    c1 = ChaCha20Poly1305(temp_k2).encrypt(
-        b'\\x00' * 4 + (1).to_bytes(8, 'little'), s_pub, h)
+    c1 = ChaCha20Poly1305(temp_k2).encrypt(bolt8_nonce(1), s_pub, h)
     h = hashlib.sha256(h + c1).digest()
     # se ECDH
-    ss = ecdh(s_priv, re_pub)
-    ck, temp_k3 = hkdf_two_keys(ck, ss)
+    se = ecdh(s_priv, re_pub)
+    ck, temp_k3 = hkdf_two_keys(ck, se)
     # Auth tag with temp_k3 at nonce=0
-    c2 = ChaCha20Poly1305(temp_k3).encrypt(
-        b'\\x00' * 4 + (0).to_bytes(8, 'little'), b"", h)
-    h = hashlib.sha256(h + c2).digest()
+    t = ChaCha20Poly1305(temp_k3).encrypt(bolt8_nonce(0), b"", h)
     # Split into transport keys
     send_key, recv_key = hkdf_two_keys(ck, b"")
-    # version(1) + c1(49) + c2(16) = 66 bytes
-    return (b'\\x00' + c1 + c2, send_key, recv_key)`,
+    # version(1) + c1(49) + t(16) = 66 bytes
+    message = b'\\x00' + c1 + t
+    return (message, send_key, recv_key)`,
     },
     rewardSats: 21,
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 10  -  Encrypt Transport Messages
+  // EXERCISE 10  -  Act 3 Responder
+  // ═══════════════════════════════════════════════════════════════════════════
+  "exercise-act3-responder": {
+    id: "exercise-act3-responder",
+    title: "Exercise 10: Act 3  -  Responder Side",
+    description:
+      "Process the initiator's Act 3 message from the responder's perspective. Decrypt the initiator's static public key, perform the 'se' ECDH to verify their identity, verify the authentication MAC, and derive the transport encryption keys. Raise <code>ValueError(\"Bad version\")</code> if the version is not <code>0x00</code>.<br><br><strong>Inputs:</strong><br>• <code>h</code> - 32-byte handshake hash after Act 2<br>• <code>ck</code> - 32-byte chaining key after Act 2<br>• <code>temp_k2</code> - 32-byte encryption key from Act 2's MixKey<br>• <code>re_priv</code> - 32-byte responder's ephemeral private key<br>• <code>message</code> - 66-byte Act 3 message<br><br><strong>Returns:</strong><br>• <code>(initiator_static_pub, send_key, recv_key)</code> - 33-byte initiator's static public key, 32-byte sending key, 32-byte receiving key",
+    starterCode: `def act_three_responder(h, ck, temp_k2, re_priv, message):
+    """
+    Process Act 3 message (responder side) and derive transport keys.
+
+    Steps:
+      1. Parse: version(1) || c(49) || t(16)
+      2. Check version == 0x00
+      3. Decrypt static key: initiator_static_pub = Decrypt(temp_k2, nonce=1, ad=h, ct=c)
+      4. MixHash(c):          h = SHA256(h || c)
+      5. ECDH(re, is):        se = ECDH(re_priv, initiator_static_pub)  [se token]
+      6. MixKey(se):           ck, temp_k3 = HKDF(ck, se)
+      7. Verify auth tag:     Decrypt(temp_k3, nonce=0, ad=h, ct=t)
+      8. Split:               recv_key, send_key = HKDF(ck, b"")
+
+    Note: The responder's key order from Split is REVERSED compared to
+    the initiator. The first HKDF output is the responder's recv_key
+    (which is the initiator's send_key).
+
+    Args:
+        h:        32-byte handshake hash (after Act 2)
+        ck:       32-byte chaining key (after Act 2)
+        temp_k2:  32-byte encryption key from Act 2's MixKey
+        re_priv:  32-byte responder's ephemeral private key
+        message:  66-byte Act 3 message
+
+    Returns:
+        tuple: (initiator_static_pub, send_key, recv_key)
+            initiator_static_pub  -  33-byte initiator's static public key (decrypted)
+            send_key  -  32-byte key for responder -> initiator messages
+            recv_key  -  32-byte key for initiator -> responder messages
+
+    Raises:
+        ValueError if version is wrong or any tag verification fails.
+    """
+    # TODO: Parse the 66-byte message: version(1) + c(49) + t(16)
+    # TODO: Check version byte == 0x00
+    # TODO: Decrypt initiator's static public key using temp_k2 at bolt8_nonce(1)
+    # TODO: MixHash(c)
+    # TODO: ECDH(re_priv, initiator_static_pub) - the 'se' token
+    # TODO: MixKey: ck, temp_k3 = HKDF(ck, se)
+    # TODO: Verify auth tag by decrypting t with temp_k3 at bolt8_nonce(0)
+    # TODO: Split: recv_key, send_key = HKDF(ck, b"")
+    #       (reversed vs initiator!)
+    # TODO: Return (initiator_static_pub, send_key, recv_key)
+    pass
+`,
+    testCode: `
+import hashlib
+import hmac
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
+
+def _ref_hkdf(salt, ikm):
+    tk = hmac.new(salt, ikm, hashlib.sha256).digest()
+    o1 = hmac.new(tk, b'\\x01', hashlib.sha256).digest()
+    o2 = hmac.new(tk, o1 + b'\\x02', hashlib.sha256).digest()
+    return (o1, o2)
+
+def _ref_ecdh(priv_bytes, pub_bytes):
+    from ecdsa import SigningKey, VerifyingKey, SECP256k1
+    import hashlib
+    sk = SigningKey.from_string(priv_bytes, curve=SECP256k1)
+    vk = VerifyingKey.from_string(pub_bytes, curve=SECP256k1)
+    pt = vk.pubkey.point * sk.privkey.secret_multiplier
+    prefix = b'\\x02' if pt.y() % 2 == 0 else b'\\x03'
+    return hashlib.sha256(prefix + pt.x().to_bytes(32, 'big')).digest()
+
+def _gen_key():
+    sk = ec.generate_private_key(ec.SECP256K1())
+    priv = sk.private_numbers().private_value.to_bytes(32, 'big')
+    pub = sk.public_key().public_bytes(Encoding.X962, PublicFormat.CompressedPoint)
+    return priv, pub
+
+def _setup_act3_responder():
+    is_priv, is_pub = _gen_key()
+    rs_priv, rs_pub = _gen_key()
+    ie_priv, ie_pub = _gen_key()
+    re_priv, re_pub = _gen_key()
+
+    # Init
+    h = hashlib.sha256(b"Noise_XK_secp256k1_ChaChaPoly_SHA256").digest()
+    ck = h
+    h = hashlib.sha256(h + b"lightning").digest()
+    h = hashlib.sha256(h + rs_pub).digest()
+
+    # Act 1
+    h = hashlib.sha256(h + ie_pub).digest()
+    ss = _ref_ecdh(ie_priv, rs_pub)
+    ck, tk1 = _ref_hkdf(ck, ss)
+    c1 = ChaCha20Poly1305(tk1).encrypt(b'\\x00' * 4 + (0).to_bytes(8, 'little'), b"", h)
+    h = hashlib.sha256(h + c1).digest()
+
+    # Act 2
+    h = hashlib.sha256(h + re_pub).digest()
+    ss = _ref_ecdh(re_priv, ie_pub)
+    ck, tk2 = _ref_hkdf(ck, ss)
+    c2 = ChaCha20Poly1305(tk2).encrypt(b'\\x00' * 4 + (0).to_bytes(8, 'little'), b"", h)
+    h = hashlib.sha256(h + c2).digest()
+
+    # Initiator builds Act 3 message
+    enc_s = ChaCha20Poly1305(tk2).encrypt(
+        b'\\x00' * 4 + (1).to_bytes(8, 'little'), is_pub, h)
+    h_after_c1 = hashlib.sha256(h + enc_s).digest()
+    ss_se = _ref_ecdh(is_priv, re_pub)
+    ck_new, tk3 = _ref_hkdf(ck, ss_se)
+    auth = ChaCha20Poly1305(tk3).encrypt(
+        b'\\x00' * 4 + (0).to_bytes(8, 'little'), b"", h_after_c1)
+    act3_msg = b'\\x00' + enc_s + auth
+
+    # Expected transport keys (initiator's perspective)
+    init_sk, init_rk = _ref_hkdf(ck_new, b"")
+
+    return h, ck, tk2, re_priv, act3_msg, is_pub, init_sk, init_rk
+
+def test_returns_correct_types():
+    h, ck, tk2, re_priv, msg, _, _, _ = _setup_act3_responder()
+    result = act_three_responder(h, ck, tk2, re_priv, msg)
+    assert isinstance(result, tuple), "Must return a tuple"
+    assert len(result) == 3, "Must return (is_pub, send_key, recv_key)"
+    is_pub, sk, rk = result
+    assert isinstance(is_pub, bytes), "is_pub must be bytes"
+    assert isinstance(sk, bytes), "send_key must be bytes"
+    assert isinstance(rk, bytes), "recv_key must be bytes"
+
+def test_recovers_static_key():
+    h, ck, tk2, re_priv, msg, expected_is_pub, _, _ = _setup_act3_responder()
+    is_pub, _, _ = act_three_responder(h, ck, tk2, re_priv, msg)
+    assert is_pub == expected_is_pub, "Must recover the initiator's 33-byte static public key"
+    assert len(is_pub) == 33, f"Static key must be 33 bytes, got {len(is_pub)}"
+
+def test_transport_keys_match_initiator():
+    h, ck, tk2, re_priv, msg, _, init_sk, init_rk = _setup_act3_responder()
+    _, resp_sk, resp_rk = act_three_responder(h, ck, tk2, re_priv, msg)
+    # Responder's send_key should be initiator's recv_key (and vice versa)
+    assert resp_sk == init_rk, "Responder send_key must equal initiator recv_key"
+    assert resp_rk == init_sk, "Responder recv_key must equal initiator send_key"
+
+def test_rejects_bad_version():
+    h, ck, tk2, re_priv, msg, _, _, _ = _setup_act3_responder()
+    bad_msg = b'\\x01' + msg[1:]
+    try:
+        act_three_responder(h, ck, tk2, re_priv, bad_msg)
+        assert False, "Should raise ValueError for bad version"
+    except ValueError:
+        pass
+
+def test_rejects_tampered_message():
+    h, ck, tk2, re_priv, msg, _, _, _ = _setup_act3_responder()
+    # Flip a byte in the encrypted static key
+    tampered = msg[:10] + bytes([msg[10] ^ 0xff]) + msg[11:]
+    try:
+        act_three_responder(h, ck, tk2, re_priv, tampered)
+        assert False, "Should raise error for tampered message"
+    except Exception:
+        pass
+`,
+    sampleCode: `# Exercise 10 - Explore Act 3 (Responder side)
+import hashlib, hmac
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
+
+def _gen():
+    sk = ec.generate_private_key(ec.SECP256K1())
+    priv = sk.private_numbers().private_value.to_bytes(32, 'big')
+    pub = sk.public_key().public_bytes(Encoding.X962, PublicFormat.CompressedPoint)
+    return priv, pub
+
+def _ecdh(priv, pub):
+    from ecdsa import SigningKey, VerifyingKey, SECP256k1
+    import hashlib
+    sk = SigningKey.from_string(priv, curve=SECP256k1)
+    vk = VerifyingKey.from_string(pub, curve=SECP256k1)
+    pt = vk.pubkey.point * sk.privkey.secret_multiplier
+    prefix = b'\\x02' if pt.y() % 2 == 0 else b'\\x03'
+    return hashlib.sha256(prefix + pt.x().to_bytes(32, 'big')).digest()
+
+def _hkdf(salt, ikm):
+    tk = hmac.new(salt, ikm, hashlib.sha256).digest()
+    o1 = hmac.new(tk, b'\\x01', hashlib.sha256).digest()
+    o2 = hmac.new(tk, o1 + b'\\x02', hashlib.sha256).digest()
+    return o1, o2
+
+# Full handshake through Act 2
+is_priv, is_pub = _gen()
+rs_priv, rs_pub = _gen()
+ie_priv, ie_pub = _gen()
+re_priv, re_pub = _gen()
+
+h = hashlib.sha256(b"Noise_XK_secp256k1_ChaChaPoly_SHA256").digest()
+ck = h
+h = hashlib.sha256(h + b"lightning").digest()
+h = hashlib.sha256(h + rs_pub).digest()
+
+# Act 1
+h = hashlib.sha256(h + ie_pub).digest()
+ck, tk1 = _hkdf(ck, _ecdh(ie_priv, rs_pub))
+c1 = ChaCha20Poly1305(tk1).encrypt(b'\\x00' * 4 + (0).to_bytes(8, 'little'), b"", h)
+h = hashlib.sha256(h + c1).digest()
+
+# Act 2
+h = hashlib.sha256(h + re_pub).digest()
+ck, tk2 = _hkdf(ck, _ecdh(re_priv, ie_pub))
+c2 = ChaCha20Poly1305(tk2).encrypt(b'\\x00' * 4 + (0).to_bytes(8, 'little'), b"", h)
+h = hashlib.sha256(h + c2).digest()
+
+# Initiator builds Act 3
+print("=== Responder processes Act 3 ===")
+enc_s = ChaCha20Poly1305(tk2).encrypt(
+    b'\\x00' * 4 + (1).to_bytes(8, 'little'), is_pub, h)
+h_i = hashlib.sha256(h + enc_s).digest()
+se = _ecdh(is_priv, re_pub)
+ck_i, tk3 = _hkdf(ck, se)
+auth = ChaCha20Poly1305(tk3).encrypt(
+    b'\\x00' * 4 + (0).to_bytes(8, 'little'), b"", h_i)
+act3_msg = b'\\x00' + enc_s + auth
+print("Act 3 message:", act3_msg.hex()[:40] + "...")
+print("Length:", len(act3_msg), "bytes")
+
+# Responder processes it
+# Step 1-2: Parse and check version
+version = act3_msg[0:1]
+c1_resp = act3_msg[1:50]
+c2_resp = act3_msg[50:]
+print("\\nVersion:", version.hex())
+
+# Step 3: Decrypt static key
+recovered_pub = ChaCha20Poly1305(tk2).decrypt(
+    b'\\x00' * 4 + (1).to_bytes(8, 'little'), c1_resp, h)
+print("Recovered static key:", recovered_pub.hex())
+print("Match?", recovered_pub == is_pub)
+`,
+    hints: {
+      conceptual:
+        "<p><strong>Goal:</strong> Process the 66-byte Act 3 message from the responder's side. Decrypt the initiator's static public key, verify their identity via the <code>se</code> ECDH, and derive transport keys.<br><br><strong>Key details:</strong> The encrypted static key uses <code>temp_k2</code> at <strong>nonce=1</strong> (same key as Act 2, incremented nonce). The <code>se</code> ECDH proves the initiator possesses their claimed static key. The transport key order is <strong>reversed</strong> compared to the initiator: the first HKDF output is the responder's <code>recv_key</code> (the initiator's <code>send_key</code>).<br><br><strong>Tools you will need:</strong> <code>ChaCha20Poly1305</code> for decryption (twice: nonce=1 and nonce=0), <code>ecdh()</code>, <code>hkdf_two_keys()</code>, and <code>hashlib.sha256()</code>.</p>",
+      steps:
+        '<ol><li><strong>Parse</strong> the 66-byte message: version (1 byte) + encrypted static key (49 bytes) + auth tag (16 bytes)</li><li><strong>Check version</strong>: raise <code>ValueError</code> if not <code>0x00</code></li><li><strong>Decrypt</strong> the initiator\'s static public key using <code>ChaCha20Poly1305</code> with <code>temp_k2</code> at nonce=1 and the handshake hash as associated data</li><li><strong>MixHash</strong> the ciphertext (<code>c</code>) into the handshake hash</li><li><strong>ECDH</strong>: Compute <code>se</code> using <code>ecdh()</code> with your ephemeral private key and the decrypted static public key</li><li><strong>MixKey</strong>: Derive <code>temp_k3</code> using <code>hkdf_two_keys()</code></li><li><strong>Verify</strong> the auth tag by decrypting <code>t</code> with <code>temp_k3</code> at nonce=0. If it fails, the initiator\'s identity is not authenticated</li><li><strong>Split</strong>: <code>recv_key, send_key = hkdf_two_keys(ck, b"")</code>. Note the reversed order compared to the initiator!</li></ol>',
+      code: `def act_three_responder(h, ck, temp_k2, re_priv, message):
+    # Parse: version(1) + c(49) + t(16) = 66 bytes
+    version = message[0:1]
+    if version != b'\\x00':
+        raise ValueError("Bad version")
+    c = message[1:50]
+    t = message[50:]
+    # Decrypt initiator's static key with temp_k2 at nonce=1
+    initiator_static_pub = ChaCha20Poly1305(temp_k2).decrypt(bolt8_nonce(1), c, h)
+    h = hashlib.sha256(h + c).digest()
+    # se ECDH
+    se = ecdh(re_priv, initiator_static_pub)
+    ck, temp_k3 = hkdf_two_keys(ck, se)
+    # Verify auth tag
+    ChaCha20Poly1305(temp_k3).decrypt(bolt8_nonce(0), t, h)
+    # Split (reversed vs initiator!)
+    recv_key, send_key = hkdf_two_keys(ck, b"")
+    return (initiator_static_pub, send_key, recv_key)`,
+    },
+    rewardSats: 21,
+  },
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // EXERCISE 11  -  Encrypt Transport Messages
   // ═══════════════════════════════════════════════════════════════════════════
   "exercise-encrypt": {
     id: "exercise-encrypt",
-    title: "Exercise 10: Encrypt Transport Messages",
+    title: "Exercise 11: Encrypt Transport Messages",
     description:
-      "Implement the <code>CipherState</code> constructor and <code>encrypt_message()</code> method. The constructor stores the encryption key, chaining key, and nonce. The encrypt method frames each message as an encrypted 2-byte length prefix followed by an encrypted body, using ChaCha20-Poly1305 with incrementing nonces.",
+      "Now it's time to encrypt some Lightning messages! In this exercise, we'll complete the <code>encrypt_message()</code> method on the <code>CipherState</code> class. So, what is <code>CipherState</code>? It's a class that bundles together the encryption key, chaining key, and nonce counter needed for Lightning's transport encryption. We use a class here because these three values need to stay in sync across every message, and grouping them into one object keeps things clean.<br><br>The constructor is already provided for you (it stores the key, chaining key, and sets the nonce to 0). You'll also notice a <code>_maybe_rotate()</code> stub that we call before each encryption. As a preview of what's to come, BOLT 8 requires nodes to rotate their encryption keys every 1,000 nonce increments (500 messages) to limit exposure if a key is ever compromised. We'll implement that rotation logic in a later exercise, but for now the stub is already wired into <code>encrypt_message()</code> and ready for when we get there!<br><br>For this exercise, encrypt a Lightning transport message by producing an encrypted 2-byte big-endian length prefix followed by the encrypted message body, using ChaCha20-Poly1305 with incrementing nonces.<br><br><strong>Inputs:</strong><br>• <code>plaintext</code> - bytes to encrypt<br><br><strong>Returns:</strong><br>• <code>enc_len + enc_body</code> concatenated as bytes. Note that <code>ChaCha20Poly1305.encrypt()</code> returns the ciphertext with the 16-byte MAC appended automatically, so <code>enc_len</code> is 18 bytes (2 encrypted + 16 MAC) and <code>enc_body</code> is len(plaintext) + 16 bytes (encrypted body + 16 MAC).",
     starterCode: `    def __init__(self, key, chaining_key):
-        """
-        Initialize the CipherState.
+        self.key = key
+        self.chaining_key = chaining_key
+        self.nonce = 0
 
-        Args:
-            key:          32-byte ChaCha20-Poly1305 encryption key
-            chaining_key: 32-byte chaining key (used for key rotation)
-        """
-        # TODO: Store key, chaining_key, and initialize nonce to 0
+    def _maybe_rotate(self):
+        # Placeholder - you'll implement key rotation in a later exercise
         pass
 
     def encrypt_message(self, plaintext):
@@ -1611,9 +1873,10 @@ print("Handshake complete! Ready for encrypted transport.")
         """
         self._maybe_rotate()
         # TODO: Encode the length of plaintext as 2-byte big-endian
-        # TODO: Encrypt the length bytes with ChaCha20Poly1305 using self.nonce
-        # TODO: Encrypt the plaintext body with ChaCha20Poly1305 using self.nonce+1
-        # TODO: Advance self.nonce by 2
+        # TODO: Encrypt the length bytes with ChaCha20Poly1305 using bolt8_nonce(self.nonce)
+        # TODO: Increment self.nonce
+        # TODO: Encrypt the plaintext body with ChaCha20Poly1305 using bolt8_nonce(self.nonce)
+        # TODO: Increment self.nonce
         # TODO: Return encrypted_length + encrypted_body
         pass
 `,
@@ -1676,11 +1939,12 @@ def test_encrypt_empty_message():
     assert len(ct) == 18 + 16, f"Empty message should produce 34 bytes, got {len(ct)}"
     assert cs.nonce == 2, f"Nonce should be 2 after encrypting, got {cs.nonce}"
 `,
-    sampleCode: `# Exercise 10 - Explore transport message encryption
+    sampleCode: `# Exercise 11 - Explore transport message encryption
 import struct, os
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 
 key = os.urandom(32)
+nonce = 0
 print("Transport key:", key.hex()[:32] + "...")
 
 # Encrypt a message
@@ -1693,15 +1957,15 @@ length_bytes = struct.pack(">H", len(plaintext))
 print()
 print("Length prefix:", length_bytes.hex(), f"({len(plaintext)} in big-endian)")
 
-# Step 2: Encrypt length with nonce=0
+# Step 2: Encrypt length, then increment nonce
 cipher = ChaCha20Poly1305(key)
-nonce_0 = b'\\x00' * 4 + (0).to_bytes(8, 'little')
-enc_len = cipher.encrypt(nonce_0, length_bytes, b"")
+enc_len = cipher.encrypt(bolt8_nonce(nonce), length_bytes, b"")
+nonce += 1
 print("Encrypted length:", enc_len.hex(), f"({len(enc_len)} bytes = 2 + 16 MAC)")
 
-# Step 3: Encrypt body with nonce=1
-nonce_1 = b'\\x00' * 4 + (1).to_bytes(8, 'little')
-enc_body = cipher.encrypt(nonce_1, plaintext, b"")
+# Step 3: Encrypt body, then increment nonce
+enc_body = cipher.encrypt(bolt8_nonce(nonce), plaintext, b"")
+nonce += 1
 print("Encrypted body:", enc_body.hex()[:32] + "...")
 print(f"({len(enc_body)} bytes = {len(plaintext)} + 16 MAC)")
 
@@ -1709,40 +1973,42 @@ print(f"({len(enc_body)} bytes = {len(plaintext)} + 16 MAC)")
 ct = enc_len + enc_body
 print()
 print("Full ciphertext:", len(ct), "bytes")
-print("Next nonce: 2 (each message consumes 2 nonces)")
+print("Nonce is now:", nonce, "(each message consumes 2 nonces)")
 `,
     hints: {
       conceptual:
-        "<p><strong>Goal:</strong> Initialize a <code>CipherState</code> and encrypt a Lightning transport message by producing an encrypted length prefix followed by the encrypted message body.<br><br><strong>Key details:</strong> Lightning frames each message with a 2-byte big-endian length prefix, then the message body. Both parts are encrypted separately with ChaCha20-Poly1305, each consuming one nonce (so a single message uses two sequential nonces). This hides the message size from observers. Nonces are 12 bytes per BOLT 8: 4 zero bytes followed by an 8-byte little-endian counter. No associated data is used.<br><br><strong>Tools you will need:</strong> <code>struct.pack()</code> to encode the length as 2 bytes, <code>ChaCha20Poly1305</code> for encryption, and <code>int.to_bytes()</code> for nonce encoding.</p>",
+        "<p><strong>Goal:</strong> Encrypt a Lightning transport message by producing an encrypted length prefix followed by the encrypted message body. The constructor and <code>_maybe_rotate()</code> are already provided.<br><br><strong>Key details:</strong> Lightning frames each message with a 2-byte big-endian length prefix, then the message body. Both parts are encrypted separately with ChaCha20-Poly1305, each consuming one nonce (so a single message uses two sequential nonces). This hides the message size from observers. No associated data is used.<br><br><strong>Tools you will need:</strong> <code>struct.pack()</code> to encode the length as 2 bytes, <code>ChaCha20Poly1305</code> for encryption, and the provided <code>bolt8_nonce()</code> helper for nonce encoding.</p>",
       steps:
-        '<ol><li><strong><code>__init__</code></strong>: Store <code>key</code>, <code>chaining_key</code>, and set <code>nonce = 0</code> as instance attributes</li><li><strong><code>encrypt_message</code></strong>: After the <code>self._maybe_rotate()</code> call, encode the plaintext length as a 2-byte big-endian unsigned integer using <code>struct.pack()</code> with the <code>">H"</code> format</li><li>Encrypt the length bytes using <code>ChaCha20Poly1305(self.key)</code> with the current nonce (BOLT 8 format: 4 zero bytes + 8-byte little-endian) and empty associated data</li><li>Encrypt the message body using the next nonce (<code>self.nonce + 1</code>) and empty associated data</li><li>Advance <code>self.nonce</code> by 2 and return the concatenated ciphertext</li></ol>',
+        '<ol><li>Encode the plaintext length as a 2-byte big-endian unsigned integer using <code>struct.pack()</code> with the <code>">H"</code> format</li><li>Encrypt the length bytes using <code>ChaCha20Poly1305(self.key)</code> with <code>bolt8_nonce(self.nonce)</code> and empty associated data, then increment <code>self.nonce</code></li><li>Encrypt the message body using <code>bolt8_nonce(self.nonce)</code> and empty associated data, then increment <code>self.nonce</code></li><li>Return the concatenated ciphertext</li></ol>',
       code: `    def __init__(self, key, chaining_key):
         self.key = key
         self.chaining_key = chaining_key
         self.nonce = 0
 
+    def _maybe_rotate(self):
+        pass  # Placeholder — implemented in the Key Rotation exercise
+
     def encrypt_message(self, plaintext):
         self._maybe_rotate()
         length_bytes = struct.pack(">H", len(plaintext))
         cipher = ChaCha20Poly1305(self.key)
-        nonce_bytes = b'\\x00' * 4 + self.nonce.to_bytes(8, 'little')
-        enc_len = cipher.encrypt(nonce_bytes, length_bytes, b"")
-        nonce_bytes2 = b'\\x00' * 4 + (self.nonce + 1).to_bytes(8, 'little')
-        enc_body = cipher.encrypt(nonce_bytes2, plaintext, b"")
-        self.nonce += 2
+        enc_len = cipher.encrypt(bolt8_nonce(self.nonce), length_bytes, b"")
+        self.nonce += 1
+        enc_body = cipher.encrypt(bolt8_nonce(self.nonce), plaintext, b"")
+        self.nonce += 1
         return enc_len + enc_body`,
     },
     rewardSats: 21,
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 11  -  Decrypt Transport Messages
+  // EXERCISE 12  -  Decrypt Transport Messages
   // ═══════════════════════════════════════════════════════════════════════════
   "exercise-decrypt": {
     id: "exercise-decrypt",
-    title: "Exercise 11: Decrypt Transport Messages",
+    title: "Exercise 12: Decrypt Transport Messages",
     description:
-      "Implement the <code>CipherState.decrypt_message()</code> method. Given an encrypted message (18-byte encrypted length prefix + encrypted body), decrypt and return the original plaintext using ChaCha20-Poly1305 with incrementing nonces, mirroring the encryption process.",
+      "Implement the <code>CipherState.decrypt_message()</code> method. Given an encrypted message (18-byte encrypted length prefix + encrypted body), decrypt and return the original plaintext using ChaCha20-Poly1305 with incrementing nonces, mirroring the encryption process.<br><br><strong>Inputs:</strong><br>• <code>ciphertext</code> - encrypted length prefix (18 bytes) + encrypted body (variable)<br><br><strong>Returns:</strong><br>• the original plaintext bytes",
     starterCode: `    def decrypt_message(self, ciphertext):
         """
         Decrypt a Lightning transport message and advance nonce.
@@ -1759,10 +2025,11 @@ print("Next nonce: 2 (each message consumes 2 nonces)")
         """
         self._maybe_rotate()
         # TODO: Split ciphertext into encrypted_length (first 18 bytes) and encrypted_body
-        # TODO: Decrypt the length field using self.nonce
+        # TODO: Decrypt the length field using bolt8_nonce(self.nonce)
+        # TODO: Increment self.nonce
         # TODO: Parse the 2-byte big-endian length
-        # TODO: Decrypt the body using self.nonce+1
-        # TODO: Advance self.nonce by 2
+        # TODO: Decrypt the body using bolt8_nonce(self.nonce)
+        # TODO: Increment self.nonce
         # TODO: Return the plaintext
         pass
 `,
@@ -1841,25 +2108,28 @@ def test_wrong_key_fails():
     except Exception:
         pass
 `,
-    sampleCode: `# Exercise 11 - Explore transport message decryption
+    sampleCode: `# Exercise 12 - Explore transport message decryption
 import struct, os
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 
 key = os.urandom(32)
+nonce = 0
 
 # First encrypt a message (so we have something to decrypt)
 plaintext = b"Decrypt me!"
 cipher = ChaCha20Poly1305(key)
-enc_len = cipher.encrypt(b'\\x00' * 4 + (0).to_bytes(8, 'little'),
-    struct.pack(">H", len(plaintext)), b"")
-enc_body = cipher.encrypt(b'\\x00' * 4 + (1).to_bytes(8, 'little'), plaintext, b"")
+enc_len = cipher.encrypt(bolt8_nonce(nonce), struct.pack(">H", len(plaintext)), b"")
+nonce += 1
+enc_body = cipher.encrypt(bolt8_nonce(nonce), plaintext, b"")
+nonce += 1
 ciphertext = enc_len + enc_body
 
 print("Ciphertext:", ciphertext.hex())
 print("Total length:", len(ciphertext), "bytes")
 print()
 
-# Now decrypt step by step
+# Now decrypt step by step (reset nonce to match sender)
+nonce = 0
 print("=== Decryption ===")
 
 # Step 1: Split into length (18 bytes) and body
@@ -1868,14 +2138,17 @@ ct_body = ciphertext[18:]
 print("Encrypted length:", ct_len.hex(), f"({len(ct_len)} bytes)")
 print("Encrypted body:  ", ct_body.hex(), f"({len(ct_body)} bytes)")
 
-# Step 2: Decrypt length with nonce=0
-length_bytes = cipher.decrypt(b'\\x00' * 4 + (0).to_bytes(8, 'little'), ct_len, b"")
+# Step 2: Decrypt length, then increment nonce
+length_bytes = cipher.decrypt(bolt8_nonce(nonce), ct_len, b"")
+nonce += 1
+# struct.unpack returns a tuple, so grab the first element with [0]
 msg_len = struct.unpack(">H", length_bytes)[0]
 print()
 print("Decrypted length:", msg_len, "bytes")
 
-# Step 3: Decrypt body with nonce=1
-recovered = cipher.decrypt(b'\\x00' * 4 + (1).to_bytes(8, 'little'), ct_body, b"")
+# Step 3: Decrypt body, then increment nonce
+recovered = cipher.decrypt(bolt8_nonce(nonce), ct_body, b"")
+nonce += 1
 print("Decrypted body:", recovered)
 print("Match:", recovered == plaintext)
 `,
@@ -1883,31 +2156,30 @@ print("Match:", recovered == plaintext)
       conceptual:
         "<p><strong>Goal:</strong> Decrypt a Lightning transport message by recovering the length prefix, then the message body.<br><br><strong>Key details:</strong> Decryption mirrors encryption. The ciphertext starts with 18 bytes: the encrypted 2-byte length prefix plus a 16-byte MAC. After decrypting the length, the remaining bytes contain the encrypted message body with its own MAC. Each decryption consumes two nonces, matching what encryption produced.<br><br><strong>Tools you will need:</strong> <code>ChaCha20Poly1305</code> for decryption, <code>struct.unpack()</code> to parse the recovered length, and byte slicing to split the ciphertext.</p>",
       steps:
-        '<ol><li>After the <code>self._maybe_rotate()</code> call, split the ciphertext: the first 18 bytes are the encrypted length (2 + 16-byte MAC), the rest is the encrypted body</li><li>Decrypt the length prefix using <code>ChaCha20Poly1305(self.key)</code> with the current nonce and empty associated data</li><li>Parse the decrypted length bytes into an integer using <code>struct.unpack()</code> with the <code>">H"</code> format</li><li>Decrypt the message body using the next nonce (<code>self.nonce + 1</code>) and empty associated data</li><li>Advance <code>self.nonce</code> by 2 and return the plaintext</li></ol>',
+        '<ol><li>Split the ciphertext: the first 18 bytes are the encrypted length (2 + 16-byte MAC), the rest is the encrypted body</li><li>Decrypt the length prefix using <code>ChaCha20Poly1305(self.key)</code> with <code>bolt8_nonce(self.nonce)</code> and empty associated data (<code>b""</code>), then increment <code>self.nonce</code></li><li>Parse the decrypted bytes into a message length integer. <code>struct.unpack()</code> returns a tuple, so you need to grab the first element: <code>msg_len = struct.unpack(">H", length_bytes)[0]</code>. The <code>">H"</code> format means big-endian unsigned 2-byte integer</li><li>Decrypt the message body using <code>bolt8_nonce(self.nonce)</code> and empty associated data, then increment <code>self.nonce</code></li><li>Return the plaintext</li></ol>',
       code: `    def decrypt_message(self, ciphertext):
         self._maybe_rotate()
         cipher = ChaCha20Poly1305(self.key)
         enc_len = ciphertext[:18]
-        nonce_bytes = b'\\x00' * 4 + self.nonce.to_bytes(8, 'little')
-        length_bytes = cipher.decrypt(nonce_bytes, enc_len, b"")
+        length_bytes = cipher.decrypt(bolt8_nonce(self.nonce), enc_len, b"")
+        self.nonce += 1
         msg_len = struct.unpack(">H", length_bytes)[0]
         enc_body = ciphertext[18:]
-        nonce_bytes2 = b'\\x00' * 4 + (self.nonce + 1).to_bytes(8, 'little')
-        plaintext = cipher.decrypt(nonce_bytes2, enc_body, b"")
-        self.nonce += 2
+        plaintext = cipher.decrypt(bolt8_nonce(self.nonce), enc_body, b"")
+        self.nonce += 1
         return plaintext`,
     },
     rewardSats: 21,
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXERCISE 12  -  Key Rotation
+  // EXERCISE 13  -  Key Rotation
   // ═══════════════════════════════════════════════════════════════════════════
   "exercise-key-rotation": {
     id: "exercise-key-rotation",
-    title: "Exercise 12: Key Rotation",
+    title: "Exercise 13: Key Rotation",
     description:
-      "Implement the <code>CipherState._maybe_rotate()</code> method. After every 1,000 nonce increments (500 messages), the key is rotated using <code>hkdf_two_keys()</code> and the nonce resets to 0. Your <code>encrypt_message()</code> and <code>decrypt_message()</code> methods already call <code>self._maybe_rotate()</code> before each operation, so once you implement this method, key rotation will work automatically.",
+      "Implement the <code>CipherState._maybe_rotate()</code> method. After every 1,000 nonce increments (500 messages), the key is rotated using <code>hkdf_two_keys()</code> and the nonce resets to 0. Your <code>encrypt_message()</code> and <code>decrypt_message()</code> methods already call <code>self._maybe_rotate()</code> before each operation, so once you implement this method, key rotation will work automatically.<br><br><strong>Inputs:</strong><br>• None (operates on <code>self.nonce</code>, <code>self.key</code>, and <code>self.chaining_key</code>)<br><br><strong>Returns:</strong><br>• Nothing (modifies instance state in place)",
     starterCode: `    def _maybe_rotate(self):
         """
         Check if the nonce has reached the rotation threshold (1000).
@@ -1952,19 +2224,19 @@ def test_key_rotation_occurs():
     ck = os.urandom(32)
     cs = CipherState(key, ck)
     original_key = cs.key
-    # Send 500 messages (each uses 2 nonces -> nonce reaches 1000)
-    for i in range(500):
+    # Send 501 messages: after 500, nonce=1000; on the 501st call,
+    # _maybe_rotate() fires at the start and rotates the key
+    for i in range(501):
         cs.encrypt_message(b"m")
-    # After 500 messages nonce would be 1000, rotation should have happened
-    assert cs.key != original_key, "Key must have rotated after 500 messages (nonce reached 1000)"
+    assert cs.key != original_key, "Key must have rotated after nonce reached 1000"
     assert cs.nonce < ROTATION_THRESHOLD, f"Nonce must have reset after rotation, got {cs.nonce}"
 
 def test_rotation_derives_correct_keys():
     key = os.urandom(32)
     ck = os.urandom(32)
     cs = CipherState(key, ck)
-    # Send 500 messages to trigger rotation
-    for i in range(500):
+    # Send 501 messages: rotation triggers on the 501st call's pre-check
+    for i in range(501):
         cs.encrypt_message(b"m")
     # Verify rotated keys match expected HKDF output
     expected_ck, expected_key = _ref_hkdf(ck, key)
@@ -2000,7 +2272,7 @@ def test_tamper_after_rotation():
     except Exception:
         pass
 `,
-    sampleCode: `# Exercise 12 - Explore key rotation
+    sampleCode: `# Exercise 13 - Explore key rotation
 import struct, hmac, hashlib, os
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 
@@ -2026,9 +2298,10 @@ for i in range(500):
     # Encrypt (simulated)
     cipher = ChaCha20Poly1305(key)
     length_bytes = struct.pack(">H", 1)
-    cipher.encrypt(b'\\x00' * 4 + nonce.to_bytes(8, 'little'), length_bytes, b"")
-    cipher.encrypt(b'\\x00' * 4 + (nonce + 1).to_bytes(8, 'little'), b"x", b"")
-    nonce += 2
+    cipher.encrypt(bolt8_nonce(nonce), length_bytes, b"")
+    nonce += 1
+    cipher.encrypt(bolt8_nonce(nonce), b"x", b"")
+    nonce += 1
 
     if nonce >= ROTATION_THRESHOLD:
         old_key = key
@@ -2045,7 +2318,7 @@ print("(500 messages x 2 nonces = 1000 = threshold)")
 `,
     hints: {
       conceptual:
-        "<p><strong>Goal:</strong> Implement automatic key rotation when the nonce reaches the threshold.<br><br><strong>How it works:</strong> BOLT 8 rotates keys every 1,000 nonce increments (500 messages) to limit the exposure of any single key. When the nonce reaches the rotation threshold, <code>hkdf_two_keys()</code> is called with the current chaining key and encryption key to derive fresh keys, and the nonce resets to 0. Both sides rotate independently but in sync since they process the same number of messages.<br><br><strong>Key insight:</strong> Your <code>encrypt_message()</code> and <code>decrypt_message()</code> methods already call <code>self._maybe_rotate()</code> before each operation. Once you implement this method, key rotation happens automatically before every encrypt/decrypt.</p>",
+        "<p><strong>Goal:</strong> Implement automatic key rotation when the nonce reaches the threshold.<br><br><strong>How it works:</strong> BOLT 8 rotates keys every 1,000 nonce increments (500 messages) to limit the exposure of any single key. When the nonce reaches the rotation threshold, <code>hkdf_two_keys()</code> is called with the current chaining key and encryption key to derive fresh keys, and the nonce resets to 0. Both sides rotate independently but in sync since they process the same number of messages.<br><br><strong>Key insight:</strong> Your <code>encrypt_message()</code> and <code>decrypt_message()</code> methods already call <code>self._maybe_rotate()</code> before each operation. Once you implement this method, key rotation happens automatically.</p>",
       steps:
         '<ol><li>Check if <code>self.nonce >= ROTATION_THRESHOLD</code> (where ROTATION_THRESHOLD is 1000)</li><li>If so, call <code>hkdf_two_keys(self.chaining_key, self.key)</code> to derive the new chaining key and new encryption key</li><li>Update <code>self.chaining_key</code> and <code>self.key</code> with the new values</li><li>Reset <code>self.nonce</code> to 0</li></ol>',
       code: `    def _maybe_rotate(self):
@@ -2055,4 +2328,5 @@ print("(500 messages x 2 nonces = 1000 = threshold)")
     },
     rewardSats: 21,
   },
+
 };

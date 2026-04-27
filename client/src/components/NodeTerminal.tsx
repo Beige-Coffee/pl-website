@@ -30,7 +30,6 @@ const COMMANDS = [
   "getblockcount",
   "getblockchaininfo",
   "getmempoolinfo",
-  "gettransaction",
   "help",
   "clear",
 ];
@@ -109,10 +108,12 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
   const [running, setRunning] = useState(false);
   const [provisioning, setProvisioning] = useState(false);
   const [nodeReady, setNodeReady] = useState(false);
+  const [nodeUnresponsive, setNodeUnresponsive] = useState(false);
   const [history, setHistory] = useState<string[]>([]);
   const [historyIdx, setHistoryIdx] = useState(-1);
   const [showHelp, setShowHelp] = useState(false);
   const hadNodeRef = useRef(false);
+  const execAbortRef = useRef<AbortController | null>(null);
 
   const [panelWidth, setPanelWidth] = useState(() => {
     // Use shared panel width if available, fall back to per-panel saved width
@@ -175,9 +176,9 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
     }
   }, [isOpen, panel.activePanel]);
 
-  // Provision node on open
+  // Provision node on open (skip if restartNode is handling provisioning)
   useEffect(() => {
-    if (!isOpen || !authenticated || !sessionToken || nodeReady) return;
+    if (!isOpen || !authenticated || !sessionToken || nodeReady || provisioning) return;
 
     let cancelled = false;
     const isRestart = hadNodeRef.current;
@@ -264,6 +265,8 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
     }
 
     setRunning(true);
+    const abortController = new AbortController();
+    execAbortRef.current = abortController;
     try {
       const res = await fetch("/api/node/exec", {
         method: "POST",
@@ -272,6 +275,7 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
           Authorization: `Bearer ${sessionToken}`,
         },
         body: JSON.stringify({ command: cmd }),
+        signal: abortController.signal,
       });
 
       const contentType = res.headers.get("content-type") || "";
@@ -288,24 +292,38 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
       }
 
       if (data.error) {
-        setLines((prev) => [...prev, { type: "error", text: data.error }]);
+        // Detect timeout / unresponsive node — show restart guidance
+        if (/timed out|timeout/i.test(data.error)) {
+          setNodeUnresponsive(true);
+          setLines((prev) => [...prev,
+            { type: "error", text: data.error },
+            { type: "info", text: "The node may be unresponsive. Click RESTART above to restart it." },
+          ]);
+        } else {
+          setLines((prev) => [...prev, { type: "error", text: data.error }]);
+        }
         // Auto-recover: if the error indicates the node process is dead,
         // reset nodeReady to trigger automatic re-provisioning.
-        // Timeouts are NOT treated as fatal — the node may still be processing.
         if (/ECONNREFUSED|ECONNRESET|socket hang up/i.test(data.error)) {
           setNodeReady(false);
+          setNodeUnresponsive(false);
         }
       } else if (data.result === "__CLEAR__") {
         setLines([]);
       } else if (data.result !== undefined) {
+        setNodeUnresponsive(false);
         const text = typeof data.result === "string"
           ? data.result
           : JSON.stringify(data.result, null, 2);
         setLines((prev) => [...prev, { type: "output", text }]);
       }
     } catch (err: any) {
-      setLines((prev) => [...prev, { type: "error", text: "Network error: " + err.message }]);
+      // Don't show errors for requests we intentionally aborted (e.g. restart)
+      if (err?.name !== "AbortError") {
+        setLines((prev) => [...prev, { type: "error", text: "Network error: " + err.message }]);
+      }
     } finally {
+      execAbortRef.current = null;
       setRunning(false);
       // Re-focus input after command completes so user can keep typing
       requestAnimationFrame(() => inputRef.current?.focus());
@@ -450,6 +468,44 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
   const inputTextColor = dark ? "text-slate-200" : "text-stone-800";
   const placeholderColor = dark ? "placeholder:text-slate-600" : "placeholder:text-stone-400";
 
+  // ── Restart node ───────────────────────────────────────────────────────
+
+  const restartNode = useCallback(async () => {
+    if (!sessionToken || provisioning) return;
+    // Abort any in-flight command (e.g. a mining request waiting for timeout)
+    if (execAbortRef.current) {
+      execAbortRef.current.abort();
+      execAbortRef.current = null;
+    }
+    setRunning(false);
+    setProvisioning(true);
+    // Don't set nodeReady=false — that triggers the provisioning useEffect
+    // and causes duplicate "restarting" messages. provisioning=true disables input.
+    setNodeUnresponsive(false);
+    setLines((prev) => [...prev, { type: "info", text: "Restarting node..." }]);
+
+    try {
+      const res = await fetch("/api/node/restart", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${sessionToken}`,
+        },
+      });
+      const data = await res.json();
+      if (data.running) {
+        setNodeReady(true);
+        setLines((prev) => [...prev, { type: "info", text: "Node restarted. Ready for commands." }]);
+      } else {
+        setLines((prev) => [...prev, { type: "error", text: data.error || "Restart failed" }]);
+      }
+    } catch (err: any) {
+      setLines((prev) => [...prev, { type: "error", text: "Restart failed: " + err.message }]);
+    } finally {
+      setProvisioning(false);
+    }
+  }, [sessionToken, provisioning]);
+
   // Listen for open event from Tools menu
   useEffect(() => {
     const handler = () => setIsOpen(true);
@@ -570,9 +626,25 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
     return (
       <Drawer open={isOpen} onOpenChange={(open) => setIsOpen(open)}>
         <DrawerContent className={`max-h-[95dvh] h-[95dvh] flex flex-col ${panelBg}`} data-testid="drawer-node-terminal">
-          <DrawerTitle className={`font-pixel text-xs ${goldText} px-4 pt-2 flex items-center gap-2`}>
-            Bitcoin Node
-            {provisioning && <span className="inline-block w-3 h-3 border-2 border-[#FFD700]/30 border-t-[#FFD700] rounded-full animate-spin" />}
+          <DrawerTitle className={`font-pixel text-xs ${goldText} px-4 pt-2 flex items-center justify-between`}>
+            <div className="flex items-center gap-2">
+              Bitcoin Node
+              {provisioning ? (
+                <span className="inline-block w-3 h-3 border-2 border-[#FFD700]/30 border-t-[#FFD700] rounded-full animate-spin" />
+              ) : (
+                <span className={`inline-block w-2 h-2 rounded-full ${
+                  !nodeReady ? "bg-red-500" : nodeUnresponsive ? "bg-amber-500" : "bg-green-500"
+                }`} />
+              )}
+            </div>
+            <button
+              onClick={restartNode}
+              disabled={provisioning}
+              className={`font-pixel text-[10px] px-2 py-1 border transition-all cursor-pointer disabled:opacity-40
+                ${dark ? "border-[#2a3552] text-slate-400" : "border-[#d4c9a8] text-black/50"}`}
+            >
+              RESTART
+            </button>
           </DrawerTitle>
           {terminalContent}
         </DrawerContent>
@@ -600,9 +672,38 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
       <div className={`flex items-center justify-between px-4 py-2.5 border-b-2 ${panelBorder} ${dark ? "bg-[#0f1930]" : "bg-[#f0e8d8]"} shrink-0`}>
         <div className={`font-pixel text-xs ${goldText} flex items-center gap-2`}>
           Bitcoin Node
-          {provisioning && <span className="inline-block w-3 h-3 border-2 border-[#FFD700]/30 border-t-[#FFD700] rounded-full animate-spin" />}
+          {provisioning ? (
+            <span className="inline-block w-3 h-3 border-2 border-[#FFD700]/30 border-t-[#FFD700] rounded-full animate-spin" />
+          ) : (
+            <span
+              className={`inline-block w-2 h-2 rounded-full ${
+                !nodeReady ? "bg-red-500" : nodeUnresponsive ? "bg-amber-500" : "bg-green-500"
+              }`}
+              title={!nodeReady ? "Node stopped" : nodeUnresponsive ? "Node unresponsive" : "Node running"}
+            />
+          )}
         </div>
         <div className="flex items-center gap-2">
+          <div className="relative group">
+            <button
+              onClick={restartNode}
+              disabled={provisioning}
+              className={`font-pixel text-[10px] px-2 py-1 border transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed
+                ${dark ? "border-[#2a3552] text-slate-400 hover:text-slate-200 hover:bg-[#132043]" : "border-[#d4c9a8] text-black/50 hover:text-black hover:bg-[#e8dcc8]"}`}
+            >
+              RESTART
+            </button>
+            <div
+              className={`absolute right-0 top-full mt-2 w-64 p-3 border-2 rounded opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity z-50 ${panelBorder} ${panelBg}`}
+              style={sansFont}
+            >
+              <div className={`font-pixel text-xs ${goldText} mb-2`}>Restart Node?</div>
+              <div className={`text-xs ${dark ? "text-slate-300" : "text-stone-600"} space-y-1.5`}>
+                <p>This restarts your Bitcoin node from a fresh state. Your <strong>course progress, exercise solutions, and transaction history</strong> are not affected.</p>
+                <p>Use this if the node becomes unresponsive or commands stop working.</p>
+              </div>
+            </div>
+          </div>
           <button
             onClick={() => setShowHelp((v) => !v)}
             className={`font-pixel text-[10px] px-2 py-1 border transition-all cursor-pointer
@@ -625,7 +726,7 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
       {/* Help overlay */}
       {showHelp && (
         <div
-          className="absolute inset-0 top-[44px] z-10 overflow-auto px-4 py-4"
+          className="absolute inset-0 top-[44px] z-30 overflow-auto px-4 py-4"
           style={{
             ...sansFont,
             backgroundColor: dark ? "#0a0f1acc" : "#faf6eeee",
@@ -654,7 +755,6 @@ export default function NodeTerminal({ theme, sessionToken, authenticated }: Nod
             {([
               ["decodescript", "hex", "Decode a hex-encoded script to see its opcodes and address."],
               ["testmempoolaccept", "raw tx hex", "Test if a transaction would be accepted to the mempool (without broadcasting)."],
-              ["gettransaction", "txid", "Get wallet transaction info (only for transactions involving wallet addresses)."],
             ] as [string, string, string][]).map(([cmd, args, desc]) => (
               <div key={cmd}>
                 <span className={`${dark ? "text-[#FFD700]" : "text-[#9a7200]"} font-bold`}>{cmd}</span>

@@ -913,6 +913,20 @@ export default function CodeExercise({
     </div>
   ) : null;
 
+  // Mobile-only overlay on the code editor — tapping expands to fullscreen
+  const mobileExpandOverlay = isMobile && !expanded && mobileTab === "code" ? (
+    <div
+      className="absolute inset-0 z-10 flex items-center justify-center cursor-pointer"
+      style={{ backgroundColor: dark ? "rgba(15,25,48,0.6)" : "rgba(255,253,245,0.65)" }}
+      onClick={() => setExpanded(true)}
+    >
+      <div className={`flex flex-col items-center gap-2 ${dark ? "text-[#FFD700]" : "text-[#9a7200]"}`}>
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" /><line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" /></svg>
+        <span className="font-pixel text-sm">TAP TO EXPAND</span>
+      </div>
+    </div>
+  ) : null;
+
   const exerciseContent = (
     <div className={expanded ? "flex flex-col flex-1 min-h-0" : `my-4 border-2 ${completedDisplay ? goldBorder : cardBorder} ${cardBg} ${isMobile ? "p-3" : "p-5"}`}>
       {/* Description + Expand button */}
@@ -1022,6 +1036,7 @@ export default function CodeExercise({
       {/* Code Editor */}
       <div className={`relative mb-3 ${expanded ? "flex-1 min-h-0" : ""}`}>
         <div ref={editorRef} className="h-full" />
+        {mobileExpandOverlay}
       </div>
 
       {/* Action buttons */}

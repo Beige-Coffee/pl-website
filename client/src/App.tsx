@@ -14,6 +14,8 @@ import AdminPage from "@/pages/admin";
 import VisualLightningPage from "@/pages/visual-lightning";
 import OnionRoutingTutorialPage from "@/pages/onion-routing-tutorial";
 import Learn from "@/pages/learn";
+import ResetPasswordPage from "@/pages/reset-password";
+
 
 function Router() {
   usePageTracking();
@@ -28,9 +30,11 @@ function Router() {
       <Route path="/lightning-tutorial/:chapterId" component={LightningTutorialPage} />
       <Route path="/onion-routing-tutorial" component={OnionRoutingTutorialPage} />
       <Route path="/onion-routing-tutorial/:chapterId" component={OnionRoutingTutorialPage} />
+      <Route path="/reset-password" component={ResetPasswordPage} />
       <Route path="/admin" component={AdminPage} />
       <Route path="/visual-lightning" component={VisualLightningPage} />
       <Route path="/visual-lightning/:sectionId" component={VisualLightningPage} />
+
       <Route component={NotFound} />
     </Switch>
   );

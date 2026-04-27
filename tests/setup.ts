@@ -13,6 +13,7 @@ vi.mock("../server/storage", async () => {
 // Mock email sending
 vi.mock("../server/email", () => ({
   sendVerificationEmail: vi.fn().mockResolvedValue(undefined),
+  sendPasswordResetEmail: vi.fn().mockResolvedValue(undefined),
 }));
 
 // Mock bitcoin-node (nodeManager singleton)

@@ -10,8 +10,13 @@ import bcrypt from "bcryptjs";
 import { decode as decodeBolt11 } from "light-bolt11-decoder";
 import { emailAuthSchema, insertPageEventSchema, type Feedback } from "@shared/schema";
 import { existsSync } from "fs";
-import { sendVerificationEmail } from "./email";
+import { sendVerificationEmail, sendPasswordResetEmail } from "./email";
+import { createHash } from "crypto";
 import { nodeManager } from "./bitcoin-node";
+import { setupNoiseWebSocket, getServerPubkey } from "./noise-handshake-ws";
+import { hex as noiseHex } from "./noise-crypto";
+import { sha256 } from "@noble/hashes/sha2.js";
+import { verify as ecdsaVerify } from "@noble/secp256k1";
 
 class RateLimiter {
   private attempts: Map<string, number[]> = new Map();
@@ -50,6 +55,16 @@ const adminLimiter = new RateLimiter(5, 60_000);
 const feedbackLimiter = new RateLimiter(5, 600_000);
 
 function getClientIp(req: Request): string {
+  // In production (Replit autoscale), multiple proxy hops mean req.ip may resolve
+  // to an internal GCP IP. Read the leftmost entry from x-forwarded-for instead,
+  // which is always the original client IP.
+  const forwarded = req.headers["x-forwarded-for"];
+  if (forwarded) {
+    const first = (Array.isArray(forwarded) ? forwarded[0] : forwarded)
+      .split(",")[0]
+      .trim();
+    if (first) return first.replace(/^::ffff:/, "");
+  }
   const ip = req.ip || req.socket.remoteAddress || "";
   if (!ip) return "unknown";
   return ip.replace(/^::ffff:/, "");
@@ -209,6 +224,7 @@ export const CHECKPOINT_ANSWER_KEY: Record<string, number> = {
   "exercise-act2-responder": 0,
   "exercise-act2-initiator": 0,
   "exercise-act3-initiator": 0,
+  "exercise-act3-responder": 0,
   "exercise-encrypt": 0,
   "exercise-decrypt": 0,
   "exercise-key-rotation": 0,
@@ -429,6 +445,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err) {
       console.error("Resend verification error:", err);
       res.status(500).json({ error: "Failed to resend verification email" });
+    }
+  });
+
+  // --- Password Reset ---
+
+  app.post("/api/auth/forgot-password", async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    if (!authLimiter.check(ip)) {
+      return res.status(429).json({ error: "Too many attempts, try again later" });
+    }
+
+    try {
+      const { email } = req.body;
+      if (!email || typeof email !== "string") {
+        return res.status(400).json({ error: "Email is required" });
+      }
+
+      // Always return success to prevent email enumeration
+      const user = await storage.getUserByEmail(email.toLowerCase().trim());
+      if (user && user.email) {
+        const token = randomBytes(32).toString("hex");
+        const tokenHash = createHash("sha256").update(token).digest("hex");
+        const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+        await storage.setResetToken(user.id, tokenHash, expiresAt);
+
+        const baseUrl = `${req.protocol}://${req.get("host")}`;
+        const resetUrl = `${baseUrl}/reset-password?token=${token}`;
+
+        try {
+          await sendPasswordResetEmail(user.email, resetUrl);
+        } catch (emailErr) {
+          console.error("[auth] Failed to send reset email:", emailErr);
+        }
+      }
+
+      res.json({ ok: true, message: "If an account exists with that email, a reset link has been sent." });
+    } catch (err) {
+      console.error("[auth] Forgot password error:", err);
+      res.status(500).json({ error: "Something went wrong" });
+    }
+  });
+
+  app.post("/api/auth/reset-password", async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    if (!authLimiter.check(ip)) {
+      return res.status(429).json({ error: "Too many attempts, try again later" });
+    }
+
+    try {
+      const { token, newPassword } = req.body;
+      if (!token || typeof token !== "string") {
+        return res.status(400).json({ error: "Reset token is required" });
+      }
+      if (!newPassword || typeof newPassword !== "string" || newPassword.length < 6) {
+        return res.status(400).json({ error: "Password must be at least 6 characters" });
+      }
+
+      const tokenHash = createHash("sha256").update(token).digest("hex");
+      const user = await storage.getUserByResetTokenHash(tokenHash);
+      if (!user) {
+        return res.status(400).json({ error: "Invalid or expired reset token" });
+      }
+
+      const passwordHash = await bcrypt.hash(newPassword, 10);
+      await storage.updateUserPassword(user.id, passwordHash);
+      await storage.clearResetToken(user.id);
+      await storage.deleteSessionsByUserId(user.id);
+
+      res.json({ ok: true, message: "Password reset successfully. Please log in." });
+    } catch (err) {
+      console.error("[auth] Reset password error:", err);
+      res.status(500).json({ error: "Something went wrong" });
     }
   });
 
@@ -670,7 +759,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const k1 = generateK1();
-      await storage.createWithdrawal(k1, user.id, String(REWARD_AMOUNT_MSATS));
+      const withdrawal = await storage.createWithdrawal(k1, user.id, String(REWARD_AMOUNT_MSATS));
+      if (!withdrawal) {
+        return res.status(400).json({ error: "Reward already claimed" });
+      }
 
       if (user.lightningAddress) {
         const result = await autoPayLightningAddress(user.lightningAddress, REWARD_AMOUNT_MSATS);
@@ -782,7 +874,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch {}
 
       const k1 = generateK1();
-      await storage.createWithdrawal(k1, user.id, String(rewardMsats), checkpointId);
+      const withdrawal = await storage.createWithdrawal(k1, user.id, String(rewardMsats), checkpointId);
+      if (!withdrawal) {
+        return res.status(400).json({ error: "Reward already claimed" });
+      }
 
       if (method !== "lnurl" && user.lightningAddress) {
         const result = await autoPayLightningAddress(user.lightningAddress, rewardMsats);
@@ -912,7 +1007,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch {}
 
       const k1 = generateK1();
-      await storage.createWithdrawal(k1, user.id, String(rewardMsats), groupId);
+      const withdrawal = await storage.createWithdrawal(k1, user.id, String(rewardMsats), groupId);
+      if (!withdrawal) {
+        return res.status(400).json({ error: "Reward already claimed" });
+      }
 
       if (method !== "lnurl" && user.lightningAddress) {
         const result = await autoPayLightningAddress(user.lightningAddress, rewardMsats);
@@ -1172,6 +1270,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (challenge.used) {
         return res.json({ status: "ERROR", reason: "Challenge already used" });
       }
+      // Reject stale challenges (10-minute max age)
+      if (Date.now() - new Date(challenge.createdAt).getTime() > 10 * 60 * 1000) {
+        return res.json({ status: "ERROR", reason: "Challenge expired" });
+      }
 
       const k1Bytes = hexToBytes(k1);
       const sigBytes = hexToBytes(sig);
@@ -1219,8 +1321,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!challenge || !challenge.used || !challenge.pubkey || !challenge.sessionToken) {
         return res.json({ authenticated: false });
       }
+      // Reject stale challenges (10-minute max age)
+      if (Date.now() - new Date(challenge.createdAt).getTime() > 10 * 60 * 1000) {
+        return res.json({ authenticated: false });
+      }
 
       const user = await storage.getUserByPubkey(challenge.pubkey);
+
+      // Delete the challenge after first successful retrieval (one-time use)
+      await storage.deleteChallenge(k1);
 
       return res.json({
         authenticated: true,
@@ -1844,6 +1953,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/node/restart", async (req: Request, res: Response) => {
+    const ip = getClientIp(req);
+    const bypass = canBypassNodeLimiter(req);
+    if (!bypass && !nodeLimiter.check(ip)) {
+      return res.status(429).json({ error: "Too many requests" });
+    }
+    if (bypass) {
+      nodeManager.noteLimiterBypass();
+    }
+
+    try {
+      const user = await getAuthUser(req);
+      if (!user) return res.status(401).json({ error: "Not authenticated" });
+
+      await nodeManager.restart(user.id);
+      return res.json({ running: true });
+    } catch (err: any) {
+      const status = err.message?.includes("busy") ? 503 : 500;
+      return res.status(status).json({ error: err.message });
+    }
+  });
+
   app.post("/api/node/exec", async (req: Request, res: Response) => {
     const ip = getClientIp(req);
     const bypass = canBypassNodeLimiter(req);
@@ -1906,6 +2037,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   nodeManager.ensureBitcoindBinary().catch((err) => {
     console.log("[node] Binary pre-download deferred:", err.message);
   });
+
+  // Periodic cleanup: expired sessions and stale LNURL challenges (every hour)
+  setInterval(() => {
+    storage.deleteExpiredSessions().catch((err) => {
+      console.error("[cleanup] Failed to delete expired sessions:", err);
+    });
+    storage.deleteExpiredChallenges().catch((err) => {
+      console.error("[cleanup] Failed to delete expired challenges:", err);
+    });
+  }, 60 * 60 * 1000);
 
   // ── Feedback ────────────────────────────────────────────────────────────
 
@@ -2016,7 +2157,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ─── Noise Protocol Endpoints ─────────────────────────────────────────────
+
+  app.get("/api/noise/pubkey", (_req: Request, res: Response) => {
+    try {
+      const pubkey = getServerPubkey();
+      res.json({ pubkey: noiseHex(pubkey) });
+    } catch (err) {
+      console.error("[noise] Failed to get server pubkey:", err);
+      res.status(500).json({ error: "Failed to get server public key" });
+    }
+  });
+
+  // Record Noise Lab completion — verifies the server-signed completion token
+  app.post("/api/noise/lab-complete", async (req: Request, res: Response) => {
+    try {
+      const user = await getAuthUser(req);
+      if (!user) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      const { token } = req.body;
+      if (!token || typeof token !== "string") {
+        return res.status(400).json({ error: "Missing completion token" });
+      }
+
+      let parsed: { studentPubkey: string; timestamp: string; signature: string };
+      try {
+        parsed = JSON.parse(token);
+      } catch {
+        return res.status(400).json({ error: "Invalid token format" });
+      }
+
+      if (!parsed.studentPubkey || !parsed.timestamp || !parsed.signature) {
+        return res.status(400).json({ error: "Incomplete token" });
+      }
+
+      // Reject tokens older than 10 minutes
+      const tokenAge = Date.now() - new Date(parsed.timestamp).getTime();
+      if (tokenAge > 10 * 60 * 1000 || tokenAge < 0) {
+        return res.status(400).json({ error: "Token expired" });
+      }
+
+      // Verify signature against server's noise pubkey
+      const message = parsed.studentPubkey + parsed.timestamp;
+      const messageHash = sha256(new TextEncoder().encode(message));
+      const sigBytes = hexToBytes(parsed.signature);
+      const serverPubkey = getServerPubkey();
+
+      const valid = ecdsaVerify(sigBytes, messageHash, serverPubkey);
+      if (!valid) {
+        return res.status(400).json({ error: "Invalid token signature" });
+      }
+
+      // Record the completion
+      await storage.markCheckpointCompleted(user.id, "noise-lab-complete");
+      return res.json({ success: true });
+    } catch (err) {
+      console.error("[noise] Lab completion error:", err);
+      res.status(500).json({ error: "Failed to record completion" });
+    }
+  });
+
   const httpServer = createServer(app);
+
+  // Attach Noise Protocol WebSocket handler to the HTTP server
+  setupNoiseWebSocket(httpServer);
+
   return httpServer;
 }
 

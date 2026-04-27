@@ -120,9 +120,9 @@ export default function FeedbackWidget({ theme, chapterTitle, exerciseId, sessio
 
   const canSubmit = category && message.trim().length > 0 && step === "form";
 
-  // Default position: offset higher on mobile to avoid overlap with TOOLS FAB
+  // Default position: offset higher on mobile to avoid overlap with TOOLS FAB + iOS safe area
   const defaultTop = typeof window !== "undefined"
-    ? window.innerWidth < 768 ? window.innerHeight - 140 : window.innerHeight - 80
+    ? window.innerWidth < 768 ? window.innerHeight - 160 : window.innerHeight - 80
     : 700;
   const iconTop = dragY ?? defaultTop;
 
@@ -130,7 +130,7 @@ export default function FeedbackWidget({ theme, chapterTitle, exerciseId, sessio
     <>
       <div
         data-feedback-widget="true"
-        className="fixed right-2 z-[100] select-none"
+        className="fixed right-2 z-[100] select-none hidden md:block"
         style={{ top: iconTop, transform: "translateY(-50%)" }}
       >
         <button

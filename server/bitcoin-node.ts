@@ -1,5 +1,5 @@
 import { spawn, execSync, type ChildProcess } from "child_process";
-import { existsSync, mkdirSync, cpSync, rmSync, readdirSync, statSync } from "fs";
+import { existsSync, mkdirSync, cpSync, rmSync, readdirSync, statSync, writeFileSync, readFileSync } from "fs";
 import { createServer } from "net";
 import { join } from "path";
 import { randomInt } from "crypto";
@@ -12,6 +12,7 @@ interface NodeInstance {
   userId: UserId;
   process: ChildProcess;
   rpcPort: number;
+  p2pPort: number;
   dataDir: string;
   lastActivity: number;
   ready: boolean;
@@ -69,7 +70,7 @@ const MAX_PORT = 18999;
 const DEFAULT_RPC_TIMEOUT_MS = 30_000;
 const RPC_TIMEOUT_OVERRIDES_MS: Record<string, number> = {
   scantxoutset: 120_000,
-  generateblock: 120_000,
+  generateblock: 30_000,
 };
 
 const BLOCKED_COMMANDS = new Set([
@@ -284,8 +285,7 @@ class NodeManager {
       // Detect dead/crashed process (e.g., OOM-killed or SIGKILL'd by host)
       if (existing.process.exitCode !== null || existing.process.killed) {
         console.log("[node] Detected dead process for user", userId, "- reprovisioning");
-        this.usedPorts.delete(existing.rpcPort);
-        this.instances.delete(userId);
+        this._releaseInstance(existing);
         // Fall through to provision a new node
       } else {
         existing.lastActivity = Date.now();
@@ -293,7 +293,14 @@ class NodeManager {
       }
     }
     if (existing && !existing.ready) {
-      throw new Error("Node is still starting, try again in a few seconds");
+      // If there's a stuck not-ready instance (from a previous failed provision),
+      // clean it up so we can try again instead of blocking forever.
+      if (existing.process.exitCode !== null || existing.process.killed) {
+        console.log("[node] Cleaning up failed provision for user", userId);
+        this._releaseInstance(existing);
+      } else {
+        throw new Error("Node is still starting, try again in a few seconds");
+      }
     }
 
     if (this.instances.size >= MAX_CONCURRENT) {
@@ -312,6 +319,10 @@ class NodeManager {
         cpSync(SNAPSHOT_DIR, regtestDir, { recursive: true });
         console.log("[node] Copied snapshot for user", userId);
       }
+    } else {
+      // Clean up stale LOCK files from previous unclean shutdown.
+      // Without this, bitcoind can't start after SIGKILL or crash.
+      this._cleanupStaleLocks(regtestDir);
     }
 
     const rpcPort = await this.allocatePort();
@@ -331,7 +342,6 @@ class NodeManager {
       "-dbcache=100",
       "-maxmempool=5",
       "-maxconnections=0",
-      "-txindex=1",
       "-disablewallet",
       "-minrelaytxfee=0",
       "-persistmempool=0",
@@ -347,6 +357,7 @@ class NodeManager {
       userId,
       process: proc,
       rpcPort,
+      p2pPort,
       dataDir,
       lastActivity: Date.now(),
       ready: false,
@@ -356,12 +367,7 @@ class NodeManager {
 
     proc.on("exit", (code) => {
       console.log("[node] bitcoind exited for user", userId, "code", code);
-      this.usedPorts.delete(rpcPort);
-      this.usedPorts.delete(p2pPort);
-      const current = this.instances.get(userId);
-      if (current?.process === proc) {
-        this.instances.delete(userId);
-      }
+      this._releaseInstance(instance);
     });
 
     let stderrBuf = "";
@@ -462,6 +468,13 @@ class NodeManager {
       throw err;
     }
 
+    const contentType = res.headers.get("content-type") || "";
+    if (!contentType.includes("application/json")) {
+      if (recordMetric) {
+        this.recordRpcMetric(method, Date.now() - startedAt, false, false);
+      }
+      throw new Error(`${method}: node returned non-JSON response (HTTP ${res.status})`);
+    }
     const data = (await res.json()) as RpcResponse;
     if (data.error) {
       if (recordMetric) {
@@ -479,12 +492,48 @@ class NodeManager {
     return this._rpcCall(port, method, params, false, timeoutMs);
   }
 
+  /**
+   * getrawtransaction with fallback for when txindex is disabled.
+   * Tries the direct RPC first (works for mempool txs). If it fails because
+   * the tx is confirmed and txindex is off, searches recent blocks using
+   * the blockhash parameter which works without txindex.
+   */
+  private async _getrawtransactionWithFallback(port: number, params: unknown[]): Promise<unknown> {
+    try {
+      return await this._rpcCall(port, "getrawtransaction", params);
+    } catch (err: any) {
+      if (!/No such mempool transaction|txindex/i.test(err.message)) {
+        throw err;
+      }
+    }
+
+    // Fallback: search recent blocks for the confirmed transaction
+    const txid = params[0] as string;
+    const verbose = params.length > 1 ? params[1] : false;
+    const height = (await this._rpcCall(port, "getblockcount", [], false)) as number;
+    const searchDepth = Math.min(50, height);
+
+    for (let i = 0; i < searchDepth; i++) {
+      const blockHash = (await this._rpcCall(port, "getblockhash", [height - i], false)) as string;
+      try {
+        return await this._rpcCall(port, "getrawtransaction", [txid, verbose, blockHash], false);
+      } catch {
+        continue;
+      }
+    }
+
+    throw new Error(`Transaction ${txid} not found in mempool or last ${searchDepth} blocks`);
+  }
+
   async rpc(userId: UserId, method: string, params: unknown[]): Promise<unknown> {
     if (BLOCKED_COMMANDS.has(method)) {
       throw new Error(`Command '${method}' is not available in this environment.`);
     }
     const instance = await this.getOrCreate(userId);
     instance.lastActivity = Date.now();
+    if (method === "getrawtransaction") {
+      return this._getrawtransactionWithFallback(instance.rpcPort, params);
+    }
     return this._rpcCall(instance.rpcPort, method, params);
   }
 
@@ -501,11 +550,13 @@ class NodeManager {
 
     // If the command failed with a connection error (not a timeout), the node
     // process is likely dead. Stop it so the next call triggers a fresh re-provision.
-    // Timeouts are NOT treated as fatal — the node may still be alive and processing
-    // (e.g., generatetoaddress mining blocks slowly). Killing it mid-write can corrupt data.
+    // Guard: only stop if this instance is still current (a concurrent restart
+    // may have already replaced it).
     if (result.error && /ECONNREFUSED|ECONNRESET|socket hang up/i.test(result.error)) {
-      console.log("[node] Node appears dead for user", userId, "- stopping for re-provision on next call");
-      await this.stop(userId);
+      if (this.instances.get(userId) === instance) {
+        console.log("[node] Node appears dead for user", userId, "- stopping for re-provision on next call");
+        await this.stop(userId);
+      }
     }
 
     return result;
@@ -553,7 +604,7 @@ class NodeManager {
           "  validateaddress <addr>     - Validate a Bitcoin address",
           "  help <command>             - Get help for a specific command",
           "",
-          "  mine <n>                   - Mine n blocks (max 40 per command)",
+          "  mine <n>                   - Mine n blocks (max 10 per command)",
           "  clear                      - Clear terminal",
           "",
           "  Note: Wallet is disabled for performance. Use scantxoutset to find UTXOs",
@@ -584,6 +635,16 @@ class NodeManager {
       return a;
     });
 
+    // getrawtransaction fallback: search recent blocks when txindex is disabled
+    if (cmd === "getrawtransaction") {
+      try {
+        const result = await this._getrawtransactionWithFallback(instance.rpcPort, rpcArgs);
+        return { result };
+      } catch (err: any) {
+        return { error: err.message };
+      }
+    }
+
     try {
       const result = await this._rpcCall(instance.rpcPort, cmd, rpcArgs);
       return { result };
@@ -593,13 +654,13 @@ class NodeManager {
   }
 
   private async _handleMine(instance: NodeInstance, args: string[]): Promise<{ result?: unknown; error?: string }> {
-    const MAX_MINE_BLOCKS = 40;
+    const MAX_MINE_BLOCKS = 10;
     const numBlocks = parseInt(args[0] || "1", 10);
     if (isNaN(numBlocks) || numBlocks < 1) {
-      return { error: "Usage: mine <number> (1-40)" };
+      return { error: "Usage: mine <number> (1-10)" };
     }
     if (numBlocks > MAX_MINE_BLOCKS) {
-      return { error: `For this course, mine is limited to ${MAX_MINE_BLOCKS} blocks at a time. Run 'mine ${MAX_MINE_BLOCKS}' multiple times if you need more.` };
+      return { error: `Mining is limited to ${MAX_MINE_BLOCKS} blocks at a time. Run 'mine ${MAX_MINE_BLOCKS}' multiple times if you need more.` };
     }
 
     try {
@@ -611,44 +672,121 @@ class NodeManager {
         await this._rpcCall(instance.rpcPort, "generateblock", [address, []]);
       }
 
-      const blockCount = await this._rpcCall(instance.rpcPort, "getblockcount", []);
-      return {
-        result: `Mined ${numBlocks} block${numBlocks > 1 ? "s" : ""}. Current height: ${blockCount}`,
-      };
+      const blockCount = (await this._rpcCall(instance.rpcPort, "getblockcount", [])) as number;
+
+      // Flush data to disk: bitcoind only writes to disk on clean shutdown.
+      // Guard: only stop if this instance is still current (a concurrent restart
+      // may have already replaced it — stopping the new one would be destructive).
+      let graceful = false;
+      if (this.instances.get(instance.userId) === instance) {
+        graceful = await this.stop(instance.userId);
+      }
+
+      const msg = `Mined ${numBlocks} block${numBlocks > 1 ? "s" : ""}. Current height: ${blockCount}`;
+      if (!graceful) {
+        return { result: `${msg} (warning: node did not shut down cleanly — some blocks may not be saved)` };
+      }
+      return { result: msg };
     } catch (err: any) {
-      // If timed out, the node is likely still processing (not dead).
-      // Poll getblockcount to report partial progress so the student knows
-      // blocks were mined even though the command appeared to fail.
       if (/timed out/i.test(err.message)) {
-        try {
-          const blockCount = await this._rpcCallWithTimeout(instance.rpcPort, "getblockcount", [], 10_000);
-          return { error: `Mining was slow but the node is still working. Current height: ${blockCount}. Try 'getblockcount' in a moment, then run 'mine' again for remaining blocks.` };
-        } catch {
-          return { error: `Mining timed out. The node may still be processing blocks. Wait a moment and try 'getblockcount' to check progress.` };
+        // Mining timed out — try to flush data before giving up.
+        // Guard: only stop if this instance is still current.
+        let flushed = false;
+        if (this.instances.get(instance.userId) === instance) {
+          try { flushed = await this.stop(instance.userId); } catch {}
         }
+        const detail = flushed ? " Data from previous commands was saved." : "";
+        return { error: `Mining timed out. Click RESTART to restart the node.${detail}` };
       }
       return { error: `Failed to mine: ${err.message}` };
     }
   }
 
-  async stop(userId: UserId): Promise<void> {
+  private _waitForExit(proc: ChildProcess, timeoutMs: number): Promise<boolean> {
+    return new Promise((resolve) => {
+      if (proc.exitCode !== null) return resolve(true);
+      const timeout = setTimeout(() => resolve(false), timeoutMs);
+      proc.once("exit", () => { clearTimeout(timeout); resolve(true); });
+    });
+  }
+
+  /**
+   * Release an instance's ports and remove from the map — but only if
+   * the map still points to THIS instance. This identity check prevents
+   * a late exit from an old process from clobbering a newer instance.
+   */
+  private _releaseInstance(instance: NodeInstance): void {
+    this.usedPorts.delete(instance.rpcPort);
+    this.usedPorts.delete(instance.p2pPort);
+    const current = this.instances.get(instance.userId);
+    if (current === instance) {
+      this.instances.delete(instance.userId);
+    }
+  }
+
+  /**
+   * Stop a user's bitcoind process and wait for it to fully exit.
+   * Returns true if shutdown was graceful (RPC stop + clean exit = data flushed).
+   * Returns false if SIGTERM/SIGKILL was needed or process didn't exit.
+   */
+  async stop(userId: UserId): Promise<boolean> {
     const instance = this.instances.get(userId);
-    if (!instance) return;
+    if (!instance) return false;
 
-    try {
-      instance.process.kill("SIGTERM");
-    } catch {}
+    const proc = instance.process;
 
-    // Wait briefly for graceful shutdown
-    await new Promise((r) => setTimeout(r, 1000));
-
-    if (instance.process.exitCode === null) {
-      try {
-        instance.process.kill("SIGKILL");
-      } catch {}
+    // Already dead — ensure cleanup
+    if (proc.exitCode !== null) {
+      this._releaseInstance(instance);
+      return false;
     }
 
-    this.instances.delete(userId);
+    // Step 1: Try RPC "stop" (cleanest — flushes LevelDB before exiting)
+    let rpcStopSucceeded = false;
+    try {
+      await this._rpcCallWithTimeout(instance.rpcPort, "stop", [], 5_000);
+      rpcStopSucceeded = true;
+    } catch {
+      // Step 2: SIGTERM if RPC fails
+      try { proc.kill("SIGTERM"); } catch {}
+    }
+
+    // Step 3: Wait up to 15s for graceful exit
+    let exited = await this._waitForExit(proc, 15_000);
+
+    // Step 4: SIGKILL as last resort
+    if (!exited) {
+      console.log("[node] bitcoind did not exit after 15s for user", userId, "- sending SIGKILL");
+      try { proc.kill("SIGKILL"); } catch {}
+      exited = await this._waitForExit(proc, 5_000);
+    }
+
+    // Ensure cleanup even if exit event didn't fire
+    this._releaseInstance(instance);
+
+    // Give the filesystem a moment to release file handles after process death
+    if (exited) {
+      await new Promise((r) => setTimeout(r, 500));
+    }
+
+    // Graceful = RPC stop succeeded AND process exited cleanly
+    return rpcStopSucceeded && exited;
+  }
+
+  /**
+   * Remove stale LevelDB LOCK files from the data directory.
+   * After SIGKILL or crash, bitcoind leaves LOCK files that prevent restart.
+   */
+  private _cleanupStaleLocks(regtestDir: string): void {
+    for (const subdir of ["blocks/index", "chainstate"]) {
+      const lockPath = join(regtestDir, subdir, "LOCK");
+      try { rmSync(lockPath); } catch {}
+    }
+  }
+
+  async restart(userId: UserId): Promise<void> {
+    await this.stop(userId);
+    await this.getOrCreate(userId);
   }
 
   getStatus(userId: UserId): { running: boolean; blockHeight?: number } {

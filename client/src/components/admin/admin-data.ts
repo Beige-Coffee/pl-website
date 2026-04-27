@@ -168,6 +168,7 @@ export const TUTORIAL_CONFIGS = {
       { id: "exercise-encrypt", label: "Encrypt", chapter: "Sending Messages" },
       { id: "exercise-decrypt", label: "Decrypt", chapter: "Receiving Messages" },
       { id: "exercise-key-rotation", label: "Key Rotation", chapter: "Key Rotation" },
+      { id: "noise-lab-complete", label: "Lab Complete", chapter: "Live Connection Lab" },
     ],
     pages: [
       { page: "/noise-tutorial", label: "Intro" },
@@ -180,7 +181,9 @@ export const TUTORIAL_CONFIGS = {
       { page: "/noise-tutorial/sending-messages", label: "Sending Msgs" },
       { page: "/noise-tutorial/receiving-messages", label: "Receiving Msgs" },
       { page: "/noise-tutorial/key-rotation", label: "Key Rotation" },
+      { page: "/noise-tutorial/crypto-review", label: "Crypto Review" },
       { page: "/noise-tutorial/quiz", label: "Quiz" },
+      { page: "/noise-tutorial/live-connection", label: "Live Connection Lab" },
     ],
     urlPrefix: "/noise-tutorial",
   },

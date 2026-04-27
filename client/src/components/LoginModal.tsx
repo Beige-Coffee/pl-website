@@ -38,12 +38,12 @@ export default function LoginModal({ theme, onSuccess, onClose }: LoginModalProp
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center p-4"
+      className="fixed inset-0 z-[200] flex items-center justify-center p-4 overflow-y-auto"
       data-testid="container-login-modal"
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div className="absolute inset-0 bg-black/60" />
-      <div className={`relative w-full max-w-md border-4 ${border} ${pageBg} p-4 sm:p-8`}>
+      <div className={`relative w-full max-w-md border-4 ${border} ${pageBg} p-4 sm:p-8 max-h-[90vh] overflow-y-auto`}>
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             {showBack && (
@@ -293,6 +293,16 @@ function EmailLoginForm({
       >
         {loading ? "PLEASE WAIT..." : "LOG IN"}
       </button>
+
+      <div className="text-center">
+        <a
+          href="/reset-password"
+          className={`text-sm ${dark ? "text-slate-400 hover:text-slate-300" : "text-gray-500 hover:text-gray-700"} underline`}
+          style={{ fontFamily: sansFont }}
+        >
+          Forgot password?
+        </a>
+      </div>
     </form>
   );
 }

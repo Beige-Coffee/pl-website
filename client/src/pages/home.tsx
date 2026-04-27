@@ -12,6 +12,7 @@ import { chapters as onionChapters } from "./onion-routing-tutorial";
 
 export default function Home() {
   const [showCodeModal, setShowCodeModal] = useState(false);
+  const [showRustConfirm, setShowRustConfirm] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showContinue, setShowContinue] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -51,10 +52,10 @@ export default function Home() {
       {/* Code Language Modal */}
       {showCodeModal && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto"
           onClick={(e) => { if (e.target === e.currentTarget) setShowCodeModal(false); }}
         >
-          <div className="bg-card border-4 border-border p-6 pixel-shadow max-w-2xl w-full relative">
+          <div className="bg-card border-4 border-border p-6 pixel-shadow max-w-2xl w-full relative max-h-[90vh] overflow-y-auto">
             <button
               onClick={() => setShowCodeModal(false)}
               className="absolute top-2 right-3 font-pixel text-xl hover:text-primary"
@@ -95,15 +96,67 @@ export default function Home() {
                   <li>Best for students who want to program in Rust and work towards protocol development. More challenging because it requires thinking about memory management and ownership.</li>
                   <li>Currently hosted on Replit and may be migrated to this website in the near future for a better learning experience.</li>
                 </ul>
-                <a
-                  href="https://replit.com/@austin-f/Programming-Lightning-Intro-to-Payment-Channels?v=1"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block w-full text-center bg-[#a72145] text-white px-3 py-2 font-pixel text-sm border-2 border-[#8b1a38] hover:bg-[#8b1a38] transition-colors pixel-shadow active:translate-x-[2px] active:translate-y-[2px] active:shadow-none"
+                <button
+                  onClick={() => setShowRustConfirm(true)}
+                  className="block w-full text-center bg-[#a72145] text-white px-3 py-2 font-pixel text-sm border-2 border-[#8b1a38] hover:bg-[#8b1a38] transition-colors pixel-shadow active:translate-x-[2px] active:translate-y-[2px] active:shadow-none cursor-pointer"
                 >
                   START IN RUST
-                </a>
+                </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rust Confirmation Modal */}
+      {showRustConfirm && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowRustConfirm(false); }}
+        >
+          <div className="bg-card border-4 border-border p-6 pixel-shadow max-w-lg w-full relative max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={() => setShowRustConfirm(false)}
+              className="absolute top-2 right-3 font-pixel text-xl hover:text-primary"
+            >
+              X
+            </button>
+            <h3 className="font-pixel text-lg mb-4">Before You Go</h3>
+            <div className="space-y-3 text-base text-foreground/80 mb-5" style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
+              <p>
+                The <strong>Rust version</strong> is the original course hosted on <strong>Replit</strong>. It covers the same material but is a simpler, older format.
+              </p>
+              <p>
+                The <strong>Python version</strong> is newer and built directly into this website with a richer learning experience, including:
+              </p>
+              <ul className="list-disc pl-5 space-y-1.5">
+                <li>Interactive code exercises with instant feedback</li>
+                <li>Built-in Bitcoin regtest node for broadcasting real transactions</li>
+                <li>Knowledge checkpoints with sat rewards</li>
+                <li>Scratch pad sandbox for experimenting with code</li>
+                <li>Auto-complete, signature hints, and file browser</li>
+                <li>Progress tracking across sessions</li>
+              </ul>
+              <p>
+                If you specifically want to learn Rust, the Replit version is a great choice. Otherwise, we recommend the Python version for the best experience.
+              </p>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <a
+                href="https://replit.com/@austin-f/Programming-Lightning-Intro-to-Payment-Channels?v=1"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => { setShowRustConfirm(false); setShowCodeModal(false); }}
+                className="flex-1 text-center bg-[#a72145] text-white px-3 py-3 font-pixel text-sm border-2 border-[#8b1a38] hover:bg-[#8b1a38] transition-colors pixel-shadow"
+              >
+                CONTINUE TO RUST
+              </a>
+              <button
+                onClick={() => { setShowRustConfirm(false); setShowCodeModal(false); navigate("/lightning-tutorial?mode=code"); }}
+                className="flex-1 bg-primary text-foreground px-3 py-3 font-pixel text-sm border-2 border-border hover:bg-primary/80 transition-colors pixel-shadow"
+              >
+                TRY PYTHON INSTEAD
+              </button>
             </div>
           </div>
         </div>
@@ -181,36 +234,94 @@ export default function Home() {
       </div>
 
       <div className="flex-1 flex flex-col items-center justify-start px-4 pt-8 md:pt-12 pb-8 relative">
-        {/* Continue Where You Left Off — floating button + popup */}
+        {/* Continue Where You Left Off — desktop: floating top-left, mobile: inline below header */}
         {authenticated && continueData.length > 0 && (
-          <div className="absolute top-2 left-4 z-20">
+          <>
+            {/* Desktop: absolute positioned */}
+            <div className="hidden md:block absolute top-2 left-4 z-20">
+              <button
+                onClick={() => continueData.length === 1 ? navigate(continueData[0].path) : setShowContinue((s) => !s)}
+                className="flex items-start gap-2.5 bg-card border-2 border-border px-3 py-2 shadow-[2px_2px_0px_rgba(0,0,0,0.15)] hover:shadow-[2px_2px_0px_rgba(0,0,0,0.25)] hover:border-foreground/30 transition-all group cursor-pointer text-left"
+              >
+                <span className="text-[#b8860b] mt-0.5 text-base leading-none">&#9654;</span>
+                <div className="min-w-0">
+                  <span className="font-pixel text-[10px] text-foreground/45 block leading-none">RESUME</span>
+                  <span
+                    className="text-sm font-semibold text-foreground/80 group-hover:text-foreground truncate block mt-0.5 max-w-[200px]"
+                    style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}
+                  >
+                    {continueData[0].chapterTitle}
+                  </span>
+                  {continueData.length > 1 && (
+                    <span className="font-pixel text-[9px] text-foreground/35 block mt-0.5">+{continueData.length - 1} MORE ▾</span>
+                  )}
+                </div>
+              </button>
+              {showContinue && continueData.length > 1 && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setShowContinue(false)} />
+                  <div className="absolute top-full left-0 mt-1 z-20 bg-card border-2 border-border shadow-md min-w-[240px]">
+                    {continueData.map((item) => (
+                      <Link
+                        key={item.path}
+                        href={item.path}
+                        className="flex items-center gap-2.5 px-3 py-2.5 hover:bg-secondary transition-colors border-b last:border-b-0 border-border"
+                        style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}
+                        onClick={() => setShowContinue(false)}
+                      >
+                        <span className="text-[#b8860b] text-xs leading-none">&#9654;</span>
+                        <div className="min-w-0">
+                          <span className="font-pixel text-[9px] text-foreground/40 block leading-none">{item.course === "Intro to Payment Channels" ? "LIGHTNING" : "NOISE"}</span>
+                          <span className="text-sm font-semibold text-foreground/80 truncate block mt-0.5">{item.chapterTitle}</span>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </>
+        )}
+
+        <header className="text-center mb-8 md:mb-10 w-full max-w-4xl">
+          <h1 className="text-3xl md:text-5xl font-pixel leading-tight mb-4 text-shadow-retro">
+            Programming<br />Lightning
+          </h1>
+          <p className="text-xl md:text-3xl font-mono font-bold text-foreground">
+            A Free, Open-Source Guide to Programming the Bitcoin Lightning Network
+          </p>
+        </header>
+
+        {/* Mobile: inline resume card below header */}
+        {authenticated && continueData.length > 0 && (
+          <div className="md:hidden w-full max-w-6xl mb-4 relative">
             <button
               onClick={() => continueData.length === 1 ? navigate(continueData[0].path) : setShowContinue((s) => !s)}
-              className="flex items-start gap-2.5 bg-card border-2 border-border px-3 py-2 shadow-[2px_2px_0px_rgba(0,0,0,0.15)] hover:shadow-[2px_2px_0px_rgba(0,0,0,0.25)] hover:border-foreground/30 transition-all group cursor-pointer text-left"
+              className="w-full flex items-center gap-3 bg-card border-2 border-border px-4 py-3 shadow-[2px_2px_0px_rgba(0,0,0,0.15)] hover:shadow-[2px_2px_0px_rgba(0,0,0,0.25)] hover:border-foreground/30 transition-all group cursor-pointer text-left"
             >
-              <span className="text-[#b8860b] mt-0.5 text-base leading-none">&#9654;</span>
-              <div className="min-w-0">
+              <span className="text-[#b8860b] text-lg leading-none">&#9654;</span>
+              <div className="min-w-0 flex-1">
                 <span className="font-pixel text-[10px] text-foreground/45 block leading-none">RESUME</span>
                 <span
-                  className="text-sm font-semibold text-foreground/80 group-hover:text-foreground truncate block mt-0.5 max-w-[200px]"
+                  className="text-sm font-semibold text-foreground/80 group-hover:text-foreground truncate block mt-0.5"
                   style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}
                 >
                   {continueData[0].chapterTitle}
                 </span>
-                {continueData.length > 1 && (
-                  <span className="font-pixel text-[9px] text-foreground/35 block mt-0.5">+{continueData.length - 1} MORE ▾</span>
-                )}
               </div>
+              {continueData.length > 1 && (
+                <span className="font-pixel text-[9px] text-foreground/35 shrink-0">+{continueData.length - 1} MORE ▾</span>
+              )}
             </button>
             {showContinue && continueData.length > 1 && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setShowContinue(false)} />
-                <div className="absolute top-full left-0 mt-1 z-20 bg-card border-2 border-border shadow-md min-w-[240px]">
+                <div className="absolute top-full left-0 right-0 mt-1 z-20 bg-card border-2 border-border shadow-md">
                   {continueData.map((item) => (
                     <Link
                       key={item.path}
                       href={item.path}
-                      className="flex items-center gap-2.5 px-3 py-2.5 hover:bg-secondary transition-colors border-b last:border-b-0 border-border"
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-secondary transition-colors border-b last:border-b-0 border-border"
                       style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}
                       onClick={() => setShowContinue(false)}
                     >
@@ -226,14 +337,6 @@ export default function Home() {
             )}
           </div>
         )}
-        <header className="text-center mb-8 md:mb-10 w-full max-w-4xl">
-          <h1 className="text-3xl md:text-5xl font-pixel leading-tight mb-4 text-shadow-retro">
-            Programming<br />Lightning
-          </h1>
-          <p className="text-xl md:text-3xl font-mono font-bold text-foreground">
-            A Free, Open-Source Guide to Programming the Bitcoin Lightning Network
-          </p>
-        </header>
 
         <div className="w-full max-w-6xl space-y-4 md:space-y-5">
 
@@ -267,7 +370,7 @@ export default function Home() {
                         </span>
                       </TooltipTrigger>
                       <TooltipContent side="right" align="start" className="bg-card text-foreground border-4 border-border text-lg px-4 py-3 pixel-shadow max-w-xs rounded-none font-sans">
-                        Coming March 2026
+                        Coming April 2026
                       </TooltipContent>
                     </Tooltip>
                     <Tooltip delayDuration={0}>
@@ -280,7 +383,7 @@ export default function Home() {
                         </button>
                       </TooltipTrigger>
                       <TooltipContent side="right" align="start" className="bg-card text-foreground border-4 border-border text-lg px-4 py-3 pixel-shadow max-w-xs rounded-none font-sans">
-                        Same content plus hands-on coding exercises where you build key parts of the protocol.
+                        Deep dive into how Lightning payment channels work. You'll build one from scratch with hands-on Python exercises.
                       </TooltipContent>
                     </Tooltip>
                   </div>
@@ -349,19 +452,20 @@ export default function Home() {
                         </Link>
                       </TooltipTrigger>
                       <TooltipContent side="right" align="start" className="bg-card text-foreground border-4 border-border text-lg px-4 py-3 pixel-shadow max-w-xs rounded-none font-sans">
-                        Deep dive into how Lightning works with checkpoint quizzes. No programming required.
+                        Learn how Lightning nodes establish encrypted connections, with checkpoint quizzes along the way. No programming required.
                       </TooltipContent>
                     </Tooltip>
                     <Tooltip delayDuration={0}>
                       <TooltipTrigger asChild>
-                        <span
-                          className="bg-muted text-muted-foreground px-6 py-2.5 font-pixel text-sm border-2 border-muted-foreground/30 cursor-not-allowed pixel-shadow text-center flex-1 md:flex-none opacity-75"
-                        >
-                          CODE
-                        </span>
+                        <Link
+                            href="/noise-tutorial?mode=code"
+                            className="bg-foreground text-background px-6 py-2.5 font-pixel text-sm border-2 border-border hover:bg-foreground/80 transition-colors pixel-shadow active:translate-x-[2px] active:translate-y-[2px] active:shadow-none text-center flex-1 md:flex-none"
+                          >
+                            CODE
+                          </Link>
                       </TooltipTrigger>
                       <TooltipContent side="right" align="start" className="bg-card text-foreground border-4 border-border text-lg px-4 py-3 pixel-shadow max-w-xs rounded-none font-sans">
-                        Coming March 2026
+                        Build the Noise Protocol from scratch with hands-on Python exercises.
                       </TooltipContent>
                     </Tooltip>
                   </div>
