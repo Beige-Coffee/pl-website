@@ -180,7 +180,7 @@ export const ONION_ROUTING_EXERCISE_GROUPS: Record<string, OnionRoutingExerciseG
     label: "sphinx/forwarder.py",
     setupCode: FORWARDER_SETUP,
     preamble: FORWARDER_PREAMBLE,
-    exerciseIds: ["exercise-peel-layer"],
+    exerciseIds: ["exercise-peel-layer", "exercise-process-onion"],
     crossGroupDependencies: [],
   },
 

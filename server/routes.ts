@@ -178,6 +178,10 @@ export const CHECKPOINT_ANSWER_KEY: Record<string, number> = {
   // Chapter 8: Peeling a Layer
   "cp-peel-extended-stream": 2,
   "exercise-peel-layer": 0,
+  // Chapter 9: Forwarding & Validation
+  "cp-validate-before-decrypt": 1,
+  "cp-tlv-final-vs-forward": 1,
+  "exercise-process-onion": 0,
   // Coding exercise IDs — answer 0 means "all tests passed"
   "exercise-generate-keypair": 0,
   "exercise-ecdh": 0,

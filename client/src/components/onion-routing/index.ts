@@ -26,3 +26,4 @@ export { OnionPacketLayoutDiagram } from "./OnionPacketLayoutDiagram";
 export { FillerTraceDiagram } from "./FillerTraceDiagram";
 export { HmacChainDiagram } from "./HmacChainDiagram";
 export { OnionPeelDiagram } from "./OnionPeelDiagram";
+export { ValidationFlowDiagram } from "./ValidationFlowDiagram";

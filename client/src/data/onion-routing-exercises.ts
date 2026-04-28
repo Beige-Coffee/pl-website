@@ -145,6 +145,237 @@ def test_different_secrets_produce_different_keys():
     groupOrder: 1,
   },
 
+  "exercise-process-onion": {
+    id: "exercise-process-onion",
+    title: "Process an Inbound Onion",
+    description:
+      "Implement OnionForwarder.process. Verify length/version, verify HMAC, peel the layer, parse the TLV, and return a ForwardInstruction (forwarder), FinalDelivery (destination), or Rejection (anything wrong). " +
+      "Use ProcessResult dataclasses provided in the preamble. Skip detailed fee/CLTV economic validation — return ForwardInstruction or FinalDelivery once the structure of the payload is parsed correctly.",
+    starterCode: `from dataclasses import dataclass
+
+@dataclass
+class ForwardInstruction:
+    next_packet: bytes
+    short_channel_id: bytes
+    amt_to_forward_msat: int
+    outgoing_cltv_value: int
+    shared_secret: bytes  # for the error path
+
+@dataclass
+class FinalDelivery:
+    amt_msat: int
+    outgoing_cltv_value: int
+    payment_data: bytes  # raw type-8 value; caller validates against invoice
+    shared_secret: bytes
+
+@dataclass
+class Rejection:
+    code: str
+    shared_secret: bytes  # may be b"" if rejection happened before ECDH
+
+class OnionForwarder:
+    def process(self, packet, node_privkey):
+        """
+        Process an inbound onion packet.
+
+        Steps:
+          1. Length and version check.
+          2. ECDH + HMAC verification.
+          3. Peel the layer (delegate to self.peel_layer).
+          4. Parse the TLV payload bytes.
+          5. Branch: forwarding (has type 6) vs final delivery (has type 8).
+
+        Args:
+          packet:        1366-byte BOLT 4 onion packet
+          node_privkey:  this hop's 32-byte node private key
+
+        Returns: ForwardInstruction | FinalDelivery | Rejection
+        """
+        # TODO: implement
+        pass
+
+
+def parse_tlv_records(payload_bytes):
+    """
+    Parse a bigsize-prefixed TLV payload into a {type: value_bytes} dict.
+
+    The first bigsize prefix is the total TLV length; after that, each record
+    is bigsize_type || bigsize_length || value_bytes.
+    """
+    total_len, header_len = parse_bigsize(payload_bytes, 0)
+    records = {}
+    pos = header_len
+    end = header_len + total_len
+    while pos < end:
+        t, t_len = parse_bigsize(payload_bytes, pos)
+        pos += t_len
+        l, l_len = parse_bigsize(payload_bytes, pos)
+        pos += l_len
+        records[t] = bytes(payload_bytes[pos:pos + l])
+        pos += l
+    return records
+`,
+    testCode: `import hmac, hashlib
+
+ROUTING_INFO_SIZE = 1300
+
+# Reuse helpers from sphinx/builder.py exercises (in scope at runtime).
+SESSION_KEY = bytes.fromhex("4141414141414141414141414141414141414141414141414141414141414141")
+BOB_PRIV   = bytes.fromhex("4242424242424242424242424242424242424242424242424242424242424242")
+CAROL_PRIV = bytes.fromhex("4343434343434343434343434343434343434343434343434343434343434343")
+DAVE_PRIV  = bytes.fromhex("4444444444444444444444444444444444444444444444444444444444444444")
+
+BOB_PUB   = privkey_to_pubkey(BOB_PRIV)
+CAROL_PUB = privkey_to_pubkey(CAROL_PRIV)
+DAVE_PUB  = privkey_to_pubkey(DAVE_PRIV)
+
+# Build well-formed TLVs with the right structure.
+# Bob payload: type 2 (amt=10003000), type 4 (cltv=260), type 6 (scid=0x0102030405060708)
+def build_intermediate_tlv(amt_msat, cltv, scid):
+    inner = (
+        encode_bigsize(2) + encode_bigsize(3) + amt_msat.to_bytes(3, 'big') +
+        encode_bigsize(4) + encode_bigsize(2) + cltv.to_bytes(2, 'big') +
+        encode_bigsize(6) + encode_bigsize(8) + scid
+    )
+    return encode_bigsize(len(inner)) + inner
+
+def build_final_tlv(amt_msat, cltv, payment_data):
+    inner = (
+        encode_bigsize(2) + encode_bigsize(3) + amt_msat.to_bytes(3, 'big') +
+        encode_bigsize(4) + encode_bigsize(2) + cltv.to_bytes(2, 'big') +
+        encode_bigsize(8) + encode_bigsize(len(payment_data)) + payment_data
+    )
+    return encode_bigsize(len(inner)) + inner
+
+BOB_SCID   = bytes.fromhex("0102030405060708")
+CAROL_SCID = bytes.fromhex("1112131415161718")
+PAYMENT_DATA = bytes.fromhex("aa" * 32 + "0000000000989680")  # 32 secret + 8 total_msat
+
+PAYLOADS = [
+    build_intermediate_tlv(10_003_000, 260, BOB_SCID),
+    build_intermediate_tlv(10_002_000, 220, CAROL_SCID),
+    build_final_tlv(10_000_000, 140, PAYMENT_DATA),
+]
+
+def chain(session_key, hop_pubkeys):
+    ek_list, ss_list = [], []
+    e = session_key
+    for pub in hop_pubkeys:
+        E = privkey_to_pubkey(e)
+        ss = ecdh(e, pub)
+        b = hashlib.sha256(E + ss).digest()
+        ek_list.append(E); ss_list.append(ss)
+        e = scalar_mul(e, b)
+    return ek_list, ss_list
+
+def reference_build(session_key, hop_pubkeys, payloads):
+    ek_list, ss_list = chain(session_key, hop_pubkeys)
+    rhos = [hmac.new(b"rho", ss, hashlib.sha256).digest() for ss in ss_list]
+    mus  = [hmac.new(b"mu", ss, hashlib.sha256).digest() for ss in ss_list]
+    sizes = [len(p) + 32 for p in payloads[:-1]]
+    filler = b""
+    for i in range(len(rhos) - 1):
+        filler = filler + b"\\x00" * sizes[i]
+        stream = chacha20_keystream(rhos[i], ROUTING_INFO_SIZE + sizes[i])
+        filler = xor_bytes(filler, stream[ROUTING_INFO_SIZE + sizes[i] - len(filler):])
+    buf = b"\\x00" * (ROUTING_INFO_SIZE - len(filler)) + filler
+    nhmac = b"\\x00" * 32
+    for i in range(len(payloads) - 1, -1, -1):
+        ss = len(payloads[i]) + 32
+        shifted = bytearray(ss) + bytearray(buf[:-ss])
+        shifted[:len(payloads[i])] = payloads[i]
+        shifted[len(payloads[i]):len(payloads[i])+32] = nhmac
+        stream = chacha20_keystream(rhos[i], ROUTING_INFO_SIZE)
+        buf = xor_bytes(bytes(shifted), stream)
+        nhmac = hmac.new(mus[i], buf, hashlib.sha256).digest()
+    return b"\\x00" + ek_list[0] + buf + nhmac
+
+PACKET = reference_build(SESSION_KEY, [BOB_PUB, CAROL_PUB, DAVE_PUB], PAYLOADS)
+
+def test_forwarding_path_returns_forward_instruction():
+    f = OnionForwarder()
+    out = f.process(PACKET, BOB_PRIV)
+    assert isinstance(out, ForwardInstruction), f"Expected ForwardInstruction, got {type(out).__name__}"
+    assert out.short_channel_id == BOB_SCID
+    assert out.amt_to_forward_msat == 10_003_000
+    assert out.outgoing_cltv_value == 260
+    assert isinstance(out.shared_secret, (bytes, bytearray)) and len(out.shared_secret) == 32
+    assert isinstance(out.next_packet, (bytes, bytearray)) and len(out.next_packet) == 1366
+
+def test_destination_returns_final_delivery():
+    """Peel through Bob and Carol; Dave should see FinalDelivery."""
+    f = OnionForwarder()
+    bob_out = f.process(PACKET, BOB_PRIV)
+    assert isinstance(bob_out, ForwardInstruction)
+    carol_out = f.process(bob_out.next_packet, CAROL_PRIV)
+    assert isinstance(carol_out, ForwardInstruction)
+    dave_out = f.process(carol_out.next_packet, DAVE_PRIV)
+    assert isinstance(dave_out, FinalDelivery), f"Dave should get FinalDelivery, got {type(dave_out).__name__}"
+    assert dave_out.amt_msat == 10_000_000
+    assert dave_out.outgoing_cltv_value == 140
+    assert dave_out.payment_data == PAYMENT_DATA
+
+def test_tampered_hmac_returns_rejection():
+    f = OnionForwarder()
+    tampered = bytearray(PACKET)
+    tampered[1334] ^= 0xff  # flip a byte in the HMAC field
+    out = f.process(bytes(tampered), BOB_PRIV)
+    assert isinstance(out, Rejection), f"Tampered HMAC should yield Rejection, got {type(out).__name__}"
+    assert "hmac" in out.code.lower() or "invalid" in out.code.lower()
+
+def test_wrong_version_returns_rejection():
+    f = OnionForwarder()
+    bad = b"\\x01" + PACKET[1:]
+    out = f.process(bad, BOB_PRIV)
+    assert isinstance(out, Rejection)
+
+def test_wrong_length_returns_rejection():
+    f = OnionForwarder()
+    out = f.process(PACKET[:-1], BOB_PRIV)
+    assert isinstance(out, Rejection)
+`,
+    hints: {
+      conceptual:
+        "<strong>Goal:</strong> tie peel + validation + parsing into a single function that returns one of three result types." +
+        "<br><br><strong>Order matters:</strong> verify before decrypt. Length and version come first; HMAC verification comes before any peel work; peel before parse; parse before branch." +
+        "<br><br><strong>Branch on TLV contents:</strong> presence of type 6 (short_channel_id) means forwarder. Presence of type 8 (payment_data) without type 6 means destination. Anything else (both, neither) is malformed.",
+      steps:
+        "<strong>1. Reject if len != 1366 or packet[0] != 0:</strong> return <code>Rejection('invalid_onion_version', b'')</code>." +
+        "<br><strong>2. Compute ss + mu:</strong> <code>ss = ecdh(node_privkey, packet[1:34])</code>; <code>mu = hmac.new(b'mu', ss, hashlib.sha256).digest()</code>." +
+        "<br><strong>3. HMAC check:</strong> <code>expected = hmac.new(mu, packet[34:1334], hashlib.sha256).digest()</code>. If <code>expected != packet[1334:1366]</code>, return <code>Rejection('invalid_onion_hmac', ss)</code>." +
+        "<br><strong>4. Peel:</strong> call <code>self.peel_layer(packet, node_privkey)</code>; unpack <code>(next_packet, payload_bytes, _)</code>." +
+        "<br><strong>5. Parse:</strong> <code>records = parse_tlv_records(payload_bytes)</code>." +
+        "<br><strong>6. Decode amt_to_forward + outgoing_cltv:</strong> <code>amt = int.from_bytes(records[2], 'big')</code> and similarly for type 4." +
+        "<br><strong>7. Branch:</strong> if 6 in records, return ForwardInstruction; elif 8 in records, return FinalDelivery; else return Rejection('invalid_onion_payload', ss).",
+      code:
+        `<strong>Solution:</strong><br><pre><code>def process(self, packet, node_privkey):
+    if len(packet) != 1366 or packet[0] != 0:
+        return Rejection('invalid_onion_version', b'')
+    E = packet[1:34]
+    ss = ecdh(node_privkey, E)
+    mu = hmac.new(b"mu", ss, hashlib.sha256).digest()
+    expected = hmac.new(mu, packet[34:1334], hashlib.sha256).digest()
+    if expected != packet[1334:1366]:
+        return Rejection('invalid_onion_hmac', ss)
+    next_packet, payload_bytes, _ = self.peel_layer(packet, node_privkey)
+    try:
+        records = parse_tlv_records(payload_bytes)
+        amt = int.from_bytes(records[2], 'big')
+        cltv = int.from_bytes(records[4], 'big')
+    except Exception:
+        return Rejection('invalid_onion_payload', ss)
+    if 6 in records:
+        return ForwardInstruction(next_packet, records[6], amt, cltv, ss)
+    if 8 in records:
+        return FinalDelivery(amt, cltv, records[8], ss)
+    return Rejection('invalid_onion_payload', ss)
+</code></pre>`,
+    },
+    rewardSats: 100,
+    group: "sphinx/forwarder",
+    groupOrder: 2,
+  },
+
   "exercise-peel-layer": {
     id: "exercise-peel-layer",
     title: "Peel a Single Layer",

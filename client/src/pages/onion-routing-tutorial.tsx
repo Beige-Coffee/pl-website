@@ -27,6 +27,7 @@ import { OnionPacketLayoutDiagram } from "../components/onion-routing/OnionPacke
 import { FillerTraceDiagram } from "../components/onion-routing/FillerTraceDiagram";
 import { HmacChainDiagram } from "../components/onion-routing/HmacChainDiagram";
 import { OnionPeelDiagram } from "../components/onion-routing/OnionPeelDiagram";
+import { ValidationFlowDiagram } from "../components/onion-routing/ValidationFlowDiagram";
 
 // Whitelist of custom course tag names that should never be wrapped in <p>.
 // CommonMark wraps custom HTML element names (which are not in the block-level
@@ -49,6 +50,7 @@ const CUSTOM_BLOCK_TAGS = new Set([
   "filler-trace",
   "hmac-chain",
   "onion-peel",
+  "validation-flow",
 ]);
 
 function rehypeUnwrapCustomBlockTags() {
@@ -114,6 +116,29 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
   answer: number;
   explanation: string;
 }> = {
+  // ── Chapter 9: Forwarding & Validation ───────────────────────────────────
+  "cp-validate-before-decrypt": {
+    question: "Why does a forwarder verify the packet's HMAC tag *before* decrypting the hop_payloads with its rho keystream?",
+    options: [
+      "Decryption is irreversible, so if the HMAC fails after decryption the forwarder can't undo the rho XOR to retry verification",
+      "Verifying first keeps untrusted bytes out of the parser and saves the CPU cost of generating an extended keystream for packets that will be rejected anyway",
+      "BOLT 4 mandates HMAC-first ordering for compatibility with HSM-based signing flows used by routing nodes",
+      "ChaCha20 doesn't initialize correctly until an HMAC has been computed over its input, so the order is forced by the cryptographic library",
+    ],
+    answer: 1,
+    explanation: "Verify-then-decrypt (encrypt-then-MAC) is a standard secure-construction pattern. Two reasons: (1) Defensive coding — never feed a tampered or malformed packet's bytes to your parser. If the HMAC is wrong, we don't know what's in the packet, so we shouldn't process it. (2) CPU efficiency — generating a 2,600-byte ChaCha20 keystream isn't free, and discarding the work because the packet was bogus is wasted effort. Verifying the 32-byte HMAC tag first costs much less than the keystream generation it gates.",
+  },
+  "cp-tlv-final-vs-forward": {
+    question: "After peeling, the forwarder parses the bigsize-prefixed TLV records and finds types 2 (amt_to_forward), 4 (outgoing_cltv_value), and 8 (payment_data). No type 6 record is present. What should the forwarder do?",
+    options: [
+      "Forward the payment using a default short_channel_id of all zeros, since type 6 is optional in BOLT 4",
+      "Treat itself as the destination and attempt to claim the HTLC against an invoice matching the payment_data (assuming this hop has such a pending invoice). If no matching invoice exists, fail the HTLC",
+      "Reject with invalid_onion_payload because every BOLT 4 payload must include type 6",
+      "Forward the packet to the next hop in its peer list at random, since the absence of short_channel_id signals 'best-effort delivery'",
+    ],
+    answer: 1,
+    explanation: "Type 6 (short_channel_id) tells a forwarder which channel to forward over. Type 8 (payment_data) carries the payment_secret + total_msat that the destination uses to validate against an invoice. The presence of type 8 without type 6 is BOLT 4's way of signaling 'you are the destination.' The hop should look up its pending invoices to find one matching the payment_data and either settle (revealing the preimage) or fail if no matching invoice is found. Defaulting to all-zero scid (option 1) would forward into a non-existent channel; rejecting (option 3) would break the protocol's intentional final-hop signaling; option 4 is fictional and dangerous.",
+  },
   // ── Chapter 8: Peeling a Layer ───────────────────────────────────────────
   "cp-peel-extended-stream": {
     question: "When Bob peels his layer, he generates a 2,600-byte ChaCha20 keystream from his rho key (twice the routing-info size) and XORs it onto a working buffer that's the inbound 1,300-byte hop_payloads followed by 1,300 zero bytes. Why does the keystream extend past 1,300 bytes?",
@@ -383,7 +408,7 @@ export const CHAPTER_REQUIREMENTS: Record<string, {
   "filler-construction": { checkpoints: ["cp-filler-purpose", "cp-filler-final-hop"], exercises: ["exercise-generate-filler"] },
   "wrapping-layer-by-layer": { checkpoints: ["cp-build-reverse-order"], exercises: ["exercise-wrap-hop", "exercise-build-packet"] },
   "peeling-a-layer": { checkpoints: ["cp-peel-extended-stream"], exercises: ["exercise-peel-layer"] },
-  "forwarding-validation": { checkpoints: [], exercises: [] },
+  "forwarding-validation": { checkpoints: ["cp-validate-before-decrypt", "cp-tlv-final-vs-forward"], exercises: ["exercise-process-onion"] },
   "error-onion": { checkpoints: [], exercises: [] },
   "capstone-success": { checkpoints: [], exercises: [] },
   "capstone-failure": { checkpoints: [], exercises: [] },
@@ -823,6 +848,9 @@ function ChapterContent({
           },
           "onion-peel": () => {
             return <OnionPeelDiagram />;
+          },
+          "validation-flow": () => {
+            return <ValidationFlowDiagram />;
           },
           "tlv-breakdown": ({ payload }: any) => {
             const fields = TLV_BREAKDOWN_PAYLOADS[String(payload || "")];
