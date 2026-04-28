@@ -25,6 +25,7 @@ import { KdfPipelineDiagram } from "../components/onion-routing/KdfPipelineDiagr
 import { ShrinkingVsFixedDiagram } from "../components/onion-routing/ShrinkingVsFixedDiagram";
 import { OnionPacketLayoutDiagram } from "../components/onion-routing/OnionPacketLayoutDiagram";
 import { FillerTraceDiagram } from "../components/onion-routing/FillerTraceDiagram";
+import { HmacChainDiagram } from "../components/onion-routing/HmacChainDiagram";
 
 // Whitelist of custom course tag names that should never be wrapped in <p>.
 // CommonMark wraps custom HTML element names (which are not in the block-level
@@ -45,6 +46,7 @@ const CUSTOM_BLOCK_TAGS = new Set([
   "shrinking-vs-fixed",
   "onion-packet-layout",
   "filler-trace",
+  "hmac-chain",
 ]);
 
 function rehypeUnwrapCustomBlockTags() {
@@ -110,6 +112,18 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
   answer: number;
   explanation: string;
 }> = {
+  // ── Chapter 7: Wrapping Layer-by-Layer ───────────────────────────────────
+  "cp-build-reverse-order": {
+    question: "Why must Alice build the onion in reverse order, starting with the destination's layer (Dave) and working outward to the first hop (Bob)?",
+    options: [
+      "BOLT 4 mandates reverse order to ensure consistent hashing across implementations, but other orders would also produce a valid packet",
+      "Each hop's HMAC is computed over the contents of the next inner layer, so the inner layer must already be built before the outer layer can compute its HMAC. Reverse order is the only build order that respects this dependency",
+      "Reverse order minimizes the number of ChaCha20 invocations, since the keystreams can be reused across iterations when computed back-to-front",
+      "Forward order would leak the hop count to a passive observer because intermediate buffers would be visible at known sizes",
+    ],
+    answer: 1,
+    explanation: "The HMAC chain has a strict direction: Bob's HMAC commits to Carol's layer, Carol's HMAC commits to Dave's layer. To compute Bob's HMAC, Carol's layer must already be built. To compute Carol's HMAC, Dave's must already be built. So we have to build the innermost layer first, then wrap it, then wrap again, and so on. Forward order is impossible because the outer hop's HMAC needs bytes that don't yet exist. The reverse order isn't an arbitrary spec choice; it's forced by the data dependencies in the construction.",
+  },
   // ── Chapter 6: Filler Construction ───────────────────────────────────────
   "cp-filler-purpose": {
     question: "Bob peels his layer of the onion. He decrypts, reads his TLV payload, shifts the inner contents forward, and needs to fill the trailing 65 bytes that the shift opened up. Why can't he just pad those 65 bytes with zeros?",
@@ -353,7 +367,7 @@ export const CHAPTER_REQUIREMENTS: Record<string, {
   "key-derivation": { checkpoints: ["cp-key-domain-separation"], exercises: ["exercise-derive-keys"] },
   "fixed-size-packet": { checkpoints: ["cp-fixed-size-reason"], exercises: [] },
   "filler-construction": { checkpoints: ["cp-filler-purpose", "cp-filler-final-hop"], exercises: ["exercise-generate-filler"] },
-  "wrapping-layer-by-layer": { checkpoints: [], exercises: [] },
+  "wrapping-layer-by-layer": { checkpoints: ["cp-build-reverse-order"], exercises: ["exercise-wrap-hop", "exercise-build-packet"] },
   "peeling-a-layer": { checkpoints: [], exercises: [] },
   "forwarding-validation": { checkpoints: [], exercises: [] },
   "error-onion": { checkpoints: [], exercises: [] },
@@ -789,6 +803,9 @@ function ChapterContent({
           },
           "filler-trace": () => {
             return <FillerTraceDiagram />;
+          },
+          "hmac-chain": () => {
+            return <HmacChainDiagram />;
           },
           "tlv-breakdown": ({ payload }: any) => {
             const fields = TLV_BREAKDOWN_PAYLOADS[String(payload || "")];

@@ -142,7 +142,12 @@ export const ONION_ROUTING_EXERCISE_GROUPS: Record<string, OnionRoutingExerciseG
     label: "sphinx/builder.py",
     setupCode: BUILDER_SETUP,
     preamble: BUILDER_PREAMBLE,
-    exerciseIds: ["exercise-derive-shared-secrets", "exercise-generate-filler"],
+    exerciseIds: [
+      "exercise-derive-shared-secrets",
+      "exercise-generate-filler",
+      "exercise-wrap-hop",
+      "exercise-build-packet",
+    ],
     crossGroupDependencies: [],
   },
 

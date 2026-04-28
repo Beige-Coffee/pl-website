@@ -171,6 +171,10 @@ export const CHECKPOINT_ANSWER_KEY: Record<string, number> = {
   "cp-filler-purpose": 1,
   "cp-filler-final-hop": 1,
   "exercise-generate-filler": 0,
+  // Chapter 7: Wrapping Layer-by-Layer
+  "cp-build-reverse-order": 1,
+  "exercise-wrap-hop": 0,
+  "exercise-build-packet": 0,
   // Coding exercise IDs — answer 0 means "all tests passed"
   "exercise-generate-keypair": 0,
   "exercise-ecdh": 0,
