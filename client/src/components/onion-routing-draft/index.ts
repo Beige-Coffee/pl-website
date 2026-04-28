@@ -30,3 +30,5 @@ export { ValidationFlowDiagram } from "./ValidationFlowDiagram";
 export { ErrorBoomerangDiagram } from "./ErrorBoomerangDiagram";
 export { ErrorUnwrapDiagram } from "./ErrorUnwrapDiagram";
 export { OnionCapstonePanel } from "./OnionCapstonePanel";
+export { LightningNetworkDiagram } from "./LightningNetworkDiagram";
+export { PlaintextMessageTear } from "./PlaintextMessageTear";

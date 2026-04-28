@@ -31,6 +31,8 @@ import { ValidationFlowDiagram } from "../components/onion-routing-draft/Validat
 import { ErrorBoomerangDiagram } from "../components/onion-routing-draft/ErrorBoomerangDiagram";
 import { ErrorUnwrapDiagram } from "../components/onion-routing-draft/ErrorUnwrapDiagram";
 import { OnionCapstonePanel } from "../components/onion-routing-draft/OnionCapstonePanel";
+import { LightningNetworkDiagram } from "../components/onion-routing-draft/LightningNetworkDiagram";
+import { PlaintextMessageTear } from "../components/onion-routing-draft/PlaintextMessageTear";
 
 // Whitelist of custom course tag names that should never be wrapped in <p>.
 // CommonMark wraps custom HTML element names (which are not in the block-level
@@ -57,6 +59,8 @@ const CUSTOM_BLOCK_TAGS = new Set([
   "error-boomerang",
   "error-unwrap",
   "onion-capstone",
+  "lightning-network",
+  "message-tear",
 ]);
 
 function rehypeUnwrapCustomBlockTags() {
@@ -263,6 +267,18 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
     answer: 2,
     explanation: "An intermediate hop's payload contains a type-6 short_channel_id record telling it which channel to forward over. The final hop has no next hop to forward to, so Alice doesn't include type 6 in its payload. When Dave parses his payload and sees no type 6, he knows immediately that the payment terminates with him. Conversely, type 8 (payment_data) appears only in the final hop's payload, since only the final hop validates against the invoice. The structure of the TLV does the work of signaling 'you're the destination' without any explicit flag.",
   },
+  // ── Intro: Naive plaintext routing leak (Draft) ──────────────────────────
+  "cp-naive-plaintext-leak-draft": {
+    question: "Look at the animation above. Alice's first `update_add_htlc` to Bob carries every hop's instructions in plaintext. When the message reaches Bob, which of the following does Bob learn?",
+    options: [
+      "Just his own slice: he should forward 10,002 sat to Charlie with outgoing CLTV at block 220",
+      "His slice plus the next hop's slice (Charlie's), but nothing about Dave's portion of the route",
+      "Every slice in the message: his own forwarding instructions, Charlie's, and that Dave is the final destination receiving 10,000 sat at block 140 with payment hash 0xa3f1...e9c4",
+      "Nothing useful, since the bytes are signed by Alice and only the final hop can verify the signature",
+    ],
+    answer: 2,
+    explanation: "This is the privacy issue with the naive plaintext design. Because every hop's instructions are sitting in the message in the clear, Bob (and anyone watching the wire between Alice and Bob) can read the entire route end-to-end. Bob now knows Alice initiated the payment, Dave is the final recipient, exactly how much each hop forwards, and even the payment hash. We want a design where Bob learns ONLY what he needs to do his job (next hop is Charlie, forward this amount with this CLTV) and nothing more. That's what the rest of the course builds.",
+  },
   // ── Chapter 1: The Privacy Problem ───────────────────────────────────────
   "cp-privacy-property-draft": {
     question: "Bob is forwarding a Lightning payment from Alice → Bob → Carol → Dave. Which of the following does Bob learn as part of forwarding the payment?",
@@ -299,7 +315,8 @@ export const chapters: Chapter[] = [
     id: "intro",
     title: "Onion Routing & Lightning Payments",
     section: "Introduction",
-    kind: "intro",
+    kind: "md",
+    file: "/onion_routing_tutorial_draft/0.0-intro.md",
   },
   {
     id: "privacy-problem",
@@ -417,7 +434,7 @@ export const CHAPTER_REQUIREMENTS: Record<string, {
   checkpoints: string[];
   exercises: string[];
 }> = {
-  "intro": { checkpoints: [], exercises: [] },
+  "intro": { checkpoints: ["cp-naive-plaintext-leak-draft"], exercises: [] },
   "privacy-problem": { checkpoints: ["cp-privacy-property-draft"], exercises: [] },
   "anatomy-of-a-route": { checkpoints: ["cp-fees-backward-draft", "cp-intermediate-vs-final-draft"], exercises: [] },
   "shared-secrets": { checkpoints: ["cp-blinding-public-draft"], exercises: ["exercise-derive-shared-secrets-draft"] },
@@ -880,6 +897,12 @@ function ChapterContent({
           "onion-capstone": ({ mode }: any) => {
             const m = mode === "failure" ? "failure" : "success";
             return <OnionCapstonePanel mode={m} />;
+          },
+          "lightning-network": () => {
+            return <LightningNetworkDiagram />;
+          },
+          "message-tear": () => {
+            return <PlaintextMessageTear />;
           },
           "tlv-breakdown": ({ payload }: any) => {
             const fields = TLV_BREAKDOWN_PAYLOADS[String(payload || "")];

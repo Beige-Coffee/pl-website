@@ -187,6 +187,8 @@ export const CHECKPOINT_ANSWER_KEY: Record<string, number> = {
   "exercise-build-error-onion": 0,
   "exercise-decrypt-error-onion": 0,
   // ── Onion Routing DRAFT mirror (progress isolated from v1) ─────────────
+  // Intro: Naive plaintext routing leak (draft)
+  "cp-naive-plaintext-leak-draft": 2,
   // Chapter 1: The Privacy Problem (draft)
   "cp-privacy-property-draft": 1,
   // Chapter 2: Anatomy of a Route (draft)
