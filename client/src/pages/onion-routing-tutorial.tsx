@@ -17,6 +17,9 @@ import { useIsMobile } from "../hooks/use-mobile";
 import { ONION_ROUTING_EXERCISES } from "../data/onion-routing-exercises";
 import { getOnionRoutingExerciseGroupContext } from "../lib/onion-routing-exercise-groups";
 import { NetworkTopologyDiagram } from "../components/onion-routing/NetworkTopologyDiagram";
+import { BackwardCalcDiagram } from "../components/onion-routing/BackwardCalcDiagram";
+import { TlvByteBreakdown, type TlvField } from "../components/onion-routing/TlvByteBreakdown";
+import { NaiveVsOnionDiagram } from "../components/onion-routing/NaiveVsOnionDiagram";
 
 // Whitelist of custom course tag names that should never be wrapped in <p>.
 // CommonMark wraps custom HTML element names (which are not in the block-level
@@ -29,6 +32,9 @@ const CUSTOM_BLOCK_TAGS = new Set([
   "checkpoint",
   "checkpoint-group",
   "network-topology",
+  "backward-calc",
+  "tlv-breakdown",
+  "naive-vs-onion",
 ]);
 
 function rehypeUnwrapCustomBlockTags() {
@@ -52,6 +58,39 @@ function rehypeUnwrapCustomBlockTags() {
     visit(tree);
   };
 }
+
+// --- Pre-defined TLV byte breakdowns referenced from markdown ---
+// Markdown embeds: <tlv-breakdown payload="bob-hop-payload"></tlv-breakdown>
+const TLV_BREAKDOWN_PAYLOADS: Record<string, { caption: string; fields: TlvField[] }> = {
+  "bob-hop-payload": {
+    caption: "Bob's hop payload (18 bytes)",
+    fields: [
+      { label: "type 2", color: "amber", hex: "02", description: "TLV type 2 = amt_to_forward." },
+      { label: "length", color: "amber", hex: "03", description: "Value is 3 bytes long." },
+      { label: "value: 10,002,000 msat", color: "amber", hex: "98 9a 90", description: "The amount Bob should forward to Carol, encoded as a truncated big-endian integer." },
+      { label: "type 4", color: "blue", hex: "04", description: "TLV type 4 = outgoing_cltv_value." },
+      { label: "length", color: "blue", hex: "01", description: "Value is 1 byte long." },
+      { label: "value: 180", color: "blue", hex: "b4", description: "The CLTV value Bob should set on the outgoing HTLC to Carol." },
+      { label: "type 6", color: "green", hex: "06", description: "TLV type 6 = short_channel_id. Present only on intermediate hops." },
+      { label: "length", color: "green", hex: "08", description: "Value is 8 bytes long." },
+      { label: "value: 0x0000000123456789", color: "green", hex: "00 00 00 01 23 45 67 89", description: "The channel Bob uses to reach Carol." },
+    ],
+  },
+  "dave-hop-payload": {
+    caption: "Dave's hop payload (no short_channel_id)",
+    fields: [
+      { label: "type 2", color: "amber", hex: "02", description: "TLV type 2 = amt_to_forward (the final amount Dave receives)." },
+      { label: "length", color: "amber", hex: "03", description: "Value is 3 bytes long." },
+      { label: "value: 10,000,000 msat", color: "amber", hex: "98 96 80", description: "10,000 sats encoded in millisats." },
+      { label: "type 4", color: "blue", hex: "04", description: "TLV type 4 = outgoing_cltv_value (the final CLTV)." },
+      { label: "length", color: "blue", hex: "01", description: "Value is 1 byte long." },
+      { label: "value: 140", color: "blue", hex: "8c", description: "The final CLTV. Dave's HTLC must be valid until at least block 140." },
+      { label: "type 8", color: "rose", hex: "08", description: "TLV type 8 = payment_data. Present only on the final hop." },
+      { label: "length", color: "rose", hex: "28", description: "Value is 40 bytes long: 32-byte payment_secret + 8-byte total_msat." },
+      { label: "value: payment_secret + total_msat", color: "rose", hex: "00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 98 96 80", description: "The 32-byte secret from the invoice (zeros here for illustration) plus the total_msat (8 bytes, big-endian)." },
+    ],
+  },
+};
 
 // --- Checkpoint questions embedded inline in tutorial chapters ---
 // Each chapter that has checkpoints adds entries here as it's built.
@@ -660,6 +699,22 @@ function ChapterContent({
           },
           "network-topology": () => {
             return <NetworkTopologyDiagram />;
+          },
+          "backward-calc": () => {
+            return <BackwardCalcDiagram />;
+          },
+          "naive-vs-onion": () => {
+            return <NaiveVsOnionDiagram />;
+          },
+          "tlv-breakdown": ({ payload }: any) => {
+            const fields = TLV_BREAKDOWN_PAYLOADS[String(payload || "")];
+            if (!fields) return null;
+            return (
+              <TlvByteBreakdown
+                caption={fields.caption}
+                fields={fields.fields}
+              />
+            );
           },
           "code-outro": ({ text }: any) => {
             return <p className="mt-4 opacity-80">{text}</p>;
