@@ -393,11 +393,14 @@ function ChapterContent({
     );
   }
 
-  // Intro pages use the simple inline markdownToHtml renderer
+  // Intro pages use the simple inline markdownToHtml renderer.
+  // Use the same noise-md CSS class as markdown chapters so headings, paragraphs,
+  // and blockquotes render with the project's tutorial typography (the project
+  // does not include @tailwindcss/typography, so `prose` would be a no-op).
   if (chapter.kind === "intro") {
     return (
       <div
-        className="prose prose-lg max-w-none dark:prose-invert"
+        className={`noise-md noise-md-${theme}`}
         dangerouslySetInnerHTML={{ __html: markdownToHtml(md) }}
       />
     );
