@@ -428,7 +428,7 @@ export const CHAPTER_REQUIREMENTS: Record<string, {
   "error-onion": { checkpoints: ["cp-error-trial-decrypt"], exercises: ["exercise-build-error-onion", "exercise-decrypt-error-onion"] },
   "capstone-success": { checkpoints: [], exercises: [] },
   "capstone-failure": { checkpoints: [], exercises: [] },
-  "beyond-sphinx": { checkpoints: [], exercises: [] },
+  "beyond-sphinx": { checkpoints: [], exercises: [] }, // tail chapter, no checkpoint or exercise
   "pay-it-forward": { checkpoints: [], exercises: [] },
 };
 
