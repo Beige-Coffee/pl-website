@@ -10,3 +10,5 @@ export {
   PerspectiveToggle,
   type PerspectiveToggleProps,
 } from "./PerspectiveToggle";
+
+export { NetworkTopologyDiagram } from "./NetworkTopologyDiagram";

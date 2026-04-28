@@ -16,6 +16,42 @@ import { CollapsibleItem, CollapsibleGroup } from "../components/CollapsibleSect
 import { useIsMobile } from "../hooks/use-mobile";
 import { ONION_ROUTING_EXERCISES } from "../data/onion-routing-exercises";
 import { getOnionRoutingExerciseGroupContext } from "../lib/onion-routing-exercise-groups";
+import { NetworkTopologyDiagram } from "../components/onion-routing/NetworkTopologyDiagram";
+
+// Whitelist of custom course tag names that should never be wrapped in <p>.
+// CommonMark wraps custom HTML element names (which are not in the block-level
+// whitelist) in <p> tags. The custom tag handlers below render React components
+// that contain <div>/<svg>/etc descendants, which would produce invalid
+// <p><div>...</div></p> nesting and React validateDOMNesting warnings.
+const CUSTOM_BLOCK_TAGS = new Set([
+  "code-intro",
+  "code-outro",
+  "checkpoint",
+  "checkpoint-group",
+  "network-topology",
+]);
+
+function rehypeUnwrapCustomBlockTags() {
+  return (tree: any) => {
+    const visit = (node: any) => {
+      if (!node.children) return;
+      for (let i = 0; i < node.children.length; i++) {
+        const child = node.children[i];
+        visit(child);
+        if (
+          child.type === "element" &&
+          child.tagName === "p" &&
+          child.children?.length === 1 &&
+          child.children[0].type === "element" &&
+          CUSTOM_BLOCK_TAGS.has(child.children[0].tagName)
+        ) {
+          node.children[i] = child.children[0];
+        }
+      }
+    };
+    visit(tree);
+  };
+}
 
 // --- Checkpoint questions embedded inline in tutorial chapters ---
 // Each chapter that has checkpoints adds entries here as it's built.
@@ -25,7 +61,18 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
   answer: number;
   explanation: string;
 }> = {
-  // [chapter-questions-go-here]
+  // ── Chapter 1: The Privacy Problem ───────────────────────────────────────
+  "cp-privacy-property": {
+    question: "Bob is forwarding a Lightning payment from Alice → Bob → Carol → Dave. Which of the following does Bob learn as part of forwarding the payment?",
+    options: [
+      "That Alice is the original sender, since the packet had to come from somewhere",
+      "That the next hop is Carol, plus the amount and timelock he should forward to her",
+      "That Dave is the final destination, because the inner payload tells him the payment terminates",
+      "The total number of hops in the route, because a fixed-size packet implies a known maximum",
+    ],
+    answer: 1,
+    explanation: "Bob only learns what he needs to do his job: the next hop is Carol, the amount to forward, and the outgoing timelock. He has no way to tell whether the packet originated with Alice or was forwarded to him from someone before her, and he has no way to tell whether Carol forwards onward or terminates the payment. The 'sender' Bob sees is just whichever node delivered the bytes to him on the wire (Alice in this case), not the payment originator. Likewise, the 'destination' from Bob's perspective is Carol, not Dave. The packet's fixed size hides the total hop count entirely.",
+  },
 };
 
 type Chapter = {
@@ -169,7 +216,7 @@ export const CHAPTER_REQUIREMENTS: Record<string, {
   exercises: string[];
 }> = {
   "intro": { checkpoints: [], exercises: [] },
-  "privacy-problem": { checkpoints: [], exercises: [] },
+  "privacy-problem": { checkpoints: ["cp-privacy-property"], exercises: [] },
   "anatomy-of-a-route": { checkpoints: [], exercises: [] },
   "shared-secrets": { checkpoints: [], exercises: [] },
   "key-derivation": { checkpoints: [], exercises: [] },
@@ -338,7 +385,7 @@ function ChapterContent({
     <div className={`noise-md noise-md-${theme}`} data-testid="container-markdown">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
-        rehypePlugins={[rehypeRaw, rehypeHighlight]}
+        rehypePlugins={[rehypeRaw, rehypeUnwrapCustomBlockTags, rehypeHighlight]}
         components={{
           img: ({ style, width, height, ...props }: any) => {
             const rawSrc = String(props.src ?? "");
@@ -584,6 +631,9 @@ function ChapterContent({
                 </CollapsibleGroup>
               </div>
             );
+          },
+          "network-topology": () => {
+            return <NetworkTopologyDiagram />;
           },
           "code-outro": ({ text }: any) => {
             return <p className="mt-4 opacity-80">{text}</p>;

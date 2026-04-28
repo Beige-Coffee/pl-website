@@ -153,67 +153,9 @@ export const CHECKPOINT_ANSWER_KEY: Record<string, number> = {
   "act2-both-ephemeral": 3,
   "act3-nonce-one": 2,
   "message-length-limit": 0,
-  // Onion routing tutorial checkpoints
-  "predict-destination": 0,
-  "predict-bob-info": 1,
-  "fixed-size-reason": 1,
-  "gossip-purpose": 1,
-  "fee-backward-reason": 1,
-  "final-hop-difference": 2,
-  "session-key-reason": 1,
-  "key-derivation-count": 2,
-  "replay-attack": 1,
-  // Onion routing exercise IDs — answer 0 means "all tests passed"
-  "exercise-fee-cltv-calculation": 0,
-  "exercise-build-tlv-payload": 0,
-  "exercise-sphinx-init-shared-secrets": 0,
-  "exercise-derive-hop-keys": 0,
-  "exercise-ephemeral-key-chain": 0,
-  "exercise-build-hop-payload": 0,
-  "exercise-generate-filler": 0,
-  "exercise-wrap-construct-packet": 0,
-  // Section 4 checkpoints
-  "naive-position-leak": 1,
-  "filler-purpose": 1,
-  "innermost-hop-first": 1,
-  "max-hops": 1,
-  // Section 5 checkpoints
-  "peel-packet-size": 1,
-  "extend-zeros": 1,
-  "forward-validation": 1,
-  // Section 5 exercise IDs — answer 0 means "all tests passed"
-  "exercise-peel-layer": 0,
-  "exercise-validate-forward": 0,
-  "exercise-end-to-end-verify": 0,
-  // Section 7 checkpoints
-  "preimage-direction": 1,
-  "error-encryption": 1,
-  "stuck-payment": 2,
-  "update-flag": 1,
-  // Section 7 exercise IDs — answer 0 means "all tests passed"
-  "exercise-construct-error": 0,
-  "exercise-unwrap-error": 0,
-  // Section 8 exercise ID — answer 0 means "all tests passed"
-  "exercise-payment-trace": 0,
-  // Section 6 checkpoints
-  "commit-before-revoke": 1,
-  "forward-without-commit": 1,
-  "message-count": 2,
-  // Section 9 checkpoints
-  "blinded-introduction-point": 1,
-  "keysend-tradeoff": 1,
-  "mpp-payment-secret": 1,
-  // Section 10 quiz checkpoints
-  "quiz-privacy-goal": 1,
-  "quiz-fee-direction": 1,
-  "quiz-tlv-field": 2,
-  "quiz-session-key": 1,
-  "quiz-key-count": 2,
-  "quiz-packet-size": 2,
-  "quiz-filler-purpose": 1,
-  "quiz-peel-order": 1,
-  "quiz-error-keys": 1,
-  "quiz-blinding-chain": 1,
+  // ── Onion routing tutorial checkpoints (added chapter-by-chapter) ─────
+  // Chapter 1: The Privacy Problem
+  "cp-privacy-property": 1,
   // Coding exercise IDs — answer 0 means "all tests passed"
   "exercise-generate-keypair": 0,
   "exercise-ecdh": 0,
