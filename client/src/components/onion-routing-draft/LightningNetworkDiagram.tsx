@@ -1,13 +1,14 @@
-import { useMemo } from "react";
+import { useMemo, useRef, useState } from "react";
 
 // ────────────────────────────────────────────────────────────────────────────
 // LightningNetworkDiagram (DRAFT)
 //
-// Pannable view of a synthetic Lightning Network. ~55 background nodes plus
-// the four highlighted route nodes (Alice → Bob → Charlie → Dave) sitting
-// inside the same graph. Visual style follows the Noise capstone: neutral
-// background, dark borders, sans-serif body, monochrome chrome with gold
-// accents on highlighted elements.
+// Drag-to-pan + buttoned zoom view of a synthetic Lightning Network.
+// Visual style matches the Noise capstone:
+//   - Black header bar with white pixel-letter-spaced uppercase title.
+//   - Cream body (#fefdfb).
+//   - Dark borders.
+//   - Gold accent (#b8860b) on highlighted route.
 // ────────────────────────────────────────────────────────────────────────────
 
 const VIEW_W = 1600;
@@ -19,10 +20,9 @@ interface NodeDef {
   x: number;
   y: number;
   highlighted?: boolean;
-  highlightOrder?: number; // 1, 2, 3, 4 for Alice, Bob, Charlie, Dave
+  highlightOrder?: number;
 }
 
-// Highlighted route — placed across the visible viewport (centered band).
 const ROUTE: NodeDef[] = [
   { id: "alice",   label: "Alice",   x: 220, y: 460, highlighted: true, highlightOrder: 1 },
   { id: "bob",     label: "Bob",     x: 600, y: 380, highlighted: true, highlightOrder: 2 },
@@ -30,8 +30,6 @@ const ROUTE: NodeDef[] = [
   { id: "dave",    label: "Dave",    x: 1380, y: 380, highlighted: true, highlightOrder: 4 },
 ];
 
-// Deterministic pseudo-random helper so background nodes render the same way
-// every time without bringing in a seedable PRNG library.
 function mulberry32(seed: number) {
   let s = seed;
   return () => {
@@ -51,10 +49,8 @@ function makeBackgroundNodes(count: number): NodeDef[] {
     attempts++;
     const x = 60 + rng() * (VIEW_W - 120);
     const y = 60 + rng() * (VIEW_H - 120);
-    // keep some distance from highlighted route so labels don't overlap
     const tooClose = ROUTE.some((r) => Math.hypot(r.x - x, r.y - y) < 120);
     if (tooClose) continue;
-    // also keep some distance from other background nodes
     const collide = nodes.some((n) => Math.hypot(n.x - x, n.y - y) < 70);
     if (collide) continue;
     nodes.push({ id: `bg-${nodes.length}`, x, y });
@@ -62,22 +58,16 @@ function makeBackgroundNodes(count: number): NodeDef[] {
   return nodes;
 }
 
-interface Edge {
-  a: string;
-  b: string;
-  highlighted?: boolean;
-}
+interface Edge { a: string; b: string; highlighted?: boolean }
 
 function makeEdges(allNodes: NodeDef[], rng: () => number): Edge[] {
   const edges: Edge[] = [];
-  // Highlight the route edges first.
   for (let i = 0; i < ROUTE.length - 1; i++) {
     edges.push({ a: ROUTE[i].id, b: ROUTE[i + 1].id, highlighted: true });
   }
-  // Connect each background node to its 2-3 nearest neighbors.
-  const bg = allNodes.filter((n) => n.id.startsWith("bg-") || n.highlighted);
-  for (const n of bg) {
-    const ranked = bg
+  const all = allNodes.filter((n) => n.id.startsWith("bg-") || n.highlighted);
+  for (const n of all) {
+    const ranked = all
       .filter((m) => m !== n)
       .map((m) => ({ m, d: Math.hypot(m.x - n.x, m.y - n.y) }))
       .sort((a, b) => a.d - b.d)
@@ -92,6 +82,12 @@ function makeEdges(allNodes: NodeDef[], rng: () => number): Edge[] {
   return edges;
 }
 
+const VIEWPORT_W = 880;
+const VIEWPORT_H = 480;
+
+const MIN_ZOOM = 0.5;
+const MAX_ZOOM = 2.5;
+
 export function LightningNetworkDiagram() {
   const { nodes, edges } = useMemo(() => {
     const bg = makeBackgroundNodes(55);
@@ -101,29 +97,84 @@ export function LightningNetworkDiagram() {
   }, []);
   const nodeById = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
 
+  const [zoom, setZoom] = useState(0.7);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const dragRef = useRef<{ active: boolean; startX: number; startY: number; startPanX: number; startPanY: number }>({
+    active: false, startX: 0, startY: 0, startPanX: 0, startPanY: 0,
+  });
+  const [dragging, setDragging] = useState(false);
+
+  function onPointerDown(e: React.PointerEvent<SVGSVGElement>) {
+    (e.target as Element).setPointerCapture?.(e.pointerId);
+    dragRef.current = {
+      active: true,
+      startX: e.clientX,
+      startY: e.clientY,
+      startPanX: pan.x,
+      startPanY: pan.y,
+    };
+    setDragging(true);
+  }
+  function onPointerMove(e: React.PointerEvent<SVGSVGElement>) {
+    if (!dragRef.current.active) return;
+    const dx = (e.clientX - dragRef.current.startX) / zoom;
+    const dy = (e.clientY - dragRef.current.startY) / zoom;
+    setPan({
+      x: dragRef.current.startPanX - dx,
+      y: dragRef.current.startPanY - dy,
+    });
+  }
+  function onPointerUp(e: React.PointerEvent<SVGSVGElement>) {
+    (e.target as Element).releasePointerCapture?.(e.pointerId);
+    dragRef.current.active = false;
+    setDragging(false);
+  }
+
+  const vbW = VIEW_W / zoom;
+  const vbH = VIEW_H / zoom;
+  // Clamp pan so we can't push the whole graph off-screen
+  const maxPanX = Math.max(0, VIEW_W - vbW);
+  const maxPanY = Math.max(0, VIEW_H - vbH);
+  const clampedPanX = Math.max(0, Math.min(pan.x, maxPanX));
+  const clampedPanY = Math.max(0, Math.min(pan.y, maxPanY));
+
+  function zoomIn() { setZoom((z) => Math.min(MAX_ZOOM, z * 1.2)); }
+  function zoomOut() { setZoom((z) => Math.max(MIN_ZOOM, z / 1.2)); }
+  function reset() { setZoom(0.7); setPan({ x: 0, y: 0 }); }
+
   return (
     <div
-      className="my-8 border-2 border-foreground/30 bg-card"
+      className="my-8 border-[1.5px] border-foreground/40 bg-card overflow-hidden"
       data-testid="onion-lightning-network"
       style={{ fontFamily: "ui-sans-serif, system-ui, sans-serif" }}
     >
-      <div className="px-4 py-2 border-b-2 border-foreground/20 flex items-center justify-between">
-        <div className="text-xs uppercase tracking-wider opacity-70 font-pixel">
-          Lightning Network — one path among many
+      {/* Black section header — Noise capstone style */}
+      <div className="bg-black text-white px-4 py-2 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="w-1.5 h-1.5 rounded-full bg-[#b8860b]" />
+          <span className="text-sm font-bold tracking-[0.08em] uppercase">
+            Lightning Network — One Path Among Many
+          </span>
         </div>
-        <div className="text-xs opacity-60 italic">scroll to explore</div>
+        <span className="text-xs italic opacity-70 hidden sm:inline">drag to pan · use buttons to zoom</span>
       </div>
 
-      {/* Pannable viewport */}
-      <div
-        className="overflow-auto bg-[#fafaf7] dark:bg-[#0b1220]"
-        style={{ maxHeight: 460 }}
-      >
+      {/* Viewport with overlay zoom controls */}
+      <div className="relative bg-[#fefdfb] dark:bg-[#0b1220]">
         <svg
-          width={VIEW_W}
-          height={VIEW_H}
-          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-          style={{ display: "block" }}
+          viewBox={`${clampedPanX} ${clampedPanY} ${vbW} ${vbH}`}
+          width={VIEWPORT_W}
+          height={VIEWPORT_H}
+          className="block w-full"
+          style={{
+            cursor: dragging ? "grabbing" : "grab",
+            touchAction: "none",
+            userSelect: "none",
+          }}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
         >
           {/* Edges */}
           {edges.map((e, i) => {
@@ -139,29 +190,26 @@ export function LightningNetworkDiagram() {
                 y2={b.y}
                 stroke={e.highlighted ? "#b8860b" : "#94a3b8"}
                 strokeWidth={e.highlighted ? 3 : 1}
-                strokeOpacity={e.highlighted ? 1 : 0.4}
+                strokeOpacity={e.highlighted ? 1 : 0.45}
               />
             );
           })}
 
           {/* Background nodes */}
-          {nodes
-            .filter((n) => !n.highlighted)
-            .map((n) => (
-              <g key={n.id}>
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={6}
-                  fill="#cbd5e1"
-                  stroke="#475569"
-                  strokeWidth={1.2}
-                  opacity={0.55}
-                />
-              </g>
-            ))}
+          {nodes.filter((n) => !n.highlighted).map((n) => (
+            <circle
+              key={n.id}
+              cx={n.x}
+              cy={n.y}
+              r={6}
+              fill="#cbd5e1"
+              stroke="#475569"
+              strokeWidth={1.2}
+              opacity={0.55}
+            />
+          ))}
 
-          {/* Highlighted route nodes (drawn last so they sit on top) */}
+          {/* Highlighted route */}
           {nodes
             .filter((n) => n.highlighted)
             .sort((a, b) => (a.highlightOrder ?? 0) - (b.highlightOrder ?? 0))
@@ -175,27 +223,13 @@ export function LightningNetworkDiagram() {
                   stroke="#b8860b"
                   strokeWidth={3}
                 />
-                <text
-                  x={n.x}
-                  y={n.y + 5}
-                  textAnchor="middle"
-                  fontSize={14}
-                  fontWeight={700}
-                  fill="#0f172a"
-                >
+                <text x={n.x} y={n.y + 5} textAnchor="middle" fontSize={14} fontWeight={700} fill="#0f172a">
                   {n.label}
                 </text>
                 {n.highlightOrder && (
                   <g>
                     <circle cx={n.x + 22} cy={n.y - 22} r={9} fill="#b8860b" />
-                    <text
-                      x={n.x + 22}
-                      y={n.y - 18}
-                      textAnchor="middle"
-                      fontSize={10}
-                      fontWeight={700}
-                      fill="#fffdf5"
-                    >
+                    <text x={n.x + 22} y={n.y - 18} textAnchor="middle" fontSize={10} fontWeight={700} fill="#fffdf5">
                       {n.highlightOrder}
                     </text>
                   </g>
@@ -203,12 +237,32 @@ export function LightningNetworkDiagram() {
               </g>
             ))}
         </svg>
+
+        {/* Zoom controls */}
+        <div className="absolute top-3 right-3 flex flex-col gap-1.5">
+          <ZoomBtn onClick={zoomIn} aria-label="Zoom in">+</ZoomBtn>
+          <ZoomBtn onClick={zoomOut} aria-label="Zoom out">−</ZoomBtn>
+          <ZoomBtn onClick={reset} aria-label="Reset view" small>⤾</ZoomBtn>
+        </div>
       </div>
 
-      <div className="px-4 py-2 border-t-2 border-foreground/20 text-xs opacity-70">
-        Highlighted: <span className="font-semibold">Alice → Bob → Charlie → Dave</span>. Faded dots are other Lightning nodes; dashed lines are the channels between them. Real Lightning has thousands of nodes and tens of thousands of channels.
+      <div className="px-4 py-2 border-t-[1.5px] border-foreground/30 text-xs opacity-70 bg-card">
+        Highlighted: <span className="font-semibold">Alice → Bob → Charlie → Dave</span>. Faded dots are other Lightning nodes; the lines between them are channels. Real Lightning has thousands of nodes and tens of thousands of channels.
       </div>
     </div>
+  );
+}
+
+function ZoomBtn({ children, onClick, small, ...rest }: { children: React.ReactNode; onClick: () => void; small?: boolean; [k: string]: any }) {
+  return (
+    <button
+      onClick={onClick}
+      className="w-8 h-8 flex items-center justify-center bg-black text-white border-[1.5px] border-black hover:bg-[#b8860b] hover:border-[#b8860b] transition-colors text-base font-bold leading-none shadow"
+      style={{ fontSize: small ? 14 : 18 }}
+      {...rest}
+    >
+      {children}
+    </button>
   );
 }
 
