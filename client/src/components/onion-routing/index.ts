@@ -23,3 +23,4 @@ export { EcdhChainDiagram } from "./EcdhChainDiagram";
 export { KdfPipelineDiagram } from "./KdfPipelineDiagram";
 export { ShrinkingVsFixedDiagram } from "./ShrinkingVsFixedDiagram";
 export { OnionPacketLayoutDiagram } from "./OnionPacketLayoutDiagram";
+export { FillerTraceDiagram } from "./FillerTraceDiagram";

@@ -167,6 +167,10 @@ export const CHECKPOINT_ANSWER_KEY: Record<string, number> = {
   "exercise-derive-keys": 0,
   // Chapter 5: The Fixed-Size Packet
   "cp-fixed-size-reason": 1,
+  // Chapter 6: Filler Construction
+  "cp-filler-purpose": 1,
+  "cp-filler-final-hop": 1,
+  "exercise-generate-filler": 0,
   // Coding exercise IDs — answer 0 means "all tests passed"
   "exercise-generate-keypair": 0,
   "exercise-ecdh": 0,

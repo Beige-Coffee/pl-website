@@ -39,6 +39,20 @@ from ecdsa import SigningKey, VerifyingKey, SECP256k1
 from ecdsa.util import string_to_number, number_to_string
 import hashlib
 
+# ChaCha20 keystream helper. BOLT 4 uses ChaCha20 with a 96-bit (12-byte)
+# all-zero nonce as a stream cipher to generate per-hop keystream bytes.
+def chacha20_keystream(key, length):
+    """Generate \`length\` bytes of ChaCha20 keystream (zero nonce) from a 32-byte key."""
+    from cryptography.hazmat.primitives.ciphers import Cipher
+    from cryptography.hazmat.primitives.ciphers.algorithms import ChaCha20
+    nonce = b"\\x00" * 16  # cryptography lib expects 16-byte nonce input
+    cipher = Cipher(ChaCha20(key, nonce), mode=None)
+    enc = cipher.encryptor()
+    return enc.update(b"\\x00" * length)
+
+def xor_bytes(a, b):
+    return bytes(x ^ y for x, y in zip(a, b))
+
 CURVE_ORDER = SECP256k1.order
 GENERATOR = SECP256k1.generator
 
@@ -85,9 +99,14 @@ const KEYS_PREAMBLE = `import hashlib, hmac, struct
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives import hashes`;
 
-const BUILDER_PREAMBLE = `# Curve helpers (provided): privkey_to_pubkey, ecdh, point_mul_pubkey, scalar_mul
-# Reference: ecdsa lib (Noise course) -> /noise-tutorial/crypto-primitives
+const BUILDER_PREAMBLE = `# Provided helpers (in scope at runtime):
+#   privkey_to_pubkey, ecdh, point_mul_pubkey, scalar_mul
+#   chacha20_keystream(key: bytes, length: int) -> bytes
+#   xor_bytes(a: bytes, b: bytes) -> bytes
+# Crypto reference: see Noise course /noise-tutorial/crypto-primitives
 import hashlib
+
+ROUTING_INFO_SIZE = 1300  # BOLT 4 hop_payloads field length
 
 class OnionPacketBuilder:`;
 
@@ -123,7 +142,7 @@ export const ONION_ROUTING_EXERCISE_GROUPS: Record<string, OnionRoutingExerciseG
     label: "sphinx/builder.py",
     setupCode: BUILDER_SETUP,
     preamble: BUILDER_PREAMBLE,
-    exerciseIds: ["exercise-derive-shared-secrets"],
+    exerciseIds: ["exercise-derive-shared-secrets", "exercise-generate-filler"],
     crossGroupDependencies: [],
   },
 

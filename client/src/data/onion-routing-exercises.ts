@@ -145,6 +145,123 @@ def test_different_secrets_produce_different_keys():
     groupOrder: 1,
   },
 
+  "exercise-generate-filler": {
+    id: "exercise-generate-filler",
+    title: "Generate the Filler",
+    description:
+      "Implement OnionPacketBuilder.generate_filler. Given the rho keys and per-hop payload sizes for hops 0..N-2 (every hop except the final one), produce the filler bytes that will appear at the trailing positions of each hop's hop_payloads view after peeling. " +
+      "The filler grows by one hop's payload size on each iteration: prepend that many zero bytes, then XOR the running filler with the trailing portion of that hop's rho keystream (extended to ROUTING_INFO_SIZE + cumulative_size). " +
+      "Reference: BOLT 4 'Filler Generation'. Helpers in scope: chacha20_keystream, xor_bytes.",
+    starterCode: `class OnionPacketBuilder:
+    def generate_filler(self, rho_keys, payload_sizes):
+        """
+        Args:
+          rho_keys:       list of 32-byte rho keys for hops 0..N-2.
+                          The final hop's rho is NOT included; it doesn't shift,
+                          so it doesn't contribute filler.
+          payload_sizes:  list of per-hop slot sizes in bytes for the same hops.
+                          slot_size = len(TLV payload) + 32 (HMAC).
+
+        Returns:
+          bytes of length sum(payload_sizes). Will be placed at the end of the
+          1300-byte hop_payloads field during construction.
+
+        Algorithm (BOLT 4):
+          filler = empty
+          for i in 0..len(rho_keys)-1:
+              # extend filler with this hop's slot at the END
+              filler = filler + (payload_sizes[i] zero bytes)
+              # generate this hop's keystream extended past 1300 bytes
+              stream = chacha20_keystream(rho_keys[i], ROUTING_INFO_SIZE + payload_sizes[i])
+              # XOR the trailing len(filler) bytes onto filler
+              filler ^= stream[ROUTING_INFO_SIZE + payload_sizes[i] - len(filler):]
+          return filler
+        """
+        # TODO: implement
+        pass
+`,
+    testCode: `def reference_generate_filler(rho_keys, payload_sizes):
+    """Reference per BOLT 4 'Filler Generation'."""
+    filler = b""
+    for i in range(len(rho_keys)):
+        filler = filler + b"\\x00" * payload_sizes[i]
+        stream = chacha20_keystream(rho_keys[i], ROUTING_INFO_SIZE + payload_sizes[i])
+        chunk = stream[ROUTING_INFO_SIZE + payload_sizes[i] - len(filler):]
+        filler = xor_bytes(filler, chunk)
+    return filler
+
+# Test vectors
+RHO_BOB   = bytes.fromhex("01" * 32)
+RHO_CAROL = bytes.fromhex("02" * 32)
+RHO_DAVE  = bytes.fromhex("03" * 32)
+
+def test_two_hop_filler_size():
+    """For a 3-hop route (Bob, Carol, Dave), filler covers Bob and Carol's slots."""
+    b = OnionPacketBuilder.__new__(OnionPacketBuilder)
+    out = b.generate_filler([RHO_BOB, RHO_CAROL], [65, 65])
+    assert isinstance(out, (bytes, bytearray))
+    assert len(out) == 130, f"Expected 130 bytes (65 + 65), got {len(out)}"
+
+def test_two_hop_matches_reference():
+    b = OnionPacketBuilder.__new__(OnionPacketBuilder)
+    out = b.generate_filler([RHO_BOB, RHO_CAROL], [65, 65])
+    expected = reference_generate_filler([RHO_BOB, RHO_CAROL], [65, 65])
+    assert out == expected, "Filler bytes don't match the BOLT 4 reference"
+
+def test_one_hop_filler_size():
+    """For a 2-hop route (Bob, Dave), filler covers only Bob."""
+    b = OnionPacketBuilder.__new__(OnionPacketBuilder)
+    out = b.generate_filler([RHO_BOB], [80])
+    assert len(out) == 80
+
+def test_three_hop_filler_size():
+    """For a 4-hop route (Bob, Carol, X, Dave), filler covers three intermediate hops."""
+    b = OnionPacketBuilder.__new__(OnionPacketBuilder)
+    out = b.generate_filler([RHO_BOB, RHO_CAROL, RHO_DAVE], [60, 70, 50])
+    assert len(out) == 60 + 70 + 50
+
+def test_three_hop_matches_reference():
+    b = OnionPacketBuilder.__new__(OnionPacketBuilder)
+    sizes = [60, 70, 50]
+    keys = [RHO_BOB, RHO_CAROL, RHO_DAVE]
+    out = b.generate_filler(keys, sizes)
+    expected = reference_generate_filler(keys, sizes)
+    assert out == expected
+
+def test_empty_rho_keys_returns_empty():
+    """A single-hop route (just the destination) has no filler."""
+    b = OnionPacketBuilder.__new__(OnionPacketBuilder)
+    out = b.generate_filler([], [])
+    assert out == b"", "No intermediate hops means no filler"
+`,
+    hints: {
+      conceptual:
+        "<strong>Goal:</strong> compute the bytes that will appear at the end of the hop_payloads field after each forwarder peels its layer." +
+        "<br><br><strong>Why this works:</strong> Alice can't compute filler in isolation; it has to account for what each rho XOR will do during peeling. By simulating the hops one by one (in order from first forwarder to last forwarder), Alice builds up the cumulative effect of all those XORs in the trailing positions." +
+        "<br><br><strong>Loop invariant:</strong> after iteration i, <code>filler</code> contains exactly what the last <code>sum(payload_sizes[:i+1])</code> bytes of hop i's view of the packet would look like, given that earlier hops' rho XORs have already been applied (virtually).",
+      steps:
+        "<strong>For each hop i in 0..len(rho_keys)-1:</strong>" +
+        "<br>1. Extend filler at the END with <code>payload_sizes[i]</code> zero bytes." +
+        "<br>2. Generate this hop's rho keystream of length <code>ROUTING_INFO_SIZE + payload_sizes[i]</code> using <code>chacha20_keystream</code>." +
+        "<br>3. Take the trailing <code>len(filler)</code> bytes of that keystream and XOR them into <code>filler</code> using <code>xor_bytes</code>." +
+        "<br><br><strong>Return:</strong> the accumulated filler bytes. Total length = <code>sum(payload_sizes)</code>.",
+      code:
+        `<strong>Solution:</strong><br><pre><code>def generate_filler(self, rho_keys, payload_sizes):
+    filler = b""
+    for i in range(len(rho_keys)):
+        filler = filler + b"\\x00" * payload_sizes[i]
+        stream_len = ROUTING_INFO_SIZE + payload_sizes[i]
+        stream = chacha20_keystream(rho_keys[i], stream_len)
+        chunk = stream[stream_len - len(filler):]
+        filler = xor_bytes(filler, chunk)
+    return filler
+</code></pre>`,
+    },
+    rewardSats: 75,
+    group: "sphinx/builder",
+    groupOrder: 2,
+  },
+
   "exercise-derive-shared-secrets": {
     id: "exercise-derive-shared-secrets",
     title: "Derive the Shared-Secret Chain",

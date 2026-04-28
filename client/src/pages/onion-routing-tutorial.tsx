@@ -24,6 +24,7 @@ import { EcdhChainDiagram } from "../components/onion-routing/EcdhChainDiagram";
 import { KdfPipelineDiagram } from "../components/onion-routing/KdfPipelineDiagram";
 import { ShrinkingVsFixedDiagram } from "../components/onion-routing/ShrinkingVsFixedDiagram";
 import { OnionPacketLayoutDiagram } from "../components/onion-routing/OnionPacketLayoutDiagram";
+import { FillerTraceDiagram } from "../components/onion-routing/FillerTraceDiagram";
 
 // Whitelist of custom course tag names that should never be wrapped in <p>.
 // CommonMark wraps custom HTML element names (which are not in the block-level
@@ -43,6 +44,7 @@ const CUSTOM_BLOCK_TAGS = new Set([
   "kdf-pipeline",
   "shrinking-vs-fixed",
   "onion-packet-layout",
+  "filler-trace",
 ]);
 
 function rehypeUnwrapCustomBlockTags() {
@@ -108,6 +110,29 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
   answer: number;
   explanation: string;
 }> = {
+  // ── Chapter 6: Filler Construction ───────────────────────────────────────
+  "cp-filler-purpose": {
+    question: "Bob peels his layer of the onion. He decrypts, reads his TLV payload, shifts the inner contents forward, and needs to fill the trailing 65 bytes that the shift opened up. Why can't he just pad those 65 bytes with zeros?",
+    options: [
+      "Zeros are reserved by BOLT 4 as a sentinel for 'final hop reached', so padding with zeros would mislead Carol into thinking she's the destination",
+      "When Carol peels her layer, she XORs her rho keystream over the entire 1,300-byte hop_payloads field. Zero-padded trailing bytes XORed with her keystream would produce structured keystream output, which isn't what Alice baked Carol's HMAC over, so verification fails",
+      "ChaCha20 produces undefined output when applied to runs of zero bytes longer than 32, so Carol's stream cipher would crash before she could verify the HMAC",
+      "Zeros at the end of the payload area would be visible to a passive observer as a quantity-of-trailing-zeros side channel, leaking the route length",
+    ],
+    answer: 1,
+    explanation: "The forwarder XORs the entire 1,300-byte hop_payloads field with its rho keystream before reading anything. If Bob shifted in zeros and Carol XORed those zeros with her keystream, she'd get her rho keystream values at those positions — which is a deterministic value, but isn't what Alice computed Carol's HMAC over. Carol's HMAC verification would fail and the payment would be rejected. The filler is precomputed by Alice exactly so that the trailing positions, after each peel, contain bytes that match what the next hop's HMAC expected.",
+  },
+  "cp-filler-final-hop": {
+    question: "In a 3-hop route Bob → Carol → Dave, Alice generates filler covering Bob's and Carol's hop sizes but does not generate any filler for Dave. Why?",
+    options: [
+      "Dave's filler would have to be 1,300 bytes long, which exceeds the maximum keystream length of ChaCha20 with a 32-byte key",
+      "Dave is the destination and doesn't shift any bytes forward. His HMAC is computed over a buffer Alice fully controls, so there are no 'trailing positions' that need to match a future hop's keystream",
+      "Dave's payload always has type 8 (payment_data), which BOLT 4 mandates must be the only TLV record in the final hop's slot, leaving no room for filler",
+      "The final hop's filler is generated client-side by Dave's wallet using the payment_secret and is not Alice's responsibility",
+    ],
+    answer: 1,
+    explanation: "Filler exists to make sure that after a hop shifts the inner packet forward, the trailing bytes that get exposed match what the next hop's HMAC was computed over. Dave is the final hop. He doesn't forward, doesn't shift, and there's no 'next hop' whose HMAC has to verify. Alice still pads the bytes after Dave's TLV during construction (typically with zeros, since there's no further structure), but those bytes don't have to align with any keystream because no further peeling happens.",
+  },
   // ── Chapter 5: The Fixed-Size Packet ─────────────────────────────────────
   "cp-fixed-size-reason": {
     question: "An onion-routed packet at every hop is encrypted, with each forwarder only able to decrypt its own slice. So why does the packet *also* need to be the same size at every hop? Isn't encryption enough?",
@@ -327,7 +352,7 @@ export const CHAPTER_REQUIREMENTS: Record<string, {
   "shared-secrets": { checkpoints: ["cp-blinding-public"], exercises: ["exercise-derive-shared-secrets"] },
   "key-derivation": { checkpoints: ["cp-key-domain-separation"], exercises: ["exercise-derive-keys"] },
   "fixed-size-packet": { checkpoints: ["cp-fixed-size-reason"], exercises: [] },
-  "filler-construction": { checkpoints: [], exercises: [] },
+  "filler-construction": { checkpoints: ["cp-filler-purpose", "cp-filler-final-hop"], exercises: ["exercise-generate-filler"] },
   "wrapping-layer-by-layer": { checkpoints: [], exercises: [] },
   "peeling-a-layer": { checkpoints: [], exercises: [] },
   "forwarding-validation": { checkpoints: [], exercises: [] },
@@ -761,6 +786,9 @@ function ChapterContent({
           },
           "onion-packet-layout": () => {
             return <OnionPacketLayoutDiagram />;
+          },
+          "filler-trace": () => {
+            return <FillerTraceDiagram />;
           },
           "tlv-breakdown": ({ payload }: any) => {
             const fields = TLV_BREAKDOWN_PAYLOADS[String(payload || "")];
