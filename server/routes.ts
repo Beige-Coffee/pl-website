@@ -182,6 +182,10 @@ export const CHECKPOINT_ANSWER_KEY: Record<string, number> = {
   "cp-validate-before-decrypt": 1,
   "cp-tlv-final-vs-forward": 1,
   "exercise-process-onion": 0,
+  // Chapter 10: The Error Onion
+  "cp-error-trial-decrypt": 1,
+  "exercise-build-error-onion": 0,
+  "exercise-decrypt-error-onion": 0,
   // Coding exercise IDs — answer 0 means "all tests passed"
   "exercise-generate-keypair": 0,
   "exercise-ecdh": 0,

@@ -28,6 +28,8 @@ import { FillerTraceDiagram } from "../components/onion-routing/FillerTraceDiagr
 import { HmacChainDiagram } from "../components/onion-routing/HmacChainDiagram";
 import { OnionPeelDiagram } from "../components/onion-routing/OnionPeelDiagram";
 import { ValidationFlowDiagram } from "../components/onion-routing/ValidationFlowDiagram";
+import { ErrorBoomerangDiagram } from "../components/onion-routing/ErrorBoomerangDiagram";
+import { ErrorUnwrapDiagram } from "../components/onion-routing/ErrorUnwrapDiagram";
 
 // Whitelist of custom course tag names that should never be wrapped in <p>.
 // CommonMark wraps custom HTML element names (which are not in the block-level
@@ -51,6 +53,8 @@ const CUSTOM_BLOCK_TAGS = new Set([
   "hmac-chain",
   "onion-peel",
   "validation-flow",
+  "error-boomerang",
+  "error-unwrap",
 ]);
 
 function rehypeUnwrapCustomBlockTags() {
@@ -116,6 +120,18 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
   answer: number;
   explanation: string;
 }> = {
+  // ── Chapter 10: The Error Onion ──────────────────────────────────────────
+  "cp-error-trial-decrypt": {
+    question: "Alice receives a wrapped error from a 3-hop route Bob → Carol → Dave. She tries hop 0's keys (Bob), the HMAC doesn't verify, then tries hop 1's keys (Carol), the HMAC verifies. What does Alice's algorithm do if Carol's keys hadn't matched either?",
+    options: [
+      "Restart from i=0 with a different decryption mode (CBC instead of CTR), since BOLT 4 allows fallback ciphers",
+      "Continue to i=2 (Dave's keys). If still no match after every layer, conclude the error packet was tampered with by some upstream hop and disconnect that peer",
+      "Send the wrapped bytes back through the route asking each hop to peel its own layer cooperatively until one says 'this is mine'",
+      "Use the failure code from a default mapping based on the wrapped bytes' length, since BOLT 4 defines a canonical fallback for unknown hops",
+    ],
+    answer: 1,
+    explanation: "Alice's algorithm is a strict trial-decrypt loop: peel one layer per iteration with the next hop's ammag, then check the corresponding um's HMAC. If she walks through every hop in the route without a match, no valid error exists in the bytes she received. This means a peer along the return path tampered with the error (or generated random bytes). Alice can disconnect that peer or downgrade their reliability score, because no attacker without one of the um keys can produce bytes that pass any layer's HMAC check.",
+  },
   // ── Chapter 9: Forwarding & Validation ───────────────────────────────────
   "cp-validate-before-decrypt": {
     question: "Why does a forwarder verify the packet's HMAC tag *before* decrypting the hop_payloads with its rho keystream?",
@@ -409,7 +425,7 @@ export const CHAPTER_REQUIREMENTS: Record<string, {
   "wrapping-layer-by-layer": { checkpoints: ["cp-build-reverse-order"], exercises: ["exercise-wrap-hop", "exercise-build-packet"] },
   "peeling-a-layer": { checkpoints: ["cp-peel-extended-stream"], exercises: ["exercise-peel-layer"] },
   "forwarding-validation": { checkpoints: ["cp-validate-before-decrypt", "cp-tlv-final-vs-forward"], exercises: ["exercise-process-onion"] },
-  "error-onion": { checkpoints: [], exercises: [] },
+  "error-onion": { checkpoints: ["cp-error-trial-decrypt"], exercises: ["exercise-build-error-onion", "exercise-decrypt-error-onion"] },
   "capstone-success": { checkpoints: [], exercises: [] },
   "capstone-failure": { checkpoints: [], exercises: [] },
   "beyond-sphinx": { checkpoints: [], exercises: [] },
@@ -851,6 +867,12 @@ function ChapterContent({
           },
           "validation-flow": () => {
             return <ValidationFlowDiagram />;
+          },
+          "error-boomerang": () => {
+            return <ErrorBoomerangDiagram />;
+          },
+          "error-unwrap": () => {
+            return <ErrorUnwrapDiagram />;
           },
           "tlv-breakdown": ({ payload }: any) => {
             const fields = TLV_BREAKDOWN_PAYLOADS[String(payload || "")];

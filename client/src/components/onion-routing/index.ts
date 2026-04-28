@@ -27,3 +27,5 @@ export { FillerTraceDiagram } from "./FillerTraceDiagram";
 export { HmacChainDiagram } from "./HmacChainDiagram";
 export { OnionPeelDiagram } from "./OnionPeelDiagram";
 export { ValidationFlowDiagram } from "./ValidationFlowDiagram";
+export { ErrorBoomerangDiagram } from "./ErrorBoomerangDiagram";
+export { ErrorUnwrapDiagram } from "./ErrorUnwrapDiagram";

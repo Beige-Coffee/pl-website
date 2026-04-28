@@ -113,7 +113,10 @@ class _OnionPacketBuilderBase:
     pass
 `;
 const FORWARDER_SETUP = CURVE_HELPERS;
-const ERRORS_SETUP = ``;
+// Errors group needs the same helpers (chacha20, xor) from CURVE_HELPERS.
+// We rely on CURVE_HELPERS being executed in the same Pyodide namespace; if
+// it isn't, we re-include the helpers here.
+const ERRORS_SETUP = CURVE_HELPERS;
 
 // ─── Visible Preambles (shown in editor, read-only) ────────────────────────
 
@@ -142,10 +145,12 @@ ROUTING_INFO_SIZE = 1300
 
 class OnionForwarder:`;
 
-const ERRORS_PREAMBLE = `# derive_keys() comes from crypto/keys.py
-from cryptography.hazmat.primitives.ciphers import Cipher
-from cryptography.hazmat.primitives.ciphers.algorithms import ChaCha20
-import hashlib, hmac, struct`;
+const ERRORS_PREAMBLE = `# Provided helpers (in scope at runtime):
+#   chacha20_keystream(key, length) -> bytes
+#   xor_bytes(a, b) -> bytes
+import hashlib, hmac
+
+ERROR_PACKET_SIZE = 288  # 32 hmac + 256 padded message`;
 
 // ─── Group Definitions ──────────────────────────────────────────────────────
 //
@@ -189,7 +194,7 @@ export const ONION_ROUTING_EXERCISE_GROUPS: Record<string, OnionRoutingExerciseG
     label: "sphinx/errors.py",
     setupCode: ERRORS_SETUP,
     preamble: ERRORS_PREAMBLE,
-    exerciseIds: [],
+    exerciseIds: ["exercise-build-error-onion", "exercise-decrypt-error-onion"],
     crossGroupDependencies: [],
   },
 };

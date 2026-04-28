@@ -145,6 +145,210 @@ def test_different_secrets_produce_different_keys():
     groupOrder: 1,
   },
 
+  "exercise-build-error-onion": {
+    id: "exercise-build-error-onion",
+    title: "Build the Error Onion (Failing Hop)",
+    description:
+      "Implement build_error_onion. Given a failure message and the failing hop's um + ammag keys, produce the 288-byte error packet (HMAC + padded message, encrypted with ammag).",
+    starterCode: `import hmac, hashlib
+
+ERROR_PACKET_SIZE = 288  # 32 hmac + 256 padded message
+
+def build_error_onion(failure_message, um_key, ammag_key):
+    """
+    Build the failing hop's encrypted error packet (BOLT 4 'Failure Messages').
+
+    Args:
+      failure_message: bytes, must be < 256 bytes
+      um_key:          32-byte 'um' key for this hop
+      ammag_key:       32-byte 'ammag' key for this hop
+
+    Returns:
+      288 bytes: error_packet XOR ammag_keystream
+
+    Algorithm:
+      1. Pad failure_message with zeros to 256 bytes (right-pad).
+      2. error_hmac = HMAC-SHA256(um_key, padded_msg)
+      3. error_packet = error_hmac (32 bytes) || padded_msg (256 bytes)
+      4. wrapped = error_packet XOR chacha20_keystream(ammag_key, 288)
+
+    Helpers in scope: chacha20_keystream, xor_bytes.
+    """
+    # TODO: implement
+    pass
+`,
+    testCode: `import hmac, hashlib
+
+UM = bytes.fromhex("aa" * 32)
+AMMAG = bytes.fromhex("bb" * 32)
+
+def reference(msg, um, ammag):
+    padded = msg + b"\\x00" * (256 - len(msg))
+    h = hmac.new(um, padded, hashlib.sha256).digest()
+    pkt = h + padded
+    stream = chacha20_keystream(ammag, 288)
+    return xor_bytes(pkt, stream)
+
+def test_returns_288_bytes():
+    out = build_error_onion(b"temporary_channel_failure", UM, AMMAG)
+    assert isinstance(out, (bytes, bytearray))
+    assert len(out) == 288, f"Expected 288 bytes, got {len(out)}"
+
+def test_matches_reference():
+    msg = b"temporary_channel_failure"
+    out = build_error_onion(msg, UM, AMMAG)
+    expected = reference(msg, UM, AMMAG)
+    assert out == expected, "Wrapped error doesn't match reference"
+
+def test_round_trip_decrypts_to_message():
+    """XOR-ing with the same ammag stream undoes the encryption. The leading 32 bytes
+    should be a valid HMAC over the trailing 256."""
+    msg = b"channel_disabled"
+    wrapped = build_error_onion(msg, UM, AMMAG)
+    stream = chacha20_keystream(AMMAG, 288)
+    decrypted = xor_bytes(wrapped, stream)
+    assert decrypted[32:32 + len(msg)] == msg, "Decryption should reveal the original message at the front of the padded region"
+    expected_hmac = hmac.new(UM, decrypted[32:], hashlib.sha256).digest()
+    assert decrypted[:32] == expected_hmac, "HMAC must verify after decryption"
+
+def test_short_message_padded():
+    out = build_error_onion(b"x", UM, AMMAG)
+    assert len(out) == 288, "All errors are 288 bytes regardless of message size"
+`,
+    hints: {
+      conceptual:
+        "<strong>Goal:</strong> from the failing hop's perspective, build the encrypted error packet that goes upstream." +
+        "<br><br><strong>Why fixed 288 bytes:</strong> all error onions are the same size regardless of failure code, so observers can't infer the failure type from packet length. Pad short messages to 256 bytes; the 32-byte HMAC brings the total to 288.",
+      steps:
+        "<strong>1. Pad:</strong> <code>padded = failure_message + b'\\x00' * (256 - len(failure_message))</code>." +
+        "<br><strong>2. HMAC:</strong> <code>tag = hmac.new(um_key, padded, hashlib.sha256).digest()</code>." +
+        "<br><strong>3. Concatenate:</strong> <code>packet = tag + padded</code> (288 bytes)." +
+        "<br><strong>4. Encrypt:</strong> <code>stream = chacha20_keystream(ammag_key, 288)</code>; return <code>xor_bytes(packet, stream)</code>.",
+      code:
+        `<strong>Solution:</strong><br><pre><code>def build_error_onion(failure_message, um_key, ammag_key):
+    padded = failure_message + b"\\x00" * (256 - len(failure_message))
+    tag = hmac.new(um_key, padded, hashlib.sha256).digest()
+    packet = tag + padded
+    stream = chacha20_keystream(ammag_key, 288)
+    return xor_bytes(packet, stream)
+</code></pre>`,
+    },
+    rewardSats: 50,
+    group: "sphinx/errors",
+    groupOrder: 1,
+  },
+
+  "exercise-decrypt-error-onion": {
+    id: "exercise-decrypt-error-onion",
+    title: "Decrypt the Error Onion (Sender Side)",
+    description:
+      "Implement decrypt_error_onion. Given the wrapped error bytes and a chain of (um, ammag) per-hop keys (in route order), peel layers one at a time and identify which hop generated the error.",
+    starterCode: `import hmac, hashlib
+
+def decrypt_error_onion(wrapped_error, hop_keys):
+    """
+    Args:
+      wrapped_error: 288-byte error blob received on the return HTLC
+      hop_keys:      list of (um, ammag) tuples per hop, in route order
+                     hop_keys[0] is the first forwarder, last is the destination
+
+    Returns:
+      (failing_hop_index, failure_message) if a layer's HMAC verifies
+      (None, None) if no layer matched (the error was tampered with)
+
+    Algorithm:
+      For each i in range(len(hop_keys)):
+        wrapped = wrapped XOR chacha20_keystream(ammag_i, 288)
+        if HMAC-SHA256(um_i, wrapped[32:]) == wrapped[:32]:
+            unpadded = strip trailing zeros from wrapped[32:]
+            return (i, unpadded)
+      return (None, None)
+    """
+    # TODO: implement
+    pass
+`,
+    testCode: `import hmac, hashlib
+
+def reference_build(msg, um, ammag):
+    padded = msg + b"\\x00" * (256 - len(msg))
+    pkt = hmac.new(um, padded, hashlib.sha256).digest() + padded
+    return xor_bytes(pkt, chacha20_keystream(ammag, 288))
+
+UM_BOB    = bytes.fromhex("01" * 32)
+AMMAG_BOB = bytes.fromhex("02" * 32)
+UM_CAROL    = bytes.fromhex("03" * 32)
+AMMAG_CAROL = bytes.fromhex("04" * 32)
+UM_DAVE    = bytes.fromhex("05" * 32)
+AMMAG_DAVE = bytes.fromhex("06" * 32)
+
+HOP_KEYS = [(UM_BOB, AMMAG_BOB), (UM_CAROL, AMMAG_CAROL), (UM_DAVE, AMMAG_DAVE)]
+
+def wrap_through_route(originating_hop_index, msg):
+    """Simulate Carol failing, then Bob wrapping on the way back."""
+    um, ammag = HOP_KEYS[originating_hop_index]
+    wrapped = reference_build(msg, um, ammag)
+    # Wrap by every upstream hop (indices < originating_hop_index, in reverse order)
+    for i in range(originating_hop_index - 1, -1, -1):
+        _, ammag_up = HOP_KEYS[i]
+        wrapped = xor_bytes(wrapped, chacha20_keystream(ammag_up, 288))
+    return wrapped
+
+def test_carol_failure_identified():
+    msg = b"temporary_channel_failure"
+    wrapped = wrap_through_route(originating_hop_index=1, msg=msg)
+    idx, recovered = decrypt_error_onion(wrapped, HOP_KEYS)
+    assert idx == 1, f"Expected failing hop index 1 (Carol), got {idx}"
+    assert recovered.startswith(msg), f"Recovered message must start with '{msg.decode()}'"
+
+def test_bob_failure_identified():
+    msg = b"fee_insufficient"
+    wrapped = wrap_through_route(originating_hop_index=0, msg=msg)
+    idx, recovered = decrypt_error_onion(wrapped, HOP_KEYS)
+    assert idx == 0, f"Expected failing hop index 0 (Bob), got {idx}"
+    assert recovered.startswith(msg)
+
+def test_dave_failure_identified():
+    msg = b"incorrect_or_unknown_payment_details"
+    wrapped = wrap_through_route(originating_hop_index=2, msg=msg)
+    idx, recovered = decrypt_error_onion(wrapped, HOP_KEYS)
+    assert idx == 2, f"Expected failing hop index 2 (Dave), got {idx}"
+    assert recovered.startswith(msg)
+
+def test_tampered_returns_none():
+    """Random bytes of the right length but no valid HMAC anywhere."""
+    wrapped = bytes(288)  # all zeros — no hop's HMAC will verify
+    idx, recovered = decrypt_error_onion(wrapped, HOP_KEYS)
+    assert idx is None and recovered is None
+`,
+    hints: {
+      conceptual:
+        "<strong>Goal:</strong> Alice's view of the return path. She has all the (um, ammag) keys; she just doesn't know which layer the failing hop wrapped with. Solution: try each layer in order until one's HMAC verifies." +
+        "<br><br><strong>Order:</strong> peel from outermost to innermost, which is hop 0, hop 1, hop 2... (the first forwarder is the outermost wrapper because their wrap was the most recent during the return trip).",
+      steps:
+        "<strong>For each i in range(len(hop_keys)):</strong>" +
+        "<br>1. <code>um, ammag = hop_keys[i]</code>." +
+        "<br>2. <code>wrapped = xor_bytes(wrapped, chacha20_keystream(ammag, 288))</code> (peel this layer)." +
+        "<br>3. <code>tag, payload = wrapped[:32], wrapped[32:]</code>." +
+        "<br>4. <code>expected = hmac.new(um, payload, hashlib.sha256).digest()</code>." +
+        "<br>5. If <code>tag == expected</code>: this is the failing hop. Strip trailing zeros from <code>payload</code> and return <code>(i, payload.rstrip(b'\\x00'))</code>." +
+        "<br><br>If the loop ends with no match, return <code>(None, None)</code>.",
+      code:
+        `<strong>Solution:</strong><br><pre><code>def decrypt_error_onion(wrapped_error, hop_keys):
+    wrapped = wrapped_error
+    for i, (um, ammag) in enumerate(hop_keys):
+        wrapped = xor_bytes(wrapped, chacha20_keystream(ammag, 288))
+        tag = wrapped[:32]
+        payload = wrapped[32:]
+        if hmac.new(um, payload, hashlib.sha256).digest() == tag:
+            return i, payload.rstrip(b"\\x00")
+    return None, None
+</code></pre>`,
+    },
+    rewardSats: 75,
+    group: "sphinx/errors",
+    groupOrder: 2,
+  },
+
   "exercise-process-onion": {
     id: "exercise-process-onion",
     title: "Process an Inbound Onion",
