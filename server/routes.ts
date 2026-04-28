@@ -162,6 +162,9 @@ export const CHECKPOINT_ANSWER_KEY: Record<string, number> = {
   // Chapter 3: Shared Secrets per Hop
   "cp-blinding-public": 1,
   "exercise-derive-shared-secrets": 0,
+  // Chapter 4: Key Derivation
+  "cp-key-domain-separation": 1,
+  "exercise-derive-keys": 0,
   // Coding exercise IDs — answer 0 means "all tests passed"
   "exercise-generate-keypair": 0,
   "exercise-ecdh": 0,

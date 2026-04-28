@@ -21,6 +21,7 @@ import { BackwardCalcDiagram } from "../components/onion-routing/BackwardCalcDia
 import { TlvByteBreakdown, type TlvField } from "../components/onion-routing/TlvByteBreakdown";
 import { NaiveVsOnionDiagram } from "../components/onion-routing/NaiveVsOnionDiagram";
 import { EcdhChainDiagram } from "../components/onion-routing/EcdhChainDiagram";
+import { KdfPipelineDiagram } from "../components/onion-routing/KdfPipelineDiagram";
 
 // Whitelist of custom course tag names that should never be wrapped in <p>.
 // CommonMark wraps custom HTML element names (which are not in the block-level
@@ -37,6 +38,7 @@ const CUSTOM_BLOCK_TAGS = new Set([
   "tlv-breakdown",
   "naive-vs-onion",
   "ecdh-chain",
+  "kdf-pipeline",
 ]);
 
 function rehypeUnwrapCustomBlockTags() {
@@ -102,6 +104,18 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
   answer: number;
   explanation: string;
 }> = {
+  // ── Chapter 4: Key Derivation ────────────────────────────────────────────
+  "cp-key-domain-separation": {
+    question: "Imagine an attacker recovers Bob's rho key (the ChaCha20 stream cipher key for the forward path). What does this let them do, and why doesn't it cascade to the other four keys?",
+    options: [
+      "They can derive Bob's mu, um, pad, and ammag because all five keys are computed from a single shared seed; recovering one breaks all of them",
+      "They can decrypt Bob's hop payload area, but they cannot derive mu, um, pad, or ammag without also obtaining ss_bob, since each key is HMAC-SHA256 with a different label and inverting HMAC is computationally infeasible",
+      "They cannot do anything: rho is only used by Alice during construction, so a forwarder never possesses it",
+      "They can forge the packet HMAC because rho is XORed with mu inside the protocol, making the two functionally equivalent",
+    ],
+    answer: 1,
+    explanation: "Each per-hop key is HMAC-SHA256(label, shared_secret) for a different ASCII label. HMAC's pseudorandom-function property means that knowing one output (rho_i) gives an attacker no usable information about the other four outputs unless they also know the shared secret ss_i. Recovering rho only lets them attack the forward stream cipher, which is bad enough on its own (they can read Bob's hop payload) but doesn't extend to forging HMACs (mu) or attacking the return path (um, ammag). That's the entire point of domain separation: a leak in one key stays contained to its own role.",
+  },
   // ── Chapter 3: Shared Secrets per Hop ────────────────────────────────────
   "cp-blinding-public": {
     question: "Bob receives an onion packet, derives ss₀ via ECDH, and needs to compute the next ephemeral pubkey E₁ = E₀ · b₀ before forwarding. The blinding factor b₀ is defined as SHA256(E₀ ‖ ss₀). Why is it safe for Bob to compute b₀ himself, even though he never sees Alice's session_key?",
@@ -295,7 +309,7 @@ export const CHAPTER_REQUIREMENTS: Record<string, {
   "privacy-problem": { checkpoints: ["cp-privacy-property"], exercises: [] },
   "anatomy-of-a-route": { checkpoints: ["cp-fees-backward", "cp-intermediate-vs-final"], exercises: [] },
   "shared-secrets": { checkpoints: ["cp-blinding-public"], exercises: ["exercise-derive-shared-secrets"] },
-  "key-derivation": { checkpoints: [], exercises: [] },
+  "key-derivation": { checkpoints: ["cp-key-domain-separation"], exercises: ["exercise-derive-keys"] },
   "fixed-size-packet": { checkpoints: [], exercises: [] },
   "filler-construction": { checkpoints: [], exercises: [] },
   "wrapping-layer-by-layer": { checkpoints: [], exercises: [] },
@@ -722,6 +736,9 @@ function ChapterContent({
           },
           "ecdh-chain": () => {
             return <EcdhChainDiagram />;
+          },
+          "kdf-pipeline": () => {
+            return <KdfPipelineDiagram />;
           },
           "tlv-breakdown": ({ payload }: any) => {
             const fields = TLV_BREAKDOWN_PAYLOADS[String(payload || "")];

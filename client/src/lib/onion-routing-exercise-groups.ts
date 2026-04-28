@@ -114,7 +114,7 @@ export const ONION_ROUTING_EXERCISE_GROUPS: Record<string, OnionRoutingExerciseG
     label: "crypto/keys.py",
     setupCode: KEYS_SETUP,
     preamble: KEYS_PREAMBLE,
-    exerciseIds: [],
+    exerciseIds: ["exercise-derive-keys"],
     crossGroupDependencies: [],
   },
 

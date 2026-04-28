@@ -43,6 +43,108 @@ export interface CodeExerciseData {
 
 export const ONION_ROUTING_EXERCISES: Record<string, CodeExerciseData> = {
 
+  "exercise-derive-keys": {
+    id: "exercise-derive-keys",
+    title: "Derive the Per-Hop Keys",
+    description:
+      "Implement derive_keys(shared_secret) -> KeyMaterial. Given a 32-byte shared secret, return the five named keys (rho, mu, um, pad, ammag) defined by BOLT 4. " +
+      "Each key is computed as HMAC-SHA256(name=ASCII label, msg=shared_secret) and is exactly 32 bytes long. The KeyMaterial dataclass is provided as a small named container.",
+    starterCode: `import hmac, hashlib
+from dataclasses import dataclass
+
+@dataclass
+class KeyMaterial:
+    rho: bytes
+    mu: bytes
+    um: bytes
+    pad: bytes
+    ammag: bytes
+
+def derive_keys(shared_secret: bytes) -> KeyMaterial:
+    """
+    Expand a 32-byte shared secret into the five named keys per BOLT 4.
+
+    Each key is HMAC-SHA256(key=name_bytes, msg=shared_secret), where name_bytes
+    is the ASCII bytes of the label (e.g. b"rho").
+
+    Returns a KeyMaterial with all five keys filled in.
+    """
+    # TODO: implement
+    pass
+`,
+    testCode: `import hmac, hashlib
+
+# Test vector: a deterministic 32-byte shared secret.
+SS = bytes.fromhex("4242424242424242424242424242424242424242424242424242424242424242")
+
+def reference(name, ss):
+    return hmac.new(name, ss, hashlib.sha256).digest()
+
+def test_returns_keymaterial():
+    out = derive_keys(SS)
+    assert isinstance(out, KeyMaterial), "Expected a KeyMaterial dataclass"
+
+def test_all_keys_are_32_bytes():
+    out = derive_keys(SS)
+    for name in ("rho", "mu", "um", "pad", "ammag"):
+        k = getattr(out, name)
+        assert isinstance(k, (bytes, bytearray)), f"{name} must be bytes"
+        assert len(k) == 32, f"{name} must be exactly 32 bytes, got {len(k)}"
+
+def test_keys_match_reference():
+    out = derive_keys(SS)
+    assert out.rho == reference(b"rho", SS), "rho doesn't match HMAC-SHA256(b'rho', ss)"
+    assert out.mu == reference(b"mu", SS), "mu doesn't match HMAC-SHA256(b'mu', ss)"
+    assert out.um == reference(b"um", SS), "um doesn't match HMAC-SHA256(b'um', ss)"
+    assert out.pad == reference(b"pad", SS), "pad doesn't match HMAC-SHA256(b'pad', ss)"
+    assert out.ammag == reference(b"ammag", SS), "ammag doesn't match HMAC-SHA256(b'ammag', ss)"
+
+def test_keys_are_distinct():
+    """Domain separation: every key should be different from every other key."""
+    out = derive_keys(SS)
+    keys = [out.rho, out.mu, out.um, out.pad, out.ammag]
+    seen = set()
+    for k in keys:
+        assert k not in seen, "Two derived keys collided; check that you're using the right label for each"
+        seen.add(k)
+
+def test_different_secrets_produce_different_keys():
+    """Sanity: a different shared secret should produce different output."""
+    other_ss = bytes.fromhex("4343434343434343434343434343434343434343434343434343434343434343")
+    a = derive_keys(SS)
+    b = derive_keys(other_ss)
+    assert a.rho != b.rho
+    assert a.mu  != b.mu
+`,
+    hints: {
+      conceptual:
+        "<strong>Goal:</strong> map one 32-byte shared secret to five 32-byte keys, each tagged with a different ASCII label." +
+        "<br><br><strong>Why HMAC:</strong> HMAC-SHA256 acts as a pseudorandom function: changing either input (key OR message) gives an output that looks statistically uncorrelated with the original. So HMAC(b'rho', ss) and HMAC(b'mu', ss) are independent-looking even though they share the same ss." +
+        "<br><br><strong>Argument order matters:</strong> the BOLT 4 construction puts the label as the HMAC key and the shared secret as the message. <code>hmac.new(key, msg, digestmod)</code> takes them in that order.",
+      steps:
+        "<strong>Imports already done:</strong> hmac, hashlib, and the KeyMaterial dataclass are in scope." +
+        "<br><br>For each of the five labels (rho, mu, um, pad, ammag):" +
+        "<br>1. Encode the label to bytes: <code>b\"rho\"</code> etc." +
+        "<br>2. Compute <code>hmac.new(label_bytes, shared_secret, hashlib.sha256).digest()</code>." +
+        "<br><br>Pack the five 32-byte values into a KeyMaterial(rho=..., mu=..., ...) and return it.",
+      code:
+        `<strong>Solution:</strong><br><pre><code>def derive_keys(shared_secret):
+    def k(name):
+        return hmac.new(name, shared_secret, hashlib.sha256).digest()
+    return KeyMaterial(
+        rho=k(b"rho"),
+        mu=k(b"mu"),
+        um=k(b"um"),
+        pad=k(b"pad"),
+        ammag=k(b"ammag"),
+    )
+</code></pre>`,
+    },
+    rewardSats: 30,
+    group: "crypto/keys",
+    groupOrder: 1,
+  },
+
   "exercise-derive-shared-secrets": {
     id: "exercise-derive-shared-secrets",
     title: "Derive the Shared-Secret Chain",
