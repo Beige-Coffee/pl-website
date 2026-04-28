@@ -21,3 +21,5 @@ export {
 export { NaiveVsOnionDiagram } from "./NaiveVsOnionDiagram";
 export { EcdhChainDiagram } from "./EcdhChainDiagram";
 export { KdfPipelineDiagram } from "./KdfPipelineDiagram";
+export { ShrinkingVsFixedDiagram } from "./ShrinkingVsFixedDiagram";
+export { OnionPacketLayoutDiagram } from "./OnionPacketLayoutDiagram";

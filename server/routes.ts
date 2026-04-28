@@ -165,6 +165,8 @@ export const CHECKPOINT_ANSWER_KEY: Record<string, number> = {
   // Chapter 4: Key Derivation
   "cp-key-domain-separation": 1,
   "exercise-derive-keys": 0,
+  // Chapter 5: The Fixed-Size Packet
+  "cp-fixed-size-reason": 1,
   // Coding exercise IDs — answer 0 means "all tests passed"
   "exercise-generate-keypair": 0,
   "exercise-ecdh": 0,

@@ -22,6 +22,8 @@ import { TlvByteBreakdown, type TlvField } from "../components/onion-routing/Tlv
 import { NaiveVsOnionDiagram } from "../components/onion-routing/NaiveVsOnionDiagram";
 import { EcdhChainDiagram } from "../components/onion-routing/EcdhChainDiagram";
 import { KdfPipelineDiagram } from "../components/onion-routing/KdfPipelineDiagram";
+import { ShrinkingVsFixedDiagram } from "../components/onion-routing/ShrinkingVsFixedDiagram";
+import { OnionPacketLayoutDiagram } from "../components/onion-routing/OnionPacketLayoutDiagram";
 
 // Whitelist of custom course tag names that should never be wrapped in <p>.
 // CommonMark wraps custom HTML element names (which are not in the block-level
@@ -39,6 +41,8 @@ const CUSTOM_BLOCK_TAGS = new Set([
   "naive-vs-onion",
   "ecdh-chain",
   "kdf-pipeline",
+  "shrinking-vs-fixed",
+  "onion-packet-layout",
 ]);
 
 function rehypeUnwrapCustomBlockTags() {
@@ -104,6 +108,18 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
   answer: number;
   explanation: string;
 }> = {
+  // ── Chapter 5: The Fixed-Size Packet ─────────────────────────────────────
+  "cp-fixed-size-reason": {
+    question: "An onion-routed packet at every hop is encrypted, with each forwarder only able to decrypt its own slice. So why does the packet *also* need to be the same size at every hop? Isn't encryption enough?",
+    options: [
+      "Because the BOLT 4 spec mandates it for backwards compatibility with older onion versions",
+      "Because a packet whose size shrinks (or grows) at each hop lets observers and forwarders infer position from byte count alone, even though the contents are encrypted",
+      "Because all 1,300 bytes must be decrypted before the HMAC can be computed, and ChaCha20 requires fixed-size inputs to operate correctly",
+      "Because the spec requires Alice's wallet to allocate the same buffer size for every payment, regardless of route length",
+    ],
+    answer: 1,
+    explanation: "Encryption hides the contents but not the metadata. A passive eavesdropper or a curious forwarder can measure the packet's size in bytes and use that to estimate how many hops remain. A 4-hop packet that's 1,500 bytes at hop 1 and 750 bytes at hop 3 advertises its position regardless of how strong the encryption is. Fixing the size to 1,366 bytes at every hop removes this side channel entirely. Every forwarder sees the same byte count, so position can no longer be inferred from packet length. This is exactly the privacy property we wrote down in Chapter 1, and it's what motivates the filler construction we'll meet in Chapter 6.",
+  },
   // ── Chapter 4: Key Derivation ────────────────────────────────────────────
   "cp-key-domain-separation": {
     question: "Imagine an attacker recovers Bob's rho key (the ChaCha20 stream cipher key for the forward path). What does this let them do, and why doesn't it cascade to the other four keys?",
@@ -310,7 +326,7 @@ export const CHAPTER_REQUIREMENTS: Record<string, {
   "anatomy-of-a-route": { checkpoints: ["cp-fees-backward", "cp-intermediate-vs-final"], exercises: [] },
   "shared-secrets": { checkpoints: ["cp-blinding-public"], exercises: ["exercise-derive-shared-secrets"] },
   "key-derivation": { checkpoints: ["cp-key-domain-separation"], exercises: ["exercise-derive-keys"] },
-  "fixed-size-packet": { checkpoints: [], exercises: [] },
+  "fixed-size-packet": { checkpoints: ["cp-fixed-size-reason"], exercises: [] },
   "filler-construction": { checkpoints: [], exercises: [] },
   "wrapping-layer-by-layer": { checkpoints: [], exercises: [] },
   "peeling-a-layer": { checkpoints: [], exercises: [] },
@@ -739,6 +755,12 @@ function ChapterContent({
           },
           "kdf-pipeline": () => {
             return <KdfPipelineDiagram />;
+          },
+          "shrinking-vs-fixed": () => {
+            return <ShrinkingVsFixedDiagram />;
+          },
+          "onion-packet-layout": () => {
+            return <OnionPacketLayoutDiagram />;
           },
           "tlv-breakdown": ({ payload }: any) => {
             const fields = TLV_BREAKDOWN_PAYLOADS[String(payload || "")];
