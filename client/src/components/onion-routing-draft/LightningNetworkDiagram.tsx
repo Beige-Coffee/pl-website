@@ -97,8 +97,27 @@ export function LightningNetworkDiagram() {
   }, []);
   const nodeById = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
 
-  const [zoom, setZoom] = useState(0.7);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
+  // Initial framing: zoom in enough that the highlighted Alice→Dave route fills
+  // the viewport, and pan so the route is roughly centered. Computed once
+  // from the route extent rather than hard-coded so it stays consistent if
+  // ROUTE positions change.
+  const ROUTE_X_MIN = Math.min(...ROUTE.map((r) => r.x)) - 80;
+  const ROUTE_X_MAX = Math.max(...ROUTE.map((r) => r.x)) + 80;
+  const ROUTE_Y_MIN = Math.min(...ROUTE.map((r) => r.y)) - 140;
+  const ROUTE_Y_MAX = Math.max(...ROUTE.map((r) => r.y)) + 140;
+  const ROUTE_WIDTH = ROUTE_X_MAX - ROUTE_X_MIN;
+  const ROUTE_HEIGHT = ROUTE_Y_MAX - ROUTE_Y_MIN;
+  // Pick the zoom that lets the route fill the viewport while staying within
+  // [MIN_ZOOM, MAX_ZOOM]. Cap at 1.4 so the user can still zoom out a bit.
+  const fitZoom = Math.min(VIEW_W / ROUTE_WIDTH, VIEW_H / ROUTE_HEIGHT);
+  const INITIAL_ZOOM = Math.max(MIN_ZOOM, Math.min(1.4, fitZoom));
+  const INITIAL_PAN = {
+    x: Math.max(0, (ROUTE_X_MIN + ROUTE_X_MAX) / 2 - VIEW_W / INITIAL_ZOOM / 2),
+    y: Math.max(0, (ROUTE_Y_MIN + ROUTE_Y_MAX) / 2 - VIEW_H / INITIAL_ZOOM / 2),
+  };
+
+  const [zoom, setZoom] = useState(INITIAL_ZOOM);
+  const [pan, setPan] = useState(INITIAL_PAN);
   const dragRef = useRef<{ active: boolean; startX: number; startY: number; startPanX: number; startPanY: number }>({
     active: false, startX: 0, startY: 0, startPanX: 0, startPanY: 0,
   });
@@ -140,7 +159,7 @@ export function LightningNetworkDiagram() {
 
   function zoomIn() { setZoom((z) => Math.min(MAX_ZOOM, z * 1.2)); }
   function zoomOut() { setZoom((z) => Math.max(MIN_ZOOM, z / 1.2)); }
-  function reset() { setZoom(0.7); setPan({ x: 0, y: 0 }); }
+  function reset() { setZoom(INITIAL_ZOOM); setPan(INITIAL_PAN); }
 
   return (
     <div
