@@ -19,3 +19,4 @@ export {
   type TlvByteBreakdownProps,
 } from "./TlvByteBreakdown";
 export { NaiveVsOnionDiagram } from "./NaiveVsOnionDiagram";
+export { EcdhChainDiagram } from "./EcdhChainDiagram";

@@ -159,6 +159,9 @@ export const CHECKPOINT_ANSWER_KEY: Record<string, number> = {
   // Chapter 2: Anatomy of a Route
   "cp-fees-backward": 1,
   "cp-intermediate-vs-final": 2,
+  // Chapter 3: Shared Secrets per Hop
+  "cp-blinding-public": 1,
+  "exercise-derive-shared-secrets": 0,
   // Coding exercise IDs — answer 0 means "all tests passed"
   "exercise-generate-keypair": 0,
   "exercise-ecdh": 0,

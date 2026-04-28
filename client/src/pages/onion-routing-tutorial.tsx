@@ -20,6 +20,7 @@ import { NetworkTopologyDiagram } from "../components/onion-routing/NetworkTopol
 import { BackwardCalcDiagram } from "../components/onion-routing/BackwardCalcDiagram";
 import { TlvByteBreakdown, type TlvField } from "../components/onion-routing/TlvByteBreakdown";
 import { NaiveVsOnionDiagram } from "../components/onion-routing/NaiveVsOnionDiagram";
+import { EcdhChainDiagram } from "../components/onion-routing/EcdhChainDiagram";
 
 // Whitelist of custom course tag names that should never be wrapped in <p>.
 // CommonMark wraps custom HTML element names (which are not in the block-level
@@ -35,6 +36,7 @@ const CUSTOM_BLOCK_TAGS = new Set([
   "backward-calc",
   "tlv-breakdown",
   "naive-vs-onion",
+  "ecdh-chain",
 ]);
 
 function rehypeUnwrapCustomBlockTags() {
@@ -100,6 +102,18 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
   answer: number;
   explanation: string;
 }> = {
+  // ── Chapter 3: Shared Secrets per Hop ────────────────────────────────────
+  "cp-blinding-public": {
+    question: "Bob receives an onion packet, derives ss₀ via ECDH, and needs to compute the next ephemeral pubkey E₁ = E₀ · b₀ before forwarding. The blinding factor b₀ is defined as SHA256(E₀ ‖ ss₀). Why is it safe for Bob to compute b₀ himself, even though he never sees Alice's session_key?",
+    options: [
+      "Because Alice signs b₀ with her session_key and sends the signature in the packet, so Bob can verify it before using it",
+      "Because b₀ is derived from public information Bob already has: E₀ is in the packet header, and ss₀ is the shared secret Bob just computed via his own private key",
+      "Because Bob downloads b₀ from a precomputed table that Alice publishes via gossip alongside her session_key",
+      "Because the chain is initialized with a random b₀ and only Alice can compute later blinding factors, so Bob can use any value here without affecting Carol",
+    ],
+    answer: 1,
+    explanation: "The whole point of the blinding chain is that each forwarder can advance it on its own using only information available to it. b₀ depends on two values: E₀ (the ephemeral public key in the inbound packet, public to Bob) and ss₀ (the shared secret Bob just derived from bob_privkey · E₀). Both are knowable by Bob without ever seeing Alice's session_key. Alice independently computes the same b₀ using session_key · bob_pubkey to get the same ss₀, then hashing with the same E₀. The two parties reach the same b₀ from completely different starting information, which is exactly what makes the chain work without any out-of-band coordination.",
+  },
   // ── Chapter 2: Anatomy of a Route ────────────────────────────────────────
   "cp-fees-backward": {
     question: "In our worked example, Carol's incoming amount is 10,002 sats and Bob's incoming amount is 10,003 sats. Why must Alice work backward from Dave's amount when she computes each hop's input?",
@@ -280,7 +294,7 @@ export const CHAPTER_REQUIREMENTS: Record<string, {
   "intro": { checkpoints: [], exercises: [] },
   "privacy-problem": { checkpoints: ["cp-privacy-property"], exercises: [] },
   "anatomy-of-a-route": { checkpoints: ["cp-fees-backward", "cp-intermediate-vs-final"], exercises: [] },
-  "shared-secrets": { checkpoints: [], exercises: [] },
+  "shared-secrets": { checkpoints: ["cp-blinding-public"], exercises: ["exercise-derive-shared-secrets"] },
   "key-derivation": { checkpoints: [], exercises: [] },
   "fixed-size-packet": { checkpoints: [], exercises: [] },
   "filler-construction": { checkpoints: [], exercises: [] },
@@ -705,6 +719,9 @@ function ChapterContent({
           },
           "naive-vs-onion": () => {
             return <NaiveVsOnionDiagram />;
+          },
+          "ecdh-chain": () => {
+            return <EcdhChainDiagram />;
           },
           "tlv-breakdown": ({ payload }: any) => {
             const fields = TLV_BREAKDOWN_PAYLOADS[String(payload || "")];

@@ -30,8 +30,53 @@ export interface OnionRoutingExerciseGroup {
 // Empty strings are valid here.
 
 const KEYS_SETUP = ``;
-const BUILDER_SETUP = ``;
-const FORWARDER_SETUP = ``;
+
+// SECP256K1 curve helpers used across builder/forwarder exercises.
+// We provide ECDH and point-multiplication wrappers so students can focus on
+// the Sphinx logic rather than re-deriving the elliptic curve plumbing.
+const CURVE_HELPERS = `
+from ecdsa import SigningKey, VerifyingKey, SECP256k1
+from ecdsa.util import string_to_number, number_to_string
+import hashlib
+
+CURVE_ORDER = SECP256k1.order
+GENERATOR = SECP256k1.generator
+
+def privkey_to_pubkey(privkey_bytes):
+    """Compute the compressed (33-byte) public key for a 32-byte private key."""
+    sk = SigningKey.from_string(privkey_bytes, curve=SECP256k1)
+    return sk.verifying_key.to_string("compressed")
+
+def ecdh(privkey_bytes, pubkey_bytes):
+    """ECDH shared secret as SHA256(privkey * pubkey). Returns 32 bytes."""
+    sk_n = string_to_number(privkey_bytes)
+    vk = VerifyingKey.from_string(pubkey_bytes, curve=SECP256k1)
+    shared_point = sk_n * vk.pubkey.point
+    # secp256k1 compressed point: 02/03 prefix + 32-byte x-coord
+    parity = b'\\x02' if shared_point.y() % 2 == 0 else b'\\x03'
+    x_bytes = number_to_string(shared_point.x(), CURVE_ORDER)
+    return hashlib.sha256(parity + x_bytes).digest()
+
+def point_mul_pubkey(pubkey_bytes, scalar_bytes):
+    """Compute pubkey * scalar (mod n) and return the compressed result."""
+    vk = VerifyingKey.from_string(pubkey_bytes, curve=SECP256k1)
+    s = string_to_number(scalar_bytes) % CURVE_ORDER
+    new_point = s * vk.pubkey.point
+    new_vk = VerifyingKey.from_public_point(new_point, curve=SECP256k1)
+    return new_vk.to_string("compressed")
+
+def scalar_mul(scalar_a_bytes, scalar_b_bytes):
+    """Multiply two 32-byte scalars mod the curve order. Returns 32 bytes."""
+    a = string_to_number(scalar_a_bytes)
+    b = string_to_number(scalar_b_bytes)
+    return number_to_string((a * b) % CURVE_ORDER, CURVE_ORDER)
+`;
+
+const BUILDER_SETUP = CURVE_HELPERS + `
+class _OnionPacketBuilderBase:
+    pass
+`;
+const FORWARDER_SETUP = CURVE_HELPERS;
 const ERRORS_SETUP = ``;
 
 // ─── Visible Preambles (shown in editor, read-only) ────────────────────────
@@ -40,11 +85,9 @@ const KEYS_PREAMBLE = `import hashlib, hmac, struct
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives import hashes`;
 
-const BUILDER_PREAMBLE = `# derive_keys() comes from crypto/keys.py
-from ecdsa import SigningKey, VerifyingKey, SECP256k1
-from cryptography.hazmat.primitives.ciphers import Cipher
-from cryptography.hazmat.primitives.ciphers.algorithms import ChaCha20
-import hashlib, hmac, struct
+const BUILDER_PREAMBLE = `# Curve helpers (provided): privkey_to_pubkey, ecdh, point_mul_pubkey, scalar_mul
+# Reference: ecdsa lib (Noise course) -> /noise-tutorial/crypto-primitives
+import hashlib
 
 class OnionPacketBuilder:`;
 
@@ -80,7 +123,7 @@ export const ONION_ROUTING_EXERCISE_GROUPS: Record<string, OnionRoutingExerciseG
     label: "sphinx/builder.py",
     setupCode: BUILDER_SETUP,
     preamble: BUILDER_PREAMBLE,
-    exerciseIds: [],
+    exerciseIds: ["exercise-derive-shared-secrets"],
     crossGroupDependencies: [],
   },
 
