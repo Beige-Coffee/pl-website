@@ -145,7 +145,7 @@ export function PlaintextMessageTear() {
       </div>
 
       {/* Stage */}
-      <div className="relative bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-6" style={{ minHeight: 280 }}>
+      <div className="relative bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-6" style={{ minHeight: 420 }}>
         {/* Hop track */}
         <div className="relative flex items-start justify-between gap-2 px-2" style={{ height: 60 }}>
           {(["alice", "bob", "charlie", "dave"] as HopId[]).map((id, i) => {
@@ -206,9 +206,9 @@ export function PlaintextMessageTear() {
         <div
           className="absolute"
           style={{
-            top: 90,
-            left: `calc(${messageLeftPct}% - 130px)`,
-            width: 260,
+            top: 84,
+            left: `calc(${messageLeftPct}% - 145px)`,
+            width: 290,
             transition: "left 1.2s cubic-bezier(0.4, 0.0, 0.2, 1)",
           }}
         >
