@@ -26,6 +26,7 @@ import { ShrinkingVsFixedDiagram } from "../components/onion-routing/ShrinkingVs
 import { OnionPacketLayoutDiagram } from "../components/onion-routing/OnionPacketLayoutDiagram";
 import { FillerTraceDiagram } from "../components/onion-routing/FillerTraceDiagram";
 import { HmacChainDiagram } from "../components/onion-routing/HmacChainDiagram";
+import { OnionPeelDiagram } from "../components/onion-routing/OnionPeelDiagram";
 
 // Whitelist of custom course tag names that should never be wrapped in <p>.
 // CommonMark wraps custom HTML element names (which are not in the block-level
@@ -47,6 +48,7 @@ const CUSTOM_BLOCK_TAGS = new Set([
   "onion-packet-layout",
   "filler-trace",
   "hmac-chain",
+  "onion-peel",
 ]);
 
 function rehypeUnwrapCustomBlockTags() {
@@ -112,6 +114,18 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
   answer: number;
   explanation: string;
 }> = {
+  // ── Chapter 8: Peeling a Layer ───────────────────────────────────────────
+  "cp-peel-extended-stream": {
+    question: "When Bob peels his layer, he generates a 2,600-byte ChaCha20 keystream from his rho key (twice the routing-info size) and XORs it onto a working buffer that's the inbound 1,300-byte hop_payloads followed by 1,300 zero bytes. Why does the keystream extend past 1,300 bytes?",
+    options: [
+      "The extra keystream is used to derive a backup mu key in case the primary HMAC verification fails",
+      "ChaCha20 requires a minimum of 2,600 bytes per call to operate efficiently; a smaller call would silently fall back to AES",
+      "The trailing portion of the keystream becomes the bytes that fill the gap when Bob shifts the inner contents forward. Those bytes have to match what Alice precomputed in the filler so Carol's HMAC verification works",
+      "The first 1,300 bytes decrypt the inbound packet; the next 1,300 bytes encrypt Bob's outgoing packet by XOR-ing his keystream onto the next ephemeral pubkey field",
+    ],
+    answer: 2,
+    explanation: "When Bob shifts the inner contents forward (to remove his slot from the front of the buffer), a gap opens up at the end. Those gap bytes have to be the bytes that Alice's chapter-6 filler computation arranged for. The filler was constructed to match the trailing portion of each hop's rho keystream extended past 1,300 bytes. By generating 2,600 bytes of keystream and XOR-ing it across a 2,600-byte working buffer, Bob applies that exact extension naturally: the front 1,300 decrypts his inbound bytes, the trailing 1,300 produces the bytes-of-keystream-XORed-with-zeros that match what Alice baked in.",
+  },
   // ── Chapter 7: Wrapping Layer-by-Layer ───────────────────────────────────
   "cp-build-reverse-order": {
     question: "Why must Alice build the onion in reverse order, starting with the destination's layer (Dave) and working outward to the first hop (Bob)?",
@@ -368,7 +382,7 @@ export const CHAPTER_REQUIREMENTS: Record<string, {
   "fixed-size-packet": { checkpoints: ["cp-fixed-size-reason"], exercises: [] },
   "filler-construction": { checkpoints: ["cp-filler-purpose", "cp-filler-final-hop"], exercises: ["exercise-generate-filler"] },
   "wrapping-layer-by-layer": { checkpoints: ["cp-build-reverse-order"], exercises: ["exercise-wrap-hop", "exercise-build-packet"] },
-  "peeling-a-layer": { checkpoints: [], exercises: [] },
+  "peeling-a-layer": { checkpoints: ["cp-peel-extended-stream"], exercises: ["exercise-peel-layer"] },
   "forwarding-validation": { checkpoints: [], exercises: [] },
   "error-onion": { checkpoints: [], exercises: [] },
   "capstone-success": { checkpoints: [], exercises: [] },
@@ -806,6 +820,9 @@ function ChapterContent({
           },
           "hmac-chain": () => {
             return <HmacChainDiagram />;
+          },
+          "onion-peel": () => {
+            return <OnionPeelDiagram />;
           },
           "tlv-breakdown": ({ payload }: any) => {
             const fields = TLV_BREAKDOWN_PAYLOADS[String(payload || "")];

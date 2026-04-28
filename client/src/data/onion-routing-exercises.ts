@@ -145,6 +145,188 @@ def test_different_secrets_produce_different_keys():
     groupOrder: 1,
   },
 
+  "exercise-peel-layer": {
+    id: "exercise-peel-layer",
+    title: "Peel a Single Layer",
+    description:
+      "Implement OnionForwarder.peel_layer. Given a 1366-byte BOLT 4 onion packet and the forwarder's 32-byte node private key, return (next_packet, payload_bytes, shared_secret). " +
+      "Hop payloads in this exercise are prefixed with a bigsize length, so the slot size is parse_bigsize(...)[0] + bigsize_header_size + 32 (HMAC). " +
+      "Skip HMAC validation in this exercise; chapter 9 layers it on. Focus on the ECDH, the keystream-extended XOR, slot extraction, and ephemeral pubkey advancement.",
+    starterCode: `class OnionForwarder:
+    def peel_layer(self, packet, node_privkey):
+        """
+        Args:
+          packet:        1366-byte BOLT 4 onion packet
+                         (1 version + 33 E_i + 1300 hop_payloads + 32 hmac)
+          node_privkey:  this forwarder's 32-byte node private key
+
+        Returns: (next_packet, payload_bytes, shared_secret)
+          next_packet:    1366-byte packet to forward to the next hop
+          payload_bytes:  the bigsize-length-prefixed TLV payload bytes for THIS hop
+                          (caller will parse it further)
+          shared_secret:  32-byte ss_i this hop derived; useful for the error path
+
+        Algorithm:
+          1. Parse the inbound packet: version, E_i, hop_payloads, inbound_hmac.
+          2. ss_i = ecdh(node_privkey, E_i)
+          3. rho = HMAC-SHA256(b"rho", ss_i)
+          4. Allocate a 2 * 1300 = 2600-byte working buffer:
+             work = hop_payloads + b"\\x00" * 1300
+          5. XOR work with chacha20_keystream(rho, 2600)
+          6. Parse work[0:] as bigsize-prefixed payload: read bigsize, the payload
+             is bigsize bytes after that, slot_size = bigsize_header_len + length + 32
+          7. payload_bytes = work[0 : bigsize_header_len + length]
+          8. next_hmac = work[slot_size - 32 : slot_size]
+          9. next_hop_payloads = work[slot_size : slot_size + 1300]
+          10. b_i = SHA256(E_i || ss_i)
+          11. E_next = point_mul_pubkey(E_i, b_i)
+          12. Return: (b"\\x00" + E_next + next_hop_payloads + next_hmac,
+                       payload_bytes, ss_i)
+        """
+        # TODO: implement
+        pass
+`,
+    testCode: `import hmac, hashlib
+
+ROUTING_INFO_SIZE = 1300
+
+# Build a fixed test packet using a reference encoder so we can verify peeling.
+SESSION_KEY = bytes.fromhex("4141414141414141414141414141414141414141414141414141414141414141")
+BOB_PRIV   = bytes.fromhex("4242424242424242424242424242424242424242424242424242424242424242")
+CAROL_PRIV = bytes.fromhex("4343434343434343434343434343434343434343434343434343434343434343")
+DAVE_PRIV  = bytes.fromhex("4444444444444444444444444444444444444444444444444444444444444444")
+
+BOB_PUB   = privkey_to_pubkey(BOB_PRIV)
+CAROL_PUB = privkey_to_pubkey(CAROL_PRIV)
+DAVE_PUB  = privkey_to_pubkey(DAVE_PRIV)
+HOP_PUBKEYS = [BOB_PUB, CAROL_PUB, DAVE_PUB]
+HOP_PRIVKEYS = [BOB_PRIV, CAROL_PRIV, DAVE_PRIV]
+
+# Fixed TLV payloads — bigsize-prefixed: each is a 19/19/8-byte TLV, prefixed by a 1-byte length.
+RAW_TLVS = [
+    bytes.fromhex("0203989a900401b40608000000012345678920"),
+    bytes.fromhex("0203989a900401b40608000000012345678921"),
+    bytes.fromhex("0203989a90040181"),
+]
+PAYLOADS = [encode_bigsize(len(t)) + t for t in RAW_TLVS]
+
+def chain(session_key, hop_pubkeys):
+    ek_list, ss_list = [], []
+    e = session_key
+    for pub in hop_pubkeys:
+        E = privkey_to_pubkey(e)
+        ss = ecdh(e, pub)
+        b = hashlib.sha256(E + ss).digest()
+        ek_list.append(E)
+        ss_list.append(ss)
+        e = scalar_mul(e, b)
+    return ek_list, ss_list
+
+def reference_build(session_key, hop_pubkeys, payloads):
+    ek_list, ss_list = chain(session_key, hop_pubkeys)
+    rhos = [hmac.new(b"rho", ss, hashlib.sha256).digest() for ss in ss_list]
+    mus  = [hmac.new(b"mu", ss, hashlib.sha256).digest() for ss in ss_list]
+    sizes = [len(p) + 32 for p in payloads[:-1]]
+
+    # Filler
+    filler = b""
+    for i in range(len(rhos) - 1):
+        filler = filler + b"\\x00" * sizes[i]
+        stream = chacha20_keystream(rhos[i], ROUTING_INFO_SIZE + sizes[i])
+        chunk = stream[ROUTING_INFO_SIZE + sizes[i] - len(filler):]
+        filler = xor_bytes(filler, chunk)
+
+    buf = b"\\x00" * (ROUTING_INFO_SIZE - len(filler)) + filler
+    nhmac = b"\\x00" * 32
+    for i in range(len(payloads) - 1, -1, -1):
+        ss = len(payloads[i]) + 32
+        shifted = bytearray(ss) + bytearray(buf[:-ss])
+        shifted[:len(payloads[i])] = payloads[i]
+        shifted[len(payloads[i]):len(payloads[i])+32] = nhmac
+        stream = chacha20_keystream(rhos[i], ROUTING_INFO_SIZE)
+        buf = xor_bytes(bytes(shifted), stream)
+        nhmac = hmac.new(mus[i], buf, hashlib.sha256).digest()
+
+    return b"\\x00" + ek_list[0] + buf + nhmac, ek_list, ss_list
+
+PACKET, EK_LIST, SS_LIST = reference_build(SESSION_KEY, HOP_PUBKEYS, PAYLOADS)
+
+def test_returns_tuple_of_three():
+    f = OnionForwarder()
+    out = f.peel_layer(PACKET, BOB_PRIV)
+    assert isinstance(out, tuple) and len(out) == 3, "Expected (next_packet, payload, ss)"
+
+def test_recovers_bob_shared_secret():
+    f = OnionForwarder()
+    _, _, ss = f.peel_layer(PACKET, BOB_PRIV)
+    assert ss == SS_LIST[0], "Bob's recovered shared secret must match the chain"
+
+def test_extracts_bob_payload():
+    f = OnionForwarder()
+    _, payload, _ = f.peel_layer(PACKET, BOB_PRIV)
+    assert payload == PAYLOADS[0], "Extracted payload must equal Bob's original bigsize-prefixed TLV"
+
+def test_next_packet_size():
+    f = OnionForwarder()
+    next_packet, _, _ = f.peel_layer(PACKET, BOB_PRIV)
+    assert len(next_packet) == 1366, "Outgoing packet must be exactly 1366 bytes"
+
+def test_next_ephemeral_advances():
+    f = OnionForwarder()
+    next_packet, _, _ = f.peel_layer(PACKET, BOB_PRIV)
+    assert next_packet[1:34] == EK_LIST[1], "Outgoing E must equal E_1 from the chain"
+
+def test_carol_can_peel_next():
+    """End-to-end: Bob's output is a valid input for Carol's peel."""
+    f = OnionForwarder()
+    bob_out, _, _ = f.peel_layer(PACKET, BOB_PRIV)
+    next_out, carol_payload, carol_ss = f.peel_layer(bob_out, CAROL_PRIV)
+    assert carol_ss == SS_LIST[1], "Carol's recovered ss must match the chain"
+    assert carol_payload == PAYLOADS[1], "Carol's payload must round-trip through the peel"
+`,
+    hints: {
+      conceptual:
+        "<strong>Goal:</strong> reverse the wrap_hop operation. Take a packet, derive the keys this hop needs, decrypt the buffer with an extended keystream, lift this hop's slot, and produce the packet to forward." +
+        "<br><br><strong>Why the extended keystream:</strong> when this hop strips its slot off the front and shifts the inner contents forward, the trailing positions must contain the extension of this hop's rho keystream. That's exactly what was XORed into the corresponding filler bytes during construction. By generating 2x the routing info size, we cover both the decrypted hop_payloads AND the keystream-extension that fills the gap.",
+      steps:
+        "<strong>1. Parse the packet:</strong>" +
+        "<br>&nbsp;&nbsp;&nbsp;&nbsp;<code>version = packet[0]</code>" +
+        "<br>&nbsp;&nbsp;&nbsp;&nbsp;<code>E_i = packet[1:34]</code>" +
+        "<br>&nbsp;&nbsp;&nbsp;&nbsp;<code>hop_payloads = packet[34:1334]</code>" +
+        "<br>&nbsp;&nbsp;&nbsp;&nbsp;<code>inbound_hmac = packet[1334:1366]</code>" +
+        "<br><strong>2. Derive keys:</strong> ss = ecdh(node_privkey, E_i); rho = HMAC(b\"rho\", ss)." +
+        "<br><strong>3. Working buffer:</strong> <code>work = hop_payloads + b\"\\x00\" * 1300</code>." +
+        "<br><strong>4. XOR with extended keystream:</strong> <code>stream = chacha20_keystream(rho, 2600); work = xor_bytes(work, stream)</code>." +
+        "<br><strong>5. Parse the bigsize length:</strong> <code>length, header_len = parse_bigsize(work, 0)</code>. The TLV bytes occupy <code>work[0:header_len + length]</code>. The slot size is <code>header_len + length + 32</code>." +
+        "<br><strong>6. Extract:</strong> <code>payload = work[0:header_len + length]</code>; <code>next_hmac = work[slot_size - 32:slot_size]</code>." +
+        "<br><strong>7. Next hop_payloads:</strong> <code>work[slot_size : slot_size + 1300]</code>." +
+        "<br><strong>8. Advance ephemeral:</strong> <code>b = SHA256(E_i + ss)</code>; <code>E_next = point_mul_pubkey(E_i, b)</code>." +
+        "<br><strong>9. Assemble outgoing:</strong> <code>b\"\\x00\" + E_next + next_hop_payloads + next_hmac</code>.",
+      code:
+        `<strong>Solution:</strong><br><pre><code>def peel_layer(self, packet, node_privkey):
+    E_i = packet[1:34]
+    hop_payloads = packet[34:1334]
+    ss = ecdh(node_privkey, E_i)
+    rho = hmac.new(b"rho", ss, hashlib.sha256).digest()
+    work = hop_payloads + b"\\x00" * ROUTING_INFO_SIZE
+    stream = chacha20_keystream(rho, 2 * ROUTING_INFO_SIZE)
+    work = xor_bytes(work, stream)
+    length, header_len = parse_bigsize(work, 0)
+    payload = work[0:header_len + length]
+    slot = header_len + length + 32
+    next_hmac = work[slot - 32:slot]
+    next_hop_payloads = work[slot:slot + ROUTING_INFO_SIZE]
+    b = hashlib.sha256(E_i + ss).digest()
+    E_next = point_mul_pubkey(E_i, b)
+    next_packet = b"\\x00" + E_next + next_hop_payloads + next_hmac
+    return next_packet, payload, ss
+</code></pre>`,
+    },
+    rewardSats: 100,
+    group: "sphinx/forwarder",
+    groupOrder: 1,
+  },
+
   "exercise-wrap-hop": {
     id: "exercise-wrap-hop",
     title: "Wrap a Single Layer",

@@ -53,6 +53,28 @@ def chacha20_keystream(key, length):
 def xor_bytes(a, b):
     return bytes(x ^ y for x, y in zip(a, b))
 
+def parse_bigsize(data, offset=0):
+    """Parse a BOLT 1 bigsize integer from data[offset:]. Returns (value, bytes_consumed)."""
+    first = data[offset]
+    if first < 0xfd:
+        return first, 1
+    elif first == 0xfd:
+        return int.from_bytes(data[offset+1:offset+3], 'big'), 3
+    elif first == 0xfe:
+        return int.from_bytes(data[offset+1:offset+5], 'big'), 5
+    else:  # 0xff
+        return int.from_bytes(data[offset+1:offset+9], 'big'), 9
+
+def encode_bigsize(value):
+    if value < 0xfd:
+        return value.to_bytes(1, 'big')
+    elif value <= 0xffff:
+        return b"\\xfd" + value.to_bytes(2, 'big')
+    elif value <= 0xffffffff:
+        return b"\\xfe" + value.to_bytes(4, 'big')
+    else:
+        return b"\\xff" + value.to_bytes(8, 'big')
+
 CURVE_ORDER = SECP256k1.order
 GENERATOR = SECP256k1.generator
 
@@ -110,11 +132,13 @@ ROUTING_INFO_SIZE = 1300  # BOLT 4 hop_payloads field length
 
 class OnionPacketBuilder:`;
 
-const FORWARDER_PREAMBLE = `# derive_keys() comes from crypto/keys.py
-from ecdsa import SigningKey, VerifyingKey, SECP256k1
-from cryptography.hazmat.primitives.ciphers import Cipher
-from cryptography.hazmat.primitives.ciphers.algorithms import ChaCha20
-import hashlib, hmac, struct
+const FORWARDER_PREAMBLE = `# Provided helpers (in scope at runtime):
+#   privkey_to_pubkey, ecdh, point_mul_pubkey, scalar_mul
+#   chacha20_keystream, xor_bytes
+#   parse_bigsize, encode_bigsize
+import hashlib, hmac
+
+ROUTING_INFO_SIZE = 1300
 
 class OnionForwarder:`;
 
@@ -156,7 +180,7 @@ export const ONION_ROUTING_EXERCISE_GROUPS: Record<string, OnionRoutingExerciseG
     label: "sphinx/forwarder.py",
     setupCode: FORWARDER_SETUP,
     preamble: FORWARDER_PREAMBLE,
-    exerciseIds: [],
+    exerciseIds: ["exercise-peel-layer"],
     crossGroupDependencies: [],
   },
 

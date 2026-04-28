@@ -175,6 +175,9 @@ export const CHECKPOINT_ANSWER_KEY: Record<string, number> = {
   "cp-build-reverse-order": 1,
   "exercise-wrap-hop": 0,
   "exercise-build-packet": 0,
+  // Chapter 8: Peeling a Layer
+  "cp-peel-extended-stream": 2,
+  "exercise-peel-layer": 0,
   // Coding exercise IDs — answer 0 means "all tests passed"
   "exercise-generate-keypair": 0,
   "exercise-ecdh": 0,

@@ -25,3 +25,4 @@ export { ShrinkingVsFixedDiagram } from "./ShrinkingVsFixedDiagram";
 export { OnionPacketLayoutDiagram } from "./OnionPacketLayoutDiagram";
 export { FillerTraceDiagram } from "./FillerTraceDiagram";
 export { HmacChainDiagram } from "./HmacChainDiagram";
+export { OnionPeelDiagram } from "./OnionPeelDiagram";
