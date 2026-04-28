@@ -186,6 +186,39 @@ export const CHECKPOINT_ANSWER_KEY: Record<string, number> = {
   "cp-error-trial-decrypt": 1,
   "exercise-build-error-onion": 0,
   "exercise-decrypt-error-onion": 0,
+  // ── Onion Routing DRAFT mirror (progress isolated from v1) ─────────────
+  // Chapter 1: The Privacy Problem (draft)
+  "cp-privacy-property-draft": 1,
+  // Chapter 2: Anatomy of a Route (draft)
+  "cp-fees-backward-draft": 1,
+  "cp-intermediate-vs-final-draft": 2,
+  // Chapter 3: Shared Secrets per Hop (draft)
+  "cp-blinding-public-draft": 1,
+  "exercise-derive-shared-secrets-draft": 0,
+  // Chapter 4: Key Derivation (draft)
+  "cp-key-domain-separation-draft": 1,
+  "exercise-derive-keys-draft": 0,
+  // Chapter 5: The Fixed-Size Packet (draft)
+  "cp-fixed-size-reason-draft": 1,
+  // Chapter 6: Filler Construction (draft)
+  "cp-filler-purpose-draft": 1,
+  "cp-filler-final-hop-draft": 1,
+  "exercise-generate-filler-draft": 0,
+  // Chapter 7: Wrapping Layer-by-Layer (draft)
+  "cp-build-reverse-order-draft": 1,
+  "exercise-wrap-hop-draft": 0,
+  "exercise-build-packet-draft": 0,
+  // Chapter 8: Peeling a Layer (draft)
+  "cp-peel-extended-stream-draft": 2,
+  "exercise-peel-layer-draft": 0,
+  // Chapter 9: Forwarding & Validation (draft)
+  "cp-validate-before-decrypt-draft": 1,
+  "cp-tlv-final-vs-forward-draft": 1,
+  "exercise-process-onion-draft": 0,
+  // Chapter 10: The Error Onion (draft)
+  "cp-error-trial-decrypt-draft": 1,
+  "exercise-build-error-onion-draft": 0,
+  "exercise-decrypt-error-onion-draft": 0,
   // Coding exercise IDs — answer 0 means "all tests passed"
   "exercise-generate-keypair": 0,
   "exercise-ecdh": 0,
