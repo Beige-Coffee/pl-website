@@ -61,6 +61,29 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
   answer: number;
   explanation: string;
 }> = {
+  // ── Chapter 2: Anatomy of a Route ────────────────────────────────────────
+  "cp-fees-backward": {
+    question: "In our worked example, Carol's incoming amount is 10,002 sats and Bob's incoming amount is 10,003 sats. Why must Alice work backward from Dave's amount when she computes each hop's input?",
+    options: [
+      "The Lightning spec defines a strict reverse processing order, and Alice's calculation has to follow that ordering to be valid",
+      "Each hop's required input depends on its output, and the only fixed point in the chain is the final amount Dave receives. Working forward would leave the math undefined",
+      "Timelocks can only be subtracted, not added, so the calculation has to start from the highest CLTV and work down",
+      "Each hop only knows what it forwards, not what it receives, so Alice has to reconstruct the input direction by simulating from the destination",
+    ],
+    answer: 1,
+    explanation: "Bob's required incoming amount = his outgoing amount + his fee. His outgoing amount is whatever Carol receives. Carol's incoming amount = her outgoing amount + her fee. Her outgoing amount is whatever Dave receives. So the chain depends on Dave's amount being known first, then propagating backward. If Alice tried to start from her own number (say, 'I have 10,003 sats to spend'), she'd have no way to determine how much each hop should keep as a fee without already knowing the downstream amounts. The same applies to CLTVs: each hop's incoming CLTV must outlast its outgoing one by the hop's CLTV delta, and the only fixed CLTV is the one Dave specifies in his invoice.",
+  },
+  "cp-intermediate-vs-final": {
+    question: "Dave receives a hop payload that's missing one specific TLV field that Bob and Carol's payloads contain. Which field, and what does its absence tell Dave?",
+    options: [
+      "outgoing_cltv_value (type 4) is missing, signaling that the HTLC has already been settled",
+      "amt_to_forward (type 2) is missing, signaling that there is nothing left to forward",
+      "short_channel_id (type 6) is missing, signaling that there is no next hop and Dave is the final destination",
+      "payment_data (type 8) is missing from intermediate hops because they aren't allowed to read invoice metadata",
+    ],
+    answer: 2,
+    explanation: "An intermediate hop's payload contains a type-6 short_channel_id record telling it which channel to forward over. The final hop has no next hop to forward to, so Alice doesn't include type 6 in its payload. When Dave parses his payload and sees no type 6, he knows immediately that the payment terminates with him. Conversely, type 8 (payment_data) appears only in the final hop's payload, since only the final hop validates against the invoice. The structure of the TLV does the work of signaling 'you're the destination' without any explicit flag.",
+  },
   // ── Chapter 1: The Privacy Problem ───────────────────────────────────────
   "cp-privacy-property": {
     question: "Bob is forwarding a Lightning payment from Alice → Bob → Carol → Dave. Which of the following does Bob learn as part of forwarding the payment?",
@@ -217,7 +240,7 @@ export const CHAPTER_REQUIREMENTS: Record<string, {
 }> = {
   "intro": { checkpoints: [], exercises: [] },
   "privacy-problem": { checkpoints: ["cp-privacy-property"], exercises: [] },
-  "anatomy-of-a-route": { checkpoints: [], exercises: [] },
+  "anatomy-of-a-route": { checkpoints: ["cp-fees-backward", "cp-intermediate-vs-final"], exercises: [] },
   "shared-secrets": { checkpoints: [], exercises: [] },
   "key-derivation": { checkpoints: [], exercises: [] },
   "fixed-size-packet": { checkpoints: [], exercises: [] },

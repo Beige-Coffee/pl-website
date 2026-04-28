@@ -156,6 +156,9 @@ export const CHECKPOINT_ANSWER_KEY: Record<string, number> = {
   // ── Onion routing tutorial checkpoints (added chapter-by-chapter) ─────
   // Chapter 1: The Privacy Problem
   "cp-privacy-property": 1,
+  // Chapter 2: Anatomy of a Route
+  "cp-fees-backward": 1,
+  "cp-intermediate-vs-final": 2,
   // Coding exercise IDs — answer 0 means "all tests passed"
   "exercise-generate-keypair": 0,
   "exercise-ecdh": 0,
