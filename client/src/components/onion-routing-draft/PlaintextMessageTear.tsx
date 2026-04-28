@@ -89,11 +89,13 @@ function highlightedAt(step: number, hop: "bob" | "charlie" | "dave"): boolean {
 }
 
 // Layout: the 4 nodes sit horizontally. The message anchors to the active hop.
+// Inset enough that the centered ~290px message doesn't overflow either edge
+// of the stage at the leftmost (Alice) or rightmost (Dave) positions.
 const NODE_X_PCT: Record<HopId, number> = {
-  alice: 8,
-  bob: 35,
-  charlie: 62,
-  dave: 89,
+  alice: 17,
+  bob: 39,
+  charlie: 61,
+  dave: 83,
 };
 
 export function PlaintextMessageTear() {
@@ -147,37 +149,8 @@ export function PlaintextMessageTear() {
       {/* Stage */}
       <div className="relative bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-6" style={{ minHeight: 420 }}>
         {/* Hop track */}
-        <div className="relative flex items-start justify-between gap-2 px-2" style={{ height: 60 }}>
-          {(["alice", "bob", "charlie", "dave"] as HopId[]).map((id, i) => {
-            const isActive = active === id;
-            const past =
-              (id === "alice" && step >= 1) ||
-              (id === "bob" && step >= 3) ||
-              (id === "charlie" && step >= 5);
-            return (
-              <div
-                key={id}
-                className="flex flex-col items-center gap-1 relative z-10"
-                style={{ width: 80 }}
-              >
-                <div
-                  className="w-16 h-10 flex items-center justify-center border-[1.5px] transition-all duration-500"
-                  style={{
-                    background: isActive ? "#b8860b" : "#fffdf5",
-                    color: isActive ? "#fffdf5" : "#0f172a",
-                    borderColor: isActive ? "#b8860b" : "#0f172a",
-                    opacity: past && !isActive ? 0.4 : 1,
-                  }}
-                >
-                  <span className="text-sm font-bold tracking-[0.05em] uppercase">
-                    {id === "alice" ? "Alice" : id === "bob" ? "Bob" : id === "charlie" ? "Charlie" : "Dave"}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-
-          {/* Backbone arrows between nodes */}
+        <div className="relative" style={{ height: 60 }}>
+          {/* Backbone arrows between nodes (rendered first so badges sit on top) */}
           <svg
             className="absolute inset-0 pointer-events-none"
             preserveAspectRatio="none"
@@ -189,10 +162,10 @@ export function PlaintextMessageTear() {
               return (
                 <line
                   key={i}
-                  x1={`${startPct + 4}%`}
-                  y1={20}
-                  x2={`${endPct - 4}%`}
-                  y2={20}
+                  x1={`${startPct}%`}
+                  y1={24}
+                  x2={`${endPct}%`}
+                  y2={24}
                   stroke="#475569"
                   strokeWidth={1.5}
                   strokeDasharray="4 3"
@@ -200,6 +173,41 @@ export function PlaintextMessageTear() {
               );
             })}
           </svg>
+
+          {/* Badges absolutely positioned at NODE_X_PCT centers */}
+          {(["alice", "bob", "charlie", "dave"] as HopId[]).map((id) => {
+            const isActive = active === id;
+            const past =
+              (id === "alice" && step >= 1) ||
+              (id === "bob" && step >= 3) ||
+              (id === "charlie" && step >= 5);
+            const label = id === "alice" ? "Alice" : id === "bob" ? "Bob" : id === "charlie" ? "Charlie" : "Dave";
+            return (
+              <div
+                key={id}
+                className="absolute z-10"
+                style={{
+                  top: 0,
+                  left: `${NODE_X_PCT[id]}%`,
+                  transform: "translateX(-50%)",
+                }}
+              >
+                <div
+                  className="w-20 h-12 flex items-center justify-center border-[1.5px] transition-all duration-500 bg-card"
+                  style={{
+                    background: isActive ? "#b8860b" : "#fffdf5",
+                    color: isActive ? "#fffdf5" : "#0f172a",
+                    borderColor: isActive ? "#b8860b" : "#0f172a",
+                    opacity: past && !isActive ? 0.4 : 1,
+                  }}
+                >
+                  <span className="text-sm font-bold tracking-[0.05em] uppercase">
+                    {label}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
         </div>
 
         {/* The traveling message */}
