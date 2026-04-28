@@ -29,3 +29,4 @@ export { OnionPeelDiagram } from "./OnionPeelDiagram";
 export { ValidationFlowDiagram } from "./ValidationFlowDiagram";
 export { ErrorBoomerangDiagram } from "./ErrorBoomerangDiagram";
 export { ErrorUnwrapDiagram } from "./ErrorUnwrapDiagram";
+export { OnionCapstonePanel } from "./OnionCapstonePanel";

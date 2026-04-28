@@ -30,6 +30,7 @@ import { OnionPeelDiagram } from "../components/onion-routing/OnionPeelDiagram";
 import { ValidationFlowDiagram } from "../components/onion-routing/ValidationFlowDiagram";
 import { ErrorBoomerangDiagram } from "../components/onion-routing/ErrorBoomerangDiagram";
 import { ErrorUnwrapDiagram } from "../components/onion-routing/ErrorUnwrapDiagram";
+import { OnionCapstonePanel } from "../components/onion-routing/OnionCapstonePanel";
 
 // Whitelist of custom course tag names that should never be wrapped in <p>.
 // CommonMark wraps custom HTML element names (which are not in the block-level
@@ -55,6 +56,7 @@ const CUSTOM_BLOCK_TAGS = new Set([
   "validation-flow",
   "error-boomerang",
   "error-unwrap",
+  "onion-capstone",
 ]);
 
 function rehypeUnwrapCustomBlockTags() {
@@ -873,6 +875,10 @@ function ChapterContent({
           },
           "error-unwrap": () => {
             return <ErrorUnwrapDiagram />;
+          },
+          "onion-capstone": ({ mode }: any) => {
+            const m = mode === "failure" ? "failure" : "success";
+            return <OnionCapstonePanel mode={m} />;
           },
           "tlv-breakdown": ({ payload }: any) => {
             const fields = TLV_BREAKDOWN_PAYLOADS[String(payload || "")];
