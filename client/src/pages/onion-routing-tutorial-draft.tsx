@@ -474,11 +474,8 @@ function idxOf(id: string) {
 }
 
 function introMarkdown() {
-  return `# Onion Routing & Lightning Payments (Draft)
+  return `# Onion Routing & Lightning Payments
 
-> ### 📝 You are reading the DRAFT version
->
-> This is your editable working copy of the course. The original reference version lives at [/onion-routing-tutorial](/onion-routing-tutorial). Changes you make here won't affect the reference. Progress (checkpoints, exercises) is tracked separately for each version.
 
 Lightning lets you send a payment to anyone on the network, even when you don't share a channel with them. The payment hops across other people's channels to get there.
 
