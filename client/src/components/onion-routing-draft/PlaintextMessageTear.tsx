@@ -61,11 +61,11 @@ const TOTAL_STEPS = 6;
 
 const STEP_CAPTIONS: Record<number, string> = {
   0: "Alice's update_add_htlc carries every hop's instructions in plaintext, in order. She's about to hand it to Bob.",
-  1: "The message arrives at Bob. He reads his slice off the front: forward 10,002 sat to Charlie, outgoing CLTV block 220.",
-  2: "Bob has read what he needs. Notice he's also seen everything else inside the message. The packet shrinks and continues to Charlie.",
-  3: "Charlie reads his slice: forward 10,000 sat to Dave, outgoing CLTV block 180. He also saw the final destination's instructions.",
-  4: "Charlie's slice falls away. The remaining message moves on to Dave.",
-  5: "Dave reads the final slice and accepts the HTLC. Payment delivered, but every hop along the way saw the entire route.",
+  1: "The message arrives at Bob. He reads his slice off the front: forward 10,002 sat to Charlie, outgoing CLTV block 220. But notice he can read every other slice too — nothing's hidden.",
+  2: "Bob forwards the same message on to Charlie. The data Bob saw doesn't get unseen: he now knows the full route, every fee, and the final destination.",
+  3: "Charlie reads his slice: forward 10,000 sat to Dave, outgoing CLTV block 180. Like Bob, he also has full visibility into every other slice.",
+  4: "Charlie forwards to Dave. Charlie too has now seen the whole route, including the final amount and payment hash.",
+  5: "Dave reads the final slice and accepts the HTLC. Payment delivered — but every hop along the way saw the entire route in plaintext. That's the privacy issue we have to solve.",
 };
 
 function activeHopAt(step: number): HopId {
@@ -73,12 +73,6 @@ function activeHopAt(step: number): HopId {
   if (step <= 2) return "bob";
   if (step <= 4) return "charlie";
   return "dave";
-}
-
-function tornAt(step: number, hop: "bob" | "charlie" | "dave"): boolean {
-  if (hop === "bob") return step >= 2;
-  if (hop === "charlie") return step >= 4;
-  return false; // Dave is never "torn" — he reads it last
 }
 
 function highlightedAt(step: number, hop: "bob" | "charlie" | "dave"): boolean {
@@ -150,37 +144,34 @@ export function PlaintextMessageTear() {
       <div className="relative bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-6" style={{ minHeight: 420 }}>
         {/* Hop track */}
         <div className="relative" style={{ height: 60 }}>
-          {/* Backbone arrows between nodes (rendered first so badges sit on top) */}
-          <svg
-            className="absolute inset-0 pointer-events-none"
-            preserveAspectRatio="none"
-            style={{ width: "100%", height: "100%" }}
-          >
-            {[0, 1, 2].map((i) => {
-              const startPct = NODE_X_PCT[(["alice", "bob", "charlie"] as HopId[])[i]];
-              const endPct = NODE_X_PCT[(["bob", "charlie", "dave"] as HopId[])[i]];
-              return (
-                <line
-                  key={i}
-                  x1={`${startPct}%`}
-                  y1={24}
-                  x2={`${endPct}%`}
-                  y2={24}
-                  stroke="#475569"
-                  strokeWidth={1.5}
-                  strokeDasharray="4 3"
-                />
-              );
-            })}
-          </svg>
+          {/* Backbone dashes — HTML divs so we can stop them at the badge edges
+              with calc(). The badges are 80px wide and centered, so each
+              segment starts at one badge's right edge (40px past its center)
+              and ends at the next badge's left edge (40px before its center). */}
+          {[0, 1, 2].map((i) => {
+            const startPct = NODE_X_PCT[(["alice", "bob", "charlie"] as HopId[])[i]];
+            const endPct = NODE_X_PCT[(["bob", "charlie", "dave"] as HopId[])[i]];
+            return (
+              <div
+                key={i}
+                className="absolute pointer-events-none"
+                style={{
+                  top: 23,
+                  left: `calc(${startPct}% + 40px)`,
+                  width: `calc(${endPct - startPct}% - 80px)`,
+                  borderTop: "1.5px dashed #475569",
+                }}
+              />
+            );
+          })}
 
           {/* Badges absolutely positioned at NODE_X_PCT centers */}
           {(["alice", "bob", "charlie", "dave"] as HopId[]).map((id) => {
             const isActive = active === id;
-            const past =
+            const seen =
               (id === "alice" && step >= 1) ||
-              (id === "bob" && step >= 3) ||
-              (id === "charlie" && step >= 5);
+              (id === "bob" && step >= 2) ||
+              (id === "charlie" && step >= 4);
             const label = id === "alice" ? "Alice" : id === "bob" ? "Bob" : id === "charlie" ? "Charlie" : "Dave";
             return (
               <div
@@ -193,17 +184,24 @@ export function PlaintextMessageTear() {
                 }}
               >
                 <div
-                  className="w-20 h-12 flex items-center justify-center border-[1.5px] transition-all duration-500 bg-card"
+                  className="w-20 h-12 flex items-center justify-center border-[1.5px] transition-all duration-500 bg-card relative"
                   style={{
                     background: isActive ? "#b8860b" : "#fffdf5",
                     color: isActive ? "#fffdf5" : "#0f172a",
                     borderColor: isActive ? "#b8860b" : "#0f172a",
-                    opacity: past && !isActive ? 0.4 : 1,
                   }}
                 >
                   <span className="text-sm font-bold tracking-[0.05em] uppercase">
                     {label}
                   </span>
+                  {seen && !isActive && (
+                    <span
+                      className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-[#5a7a2f] text-white text-[10px] font-bold flex items-center justify-center border-[1.5px] border-[#fffdf5]"
+                      title="Already saw the entire payload"
+                    >
+                      ✓
+                    </span>
+                  )}
                 </div>
               </div>
             );
@@ -231,29 +229,45 @@ export function PlaintextMessageTear() {
             </span>
           </div>
 
-          {/* Slice stack */}
+          {/* Slice stack — every slice stays fully visible. The point is that
+              every hop along the way SEES every slice, not that data gets
+              deleted. We mark slices that previous hops have already read with
+              a green checkmark so it reads as "this hop has now seen this
+              data" rather than "this data was destroyed". */}
           <div className="bg-[#fffdf5] border-[1.5px] border-t-0 border-black p-2 space-y-1.5">
             {SLICES.map((s) => {
-              const isTorn = tornAt(step, s.forHop);
               const isActive = highlightedAt(step, s.forHop);
+              const seenBy: Array<"bob" | "charlie" | "dave"> = [];
+              if (s.forHop === "bob") {
+                if (step >= 1) seenBy.push("bob");
+                if (step >= 3) seenBy.push("charlie");
+                if (step >= 5) seenBy.push("dave");
+              } else if (s.forHop === "charlie") {
+                if (step >= 1) seenBy.push("bob");
+                if (step >= 3) seenBy.push("charlie");
+                if (step >= 5) seenBy.push("dave");
+              } else {
+                if (step >= 1) seenBy.push("bob");
+                if (step >= 3) seenBy.push("charlie");
+                if (step >= 5) seenBy.push("dave");
+              }
               return (
                 <div
                   key={s.forHop}
-                  className="border-[1.5px] px-2 py-1.5 transition-all duration-500"
+                  className="border-[1.5px] px-2 py-1.5 transition-all duration-500 relative"
                   style={{
                     borderColor: isActive ? "#b8860b" : "#475569",
-                    background: isTorn
-                      ? "transparent"
-                      : isActive
-                      ? "#fef3c7"
-                      : "#fffdf5",
-                    opacity: isTorn ? 0.15 : 1,
+                    background: isActive ? "#fef3c7" : "#fffdf5",
                     fontFamily: '"JetBrains Mono", "Fira Code", monospace',
-                    transform: isTorn ? "translateX(-12px) scale(0.95)" : "translateX(0) scale(1)",
                   }}
                 >
-                  <div className="text-[9px] uppercase tracking-wider opacity-60 mb-0.5">
-                    slice for {s.forHop}
+                  <div className="text-[9px] uppercase tracking-wider opacity-60 mb-0.5 flex items-center gap-1.5">
+                    <span>slice for {s.forHop}</span>
+                    {seenBy.length > 0 && (
+                      <span className="ml-auto inline-flex items-center gap-1 text-[#5a7a2f] normal-case tracking-normal">
+                        ✓ seen by {seenBy.join(", ")}
+                      </span>
+                    )}
                   </div>
                   <div className="text-[10px] leading-tight space-y-0.5">
                     {s.fields.map((f) => (
