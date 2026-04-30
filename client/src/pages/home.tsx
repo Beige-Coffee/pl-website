@@ -2,6 +2,7 @@ import { Link, useLocation } from "wouter";
 import { useState, useMemo } from "react";
 import lightningBolt from "@/assets/lightning-bolt.png";
 import xkLogo from "/xk-logo.png";
+import OnionIcon from "@/components/OnionIcon";
 import LoginModal from "../components/LoginModal";
 import ProfileDropdown from "../components/ProfileDropdown";
 import { useAuth } from "../hooks/use-auth";
@@ -516,9 +517,7 @@ export default function Home() {
               <div className="bg-card border-4 border-border p-4 pixel-shadow flex-1 min-w-0">
                 <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
                   <div className="flex items-start md:items-center gap-3 md:gap-4 flex-1 min-w-0">
-                    <div className="w-14 h-14 md:w-28 md:h-28 shrink-0 flex items-center justify-center text-4xl md:text-6xl">
-                      🧅
-                    </div>
+                    <OnionIcon className="w-14 h-14 md:w-28 md:h-28 shrink-0 drop-shadow-[2px_2px_0px_rgba(0,0,0,0.6)]" />
                     <div className="flex-1 min-w-0">
                       <h2 className="text-base md:text-xl font-pixel leading-relaxed">
                         Onion Routing & Lightning Payments
