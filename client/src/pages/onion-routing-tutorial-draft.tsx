@@ -1298,7 +1298,7 @@ function OnionRoutingDraftTutorialShell({ activeId }: { activeId: string }) {
                   {items.length > 0 ? (
                     <nav className="grid gap-1">
                       {items.map((c) => {
-                        const href = c.id === "intro" ? "/onion-routing-tutorial-draft" : `/onion-routing-tutorial/${c.id}`;
+                        const href = c.id === "intro" ? "/onion-routing-tutorial-draft" : `/onion-routing-tutorial-draft/${c.id}`;
                         const isActive = c.id === activeId;
                         const isComplete = chapterCompletion[c.id] === "complete";
                         const showIcon = c.id !== "pay-it-forward";
@@ -1367,7 +1367,7 @@ function OnionRoutingDraftTutorialShell({ activeId }: { activeId: string }) {
             <div className={`mt-10 pt-6 border-t ${theme === "dark" ? "border-[#1f2a44]" : "border-border"} flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3`}>
               {prev ? (
                 <Link
-                  href={prev.id === "intro" ? "/onion-routing-tutorial-draft" : `/onion-routing-tutorial/${prev.id}`}
+                  href={prev.id === "intro" ? "/onion-routing-tutorial-draft" : `/onion-routing-tutorial-draft/${prev.id}`}
                   className={`inline-flex items-center gap-2 border-2 px-3 py-2 md:px-4 transition-colors w-full md:w-auto ${t.navPrev}`}
                   data-testid="link-prev"
                 >
@@ -1380,7 +1380,7 @@ function OnionRoutingDraftTutorialShell({ activeId }: { activeId: string }) {
 
               {next ? (
                 <Link
-                  href={next.id === "intro" ? "/onion-routing-tutorial-draft" : `/onion-routing-tutorial/${next.id}`}
+                  href={next.id === "intro" ? "/onion-routing-tutorial-draft" : `/onion-routing-tutorial-draft/${next.id}`}
                   className={`inline-flex items-center gap-2 border-2 px-3 py-2 md:px-4 transition-all w-full md:w-auto ${t.navNext}`}
                   data-testid="link-next"
                 >
