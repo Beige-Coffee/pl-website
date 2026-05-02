@@ -3,20 +3,34 @@ import { useState, useEffect, useRef } from "react";
 // ────────────────────────────────────────────────────────────────────────────
 // PlaintextMessageTear (DRAFT)
 //
-// Animated naive-routing visualization. The update_add_htlc message rectangle
-// physically translates from Alice → Bob → Charlie → Dave; at each hop the
-// destination hop's slice highlights and is "consumed", and the message
-// shrinks before continuing.
+// Animated naive-routing visualization. The payment message rectangle
+// physically translates from Alice → Bob → Charlie → Dave. At each hop the
+// destination hop's slice highlights, is read, and then is *removed from the
+// payload* before the message moves on. This matches BOLT 4 Sphinx behavior:
+// a forwarding hop peels its own per-hop payload off and only the rest gets
+// passed on. The privacy leak in this naive design is that each hop sees every
+// downstream slice while it's still in the stack (Bob learns the whole route
+// from himself onward, including that Dave is the destination).
 //
 // Visual style follows the Noise capstone:
 //   - Black section-header bar with white pixel-letter-spaced uppercase title.
-//   - The packet header itself is BLACK with WHITE text ("UPDATE_ADD_HTLC").
+//   - The packet header itself is BLACK with WHITE text ("PAYMENT_INSTRUCTIONS").
 //   - Cream body (#fefdfb), dark borders, gold (#b8860b) accents on the
 //     active slice and active node.
 //   - Body sans-serif; protocol values in JetBrains Mono.
 // ────────────────────────────────────────────────────────────────────────────
 
 type HopId = "alice" | "bob" | "charlie" | "dave";
+
+// Canonical hop palette — must stay aligned with HtlcPropagationDiagram and
+// ForwarderPolicyMap so the same characters carry the same colors across the
+// course.
+const HOP_COLORS: Record<HopId, { stroke: string; fill: string }> = {
+  alice:   { stroke: "#b8860b", fill: "#fef3c7" },
+  bob:     { stroke: "#3b6aa0", fill: "#dbeafe" },
+  charlie: { stroke: "#2d7a7a", fill: "#ccece8" },
+  dave:    { stroke: "#7b4b8a", fill: "#ede1f3" },
+};
 
 interface Slice {
   forHop: "bob" | "charlie" | "dave";
@@ -51,21 +65,21 @@ const SLICES: Slice[] = [
 ];
 
 // Step semantics (auto-advancing animation):
-// 0: message at Alice, full payload visible
-// 1: message arrives at Bob, Bob's slice highlights
-// 2: Bob's slice consumed (faded out)
+// 0: message at Alice, full stack visible (slices for Bob, Charlie, Dave)
+// 1: message arrives at Bob, Bob's slice highlights (Bob is reading it)
+// 2: Bob peels his slice off; only Charlie+Dave slices remain on the wire
 // 3: message arrives at Charlie, Charlie's slice highlights
-// 4: Charlie's slice consumed
-// 5: message arrives at Dave, Dave's slice highlights
+// 4: Charlie peels his slice off; only Dave's slice remains
+// 5: message arrives at Dave, Dave's slice highlights (final hop reads it)
 const TOTAL_STEPS = 6;
 
 const STEP_CAPTIONS: Record<number, string> = {
-  0: "Alice's update_add_htlc carries every hop's instructions in plaintext, in order. She's about to hand it to Bob.",
-  1: "The message arrives at Bob. He reads his slice off the front: forward 10,002 sat to Charlie, outgoing CLTV block 220. But notice he can read every other slice too — nothing's hidden.",
-  2: "Bob forwards the same message on to Charlie. The data Bob saw doesn't get unseen: he now knows the full route, every fee, and the final destination.",
-  3: "Charlie reads his slice: forward 10,000 sat to Dave, outgoing CLTV block 180. Like Bob, he also has full visibility into every other slice.",
-  4: "Charlie forwards to Dave. Charlie too has now seen the whole route, including the final amount and payment hash.",
-  5: "Dave reads the final slice and accepts the HTLC. Payment delivered — but every hop along the way saw the entire route in plaintext. That's the privacy issue we have to solve.",
+  0: "Alice's payment message carries a stack of per-hop slices in plaintext. She'll hand the whole stack to Bob, and each hop will peel off its own slice before forwarding the rest.",
+  1: "The message arrives at Bob. He reads the front slice: forward 10,002 sat to Charlie at CLTV 220. The slices for Charlie and Dave are still in plaintext beneath it, so Bob already learns the final amount, the payment hash, and that Dave is the destination.",
+  2: "Bob peels his slice off the stack and forwards only Charlie's and Dave's slices onward. The slice is gone from the wire, but Bob already saw every downstream field while it was passing through him.",
+  3: "Charlie reads his slice: forward 10,000 sat to Dave at CLTV 180. Like Bob, he can also see Dave's slice beneath, so the final amount and payment hash are visible to him too.",
+  4: "Charlie peels his slice off and forwards Dave's slice on alone. Each forwarder consumed its own slice before passing the rest along.",
+  5: "Dave reads the final slice and accepts the HTLC. Payment delivered. But every hop saw every downstream slice while it was passing through, so Bob learned the entire route. That's the privacy issue we have to solve.",
 };
 
 function activeHopAt(step: number): HopId {
@@ -82,14 +96,42 @@ function highlightedAt(step: number, hop: "bob" | "charlie" | "dave"): boolean {
   return false;
 }
 
+// In real BOLT 4 / Sphinx, a forwarder peels its own per-hop payload off the
+// onion before forwarding. We mirror that here: Bob's slice leaves the stack
+// after step 1, Charlie's after step 3. Dave's slice is the final payload.
+function isRemoved(forHop: "bob" | "charlie" | "dave", step: number): boolean {
+  if (forHop === "bob") return step >= 2;
+  if (forHop === "charlie") return step >= 4;
+  return false;
+}
+
+// Which hops have actually read this slice while it was on the wire.
+// A slice is read by every hop that processed the message while the slice was
+// still in the stack — i.e. up to and including the hop that peels it off.
+function seenByAt(forHop: "bob" | "charlie" | "dave", step: number): string[] {
+  const out: string[] = [];
+  if (forHop === "bob") {
+    if (step >= 1) out.push("bob");
+  } else if (forHop === "charlie") {
+    if (step >= 1) out.push("bob");
+    if (step >= 3) out.push("charlie");
+  } else {
+    if (step >= 1) out.push("bob");
+    if (step >= 3) out.push("charlie");
+    if (step >= 5) out.push("dave");
+  }
+  return out;
+}
+
 // Layout: the 4 nodes sit horizontally. The message anchors to the active hop.
 // Inset enough that the centered ~290px message doesn't overflow either edge
-// of the stage at the leftmost (Alice) or rightmost (Dave) positions.
+// of the stage at the leftmost (Alice) or rightmost (Dave) positions, with a
+// little extra buffer so the message doesn't sit flush against the stage edge.
 const NODE_X_PCT: Record<HopId, number> = {
-  alice: 17,
-  bob: 39,
-  charlie: 61,
-  dave: 83,
+  alice: 20,
+  bob: 40,
+  charlie: 60,
+  dave: 80,
 };
 
 export function PlaintextMessageTear() {
@@ -134,20 +176,19 @@ export function PlaintextMessageTear() {
         <div className="flex items-center gap-2">
           <div className="w-1.5 h-1.5 rounded-full bg-[#b8860b]" />
           <span className="text-sm font-bold tracking-[0.08em] uppercase">
-            A naive update_add_htlc
+            A naive payment message
           </span>
         </div>
-        <span className="text-xs italic opacity-70 hidden sm:inline">watch what each hop sees</span>
       </div>
 
       {/* Stage */}
-      <div className="relative bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-6" style={{ minHeight: 420 }}>
+      <div className="relative bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-6" style={{ minHeight: 440 }}>
         {/* Hop track */}
-        <div className="relative" style={{ height: 60 }}>
-          {/* Backbone dashes — HTML divs so we can stop them at the badge edges
-              with calc(). The badges are 80px wide and centered, so each
-              segment starts at one badge's right edge (40px past its center)
-              and ends at the next badge's left edge (40px before its center). */}
+        <div className="relative" style={{ height: 88 }}>
+          {/* Backbone dashes — HTML divs aligned to the vertical center of the
+              circular nodes (which are 60px tall, so center sits at y=30). The
+              segments start/end 30px out from each node's center to clear the
+              circle's radius, plus a small visual buffer. */}
           {[0, 1, 2].map((i) => {
             const startPct = NODE_X_PCT[(["alice", "bob", "charlie"] as HopId[])[i]];
             const endPct = NODE_X_PCT[(["bob", "charlie", "dave"] as HopId[])[i]];
@@ -156,16 +197,17 @@ export function PlaintextMessageTear() {
                 key={i}
                 className="absolute pointer-events-none"
                 style={{
-                  top: 23,
-                  left: `calc(${startPct}% + 40px)`,
-                  width: `calc(${endPct - startPct}% - 80px)`,
+                  top: 29,
+                  left: `calc(${startPct}% + 32px)`,
+                  width: `calc(${endPct - startPct}% - 64px)`,
                   borderTop: "1.5px dashed #475569",
                 }}
               />
             );
           })}
 
-          {/* Badges absolutely positioned at NODE_X_PCT centers */}
+          {/* Circular hop nodes — match the canonical hop palette used in
+              HtlcPropagationDiagram and ForwarderPolicyMap. */}
           {(["alice", "bob", "charlie", "dave"] as HopId[]).map((id) => {
             const isActive = active === id;
             const seen =
@@ -173,10 +215,11 @@ export function PlaintextMessageTear() {
               (id === "bob" && step >= 2) ||
               (id === "charlie" && step >= 4);
             const label = id === "alice" ? "Alice" : id === "bob" ? "Bob" : id === "charlie" ? "Charlie" : "Dave";
+            const hop = HOP_COLORS[id];
             return (
               <div
                 key={id}
-                className="absolute z-10"
+                className="absolute z-10 flex flex-col items-center"
                 style={{
                   top: 0,
                   left: `${NODE_X_PCT[id]}%`,
@@ -184,24 +227,41 @@ export function PlaintextMessageTear() {
                 }}
               >
                 <div
-                  className="w-20 h-12 flex items-center justify-center border-[1.5px] transition-all duration-500 bg-card relative"
+                  className="rounded-full flex items-center justify-center transition-all duration-500 relative"
                   style={{
-                    background: isActive ? "#b8860b" : "#fffdf5",
-                    color: isActive ? "#fffdf5" : "#0f172a",
-                    borderColor: isActive ? "#b8860b" : "#0f172a",
+                    width: 60,
+                    height: 60,
+                    background: hop.fill,
+                    color: "#0f172a",
+                    border: `${isActive ? 3 : 2}px solid ${hop.stroke}`,
+                    boxShadow: isActive
+                      ? `0 0 0 4px rgba(184,134,11,0.30)`
+                      : undefined,
                   }}
                 >
-                  <span className="text-sm font-bold tracking-[0.05em] uppercase">
-                    {label}
+                  <span
+                    className="font-bold"
+                    style={{
+                      fontSize: 22,
+                      fontFamily: "ui-sans-serif, system-ui, sans-serif",
+                    }}
+                  >
+                    {label.charAt(0)}
                   </span>
                   {seen && !isActive && (
                     <span
-                      className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-[#5a7a2f] text-white text-[10px] font-bold flex items-center justify-center border-[1.5px] border-[#fffdf5]"
+                      className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-[#5a7a2f] text-white text-[10px] font-bold flex items-center justify-center border-[1.5px] border-[#fffdf5]"
                       title="Already saw the entire payload"
                     >
                       ✓
                     </span>
                   )}
+                </div>
+                <div
+                  className="mt-1 text-[11px] font-semibold tracking-[0.05em]"
+                  style={{ color: "#0f172a" }}
+                >
+                  {label}
                 </div>
               </div>
             );
@@ -212,53 +272,63 @@ export function PlaintextMessageTear() {
         <div
           className="absolute"
           style={{
-            top: 84,
+            top: 112,
             left: `calc(${messageLeftPct}% - 145px)`,
             width: 290,
             transition: "left 1.2s cubic-bezier(0.4, 0.0, 0.2, 1)",
           }}
         >
-          {/* Black header strip (UPDATE_ADD_HTLC) */}
+          {/* Black header strip (PAYMENT_INSTRUCTIONS) */}
           <div
             className="bg-black text-white px-3 py-1.5 border-[1.5px] border-black flex items-center gap-2"
             style={{ fontFamily: '"JetBrains Mono", "Fira Code", monospace' }}
           >
             <div className="w-1.5 h-1.5 bg-[#b8860b]" />
             <span className="text-[10px] font-bold tracking-[0.1em] uppercase">
-              UPDATE_ADD_HTLC
+              PAYMENT_INSTRUCTIONS
             </span>
           </div>
 
-          {/* Slice stack — every slice stays fully visible. The point is that
-              every hop along the way SEES every slice, not that data gets
-              deleted. We mark slices that previous hops have already read with
-              a green checkmark so it reads as "this hop has now seen this
-              data" rather than "this data was destroyed". */}
-          <div className="bg-[#fffdf5] border-[1.5px] border-t-0 border-black p-2 space-y-1.5">
+          {/* Envelope body. We don't introduce the onion_routing_packet
+              sub-field here yet — that's a Sphinx concept and we haven't
+              motivated it. payment_hash sits at the envelope level (BOLT 2)
+              and stays the same across hops, so it doubles as a small
+              reminder that there's a real envelope around the slice stack. */}
+          <div
+            className="bg-[#fffdf5] border-[1.5px] border-t-0 border-black p-2"
+            style={{ fontFamily: '"JetBrains Mono", "Fira Code", monospace' }}
+          >
+            {/* Envelope-level field (constant across all hops). */}
+            <div className="text-[10px] leading-tight px-1 mb-2">
+              <span className="opacity-60">payment_hash:</span>{" "}
+              <span className="font-bold">0xa3f1...e9c4</span>
+            </div>
+
+            {/* Slice stack. Each forwarder peels its own slice off before
+                forwarding (matches BOLT 4 Sphinx behavior). The privacy leak
+                this visual is making honest is that every hop still sees every
+                *downstream* slice while the message is passing through. */}
+            <div className="space-y-1.5">
             {SLICES.map((s) => {
               const isActive = highlightedAt(step, s.forHop);
-              const seenBy: Array<"bob" | "charlie" | "dave"> = [];
-              if (s.forHop === "bob") {
-                if (step >= 1) seenBy.push("bob");
-                if (step >= 3) seenBy.push("charlie");
-                if (step >= 5) seenBy.push("dave");
-              } else if (s.forHop === "charlie") {
-                if (step >= 1) seenBy.push("bob");
-                if (step >= 3) seenBy.push("charlie");
-                if (step >= 5) seenBy.push("dave");
-              } else {
-                if (step >= 1) seenBy.push("bob");
-                if (step >= 3) seenBy.push("charlie");
-                if (step >= 5) seenBy.push("dave");
-              }
+              const removed = isRemoved(s.forHop, step);
+              const seenBy = seenByAt(s.forHop, step);
               return (
                 <div
                   key={s.forHop}
-                  className="border-[1.5px] px-2 py-1.5 transition-all duration-500 relative"
+                  className="border-[1.5px] px-2 py-1.5 relative overflow-hidden"
                   style={{
                     borderColor: isActive ? "#b8860b" : "#475569",
                     background: isActive ? "#fef3c7" : "#fffdf5",
                     fontFamily: '"JetBrains Mono", "Fira Code", monospace',
+                    transition: "max-height 700ms ease-in-out, opacity 700ms ease-in-out, padding 700ms ease-in-out, border-width 700ms ease-in-out, margin 700ms ease-in-out",
+                    maxHeight: removed ? 0 : 240,
+                    opacity: removed ? 0 : 1,
+                    paddingTop: removed ? 0 : undefined,
+                    paddingBottom: removed ? 0 : undefined,
+                    marginTop: removed ? 0 : undefined,
+                    marginBottom: removed ? 0 : undefined,
+                    borderWidth: removed ? 0 : undefined,
                   }}
                 >
                   <div className="text-[9px] uppercase tracking-wider opacity-60 mb-0.5 flex items-center gap-1.5">
@@ -280,6 +350,7 @@ export function PlaintextMessageTear() {
                 </div>
               );
             })}
+            </div>
           </div>
         </div>
       </div>

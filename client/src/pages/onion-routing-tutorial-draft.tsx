@@ -17,8 +17,6 @@ import { useIsMobile } from "../hooks/use-mobile";
 import { ONION_ROUTING_EXERCISES_DRAFT as ONION_ROUTING_EXERCISES } from "../data/onion-routing-exercises-draft";
 import { getOnionRoutingDraftExerciseGroupContext as getOnionRoutingExerciseGroupContext } from "../lib/onion-routing-exercise-groups-draft";
 import { NetworkTopologyDiagram } from "../components/onion-routing-draft/NetworkTopologyDiagram";
-import { BackwardCalcDiagram } from "../components/onion-routing-draft/BackwardCalcDiagram";
-import { TlvByteBreakdown, type TlvField } from "../components/onion-routing-draft/TlvByteBreakdown";
 import { NaiveVsOnionDiagram } from "../components/onion-routing-draft/NaiveVsOnionDiagram";
 import { EcdhChainDiagram } from "../components/onion-routing-draft/EcdhChainDiagram";
 import { KdfPipelineDiagram } from "../components/onion-routing-draft/KdfPipelineDiagram";
@@ -33,6 +31,18 @@ import { ErrorUnwrapDiagram } from "../components/onion-routing-draft/ErrorUnwra
 import { OnionCapstonePanel } from "../components/onion-routing-draft/OnionCapstonePanel";
 import { LightningNetworkDiagram } from "../components/onion-routing-draft/LightningNetworkDiagram";
 import { PlaintextMessageTear } from "../components/onion-routing-draft/PlaintextMessageTear";
+import { EncryptedSliceReveal } from "../components/onion-routing-draft/EncryptedSliceReveal";
+import { KnowledgeMatrix } from "../components/onion-routing-draft/KnowledgeMatrix";
+import { HtlcPropagationDiagram } from "../components/onion-routing-draft/HtlcPropagationDiagram";
+import { EcdhRecapDiagram } from "../components/onion-routing-draft/EcdhRecapDiagram";
+import { BlindingFactorDiagram } from "../components/onion-routing-draft/BlindingFactorDiagram";
+import { SharedSecretSymmetryDiagram } from "../components/onion-routing-draft/SharedSecretSymmetryDiagram";
+import { HmacRecapDiagram } from "../components/onion-routing-draft/HmacRecapDiagram";
+import { FiveKeysJobsDiagram } from "../components/onion-routing-draft/FiveKeysJobsDiagram";
+import { PerHopKeyMatrixDiagram } from "../components/onion-routing-draft/PerHopKeyMatrixDiagram";
+import { RouteComparisonDiagram } from "../components/onion-routing-draft/RouteComparisonDiagram";
+import { CltvSafetyLab } from "../components/onion-routing-draft/CltvSafetyLab";
+import { ForwarderPolicyMap } from "../components/onion-routing-draft/ForwarderPolicyMap";
 
 // Whitelist of custom course tag names that should never be wrapped in <p>.
 // CommonMark wraps custom HTML element names (which are not in the block-level
@@ -45,8 +55,7 @@ const CUSTOM_BLOCK_TAGS = new Set([
   "checkpoint",
   "checkpoint-group",
   "network-topology",
-  "backward-calc",
-  "tlv-breakdown",
+  "route-comparison",
   "naive-vs-onion",
   "ecdh-chain",
   "kdf-pipeline",
@@ -61,6 +70,17 @@ const CUSTOM_BLOCK_TAGS = new Set([
   "onion-capstone",
   "lightning-network",
   "message-tear",
+  "encrypted-slice-reveal",
+  "htlc-propagation",
+  "ecdh-recap",
+  "blinding-factor",
+  "shared-secret-symmetry",
+  "hmac-recap",
+  "five-keys-jobs",
+  "per-hop-key-matrix",
+  "cltv-safety-lab",
+  "forwarder-policy-map",
+  "knowledge-matrix",
 ]);
 
 function rehypeUnwrapCustomBlockTags() {
@@ -85,45 +105,12 @@ function rehypeUnwrapCustomBlockTags() {
   };
 }
 
-// --- Pre-defined TLV byte breakdowns referenced from markdown ---
-// Markdown embeds: <tlv-breakdown payload="bob-hop-payload"></tlv-breakdown>
-const TLV_BREAKDOWN_PAYLOADS: Record<string, { caption: string; fields: TlvField[] }> = {
-  "bob-hop-payload": {
-    caption: "Bob's hop payload (18 bytes)",
-    fields: [
-      { label: "type 2", color: "amber", hex: "02", description: "TLV type 2 = amt_to_forward." },
-      { label: "length", color: "amber", hex: "03", description: "Value is 3 bytes long." },
-      { label: "value: 10,002,000 msat", color: "amber", hex: "98 9a 90", description: "The amount Bob should forward to Carol, encoded as a truncated big-endian integer." },
-      { label: "type 4", color: "blue", hex: "04", description: "TLV type 4 = outgoing_cltv_value." },
-      { label: "length", color: "blue", hex: "01", description: "Value is 1 byte long." },
-      { label: "value: 180", color: "blue", hex: "b4", description: "The CLTV value Bob should set on the outgoing HTLC to Carol." },
-      { label: "type 6", color: "green", hex: "06", description: "TLV type 6 = short_channel_id. Present only on intermediate hops." },
-      { label: "length", color: "green", hex: "08", description: "Value is 8 bytes long." },
-      { label: "value: 0x0000000123456789", color: "green", hex: "00 00 00 01 23 45 67 89", description: "The channel Bob uses to reach Carol." },
-    ],
-  },
-  "dave-hop-payload": {
-    caption: "Dave's hop payload (no short_channel_id)",
-    fields: [
-      { label: "type 2", color: "amber", hex: "02", description: "TLV type 2 = amt_to_forward (the final amount Dave receives)." },
-      { label: "length", color: "amber", hex: "03", description: "Value is 3 bytes long." },
-      { label: "value: 10,000,000 msat", color: "amber", hex: "98 96 80", description: "10,000 sats encoded in millisats." },
-      { label: "type 4", color: "blue", hex: "04", description: "TLV type 4 = outgoing_cltv_value (the final CLTV)." },
-      { label: "length", color: "blue", hex: "01", description: "Value is 1 byte long." },
-      { label: "value: 140", color: "blue", hex: "8c", description: "The final CLTV. Dave's HTLC must be valid until at least block 140." },
-      { label: "type 8", color: "rose", hex: "08", description: "TLV type 8 = payment_data. Present only on the final hop." },
-      { label: "length", color: "rose", hex: "28", description: "Value is 40 bytes long: 32-byte payment_secret + 8-byte total_msat." },
-      { label: "value: payment_secret + total_msat", color: "rose", hex: "00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 98 96 80", description: "The 32-byte secret from the invoice (zeros here for illustration) plus the total_msat (8 bytes, big-endian)." },
-    ],
-  },
-};
-
 // --- Checkpoint questions embedded inline in tutorial chapters ---
 // Each chapter that has checkpoints adds entries here as it's built.
 export const CHECKPOINT_QUESTIONS: Record<string, {
   question: string;
   options: string[];
-  answer: number;
+  answer: number | number[];
   explanation: string;
 }> = {
   // ── Chapter 10: The Error Onion ──────────────────────────────────────────
@@ -244,7 +231,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
     answer: 1,
     explanation: "The whole point of the blinding chain is that each forwarder can advance it on its own using only information available to it. b₀ depends on two values: E₀ (the ephemeral public key in the inbound packet, public to Bob) and ss₀ (the shared secret Bob just derived from bob_privkey · E₀). Both are knowable by Bob without ever seeing Alice's session_key. Alice independently computes the same b₀ using session_key · bob_pubkey to get the same ss₀, then hashing with the same E₀. The two parties reach the same b₀ from completely different starting information, which is exactly what makes the chain work without any out-of-band coordination.",
   },
-  // ── Chapter 2: Anatomy of a Route ────────────────────────────────────────
+  // ── Chapter 2: Pathfinding 101 ───────────────────────────────────────────
   "cp-fees-backward-draft": {
     question: "In our worked example, Carol's incoming amount is 10,002 sats and Bob's incoming amount is 10,003 sats. Why must Alice work backward from Dave's amount when she computes each hop's input?",
     options: [
@@ -255,6 +242,28 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
     ],
     answer: 1,
     explanation: "Bob's required incoming amount = his outgoing amount + his fee. His outgoing amount is whatever Carol receives. Carol's incoming amount = her outgoing amount + her fee. Her outgoing amount is whatever Dave receives. So the chain depends on Dave's amount being known first, then propagating backward. If Alice tried to start from her own number (say, 'I have 10,003 sats to spend'), she'd have no way to determine how much each hop should keep as a fee without already knowing the downstream amounts. The same applies to CLTVs: each hop's incoming CLTV must outlast its outgoing one by the hop's CLTV delta, and the only fixed CLTV is the one Dave specifies in his invoice.",
+  },
+  "cp-channel-update-direction-draft": {
+    question: "A single payment channel between two nodes can have up to two `channel_update`s on the gossip network. Why?",
+    options: [
+      "Both sides cosign one shared `channel_update` at channel open, then re-sign it together whenever policy changes, producing two versions over the channel's lifetime.",
+      "Each direction of the channel has its own forwarding policy, and each side publishes the `channel_update` for the direction it owns.",
+      "One advertises the channel's existence, the other advertises its capacity. Both are required for the channel to be valid on the gossip network.",
+      "The protocol mandates a redundant second update so peers can verify the channel is online, and each node publishes one to confirm its presence.",
+    ],
+    answer: 1,
+    explanation: "Forwarding policies are direction-specific. The Alice to Bob direction can charge different fees and require a different `cltv_expiry_delta` than the Bob to Alice direction, so each direction needs its own `channel_update`. Each side publishes the `channel_update` for their own outgoing direction: Alice publishes the Alice to Bob policy if she forwards that way, and Bob publishes the Bob to Alice policy if he forwards that way. Either side can update its own policy at any time by broadcasting a fresh `channel_update` with a newer timestamp, and the latest timestamp wins. If a node never forwards in a particular direction (for example, a pure receiver like Dave), no `channel_update` for that direction gets published, which is why hovering a receiver on the forwarder graph above shows no outgoing `channel_update`s.",
+  },
+  "cp-cheapest-route-draft": {
+    question: "You've now computed all three routes. Alice wants the lowest fee, but her wallet enforces `max_total_cltv_expiry_delta = 200`. Which route should she send through?",
+    options: [
+      "Route A: direct via Hazel (1,300 sats fee). It's the cheapest on fees, and a single forwarder is the simplest path.",
+      "Route B: through Frank and Greg (2,002 sats fee). The most expensive route, but well within the CLTV ceiling.",
+      "Route C: through Bob and Charlie (1,226 sats fee). The cheapest route that also fits under the CLTV ceiling.",
+      "Either Route B or Route C. Once Route A is filtered out, picking between the survivors is a judgment call.",
+    ],
+    answer: 2,
+    explanation: "The right move is **filter, then minimize**. Route A looks tempting at 1,300 sats, but Hazel's `cltv_expiry_delta = 1000` pushes the total accumulated CLTV to 1,018 blocks, which blows past Alice's 200-block ceiling, so her wallet refuses to lock her funds for that long. Route A drops out before fees are even compared. Among the survivors, Route B totals 60 blocks of CLTV at 2,002 sats, and Route C totals 53 blocks of CLTV at 1,226 sats. Route C is both cheaper *and* lower CLTV, so it wins on every axis that matters. This filter-then-optimize pattern is what real Lightning pathfinders do: they apply hard constraints (CLTV ceiling, HTLC min/max amounts, channel capacity) up front, then minimize a cost function over what's left. Route C is also the same path Alice picked back in chapter 1: Alice → Bob → Charlie → Dave.",
   },
   "cp-intermediate-vs-final-draft": {
     question: "Dave receives a hop payload that's missing one specific TLV field that Bob and Carol's payloads contain. Which field, and what does its absence tell Dave?",
@@ -280,6 +289,17 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
     explanation: "This is the privacy issue with the naive plaintext design. Because every hop's instructions are sitting in the message in the clear, Bob (and anyone watching the wire between Alice and Bob) can read the entire route end-to-end. Bob now knows Alice initiated the payment, Dave is the final recipient, exactly how much each hop forwards, and even the payment hash. We want a design where Bob learns ONLY what he needs to do his job (next hop is Charlie, forward this amount with this CLTV) and nothing more. That's what the rest of the course builds.",
   },
   // ── Chapter 1: The Privacy Problem ───────────────────────────────────────
+  "cp-still-vulnerable-draft": {
+    question: "Per-hop encryption hides the contents of each slice, but the message still leaks privacy in more than one way. Select all that apply.",
+    options: [
+      "The encrypted slices look identical from the outside, so Bob can't tell which slice is his to decrypt.",
+      "The packet shrinks at each hop as forwarders peel their slices off, so anyone watching can count the slices in the message at each step and figure out which hop is at which position in the route.",
+      "Each slice has to be encrypted to a known forwarder's published node-identity public key. Anyone watching can correlate the public keys Alice used against the gossip graph and identify every forwarder in the route.",
+      "Public-key encryption is too computationally expensive for low-power wallets to perform per-hop, so the design doesn't scale.",
+    ],
+    answer: [1, 2],
+    explanation: "Two real privacy problems remain even with per-hop encryption. **First, the packet shrinks.** Each forwarder peels its own slice off the wire before forwarding the rest, so the message gets smaller at each hop. If Bob receives a 3-slice message, he immediately knows there are at least two hops downstream of him; when Charlie sees a 2-slice message, he knows he's the second-to-last forwarder. Size alone reveals each forwarder's position, which directly violates the property 'Bob shouldn't be able to tell whether he's the first hop, the last forwarder, or somewhere in between.' Sphinx fixes this with a **fixed-size packet** that doesn't shrink. **Second, every forwarder's identity is exposed by the keys themselves.** To encrypt a slice for Bob, Alice has to look up Bob's node-identity public key on the gossip network. The very act of using Bob's public key in the packet (or any tag that lets Bob find his slice) signals 'Bob is in this route' to anyone watching. Sphinx fixes this with **shared-secret derivation via ephemeral keys** so Alice never directly references each hop's static identity key. The two distractors are wrong: identical-looking ciphertext is a feature of encryption, not a bug, and public-key crypto cost isn't the central problem here.",
+  },
   "cp-privacy-property-draft": {
     question: "Bob is forwarding a Lightning payment from Alice → Bob → Carol → Dave. Which of the following does Bob learn as part of forwarding the payment?",
     options: [
@@ -297,7 +317,6 @@ type Chapter = {
   id: string;
   title: string;
   section:
-    | "Introduction"
     | "Foundations"
     | "Cryptography"
     | "Building the Packet"
@@ -312,39 +331,39 @@ type Chapter = {
 
 export const chapters: Chapter[] = [
   {
-    id: "intro",
-    title: "Onion Routing & Lightning Payments",
-    section: "Introduction",
+    id: "a-lightning-payment",
+    title: "Lightning Payments Overview",
+    section: "Foundations",
     kind: "md",
-    file: "/onion_routing_tutorial_draft/0.0-intro.md",
+    file: "/onion_routing_tutorial_draft/1.0-a-lightning-payment.md",
+  },
+  {
+    id: "pathfinding-101",
+    title: "Pathfinding 101",
+    section: "Foundations",
+    kind: "md",
+    file: "/onion_routing_tutorial_draft/2.0-pathfinding-101.md",
   },
   {
     id: "privacy-problem",
     title: "The Privacy Problem",
     section: "Foundations",
     kind: "md",
-    file: "/onion_routing_tutorial_draft/1.0-privacy-problem.md",
-  },
-  {
-    id: "anatomy-of-a-route",
-    title: "Anatomy of a Route",
-    section: "Foundations",
-    kind: "md",
-    file: "/onion_routing_tutorial_draft/2.0-anatomy-of-a-route.md",
+    file: "/onion_routing_tutorial_draft/3.0-the-privacy-problem.md",
   },
   {
     id: "shared-secrets",
     title: "Shared Secrets per Hop",
     section: "Cryptography",
     kind: "md",
-    file: "/onion_routing_tutorial_draft/3.0-shared-secrets.md",
+    file: "/onion_routing_tutorial_draft/4.0-shared-secrets.md",
   },
   {
     id: "key-derivation",
     title: "Key Derivation",
     section: "Cryptography",
     kind: "md",
-    file: "/onion_routing_tutorial_draft/4.0-key-derivation.md",
+    file: "/onion_routing_tutorial_draft/5.0-key-derivation.md",
   },
   {
     id: "fixed-size-packet",
@@ -419,7 +438,6 @@ export const chapters: Chapter[] = [
 ];
 
 export const sectionOrder: Chapter["section"][] = [
-  "Introduction",
   "Foundations",
   "Cryptography",
   "Building the Packet",
@@ -434,9 +452,9 @@ export const CHAPTER_REQUIREMENTS: Record<string, {
   checkpoints: string[];
   exercises: string[];
 }> = {
-  "intro": { checkpoints: ["cp-naive-plaintext-leak-draft"], exercises: [] },
-  "privacy-problem": { checkpoints: ["cp-privacy-property-draft"], exercises: [] },
-  "anatomy-of-a-route": { checkpoints: ["cp-fees-backward-draft", "cp-intermediate-vs-final-draft"], exercises: [] },
+  "a-lightning-payment": { checkpoints: [], exercises: [] },
+  "pathfinding-101": { checkpoints: ["cp-channel-update-direction-draft", "cp-cheapest-route-draft"], exercises: [] },
+  "privacy-problem": { checkpoints: ["cp-naive-plaintext-leak-draft", "cp-still-vulnerable-draft"], exercises: [] },
   "shared-secrets": { checkpoints: ["cp-blinding-public-draft"], exercises: ["exercise-derive-shared-secrets-draft"] },
   "key-derivation": { checkpoints: ["cp-key-domain-separation-draft"], exercises: ["exercise-derive-keys-draft"] },
   "fixed-size-packet": { checkpoints: ["cp-fixed-size-reason-draft"], exercises: [] },
@@ -681,11 +699,14 @@ function ChapterContent({
           "checkpoint-group": ({ id, ids }: any) => {
             const groupId = String(id || "");
             const questionIds = String(ids || "").split(",").map((s: string) => s.trim()).filter(Boolean);
+            // Filter out any multi-select questions — CheckpointGroup's
+            // grouped reward UI only supports single-answer questions today.
             const groupQuestions = questionIds
               .map((qid: string) => {
                 const cpData = CHECKPOINT_QUESTIONS[qid];
                 if (!cpData) return null;
-                return { id: qid, ...cpData };
+                if (Array.isArray(cpData.answer)) return null;
+                return { id: qid, ...cpData, answer: cpData.answer as number };
               })
               .filter(Boolean) as Array<{ id: string; question: string; options: string[]; answer: number; explanation: string }>;
             if (groupQuestions.length === 0) return null;
@@ -858,8 +879,8 @@ function ChapterContent({
           "network-topology": () => {
             return <NetworkTopologyDiagram />;
           },
-          "backward-calc": () => {
-            return <BackwardCalcDiagram />;
+          "route-comparison": () => {
+            return <RouteComparisonDiagram />;
           },
           "naive-vs-onion": () => {
             return <NaiveVsOnionDiagram />;
@@ -904,15 +925,38 @@ function ChapterContent({
           "message-tear": () => {
             return <PlaintextMessageTear />;
           },
-          "tlv-breakdown": ({ payload }: any) => {
-            const fields = TLV_BREAKDOWN_PAYLOADS[String(payload || "")];
-            if (!fields) return null;
-            return (
-              <TlvByteBreakdown
-                caption={fields.caption}
-                fields={fields.fields}
-              />
-            );
+          "encrypted-slice-reveal": () => {
+            return <EncryptedSliceReveal />;
+          },
+          "htlc-propagation": () => {
+            return <HtlcPropagationDiagram />;
+          },
+          "ecdh-recap": () => {
+            return <EcdhRecapDiagram />;
+          },
+          "blinding-factor": () => {
+            return <BlindingFactorDiagram />;
+          },
+          "shared-secret-symmetry": () => {
+            return <SharedSecretSymmetryDiagram />;
+          },
+          "hmac-recap": () => {
+            return <HmacRecapDiagram />;
+          },
+          "five-keys-jobs": () => {
+            return <FiveKeysJobsDiagram />;
+          },
+          "per-hop-key-matrix": () => {
+            return <PerHopKeyMatrixDiagram />;
+          },
+          "cltv-safety-lab": () => {
+            return <CltvSafetyLab />;
+          },
+          "forwarder-policy-map": () => {
+            return <ForwarderPolicyMap />;
+          },
+          "knowledge-matrix": () => {
+            return <KnowledgeMatrix />;
           },
           "code-outro": ({ text }: any) => {
             return <p className="mt-4 opacity-80">{text}</p>;

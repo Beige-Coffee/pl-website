@@ -18,6 +18,16 @@ export {
   type TlvField,
   type TlvByteBreakdownProps,
 } from "./TlvByteBreakdown";
+export { ChannelUpdateCard, type ChannelUpdateCardProps } from "./ChannelUpdateCard";
+export {
+  ComputedRouteDiagram,
+  type ComputedRouteDiagramProps,
+  type RouteHop,
+  type RouteChannelUpdate,
+  type RouteFeeCalculation,
+  type RouteTimeoutCalculation,
+  type RouteInvoice,
+} from "./ComputedRouteDiagram";
 export { NaiveVsOnionDiagram } from "./NaiveVsOnionDiagram";
 export { EcdhChainDiagram } from "./EcdhChainDiagram";
 export { KdfPipelineDiagram } from "./KdfPipelineDiagram";
@@ -32,3 +42,19 @@ export { ErrorUnwrapDiagram } from "./ErrorUnwrapDiagram";
 export { OnionCapstonePanel } from "./OnionCapstonePanel";
 export { LightningNetworkDiagram } from "./LightningNetworkDiagram";
 export { PlaintextMessageTear } from "./PlaintextMessageTear";
+export { EncryptedSliceReveal } from "./EncryptedSliceReveal";
+export { HtlcPropagationDiagram } from "./HtlcPropagationDiagram";
+export { EcdhRecapDiagram } from "./EcdhRecapDiagram";
+export { BlindingFactorDiagram } from "./BlindingFactorDiagram";
+export { SharedSecretSymmetryDiagram } from "./SharedSecretSymmetryDiagram";
+export { HmacRecapDiagram } from "./HmacRecapDiagram";
+export { FiveKeysJobsDiagram } from "./FiveKeysJobsDiagram";
+export { PerHopKeyMatrixDiagram } from "./PerHopKeyMatrixDiagram";
+export { RouteCalcExercise } from "./RouteCalcExercise";
+export {
+  FeeCalculatorModal,
+  type FeeCalculatorModalProps,
+} from "./FeeCalculatorModal";
+export { RouteComparisonDiagram } from "./RouteComparisonDiagram";
+export { CltvSafetyLab } from "./CltvSafetyLab";
+export { ForwarderPolicyMap } from "./ForwarderPolicyMap";

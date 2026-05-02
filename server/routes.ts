@@ -141,9 +141,27 @@ a:hover{opacity:0.9;}</style></head>
 <a href="/">BACK TO HOME</a></div></body></html>`;
 }
 
+// Validate an incoming checkpoint answer payload. Single-select submissions
+// arrive as a number; multi-select submissions as an array of numbers.
+function isValidAnswer(value: unknown): value is number | number[] {
+  if (typeof value === "number" && Number.isInteger(value)) return true;
+  if (Array.isArray(value) && value.every((v) => typeof v === "number" && Number.isInteger(v))) return true;
+  return false;
+}
+
+// Compare a user's submitted answer against the canonical answer. For
+// multi-select questions the order doesn't matter but the *set* of selected
+// indices must match exactly.
+function answersMatch(user: number | number[], correct: number | number[]): boolean {
+  const userArr = Array.isArray(user) ? [...user].sort((a, b) => a - b) : [user];
+  const correctArr = Array.isArray(correct) ? [...correct].sort((a, b) => a - b) : [correct];
+  if (userArr.length !== correctArr.length) return false;
+  return userArr.every((v, i) => v === correctArr[i]);
+}
+
 // Checkpoint questions — server-side answer key (index of correct option)
 // Exported for content integrity tests
-export const CHECKPOINT_ANSWER_KEY: Record<string, number> = {
+export const CHECKPOINT_ANSWER_KEY: Record<string, number | number[]> = {
   "pubkey-compression": 1,
   "hash-preimage": 2,
   "ecdh-security": 1,
@@ -191,9 +209,12 @@ export const CHECKPOINT_ANSWER_KEY: Record<string, number> = {
   "cp-naive-plaintext-leak-draft": 2,
   // Chapter 1: The Privacy Problem (draft)
   "cp-privacy-property-draft": 1,
+  "cp-still-vulnerable-draft": [1, 2],
   // Chapter 2: Anatomy of a Route (draft)
   "cp-fees-backward-draft": 1,
   "cp-intermediate-vs-final-draft": 2,
+  "cp-channel-update-direction-draft": 1,
+  "cp-cheapest-route-draft": 2,
   // Chapter 3: Shared Secrets per Hop (draft)
   "cp-blinding-public-draft": 1,
   "exercise-derive-shared-secrets-draft": 0,
@@ -802,7 +823,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { checkpointId, answer } = req.body;
-      if (!checkpointId || typeof checkpointId !== "string" || typeof answer !== "number") {
+      if (
+        !checkpointId ||
+        typeof checkpointId !== "string" ||
+        !isValidAnswer(answer)
+      ) {
         return res.status(400).json({ error: "Invalid request" });
       }
 
@@ -811,7 +836,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Unknown checkpoint" });
       }
 
-      if (answer !== correctAnswer) {
+      if (!answersMatch(answer, correctAnswer)) {
         return res.json({ correct: false });
       }
 
@@ -842,7 +867,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { checkpointId, answer, method } = req.body;
-      if (!checkpointId || typeof checkpointId !== "string" || typeof answer !== "number") {
+      if (
+        !checkpointId ||
+        typeof checkpointId !== "string" ||
+        !isValidAnswer(answer)
+      ) {
         return res.status(400).json({ error: "Invalid request" });
       }
 
@@ -851,7 +880,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Unknown checkpoint" });
       }
 
-      if (answer !== correctAnswer) {
+      if (!answersMatch(answer, correctAnswer)) {
         return res.status(400).json({ error: "Incorrect answer", correct: false });
       }
 

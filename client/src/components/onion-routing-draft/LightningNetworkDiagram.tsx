@@ -175,7 +175,6 @@ export function LightningNetworkDiagram() {
             Lightning Network — One Path Among Many
           </span>
         </div>
-        <span className="text-xs italic opacity-70 hidden sm:inline">drag to pan · use buttons to zoom</span>
       </div>
 
       {/* Viewport with overlay zoom controls */}
@@ -228,33 +227,73 @@ export function LightningNetworkDiagram() {
             />
           ))}
 
-          {/* Highlighted route */}
+          {/* Highlighted route — canonical hop palette so the cast renders
+              identically to ForwarderPolicyMap and the chapter 2 route
+              diagrams. Each node carries its own color (Alice gold, Bob
+              indigo, Charlie teal, Dave violet) and shows the first letter
+              centered with the full name below. */}
           {nodes
             .filter((n) => n.highlighted)
             .sort((a, b) => (a.highlightOrder ?? 0) - (b.highlightOrder ?? 0))
-            .map((n) => (
-              <g key={n.id}>
-                <circle
-                  cx={n.x}
-                  cy={n.y}
-                  r={28}
-                  fill="#fffdf5"
-                  stroke="#b8860b"
-                  strokeWidth={3}
-                />
-                <text x={n.x} y={n.y + 5} textAnchor="middle" fontSize={14} fontWeight={700} fill="#0f172a">
-                  {n.label}
-                </text>
-                {n.highlightOrder && (
-                  <g>
-                    <circle cx={n.x + 22} cy={n.y - 22} r={9} fill="#b8860b" />
-                    <text x={n.x + 22} y={n.y - 18} textAnchor="middle" fontSize={10} fontWeight={700} fill="#fffdf5">
-                      {n.highlightOrder}
-                    </text>
-                  </g>
-                )}
-              </g>
-            ))}
+            .map((n) => {
+              const palette =
+                n.id === "alice"
+                  ? { stroke: "#b8860b", fill: "#fef3c7" }
+                  : n.id === "bob"
+                    ? { stroke: "#3b6aa0", fill: "#dbeafe" }
+                    : n.id === "charlie"
+                      ? { stroke: "#2d7a7a", fill: "#ccece8" }
+                      : n.id === "dave"
+                        ? { stroke: "#7b4b8a", fill: "#ede1f3" }
+                        : { stroke: "#b8860b", fill: "#fef3c7" };
+              return (
+                <g key={n.id}>
+                  <circle
+                    cx={n.x}
+                    cy={n.y}
+                    r={32}
+                    fill={palette.fill}
+                    stroke={palette.stroke}
+                    strokeWidth={3}
+                  />
+                  <text
+                    x={n.x}
+                    y={n.y + 6}
+                    textAnchor="middle"
+                    fontSize={20}
+                    fontWeight={700}
+                    fill="#0f172a"
+                  >
+                    {(n.label ?? "")[0]}
+                  </text>
+                  <text
+                    x={n.x}
+                    y={n.y + 50}
+                    textAnchor="middle"
+                    fontSize={13}
+                    fontWeight={700}
+                    fill="#0f172a"
+                  >
+                    {n.label}
+                  </text>
+                  {n.highlightOrder && (
+                    <g>
+                      <circle cx={n.x + 26} cy={n.y - 26} r={10} fill="#b8860b" />
+                      <text
+                        x={n.x + 26}
+                        y={n.y - 22}
+                        textAnchor="middle"
+                        fontSize={11}
+                        fontWeight={700}
+                        fill="#fffdf5"
+                      >
+                        {n.highlightOrder}
+                      </text>
+                    </g>
+                  )}
+                </g>
+              );
+            })}
         </svg>
 
         {/* Zoom controls */}

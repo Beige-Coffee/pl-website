@@ -6,7 +6,8 @@ interface CheckpointQuestionProps {
   checkpointId: string;
   question: string;
   options: string[];
-  answer: number;
+  /** Single correct index, or array of indices for multi-select */
+  answer: number | number[];
   explanation: string;
   theme: "light" | "dark";
   authenticated: boolean;
@@ -66,13 +67,30 @@ export default function CheckpointQuestion({
   const userSuffix = sessionToken ? `-${sessionToken.slice(0, 8)}` : "";
   const storageKey = `pl-checkpoint-${checkpointId}${userSuffix}`;
 
-  const [selected, setSelected] = useState<number | null>(() => {
+  // For multi-select questions (when `answer` is an array) `selected` is an
+  // array of indices. For single-select it's a single number. `null` = unset.
+  const isMulti = Array.isArray(answer);
+  const [selected, setSelected] = useState<number | number[] | null>(() => {
     try {
       const saved = localStorage.getItem(storageKey);
-      if (saved !== null) return JSON.parse(saved);
+      if (saved !== null) {
+        const parsed = JSON.parse(saved);
+        if (isMulti) {
+          return Array.isArray(parsed) ? parsed : null;
+        }
+        return typeof parsed === "number" ? parsed : null;
+      }
     } catch {}
     return null;
   });
+
+  // Helpers shared by submit + render logic.
+  const setEqual = (a: number[], b: number[]) =>
+    a.length === b.length &&
+    a.every((v) => b.includes(v));
+  const isSelectionEmpty =
+    selected === null ||
+    (Array.isArray(selected) && selected.length === 0);
   const [submitted, setSubmitted] = useState(false);
   const [correct, setCorrect] = useState(false);
   const [wrongAttempt, setWrongAttempt] = useState(false);
@@ -129,14 +147,20 @@ export default function CheckpointQuestion({
   };
 
   const handleSubmit = useCallback(async () => {
-    if (selected === null) return;
+    if (isSelectionEmpty) return;
 
     if (!authenticated) {
       onLoginRequest();
       return;
     }
 
-    if (selected !== answer) {
+    const isCorrect = isMulti
+      ? Array.isArray(selected) &&
+        Array.isArray(answer) &&
+        setEqual(selected, answer)
+      : selected === answer;
+
+    if (!isCorrect) {
       setWrongAttempt(true);
       setShaking(true);
       setTimeout(() => setShaking(false), 500);
@@ -320,8 +344,18 @@ export default function CheckpointQuestion({
         </div>
         <div className={`text-[17px] md:text-[19px] font-semibold ${textColor} mb-3`}>{renderInlineCode(question, dark)}</div>
         <div className={`text-[15px] md:text-[17px] ${textMuted} leading-relaxed`}>
-          <span className={`font-semibold ${greenText}`}>Correct answer: </span>
-          {renderInlineCode(options[answer], dark)}
+          <span className={`font-semibold ${greenText}`}>
+            {Array.isArray(answer) ? "Correct answers: " : "Correct answer: "}
+          </span>
+          {Array.isArray(answer) ? (
+            <ul className="mt-1 list-disc pl-5 space-y-1">
+              {answer.map((idx) => (
+                <li key={idx}>{renderInlineCode(options[idx], dark)}</li>
+              ))}
+            </ul>
+          ) : (
+            renderInlineCode(options[answer], dark)
+          )}
         </div>
         {explanation && (
           <div className={`mt-3 pt-3 border-t ${dark ? "border-[#1f2a44]" : "border-border"}`}>
@@ -357,9 +391,14 @@ export default function CheckpointQuestion({
 
       <div className="space-y-2 mb-4">
         {options.map((opt, i) => {
-          const isSelected = selected === i;
-          const isWrongSelection = wrongAttempt && isSelected && i !== answer;
-          const isCorrectReveal = submitted && correct && i === answer;
+          const isSelected = isMulti
+            ? Array.isArray(selected) && selected.includes(i)
+            : selected === i;
+          const isCorrectIndex = isMulti
+            ? Array.isArray(answer) && answer.includes(i)
+            : i === answer;
+          const isWrongSelection = wrongAttempt && isSelected && !isCorrectIndex;
+          const isCorrectReveal = submitted && correct && isCorrectIndex;
 
           let optBorder = dark ? "border-[#2a3552]" : "border-border";
           let optBg = dark ? "bg-[#0b1220]" : "bg-background";
@@ -382,8 +421,17 @@ export default function CheckpointQuestion({
               type="button"
               onClick={() => {
                 if (submitted) return;
-                setSelected(i);
-                try { localStorage.setItem(storageKey, JSON.stringify(i)); } catch {}
+                let next: number | number[];
+                if (isMulti) {
+                  const cur = Array.isArray(selected) ? selected : [];
+                  next = cur.includes(i)
+                    ? cur.filter((x) => x !== i)
+                    : [...cur, i].sort((a, b) => a - b);
+                } else {
+                  next = i;
+                }
+                setSelected(next);
+                try { localStorage.setItem(storageKey, JSON.stringify(next)); } catch {}
                 setWrongAttempt(false);
               }}
               disabled={submitted}
@@ -405,7 +453,7 @@ export default function CheckpointQuestion({
                       : "border-border text-foreground/60"
                   }`}
                 >
-                  {isCorrectReveal ? "\u2713" : isWrongSelection ? "\u2717" : String.fromCharCode(65 + i)}
+                  {isCorrectReveal ? "\u2713" : isWrongSelection ? "\u2717" : isMulti ? (isSelected ? "\u2713" : "") : String.fromCharCode(65 + i)}
                 </span>
                 <div className={`text-[15px] md:text-[17px] ${optText} leading-relaxed`}>{renderInlineCode(opt, dark)}</div>
               </div>
@@ -424,16 +472,16 @@ export default function CheckpointQuestion({
         <button
           type="button"
           onClick={handleSubmit}
-          disabled={selected === null}
+          disabled={isSelectionEmpty}
           className={`font-pixel text-sm border-2 px-6 py-3 transition-all ${
-            selected !== null
+            !isSelectionEmpty
               ? `${goldBorder} ${goldBg} text-black hover:bg-[#FFC800] active:scale-95`
               : dark
               ? "border-[#2a3552] bg-[#0f1930] text-slate-500 cursor-not-allowed"
               : "border-border bg-secondary text-foreground/40 cursor-not-allowed"
           }`}
         >
-          {selected !== null && !authenticated ? "LOGIN & SUBMIT" : "SUBMIT ANSWER"}
+          {!isSelectionEmpty && !authenticated ? "LOGIN & SUBMIT" : "SUBMIT ANSWER"}
         </button>
       )}
 
