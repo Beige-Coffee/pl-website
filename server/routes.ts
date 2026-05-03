@@ -171,40 +171,8 @@ export const CHECKPOINT_ANSWER_KEY: Record<string, number | number[]> = {
   "act2-both-ephemeral": 3,
   "act3-nonce-one": 2,
   "message-length-limit": 0,
-  // ── Onion routing tutorial checkpoints (added chapter-by-chapter) ─────
-  // Chapter 1: The Privacy Problem
-  "cp-privacy-property": 1,
-  // Chapter 2: Anatomy of a Route
-  "cp-fees-backward": 1,
-  "cp-intermediate-vs-final": 2,
-  // Chapter 3: Shared Secrets per Hop
-  "cp-blinding-public": 1,
-  "exercise-derive-shared-secrets": 0,
-  // Chapter 4: Key Derivation
-  "cp-key-domain-separation": 1,
-  "exercise-derive-keys": 0,
-  // Chapter 5: The Fixed-Size Packet
-  "cp-fixed-size-reason": 1,
-  // Chapter 6: Filler Construction
-  "cp-filler-purpose": 1,
-  "cp-filler-final-hop": 1,
-  "exercise-generate-filler": 0,
-  // Chapter 7: Wrapping Layer-by-Layer
-  "cp-build-reverse-order": 1,
-  "exercise-wrap-hop": 0,
-  "exercise-build-packet": 0,
-  // Chapter 8: Peeling a Layer
-  "cp-peel-extended-stream": 2,
-  "exercise-peel-layer": 0,
-  // Chapter 9: Forwarding & Validation
-  "cp-validate-before-decrypt": 1,
-  "cp-tlv-final-vs-forward": 1,
-  "exercise-process-onion": 0,
-  // Chapter 10: The Error Onion
-  "cp-error-trial-decrypt": 1,
-  "exercise-build-error-onion": 0,
-  "exercise-decrypt-error-onion": 0,
-  // ── Onion Routing DRAFT mirror (progress isolated from v1) ─────────────
+  // ── Onion routing tutorial checkpoints (draft naming retained on
+  // checkpoint IDs to preserve persisted user progress) ─────────────────
   // Intro: Naive plaintext routing leak (draft)
   "cp-naive-plaintext-leak-draft": 2,
   // Chapter 1: The Privacy Problem (draft)

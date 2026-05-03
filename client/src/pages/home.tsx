@@ -35,15 +35,12 @@ export default function Home() {
         const ch = noiseChapters.find((c) => c.id === noiseChapterId);
         if (ch) items.push({ course: "Noise Protocol", chapterId: noiseChapterId, chapterTitle: ch.title, path: `/noise-tutorial/${noiseChapterId}` });
       }
-      const onionChapterId = localStorage.getItem("pl-onion-last-chapter");
+      // Stored under the historical "-draft" key to preserve persisted user
+      // progress from before the reference/draft consolidation.
+      const onionChapterId = localStorage.getItem("pl-onion-last-chapter-draft");
       if (onionChapterId) {
         const ch = onionChapters.find((c) => c.id === onionChapterId);
         if (ch) items.push({ course: "Onion Routing", chapterId: onionChapterId, chapterTitle: ch.title, path: `/onion-routing-tutorial/${onionChapterId}` });
-      }
-      const onionDraftChapterId = localStorage.getItem("pl-onion-last-chapter-draft");
-      if (onionDraftChapterId) {
-        const ch = onionChapters.find((c) => c.id === onionDraftChapterId);
-        if (ch) items.push({ course: "Onion Routing (Draft)", chapterId: onionDraftChapterId, chapterTitle: ch.title, path: `/onion-routing-tutorial-draft/${onionDraftChapterId}` });
       }
       return items;
     } catch { return []; }
@@ -333,7 +330,7 @@ export default function Home() {
                     >
                       <span className="text-[#b8860b] text-xs leading-none">&#9654;</span>
                       <div className="min-w-0">
-                        <span className="font-pixel text-[9px] text-foreground/40 block leading-none">{item.course === "Intro to Payment Channels" ? "LIGHTNING" : item.course === "Onion Routing" ? "ONION ROUTING" : item.course === "Onion Routing (Draft)" ? "ONION ROUTING (DRAFT)" : "NOISE"}</span>
+                        <span className="font-pixel text-[9px] text-foreground/40 block leading-none">{item.course === "Intro to Payment Channels" ? "LIGHTNING" : item.course === "Onion Routing" ? "ONION ROUTING" : "NOISE"}</span>
                         <span className="text-sm font-semibold text-foreground/80 truncate block mt-0.5">{item.chapterTitle}</span>
                       </div>
                     </Link>
@@ -530,15 +527,9 @@ export default function Home() {
                   <div className="flex flex-row md:flex-col gap-2 shrink-0">
                     <Link
                       href="/onion-routing-tutorial"
-                      className="bg-primary text-foreground px-6 py-2.5 font-pixel text-sm border-2 border-border hover:bg-primary/80 transition-colors pixel-shadow active:translate-x-[2px] active:translate-y-[2px] active:shadow-none text-center flex-1 md:flex-none"
+                      className="bg-foreground text-background px-6 py-2.5 font-pixel text-sm border-2 border-border hover:bg-foreground/80 transition-colors pixel-shadow active:translate-x-[2px] active:translate-y-[2px] active:shadow-none text-center flex-1 md:flex-none"
                     >
-                      REFERENCE
-                    </Link>
-                    <Link
-                      href="/onion-routing-tutorial-draft"
-                      className="bg-secondary text-foreground px-6 py-2.5 font-pixel text-sm border-2 border-border hover:bg-secondary/80 transition-colors pixel-shadow active:translate-x-[2px] active:translate-y-[2px] active:shadow-none text-center flex-1 md:flex-none"
-                    >
-                      DRAFT
+                      CODE
                     </Link>
                   </div>
                 </div>
