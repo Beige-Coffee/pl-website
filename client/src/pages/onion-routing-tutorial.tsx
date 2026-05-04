@@ -37,6 +37,9 @@ import { HtlcPropagationDiagram } from "../components/onion-routing-draft/HtlcPr
 import { EcdhRecapDiagram } from "../components/onion-routing-draft/EcdhRecapDiagram";
 import { BlindingFactorDiagram } from "../components/onion-routing-draft/BlindingFactorDiagram";
 import { SharedSecretSymmetryDiagram } from "../components/onion-routing-draft/SharedSecretSymmetryDiagram";
+import { NaivePacketDiagram } from "../components/onion-routing-draft/NaivePacketDiagram";
+import { SharedSecretsRecapDiagram } from "../components/onion-routing-draft/SharedSecretsRecapDiagram";
+import { NodeKeyAttemptDiagram } from "../components/onion-routing-draft/NodeKeyAttemptDiagram";
 import { HmacRecapDiagram } from "../components/onion-routing-draft/HmacRecapDiagram";
 import { FiveKeysJobsDiagram } from "../components/onion-routing-draft/FiveKeysJobsDiagram";
 import { PerHopKeyMatrixDiagram } from "../components/onion-routing-draft/PerHopKeyMatrixDiagram";
@@ -81,6 +84,9 @@ const CUSTOM_BLOCK_TAGS = new Set([
   "cltv-safety-lab",
   "forwarder-policy-map",
   "knowledge-matrix",
+  "naive-packet",
+  "shared-secrets-recap",
+  "node-key-attempt",
 ]);
 
 function rehypeUnwrapCustomBlockTags() {
@@ -220,16 +226,41 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
     explanation: "Each per-hop key is HMAC-SHA256(label, shared_secret) for a different ASCII label. HMAC's pseudorandom-function property means that knowing one output (rho_i) gives an attacker no usable information about the other four outputs unless they also know the shared secret ss_i. Recovering rho only lets them attack the forward stream cipher, which is bad enough on its own (they can read Bob's hop payload) but doesn't extend to forging HMACs (mu) or attacking the return path (um, ammag). That's the entire point of domain separation: a leak in one key stays contained to its own role.",
   },
   // ── Chapter 3: Shared Secrets per Hop ────────────────────────────────────
-  "cp-blinding-public-draft": {
-    question: "Bob receives an onion packet, derives ss₀ via ECDH, and needs to compute the next ephemeral pubkey E₁ = E₀ · b₀ before forwarding. The blinding factor b₀ is defined as SHA256(E₀ ‖ ss₀). Why is it safe for Bob to compute b₀ himself, even though he never sees Alice's session_key?",
+  "cp-node-key-ecdh-draft": {
+    question: "Reusing Alice's node-identity key as the ECDH input has multiple consequences. Some are visible in the animation above, others fall out of the design when you think it through. Select all the real problems with this approach.",
     options: [
-      "Because Alice signs b₀ with her session_key and sends the signature in the packet, so Bob can verify it before using it",
-      "Because b₀ is derived from public information Bob already has: E₀ is in the packet header, and ss₀ is the shared secret Bob just computed via his own private key",
-      "Because Bob downloads b₀ from a precomputed table that Alice publishes via gossip alongside her session_key",
-      "Because the chain is initialized with a random b₀ and only Alice can compute later blinding factors, so Bob can use any value here without affecting Carol",
+      "Every forwarder can match the pubkey in the packet against the public gossip graph and identify Alice as the sender.",
+      "Two of Alice's payments would carry the same pubkey, letting an observer link them to the same sender.",
+      "Every payment Alice routes through the same forwarder would derive the same shared secret with that forwarder, since both ECDH inputs are static keys.",
+      "A forwarder receiving Alice's onion could decrypt the slices intended for hops further downstream, since Alice's key is reused across all of them.",
+    ],
+    answer: [0, 1, 2],
+    explanation:
+      "Three real consequences fall out of one design choice, plus a tempting distractor.\n\n**Option 1 (correct).** The pubkey rides at the top of the packet because every forwarder needs it for ECDH. If it's Alice's published node-identity key, any forwarder can match it against the gossip graph and learn who sent the payment. That's exactly the gossip-lookup callout you saw fire at Bob, Charlie, and Dave in the visual.\n\n**Option 2 (correct).** Linkability across payments. Every onion Alice sends would carry the same pubkey, so an observer sitting between her and her first hop, or two colluding forwarders comparing notes, could correlate every one of her payments. The visual only animated one payment, but think about what an observer would see if she sent two.\n\n**Option 3 (correct).** ECDH with both inputs static is deterministic: same inputs always produce the same output. Every payment Alice routes through Bob would derive the *same* shared secret with Bob. That removes per-payment cryptographic separation, so a single shared-secret compromise retroactively breaks every payment Alice ever routed through that forwarder.\n\n**Option 4 (wrong, distractor).** Reusing Alice's side of the ECDH doesn't collapse the per-hop shared secrets. Each forwarder still derives a *different* shared secret because each has a *different* node privkey on its side of the ECDH. Bob computes bob_priv · A; Charlie computes charlie_priv · A; bob_priv ≠ charlie_priv, so the shared secrets differ. Bob cannot decrypt Charlie's slice.",
+  },
+  "cp-naive-shared-secrets-draft": {
+    question: "The fresh-keypair-per-hop design fixes the identity leak from the first attempt, but it pays a price elsewhere that scales with the route length. Select all the real costs of this design.",
+    options: [
+      "The packet has to carry one ephemeral pubkey per hop, consuming bytes that would otherwise be available for the hop payloads.",
+      "Each shared secret is statistically predictable because Alice can only generate a limited amount of randomness per payment.",
+      "Alice has to generate, store, and manage one private key per hop, and she can't discard them mid-payment because errors come back encrypted with the same shared secrets.",
+      "Any forwarder that learns its own ephemeral pubkey can use it to recover Alice's other ephemeral private keys from the packet.",
+    ],
+    answer: [0, 2],
+    explanation:
+      "Two real costs scale with the route length, and a single insight (the ephemeral key chain) is going to collapse both to one in the next section.\n\n**Option 1 (correct).** Each hop needs its own ephemeral pubkey in plaintext at the front of the packet to run ECDH against. Each pubkey is 33 bytes, so a 3-hop route ships 3 pubkeys (about 100 bytes), a 10-hop route ships 10. The BOLT 4 onion packet is fixed at 1300 bytes total, so every ephemeral pubkey is bytes we can't spend on the actual hop payloads.\n\n**Option 3 (correct).** Alice generates a fresh ephemeral keypair for every hop and has to keep them all in memory until the payment finishes. She can't discard them after sending, because failures come back encrypted with those same shared secrets and she needs the keys to decrypt the error onion. That means an N-hop in-flight payment requires Alice to maintain N keypairs of state for the entire payment lifecycle.\n\nBoth costs scale linearly with route length: the longer the route, the worse it gets. The math works, but the design is wasteful in a way Sphinx wouldn't accept, which is exactly what the ephemeral key chain construction in the next section fixes.\n\n**Option 2 (wrong, distractor).** Shared secrets from fresh ECDH are uniformly random. The elliptic curve discrete log problem rules out predicting them from public information.\n\n**Option 4 (wrong, distractor).** The discrete log problem also keeps each ephemeral private key safe even when the corresponding pubkey is public. A forwarder seeing E_Bob can't recover e_Bob, and the keypairs for other hops are completely independent.",
+  },
+  "cp-blinding-public-draft": {
+    question: "Bob has derived ss_AB and computed bf_AB. He's about to forward the onion to Charlie. Which of the following best describes what Bob does to the ephemeral key field in the outgoing packet, and why Charlie ends up deriving the same ss_AC Alice precomputed?",
+    options: [
+      "Bob appends E_AC after E_AB, so Charlie can scan for his own key. It works because Charlie tries each pubkey until ECDH produces a value that successfully decrypts his slice.",
+      "Bob *replaces* E_AB with E_AC (computed as bf_AB · E_AB). Charlie does ECDH with his node privkey against E_AC and lands on the same ss_AC Alice precomputed, because Alice and Bob independently derive the same E_AC from their respective chains.",
+      "Bob signs E_AC with his node private key and embeds both E_AC and the signature in the packet. Charlie verifies the signature against bob_pubkey before trusting E_AC.",
+      "Bob leaves E_AB in the field; Charlie derives E_AC himself by recomputing the chain from his own position in the route.",
     ],
     answer: 1,
-    explanation: "The whole point of the blinding chain is that each forwarder can advance it on its own using only information available to it. b₀ depends on two values: E₀ (the ephemeral public key in the inbound packet, public to Bob) and ss₀ (the shared secret Bob just derived from bob_privkey · E₀). Both are knowable by Bob without ever seeing Alice's session_key. Alice independently computes the same b₀ using session_key · bob_pubkey to get the same ss₀, then hashing with the same E₀. The two parties reach the same b₀ from completely different starting information, which is exactly what makes the chain work without any out-of-band coordination.",
+    explanation:
+      "The chain advances by **replacing** the ephemeral key field at each hop, and the construction works because Alice and Bob independently arrive at the same E_AC.\n\n**Option 2 (correct).** Alice's chain produces E_AC as bf_AB · E_AB (since she advances her scalar e_AB by bf_AB to get e_AC, and e_AC · G = bf_AB · E_AB). Bob computes the same E_AC directly via bf_AB · E_AB on the public side. Once both sides agree on E_AC, ECDH between Charlie's node privkey and E_AC produces the same ss_AC Alice computed via e_AC · C, because scalar multiplication commutes.\n\n**Option 1 (wrong).** Appending defeats the fixed-size packet design and reintroduces both flaws we worked to eliminate (the size leak and Alice's key-management burden). The chain-and-replace mechanism is what keeps the packet compact.\n\n**Option 3 (wrong).** There is no signature on the ephemeral key in BOLT 4. Bob is kept honest economically (he loses his fee if he tampers) and via the HMAC we'll add in chapter 7. A signature would also expose Bob's identity to Charlie.\n\n**Option 4 (wrong).** Charlie can't derive E_AC without bf_AB, which requires ss_AB, which requires *Bob's* private key. Charlie has none of those. Each hop derives its own shared secret using the ephemeral key it sees in the packet header, not by recomputing the chain from scratch.",
   },
   // ── Chapter 2: Pathfinding 101 ───────────────────────────────────────────
   "cp-fees-backward-draft": {
@@ -455,7 +486,7 @@ export const CHAPTER_REQUIREMENTS: Record<string, {
   "a-lightning-payment": { checkpoints: [], exercises: [] },
   "pathfinding-101": { checkpoints: ["cp-channel-update-direction-draft", "cp-cheapest-route-draft"], exercises: [] },
   "privacy-problem": { checkpoints: ["cp-naive-plaintext-leak-draft", "cp-still-vulnerable-draft"], exercises: [] },
-  "shared-secrets": { checkpoints: ["cp-blinding-public-draft"], exercises: ["exercise-derive-shared-secrets-draft"] },
+  "shared-secrets": { checkpoints: ["cp-node-key-ecdh-draft", "cp-naive-shared-secrets-draft", "cp-blinding-public-draft"], exercises: ["exercise-derive-shared-secrets-draft"] },
   "key-derivation": { checkpoints: ["cp-key-domain-separation-draft"], exercises: ["exercise-derive-keys-draft"] },
   "fixed-size-packet": { checkpoints: ["cp-fixed-size-reason-draft"], exercises: [] },
   "filler-construction": { checkpoints: ["cp-filler-purpose-draft", "cp-filler-final-hop-draft"], exercises: ["exercise-generate-filler-draft"] },
@@ -939,6 +970,15 @@ function ChapterContent({
           },
           "shared-secret-symmetry": () => {
             return <SharedSecretSymmetryDiagram />;
+          },
+          "naive-packet": () => {
+            return <NaivePacketDiagram />;
+          },
+          "shared-secrets-recap": () => {
+            return <SharedSecretsRecapDiagram />;
+          },
+          "node-key-attempt": () => {
+            return <NodeKeyAttemptDiagram />;
           },
           "hmac-recap": () => {
             return <HmacRecapDiagram />;

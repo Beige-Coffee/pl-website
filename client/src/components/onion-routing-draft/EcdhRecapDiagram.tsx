@@ -1,103 +1,237 @@
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 // ────────────────────────────────────────────────────────────────────────────
 // EcdhRecapDiagram (DRAFT)
 //
-// A bilateral ECDH refresher. Two parties (Alice, Bob) each hold a keypair.
-// Each computes the same shared point from the other's public key plus their
-// own private key — because scalar multiplication on the curve commutes:
-//   a · B = a · (b · G) = ab · G = b · (a · G) = b · A
-// SHA256(shared_point) becomes the 32-byte shared secret.
+// Single-visual ECDH refresher. Two modes (Abstract / Concrete) selectable
+// via toggle. Three pedagogical steps reveal the protocol progressively:
+//   1. Setup     each party has a keypair (private + public)
+//   2. Exchange  public keys travel to the center, both visible
+//   3. Compute   each party computes the shared point; gold pill appears
 //
-// One-shot mount animation:
-//   - Key cards fade in at 0 ms
-//   - Computation blocks fade in at 600 ms
-//   - Center "SHARED POINT" pill scales in at 1100 ms with a brief gold pulse
-// "Replay" button below the stage re-runs the animation by toggling a key.
-//
-// Visual style follows the locked onion-routing format: black header bar,
-// cream body, 1.5px ink borders, gold (#b8860b) ONLY for the shared-point
-// pill so the eye is drawn there. Columns stay neutral cream/ink.
+// No mount-time animation. Step buttons drive the reveal.
+// All variables render in ink (no per-side color coding). Hover tooltips
+// use position: fixed with viewport clamping so they never get cut off.
 // ────────────────────────────────────────────────────────────────────────────
 
 const INK = "#0f172a";
 const SLATE = "#475569";
 const CREAM_STAGE = "#fefdfb";
 const CREAM_CARD = "#fffdf5";
-const GOLD = "#b8860b";
+const SHARED = "#b8860b";
 const MONO = '"JetBrains Mono", "Fira Code", monospace';
 
-// Tiny pixel-art lock glyph in gold, used next to "private key" labels.
+type Mode = "abstract" | "concrete";
+
+interface ModeValues {
+  a: string;
+  b: string;
+  A: string;
+  B: string;
+  shared: string;
+  sharedHash: string;
+}
+
+const VALUES: Record<Mode, ModeValues> = {
+  abstract: {
+    a: "a",
+    b: "b",
+    A: "A = a · G",
+    B: "B = b · G",
+    shared: "ab · G",
+    sharedHash: "SHA256(ab · G)",
+  },
+  concrete: {
+    a: "3",
+    b: "5",
+    A: "A = 3 · G",
+    B: "B = 5 · G",
+    shared: "15 · G",
+    sharedHash: "SHA256(15 · G)",
+  },
+};
+
+// ── Tooltip catalog ─────────────────────────────────────────────────────────
+
+function tooltips(mode: Mode) {
+  if (mode === "abstract") {
+    return {
+      a: "Alice's private key. A 256-bit random number she generates locally and never shares.",
+      A: "Alice's public key, computed as a · G. Safe to share. Recovering a from A requires solving the discrete log problem.",
+      b: "Bob's private key. A 256-bit random number he generates locally and never shares.",
+      B: "Bob's public key, computed as b · G. Safe to share.",
+      G: "The generator point. A fixed point on the elliptic curve known to everyone.",
+      shared:
+        "The shared point. Both parties arrive at this value, but neither sent it. An eavesdropper sees A and B but cannot combine them into ab · G without recovering one of the private keys.",
+    };
+  }
+  return {
+    a: "Alice's private number. In real ECDH this would be 256 bits of randomness, not 3.",
+    A: "Alice's public key, computed as 3 · G.",
+    b: "Bob's private number. In real ECDH this would be 256 bits of randomness, not 5.",
+    B: "Bob's public key, computed as 5 · G.",
+    G: "The generator point. A fixed, well-known point on the elliptic curve.",
+    shared:
+      "The shared point. Alice and Bob both arrive at 15 · G because 3 · 5 = 5 · 3. Neither party had to send 15 · G; they each derived it independently.",
+  };
+}
+
+// ── HoverTip with viewport-clamped fixed positioning ────────────────────────
+
+const TIP_WIDTH = 240;
+
+function HoverTip({ children, info }: { children: ReactNode; info: string }) {
+  const [shown, setShown] = useState(false);
+  const [pos, setPos] = useState({ x: 0, y: 0, above: true });
+  const ref = useRef<HTMLSpanElement>(null);
+
+  function show() {
+    const el = ref.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const margin = 8;
+    const desiredX = r.left + r.width / 2 - TIP_WIDTH / 2;
+    const x = Math.max(
+      margin,
+      Math.min(window.innerWidth - TIP_WIDTH - margin, desiredX)
+    );
+    const aboveY = r.top - 10;
+    const fitsAbove = aboveY > 80;
+    const y = fitsAbove ? aboveY : r.bottom + 10;
+    setPos({ x, y, above: fitsAbove });
+    setShown(true);
+  }
+
+  return (
+    <span
+      ref={ref}
+      onMouseEnter={show}
+      onMouseLeave={() => setShown(false)}
+      style={{
+        position: "relative",
+        cursor: "help",
+        display: "inline-block",
+        borderBottom: `1px dotted ${SLATE}`,
+      }}
+    >
+      {children}
+      {shown && (
+        <span
+          style={{
+            position: "fixed",
+            left: pos.x,
+            top: pos.above ? undefined : pos.y,
+            bottom: pos.above ? window.innerHeight - pos.y : undefined,
+            width: TIP_WIDTH,
+            zIndex: 50,
+            padding: "8px 10px",
+            background: INK,
+            color: "#fffdf5",
+            fontSize: 11,
+            lineHeight: 1.45,
+            fontFamily: "ui-sans-serif, system-ui, sans-serif",
+            fontWeight: 400,
+            letterSpacing: "0.01em",
+            whiteSpace: "normal",
+            boxShadow: "0 8px 30px rgba(0,0,0,0.25)",
+            pointerEvents: "none",
+          }}
+        >
+          {info}
+        </span>
+      )}
+    </span>
+  );
+}
+
+// ── Inline value with hover ─────────────────────────────────────────────────
+
+function V({ children, info }: { children: ReactNode; info: string }) {
+  return (
+    <HoverTip info={info}>
+      <span style={{ color: INK, fontWeight: 700, fontFamily: MONO }}>{children}</span>
+    </HoverTip>
+  );
+}
+
+// ── Lock tile ───────────────────────────────────────────────────────────────
+
 function LockTile() {
   return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 12 12"
-      aria-hidden
-      style={{ flexShrink: 0 }}
-    >
-      {/* shackle */}
-      <rect x="3" y="2" width="1" height="3" fill={GOLD} />
-      <rect x="8" y="2" width="1" height="3" fill={GOLD} />
-      <rect x="4" y="1" width="4" height="1" fill={GOLD} />
-      {/* body */}
-      <rect x="2" y="5" width="8" height="6" fill={GOLD} />
+    <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden style={{ flexShrink: 0 }}>
+      <rect x="3" y="2" width="1" height="3" fill={SLATE} />
+      <rect x="8" y="2" width="1" height="3" fill={SLATE} />
+      <rect x="4" y="1" width="4" height="1" fill={SLATE} />
+      <rect x="2" y="5" width="8" height="6" fill={SLATE} />
       <rect x="5" y="7" width="2" height="2" fill={CREAM_CARD} />
     </svg>
   );
 }
 
+// ── Mode toggle ─────────────────────────────────────────────────────────────
+
+function ModeToggle({ mode, onChange }: { mode: Mode; onChange: (m: Mode) => void }) {
+  const Btn = ({ value, label }: { value: Mode; label: string }) => (
+    <button
+      onClick={() => onChange(value)}
+      className="px-3 py-1 border-[1.5px] text-[10px] font-bold tracking-[0.06em] uppercase transition-colors"
+      style={{
+        background: mode === value ? INK : CREAM_CARD,
+        color: mode === value ? "#fffdf5" : INK,
+        borderColor: INK,
+      }}
+      data-testid={`ecdh-recap-mode-${value}`}
+    >
+      {label}
+    </button>
+  );
+  return (
+    <div className="border-b-[1.5px] border-foreground/20 px-4 py-2 flex items-center gap-2 flex-wrap">
+      <span
+        className="text-[10px] uppercase tracking-wider"
+        style={{ color: SLATE, fontFamily: "ui-sans-serif, system-ui, sans-serif" }}
+      >
+        Mode
+      </span>
+      <Btn value="abstract" label="Abstract" />
+      <Btn value="concrete" label="Concrete (a=3, b=5)" />
+    </div>
+  );
+}
+
+// ── Party column ────────────────────────────────────────────────────────────
+
 interface PartyColumnProps {
   name: string;
-  privVar: string;
-  pubVar: string;
-  ownPriv: string;
-  otherPub: string;
-  arrowDirection: "right" | "left";
-  arrowLabel: string;
-  visibleKeys: boolean;
-  visibleCompute: boolean;
+  privVar: ReactNode;
+  pubVar: ReactNode;
+  computeStep1: ReactNode;
+  computeStep2: ReactNode;
+  computeFinal: ReactNode;
+  showCompute: boolean;
 }
 
 function PartyColumn({
   name,
   privVar,
   pubVar,
-  ownPriv,
-  otherPub,
-  arrowDirection,
-  arrowLabel,
-  visibleKeys,
-  visibleCompute,
+  computeStep1,
+  computeStep2,
+  computeFinal,
+  showCompute,
 }: PartyColumnProps) {
   return (
     <div className="flex flex-col items-center gap-3" style={{ width: 220 }}>
-      {/* Party badge */}
       <div
         className="px-4 py-1.5 border-[1.5px]"
-        style={{
-          background: CREAM_CARD,
-          borderColor: INK,
-          color: INK,
-        }}
+        style={{ background: CREAM_CARD, borderColor: INK, color: INK }}
       >
-        <span className="text-sm font-bold tracking-[0.08em] uppercase">
-          {name}
-        </span>
+        <span className="text-sm font-bold tracking-[0.08em] uppercase">{name}</span>
       </div>
 
-      {/* Key card */}
       <div
         className="w-full border-[1.5px] px-3 py-2"
-        style={{
-          background: CREAM_CARD,
-          borderColor: INK,
-          opacity: visibleKeys ? 1 : 0,
-          transform: visibleKeys ? "translateY(0)" : "translateY(6px)",
-          transition: "opacity 300ms ease-out, transform 300ms ease-out",
-          fontFamily: MONO,
-        }}
+        style={{ background: CREAM_CARD, borderColor: INK, fontFamily: MONO }}
       >
         <div className="flex items-center gap-1.5 mb-1">
           <LockTile />
@@ -108,107 +242,154 @@ function PartyColumn({
             {name.toLowerCase()}'s private
           </span>
         </div>
-        <div className="text-[12px] font-bold mb-2" style={{ color: INK }}>
-          {privVar}
-        </div>
+        <div className="text-[12px] mb-2">{privVar}</div>
         <div
           className="text-[9px] uppercase tracking-wider mb-1"
           style={{ color: SLATE, fontFamily: "ui-sans-serif, system-ui, sans-serif" }}
         >
           {name.toLowerCase()}'s public
         </div>
-        <div className="text-[12px] font-bold" style={{ color: INK }}>
-          {pubVar}
-        </div>
+        <div className="text-[12px]">{pubVar}</div>
       </div>
 
-      {/* Arrow toward / from center */}
-      <div
-        className="flex items-center gap-1.5 text-[10px]"
-        style={{
-          color: SLATE,
-          opacity: visibleKeys ? 1 : 0,
-          transition: "opacity 300ms ease-out 100ms",
-          fontFamily: "ui-sans-serif, system-ui, sans-serif",
-        }}
-      >
-        {arrowDirection === "right" ? (
-          <>
-            <span>{arrowLabel}</span>
-            <span style={{ color: INK, fontWeight: 700 }}>→</span>
-          </>
-        ) : (
-          <>
-            <span style={{ color: INK, fontWeight: 700 }}>←</span>
-            <span>{arrowLabel}</span>
-          </>
-        )}
-      </div>
-
-      {/* Computation block */}
       <div
         className="w-full border-[1.5px] px-3 py-2"
         style={{
           background: CREAM_CARD,
-          borderColor: INK,
-          opacity: visibleCompute ? 1 : 0,
-          transform: visibleCompute ? "translateY(0)" : "translateY(6px)",
-          transition: "opacity 300ms ease-out, transform 300ms ease-out",
+          borderColor: showCompute ? INK : "transparent",
           fontFamily: MONO,
+          minHeight: 110,
+          opacity: showCompute ? 1 : 0.25,
+          transition: "opacity 250ms ease-out, border-color 250ms ease-out",
         }}
       >
         <div
           className="text-[9px] uppercase tracking-wider mb-1"
-          style={{ color: SLATE, fontFamily: "ui-sans-serif, system-ui, sans-serif" }}
+          style={{
+            color: SLATE,
+            fontFamily: "ui-sans-serif, system-ui, sans-serif",
+          }}
         >
           compute
         </div>
-        <div className="text-[12px] leading-relaxed" style={{ color: INK }}>
-          <div className="font-bold">{ownPriv} · {otherPub}</div>
-          <div style={{ color: SLATE }}>= {ownPriv} · ({otherPub === "B" ? "b" : "a"} · G)</div>
-          <div className="font-bold">= ab · G</div>
-        </div>
-        <div
-          className="mt-1.5 text-[10px] flex items-center gap-1"
-          style={{ color: INK, fontFamily: "ui-sans-serif, system-ui, sans-serif" }}
-        >
-          <span style={{ fontWeight: 700 }}>→</span>
-          <span className="italic">shared_point</span>
-        </div>
+        {showCompute ? (
+          <>
+            <div className="text-[12px] leading-relaxed" style={{ color: INK }}>
+              <div>{computeStep1}</div>
+              <div style={{ color: SLATE }}>{computeStep2}</div>
+              <div>= {computeFinal}</div>
+            </div>
+            <div
+              className="mt-1.5 text-[10px] flex items-center gap-1"
+              style={{ color: INK, fontFamily: "ui-sans-serif, system-ui, sans-serif" }}
+            >
+              <span style={{ fontWeight: 700 }}>→</span>
+              <span className="italic">shared_point</span>
+            </div>
+          </>
+        ) : (
+          <div
+            className="text-[10px] italic"
+            style={{ color: SLATE, fontFamily: "ui-sans-serif, system-ui, sans-serif" }}
+          >
+            (waiting for the other side's public key)
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
+// ── Step controls (no Play, just numbered steps + Reset) ────────────────────
+
+const TOTAL_STEPS = 3;
+
+const STEP_CAPTIONS: Record<number, string> = {
+  0: "Each party generates a private key (a 256-bit random number) and derives a public key from it. Private keys never leave their owner; public keys can be shared safely.",
+  1: "Alice and Bob exchange public keys. The two values now visible in the center are everything an eavesdropper would see on the wire. Without one of the private keys, that's not enough to compute ab · G.",
+  2: "Watch as each public key flies into the opposite party's calculation. Alice combines her private key with B; Bob combines his with A. Both arrive at the same shared point because scalar multiplication commutes. The hash of that point becomes a 32-byte symmetric key.",
+};
+
+// ── Main component ──────────────────────────────────────────────────────────
+
 export function EcdhRecapDiagram() {
-  // Toggling animKey re-runs the mount animation (Replay button).
-  const [animKey, setAnimKey] = useState(0);
-  const [visibleKeys, setVisibleKeys] = useState(false);
-  const [visibleCompute, setVisibleCompute] = useState(false);
-  const [visiblePill, setVisiblePill] = useState(false);
-  const [pulse, setPulse] = useState(false);
+  const [mode, setMode] = useState<Mode>("abstract");
+  const [step, setStep] = useState<number>(0);
+  // arrived = chips have completed their step-3 flight to opposite compute boxes
+  const [arrived, setArrived] = useState(false);
 
+  // Reset to step 0 when mode changes.
   useEffect(() => {
-    setVisibleKeys(false);
-    setVisibleCompute(false);
-    setVisiblePill(false);
-    setPulse(false);
+    setStep(0);
+  }, [mode]);
 
-    const t1 = setTimeout(() => setVisibleKeys(true), 50);
-    const t2 = setTimeout(() => setVisibleCompute(true), 650);
-    const t3 = setTimeout(() => {
-      setVisiblePill(true);
-      setPulse(true);
-    }, 1150);
-    const t4 = setTimeout(() => setPulse(false), 1550);
+  // Manage the step-3 arrival timing.
+  useEffect(() => {
+    if (step >= 2) {
+      setArrived(false);
+      const t = setTimeout(() => setArrived(true), 750);
+      return () => clearTimeout(t);
+    }
+    setArrived(false);
+  }, [step]);
 
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-      clearTimeout(t3);
-      clearTimeout(t4);
-    };
-  }, [animKey]);
+  const v = VALUES[mode];
+  const t = tooltips(mode);
+
+  const showExchange = step >= 1; // chips visible
+  const flyingToCompute = step >= 2; // chips moving to opposite compute box
+  // Compute boxes ignite once chips arrive
+  const showCompute = step >= 2 && arrived;
+  const showShared = step >= 2 && arrived;
+
+  // Chip transforms across step transitions.
+  // Distances are tuned for the 220 / 240 / 220 column layout.
+  const aliceChipTransform =
+    step === 0
+      ? "translate(-180px, 0)"
+      : step === 1
+        ? "translate(0, 0)"
+        : "translate(336px, 170px)";
+  const bobChipTransform =
+    step === 0
+      ? "translate(180px, 0)"
+      : step === 1
+        ? "translate(0, 0)"
+        : "translate(-336px, 170px)";
+
+  // Opacity: fade out only AFTER arrival at the compute box.
+  const aliceChipOpacity = step === 0 ? 0 : flyingToCompute && arrived ? 0 : 1;
+  const bobChipOpacity = aliceChipOpacity;
+
+  // Tokens.
+  const aTok = <V info={t.a}>{v.a}</V>;
+  const bTok = <V info={t.b}>{v.b}</V>;
+  const ATok = <V info={t.A}>{v.A}</V>;
+  const BTok = <V info={t.B}>{v.B}</V>;
+  const GTok = <V info={t.G}>G</V>;
+  const sharedInline = <V info={t.shared}>{v.shared}</V>;
+
+  // Compute box contents.
+  const aliceStep1 = (
+    <>
+      {aTok} <span style={{ color: INK }}>·</span> <V info={t.B}>B</V>
+    </>
+  );
+  const aliceStep2 = (
+    <>
+      = {aTok} · ({bTok} · {GTok})
+    </>
+  );
+  const bobStep1 = (
+    <>
+      {bTok} <span style={{ color: INK }}>·</span> <V info={t.A}>A</V>
+    </>
+  );
+  const bobStep2 = (
+    <>
+      = {bTok} · ({aTok} · {GTok})
+    </>
+  );
 
   return (
     <div
@@ -221,150 +402,191 @@ export function EcdhRecapDiagram() {
         <div className="flex items-center gap-2">
           <div className="w-1.5 h-1.5 rounded-full bg-[#b8860b]" />
           <span className="text-sm font-bold tracking-[0.08em] uppercase">
-            ECDH in one picture
+            ECDH key exchange
           </span>
         </div>
       </div>
 
+      {/* Mode toggle */}
+      <ModeToggle mode={mode} onChange={setMode} />
+
       {/* Stage */}
-      <div
-        className="relative overflow-x-auto px-4 py-6"
-        style={{
-          background: CREAM_STAGE,
-          minHeight: 360,
-        }}
-      >
+      <div className="overflow-x-auto">
         <div
-          className="relative flex items-stretch justify-center gap-4"
-          style={{ minWidth: 720 }}
+          className="relative px-4 py-6"
+          style={{ background: CREAM_STAGE, minHeight: 380, minWidth: 760 }}
         >
-          {/* Alice */}
-          <PartyColumn
-            name="Alice"
-            privVar="a"
-            pubVar="A = a · G"
-            ownPriv="a"
-            otherPub="B"
-            arrowDirection="right"
-            arrowLabel="Bob's public key"
-            visibleKeys={visibleKeys}
-            visibleCompute={visibleCompute}
-          />
+          <div className="flex items-stretch justify-center gap-4">
+            <PartyColumn
+              name="Alice"
+              privVar={aTok}
+              pubVar={ATok}
+              computeStep1={aliceStep1}
+              computeStep2={aliceStep2}
+              computeFinal={sharedInline}
+              showCompute={showCompute}
+            />
 
-          {/* Center pill + arrows */}
-          <div
-            className="flex flex-col items-center justify-center"
-            style={{ width: 220 }}
-          >
-            {/* Inbound arrows from each side, hinting that both columns
-                point at the center pill. */}
+            {/* Center column */}
             <div
-              className="flex items-center justify-between w-full px-1 mb-2"
-              style={{
-                opacity: visibleCompute ? 1 : 0,
-                transition: "opacity 400ms ease-out 200ms",
-                color: SLATE,
-              }}
+              className="flex flex-col items-center justify-start"
+              style={{ width: 240, paddingTop: 56 }}
             >
-              <span style={{ fontWeight: 700, color: INK }}>→</span>
-              <span
-                className="text-[9px] uppercase tracking-wider"
-                style={{ fontFamily: "ui-sans-serif, system-ui, sans-serif" }}
+              {/* Exchange lane:
+                    Step 1: A and B chips slide from their cards into the center.
+                    Step 2: chips continue to the OPPOSITE compute box (Alice's A
+                            flies to Bob's box, Bob's B flies to Alice's). They
+                            fade once they arrive, ignoring the compute box. */}
+              <div
+                className="relative w-full"
+                style={{
+                  minHeight: 44,
+                  marginBottom: 16,
+                }}
+                aria-hidden
               >
-                meet here
-              </span>
-              <span style={{ fontWeight: 700, color: INK }}>←</span>
+                {/* Alice's public key chip */}
+                <div
+                  style={{
+                    position: "absolute",
+                    top: 4,
+                    left: "50%",
+                    marginLeft: -90,
+                    background: CREAM_CARD,
+                    border: `1.5px solid ${INK}`,
+                    color: INK,
+                    fontFamily: MONO,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    padding: "4px 8px",
+                    whiteSpace: "nowrap",
+                    transform: aliceChipTransform,
+                    opacity: aliceChipOpacity,
+                    transition:
+                      "transform 750ms cubic-bezier(0.4, 0, 0.2, 1), opacity 300ms ease-out",
+                    zIndex: 5,
+                  }}
+                >
+                  {v.A}
+                </div>
+                {/* Bob's public key chip */}
+                <div
+                  style={{
+                    position: "absolute",
+                    top: 4,
+                    right: "50%",
+                    marginRight: -90,
+                    background: CREAM_CARD,
+                    border: `1.5px solid ${INK}`,
+                    color: INK,
+                    fontFamily: MONO,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    padding: "4px 8px",
+                    whiteSpace: "nowrap",
+                    transform: bobChipTransform,
+                    opacity: bobChipOpacity,
+                    transition:
+                      "transform 750ms cubic-bezier(0.4, 0, 0.2, 1), opacity 300ms ease-out",
+                    zIndex: 5,
+                  }}
+                >
+                  {v.B}
+                </div>
+              </div>
+
+              {/* Shared point pill: appears at step 2 */}
+              <div
+                className="px-4 py-2 border-[1.5px]"
+                style={{
+                  background: SHARED,
+                  borderColor: SHARED,
+                  color: "#ffffff",
+                  opacity: showCompute ? 1 : 0,
+                  transform: showCompute ? "scale(1)" : "scale(0.85)",
+                  transition: "opacity 250ms ease-out, transform 250ms ease-out",
+                  pointerEvents: showCompute ? "auto" : "none",
+                }}
+              >
+                <div className="text-[10px] tracking-[0.1em] uppercase font-bold opacity-80">
+                  shared point
+                </div>
+                <div className="text-[14px] font-bold mt-0.5" style={{ fontFamily: MONO }}>
+                  <HoverTip info={t.shared}>
+                    <span style={{ borderBottom: "1px dotted rgba(255,255,255,0.5)" }}>
+                      {v.shared}
+                    </span>
+                  </HoverTip>
+                </div>
+              </div>
+
+              {/* SHA256 caption beneath the pill */}
+              <div
+                className="mt-3 text-center"
+                style={{
+                  opacity: showCompute ? 1 : 0,
+                  transition: "opacity 250ms ease-out 100ms",
+                }}
+              >
+                <div
+                  className="text-[10px] leading-snug"
+                  style={{ color: SLATE, fontFamily: MONO }}
+                >
+                  {v.sharedHash}
+                </div>
+                <div className="text-[10px] leading-snug mt-0.5" style={{ color: INK }}>
+                  <span style={{ fontWeight: 700 }}>→</span>{" "}
+                  <span className="italic">32-byte shared secret</span>
+                </div>
+              </div>
             </div>
 
-            {/* Shared-point pill — the only gold element in the stage */}
-            <div
-              className="px-4 py-2 border-[1.5px]"
-              style={{
-                background: GOLD,
-                borderColor: GOLD,
-                color: "#ffffff",
-                opacity: visiblePill ? 1 : 0,
-                transform: visiblePill
-                  ? pulse
-                    ? "scale(1.08)"
-                    : "scale(1)"
-                  : "scale(0.6)",
-                transition:
-                  "opacity 200ms ease-out, transform 400ms cubic-bezier(0.34, 1.56, 0.64, 1)",
-                boxShadow: pulse
-                  ? `0 0 0 6px rgba(184, 134, 11, 0.25)`
-                  : "0 0 0 0 rgba(184, 134, 11, 0)",
-              }}
-            >
-              <div className="text-[10px] tracking-[0.1em] uppercase font-bold opacity-80">
-                shared point
-              </div>
-              <div
-                className="text-[14px] font-bold mt-0.5"
-                style={{ fontFamily: MONO }}
-              >
-                ab · G
-              </div>
-            </div>
-
-            {/* SHA256 caption beneath the pill */}
-            <div
-              className="mt-3 text-center"
-              style={{
-                opacity: visiblePill ? 1 : 0,
-                transition: "opacity 400ms ease-out 200ms",
-              }}
-            >
-              <div
-                className="text-[10px] leading-snug"
-                style={{ color: SLATE, fontFamily: MONO }}
-              >
-                SHA256(shared_point)
-              </div>
-              <div
-                className="text-[10px] leading-snug mt-0.5"
-                style={{ color: INK }}
-              >
-                <span style={{ fontWeight: 700 }}>→</span>{" "}
-                <span className="italic">32-byte shared secret</span>
-              </div>
-            </div>
+            <PartyColumn
+              name="Bob"
+              privVar={bTok}
+              pubVar={BTok}
+              computeStep1={bobStep1}
+              computeStep2={bobStep2}
+              computeFinal={sharedInline}
+              showCompute={showCompute}
+            />
           </div>
-
-          {/* Bob */}
-          <PartyColumn
-            name="Bob"
-            privVar="b"
-            pubVar="B = b · G"
-            ownPriv="b"
-            otherPub="A"
-            arrowDirection="left"
-            arrowLabel="Alice's public key"
-            visibleKeys={visibleKeys}
-            visibleCompute={visibleCompute}
-          />
         </div>
       </div>
 
-      {/* Replay control */}
+      {/* Step controls */}
       <div className="px-4 py-3 border-t-[1.5px] border-foreground/30 bg-card">
-        <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div
-            className="text-xs leading-relaxed flex-1 max-w-2xl"
-            style={{ color: INK }}
-          >
-            Both sides land on the <span className="font-bold">same point</span>{" "}
-            because scalar multiplication commutes:{" "}
-            <span style={{ fontFamily: MONO }}>a · B = b · A = ab · G</span>.
-            Hash that point and you have a shared key neither party had to send.
+        <div className="flex flex-col md:flex-row md:items-start md:gap-4">
+          <div className="flex gap-1.5 items-center flex-wrap shrink-0">
+            <button
+              onClick={() => setStep(0)}
+              className="px-3 py-1.5 border-[1.5px] border-foreground/40 bg-card text-foreground text-xs uppercase tracking-[0.05em] hover:bg-secondary transition-colors"
+              data-testid="ecdh-recap-reset"
+            >
+              Reset
+            </button>
+            <div className="ml-1 flex gap-1">
+              {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setStep(i)}
+                  className="w-7 h-7 border-[1.5px] text-[10px] font-bold transition-colors"
+                  style={{
+                    background:
+                      step === i ? SHARED : step > i ? "#fef3c7" : CREAM_CARD,
+                    borderColor: step === i ? SHARED : INK,
+                    color: step === i ? "#fffdf5" : INK,
+                  }}
+                  data-testid={`ecdh-recap-step-${i}`}
+                >
+                  {i + 1}
+                </button>
+              ))}
+            </div>
           </div>
-          <button
-            onClick={() => setAnimKey((k) => k + 1)}
-            className="px-3 py-1.5 border-[1.5px] border-black bg-black text-white font-bold text-xs tracking-[0.05em] uppercase hover:bg-[#b8860b] hover:border-[#b8860b] transition-colors shrink-0"
-            data-testid="ecdh-recap-diagram-replay"
-          >
-            ↻ Replay
-          </button>
+          <div className="mt-3 md:mt-0 text-sm leading-relaxed flex-1 max-w-2xl">
+            {STEP_CAPTIONS[step]} Hover any value above for a refresher.
+          </div>
         </div>
       </div>
     </div>

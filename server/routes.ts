@@ -184,6 +184,8 @@ export const CHECKPOINT_ANSWER_KEY: Record<string, number | number[]> = {
   "cp-channel-update-direction-draft": 1,
   "cp-cheapest-route-draft": 2,
   // Chapter 3: Shared Secrets per Hop (draft)
+  "cp-node-key-ecdh-draft": [0, 1, 2],
+  "cp-naive-shared-secrets-draft": [0, 2],
   "cp-blinding-public-draft": 1,
   "exercise-derive-shared-secrets-draft": 0,
   // Chapter 4: Key Derivation (draft)
