@@ -150,7 +150,10 @@ const ERRORS_PREAMBLE = `# Provided helpers (in scope at runtime):
 #   xor_bytes(a, b) -> bytes
 import hashlib, hmac
 
-ERROR_PACKET_SIZE = 288  # 32 hmac + 256 padded message`;
+# BOLT 4 error packet layout: hmac(32) || u16:failure_len || failure_msg ||
+# u16:pad_len || pad zeros, with failure_len + pad_len == 256.
+# Total = 32 + 2 + failure_len + 2 + pad_len = 32 + 260 = 292 bytes.
+ERROR_PACKET_SIZE = 292`;
 
 // ─── Group Definitions ──────────────────────────────────────────────────────
 //
