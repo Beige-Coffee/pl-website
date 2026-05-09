@@ -189,11 +189,11 @@ export const CHECKPOINT_ANSWER_KEY: Record<string, number | number[]> = {
   "cp-blinding-public-draft": 1,
   "exercise-derive-shared-secrets-draft": 0,
   // Chapter 4: Key Derivation (draft)
+  "cp-key-separation-draft": [0, 1, 2],
   "cp-key-domain-separation-draft": 1,
   "exercise-derive-keys-draft": 0,
-  // Chapter 5: The Fixed-Size Packet (draft)
-  "cp-fixed-size-reason-draft": 1,
-  // Chapter 6: Filler Construction (draft)
+  // Chapter 6: The Fixed-Size Packet & Filler (draft)
+  "cp-payload-shrink-leak-draft": [0, 1],
   "cp-filler-purpose-draft": 1,
   "cp-filler-final-hop-draft": 1,
   "exercise-generate-filler-draft": 0,
@@ -207,6 +207,7 @@ export const CHECKPOINT_ANSWER_KEY: Record<string, number | number[]> = {
   // Chapter 9: Forwarding & Validation (draft)
   "cp-validate-before-decrypt-draft": 1,
   "cp-tlv-final-vs-forward-draft": 1,
+  "exercise-verify-hmac-draft": 0,
   "exercise-process-onion-draft": 0,
   // Chapter 10: The Error Onion (draft)
   "cp-error-trial-decrypt-draft": 1,

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Tok } from "./mathTokens";
 
 // ────────────────────────────────────────────────────────────────────────────
 // NodeKeyAttemptDiagram (DRAFT)
@@ -479,7 +480,7 @@ export function NodeKeyAttemptDiagram() {
                       fontFamily: '"JetBrains Mono", "Fira Code", monospace',
                     }}
                   >
-                    {ecdh.ssLabel}
+                    <Tok token={ecdh.ssLabel} />
                   </span>
                   <span
                     className="text-[10px]"

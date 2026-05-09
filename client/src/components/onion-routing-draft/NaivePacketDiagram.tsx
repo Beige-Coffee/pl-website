@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Tok } from "./mathTokens";
 
 // ────────────────────────────────────────────────────────────────────────────
 // NaivePacketDiagram (DRAFT)
@@ -210,9 +211,9 @@ function AliceKeysChip() {
                 <LockTile tint={s.color.stroke} />
                 <span
                   className="text-[10px]"
-                  style={{ color: INK, fontWeight: 700 }}
+                  style={{ color: INK, fontWeight: 700, fontFamily: '"JetBrains Mono", "Fira Code", monospace' }}
                 >
-                  ({s.privLabel}, {s.pubLabel})
+                  (<Tok token={s.privLabel} />, <Tok token={s.pubLabel} />)
                 </span>
               </div>
             ))}
@@ -461,9 +462,10 @@ export function NaivePacketDiagram() {
                           style={{
                             color: labelColor,
                             minWidth: 70,
+                            fontFamily: '"JetBrains Mono", "Fira Code", monospace',
                           }}
                         >
-                          {s.pubLabel}:
+                          <Tok token={s.pubLabel} color={labelColor} />:
                         </span>
                         <span
                           className="text-[10px]"
@@ -585,9 +587,10 @@ export function NaivePacketDiagram() {
                       background: ecdh.pubColor.fill,
                       borderColor: ecdh.pubColor.stroke,
                       color: INK,
+                      fontFamily: '"JetBrains Mono", "Fira Code", monospace',
                     }}
                   >
-                    {ecdh.pubLabel}
+                    <Tok token={ecdh.pubLabel} />
                   </span>
                   <span
                     className="text-[10px]"
@@ -618,7 +621,7 @@ export function NaivePacketDiagram() {
                       fontFamily: '"JetBrains Mono", "Fira Code", monospace',
                     }}
                   >
-                    {ecdh.ssLabel}
+                    <Tok token={ecdh.ssLabel} />
                   </span>
                   <span
                     className="text-[10px]"

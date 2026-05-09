@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Tok } from "./mathTokens";
 
 // ────────────────────────────────────────────────────────────────────────────
 // SharedSecretsRecapDiagram (DRAFT)
@@ -172,7 +173,7 @@ export function SharedSecretsRecapDiagram() {
                       flexShrink: 0,
                     }}
                   >
-                    E_AB
+                    <Tok token="E_AB" />
                   </div>
                   <div
                     className="border-[1.5px] flex-1 flex items-center justify-center"

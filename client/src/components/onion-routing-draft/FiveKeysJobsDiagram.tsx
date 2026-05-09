@@ -56,9 +56,9 @@ const KEYS: KeySpec[] = [
     name: "pad",
     color: "#7b4b8a",
     direction: "SENDER ONLY",
-    role: "Filler seed",
+    role: "Buffer init",
     oneLiner:
-      "Seeds the deterministic 1300-byte filler used during initial packet construction.",
+      "Pre-fills the 1300-byte payload buffer with random-looking bytes derived from Alice's session key, before any onion layer is applied.",
   },
   {
     name: "ammag",

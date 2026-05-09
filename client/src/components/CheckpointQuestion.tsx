@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { useIsMobile } from "../hooks/use-mobile";
+import { renderMath } from "./onion-routing-draft/mathTokens";
 
 interface CheckpointQuestionProps {
   checkpointId: string;
@@ -22,9 +23,11 @@ interface CheckpointQuestionProps {
   onOpenProfile?: () => void;
 }
 
-// Render inline code: converts `text` to <code> elements
+// Render inline markup: backtick code spans become <code>, and <m>...</m>
+// tokens render with proper math typography (italic base + HTML subscripts)
+// via the shared renderMath helper.
 function renderInlineCode(text: string, dark: boolean): React.ReactNode {
-  const parts = text.split(/(`[^`]+`)/g);
+  const parts = text.split(/(`[^`]+`|<m>[^<]+<\/m>)/g);
   if (parts.length === 1) return text;
   return parts.map((part, i) => {
     if (part.startsWith("`") && part.endsWith("`")) {
@@ -36,6 +39,14 @@ function renderInlineCode(text: string, dark: boolean): React.ReactNode {
         >
           {code}
         </code>
+      );
+    }
+    if (part.startsWith("<m>") && part.endsWith("</m>")) {
+      const token = part.slice(3, -4);
+      return (
+        <span key={i} className="font-mono text-[0.95em] font-semibold">
+          {renderMath(token)}
+        </span>
       );
     }
     return part;

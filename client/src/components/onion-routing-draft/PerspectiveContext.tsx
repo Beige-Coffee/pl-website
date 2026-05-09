@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 // Types
 // ---------------------------------------------------------------------------
 
-export type NodeName = "alice" | "bob" | "carol" | "dave";
+export type NodeName = "alice" | "bob" | "charlie" | "dave";
 
 export type PerspectiveView =
   | { type: "omniscient" }
@@ -19,7 +19,7 @@ export interface PerspectiveContextValue {
   /** True when viewing a specific node's perspective. */
   isNodeLocal: (node: string) => boolean;
   /**
-   * Route privacy model for Alice -> Bob -> Carol -> Dave.
+   * Route privacy model for Alice -> Bob -> Charlie -> Dave.
    *
    * In omniscient mode: always returns true.
    * In node-local mode: returns true only if `target` is the current node
@@ -27,9 +27,9 @@ export interface PerspectiveContextValue {
    *
    * Neighbor map:
    *   Alice: sees Bob (next hop)
-   *   Bob:   sees Alice (prev) and Carol (next)
-   *   Carol: sees Bob (prev) and Dave (next)
-   *   Dave:  sees Carol (prev)
+   *   Bob:   sees Alice (prev) and Charlie (next)
+   *   Charlie: sees Bob (prev) and Dave (next)
+   *   Dave:  sees Charlie (prev)
    */
   canSee: (observer: string, target: string) => boolean;
 }
@@ -38,16 +38,16 @@ export interface PerspectiveContextValue {
 // Route topology -- who can see whom
 // ---------------------------------------------------------------------------
 
-/** Canonical route: Alice -> Bob -> Carol -> Dave */
+/** Canonical route: Alice -> Bob -> Charlie -> Dave */
 const ROUTE_NEIGHBORS: Record<NodeName, Set<NodeName>> = {
   alice: new Set<NodeName>(["alice", "bob"]),
-  bob: new Set<NodeName>(["bob", "alice", "carol"]),
-  carol: new Set<NodeName>(["carol", "bob", "dave"]),
-  dave: new Set<NodeName>(["dave", "carol"]),
+  bob: new Set<NodeName>(["bob", "alice", "charlie"]),
+  charlie: new Set<NodeName>(["charlie", "bob", "dave"]),
+  dave: new Set<NodeName>(["dave", "charlie"]),
 };
 
 function isNodeName(value: string): value is NodeName {
-  return value === "alice" || value === "bob" || value === "carol" || value === "dave";
+  return value === "alice" || value === "bob" || value === "charlie" || value === "dave";
 }
 
 // ---------------------------------------------------------------------------

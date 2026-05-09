@@ -29,8 +29,8 @@ const NODE_META: Record<NodeName, NodeMeta> = {
     activeBg: "bg-green-500/15 border-green-500/50",
     activeText: "text-green-700 dark:text-green-300",
   },
-  carol: {
-    label: "Carol",
+  charlie: {
+    label: "Charlie",
     dotClass: "bg-amber-500",
     activeBg: "bg-amber-500/15 border-amber-500/50",
     activeText: "text-amber-700 dark:text-amber-300",
@@ -43,7 +43,7 @@ const NODE_META: Record<NodeName, NodeMeta> = {
   },
 };
 
-const ALL_NODES: NodeName[] = ["alice", "bob", "carol", "dave"];
+const ALL_NODES: NodeName[] = ["alice", "bob", "charlie", "dave"];
 
 // ---------------------------------------------------------------------------
 // Component

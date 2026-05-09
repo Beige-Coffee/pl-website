@@ -6,7 +6,7 @@
 // hop's slice. Used in Chapter 1 to make the privacy leak concrete.
 // ────────────────────────────────────────────────────────────────────────────
 
-const ROUTE = ["Alice", "Bob", "Carol", "Dave"];
+const ROUTE = ["Alice", "Bob", "Charlie", "Dave"];
 
 function PlaintextPanel() {
   return (
@@ -26,7 +26,7 @@ function PlaintextPanel() {
       >
         <div>sender:&nbsp;&nbsp;Alice</div>
         <div>hop 1:&nbsp;&nbsp;&nbsp;Bob (10,003 sats, block 260)</div>
-        <div>hop 2:&nbsp;&nbsp;&nbsp;Carol (10,002 sats, block 180)</div>
+        <div>hop 2:&nbsp;&nbsp;&nbsp;Charlie (10,002 sats, block 180)</div>
         <div>hop 3:&nbsp;&nbsp;&nbsp;Dave (10,000 sats, block 140)</div>
       </div>
       <div className="mt-3 text-sm leading-snug">
@@ -60,9 +60,9 @@ function OnionPanel() {
         style={{ fontFamily: '"JetBrains Mono", "Fira Code", monospace' }}
       >
         <div className="text-emerald-700 dark:text-emerald-300">[bob's layer — readable]</div>
-        <div className="ml-2">forward 10,002 sats to Carol</div>
+        <div className="ml-2">forward 10,002 sats to Charlie</div>
         <div className="ml-2">outgoing CLTV: block 180</div>
-        <div className="mt-2 text-foreground/40">[carol's layer — encrypted, only Carol can open]</div>
+        <div className="mt-2 text-foreground/40">[charlie's layer — encrypted, only Charlie can open]</div>
         <div className="text-foreground/40">[dave's layer — encrypted, only Dave can open]</div>
         <div className="text-foreground/40">[padding to 1366 bytes total]</div>
       </div>
@@ -71,7 +71,7 @@ function OnionPanel() {
           What Bob learns:
         </div>
         <ul className="list-disc pl-5 space-y-0.5 text-foreground/80">
-          <li>The next hop is Carol</li>
+          <li>The next hop is Charlie</li>
           <li>How much to forward and the CLTV</li>
           <li>Nothing else</li>
         </ul>

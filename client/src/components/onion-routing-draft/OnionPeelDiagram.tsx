@@ -1,152 +1,321 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 // ────────────────────────────────────────────────────────────────────────────
-// OnionPeelDiagram
+// OnionPeelDiagram (rebuilt 2026-05-08)
 //
-// Forward-direction visualization: shows the 2,600-byte working buffer Bob
-// allocates during peel, the rho-keystream XOR, and the slot extraction.
-// Used in Chapter 8.
+// Forward-direction visualization of one forwarder peeling its layer. Shows
+// the 2,600-byte working buffer Bob allocates, the rho-keystream XOR over
+// the full 2,600-byte region, and how the next 1,300-byte slice (window
+// shifted forward by slot size) becomes Charlie's view.
+//
+// Visual style follows the locked onion-routing format spec.
 // ────────────────────────────────────────────────────────────────────────────
 
-const STEPS = [
-  {
-    title: "1. Bob receives the packet",
-    desc: "Bob copies the inbound 1,300-byte hop_payloads into the front of a 2,600-byte working buffer. The trailing 1,300 bytes are zero. Bob has no idea what's in the encrypted bytes yet.",
-  },
-  {
-    title: "2. XOR with extended rho keystream",
-    desc: "Bob generates 2,600 bytes of ChaCha20 keystream from rho_bob and XORs it onto the working buffer. The first part decrypts to Bob's TLV payload + next_hmac. The trailing portion is now Bob's keystream applied to zeros — exactly the bytes Alice precomputed in the filler so Carol's view will line up.",
-  },
-  {
-    title: "3. Extract Bob's slot, slide the window",
-    desc: "Bob reads his TLV payload off the front, learns slot_size = len(payload) + 32, and reads next_hmac. The next packet's hop_payloads is bytes [slot_size : slot_size + 1300] of the working buffer. He's effectively slid the 1,300-byte window forward by slot_size.",
-  },
-  {
-    title: "4. Forward to Carol",
-    desc: "Bob computes E_{i+1} = E_i × SHA256(E_i || ss_i), assembles version || E_{i+1} || next_hop_payloads || next_hmac, and sends it to Carol. The packet she receives looks indistinguishable from one Alice could have sent her directly.",
-  },
-];
+const MONO = '"JetBrains Mono", "Fira Code", monospace';
+
+const STEP_CAPTIONS: Record<number, string> = {
+  0: "Bob receives the packet. He copies the inbound 1,300-byte hop_payloads field into the front of a 2,600-byte working buffer. The trailing 1,300 bytes start as zeros. None of the bytes are decrypted yet; he doesn't know what's in any of them.",
+  1: "Bob generates 2,600 bytes of ChaCha20 keystream from his rho key and XORs it onto the working buffer. The first 1,300 bytes now have the encryption layer removed — Bob's TLV slot at the front, Charlie's view in the rest. The trailing 1,300 bytes are now Bob's keystream applied to zeros, exactly the bytes Alice baked into the filler so Charlie's HMAC will line up.",
+  2: "Bob reads his slot off the front: the bigsize length, the TLV records, and the next_hmac that points to Charlie's layer. He computes slot_size = bigsize_header + tlv_length + 32. The next packet's hop_payloads is the 1,300-byte window of the working buffer starting at slot_size — sliding the window forward by exactly Bob's slot.",
+  3: "Bob assembles the outgoing packet: version || E_AC (advanced via the blinding chain) || next_hop_payloads || next_hmac. The packet Charlie receives is indistinguishable from one Alice could have built directly for her.",
+};
+
+const TOTAL_BEATS = 4;
 
 export function OnionPeelDiagram() {
   const [step, setStep] = useState(0);
+  const [playing, setPlaying] = useState(false);
 
-  // Visualize the 2600-byte working buffer at the current step.
-  // - Step 0: front 1300 bytes "encrypted" (gray hatched), rest empty
-  // - Step 1: front 1300 decrypted (Bob's slot at very front in blue, then encrypted-for-Carol),
-  //           trailing 1300 bytes is keystream-applied-to-zero (filler-shape, light)
-  // - Step 2/3: same buffer, with a window highlighted around the next 1300 bytes after Bob's slot
+  useEffect(() => {
+    if (!playing) return;
+    if (step >= TOTAL_BEATS - 1) {
+      setPlaying(false);
+      return;
+    }
+    const t = setTimeout(() => setStep((s) => s + 1), 2200);
+    return () => clearTimeout(t);
+  }, [playing, step]);
+
+  const play = () => {
+    if (step >= TOTAL_BEATS - 1) setStep(0);
+    setPlaying(true);
+  };
+  const pause = () => setPlaying(false);
+  const reset = () => {
+    setStep(0);
+    setPlaying(false);
+  };
 
   return (
     <div
-      className="my-8 border-2 border-border bg-card p-4 md:p-6"
+      className="my-8 border-[1.5px] border-foreground/40 bg-card overflow-hidden"
       data-testid="onion-peel-forward"
+      style={{ fontFamily: "ui-sans-serif, system-ui, sans-serif" }}
     >
-      <div className="text-xs uppercase tracking-wider opacity-70 font-pixel mb-3">
-        Bob peels his layer
+      {/* Header */}
+      <div className="bg-black text-white px-4 py-2 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="w-1.5 h-1.5 rounded-full bg-[#b8860b]" />
+          <span className="text-sm font-bold tracking-[0.08em] uppercase">
+            Bob peels his layer
+          </span>
+        </div>
       </div>
 
-      {/* Buffer visualization */}
-      <div className="overflow-x-auto">
-        <svg
-          viewBox="0 0 720 160"
-          className="w-full max-w-4xl mx-auto"
-          style={{ fontFamily: "ui-sans-serif, system-ui, sans-serif" }}
-        >
-          {/* Buffer outline */}
-          <rect x={20} y={50} width={680} height={50} fill="none" stroke="#0f172a" strokeWidth={2} />
-          {/* 1300-byte boundary line */}
-          <line x1={360} y1={50} x2={360} y2={100} stroke="#0f172a" strokeWidth={1.5} strokeDasharray="3 3" />
-          <text x={360} y={45} textAnchor="middle" fontSize={9} fill="#475569">
-            1,300 byte boundary
-          </text>
+      {/* Stage */}
+      <div
+        className="relative bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-6"
+        style={{ minHeight: 280 }}
+      >
+        <div className="overflow-x-auto">
+          <div style={{ minWidth: 720 }}>
+            {/* Buffer label */}
+            <div className="flex items-center justify-between mb-2">
+              <div
+                className="text-[10px] uppercase tracking-[0.08em]"
+                style={{ color: "#475569" }}
+              >
+                2,600-byte working buffer
+              </div>
+              <div
+                className="text-[10px] uppercase tracking-[0.08em]"
+                style={{ color: "#475569" }}
+              >
+                ← inbound | working space →
+              </div>
+            </div>
 
-          {/* Step 0: front half encrypted (#cbd5e1), back half empty */}
-          {step === 0 && (
-            <>
-              <rect x={20} y={51} width={340} height={48} fill="#cbd5e1" />
-              <text x={190} y={80} textAnchor="middle" fontSize={11} fill="#0f172a">
-                inbound encrypted hop_payloads
-              </text>
-              <rect x={360} y={51} width={340} height={48} fill="#f1f5f9" />
-              <text x={530} y={80} textAnchor="middle" fontSize={11} fill="#475569" fontStyle="italic">
-                zero (working space)
-              </text>
-            </>
-          )}
+            {/* Buffer visualization */}
+            <BufferStrip step={step} />
 
-          {/* Step 1: full decrypted view */}
-          {step >= 1 && (
-            <>
-              {/* Bob's slot */}
-              <rect x={20} y={51} width={45} height={48} fill="#bfdbfe" stroke="#2563eb" strokeWidth={1.5} />
-              <text x={42} y={80} textAnchor="middle" fontSize={9} fill="#0f172a">
-                bob slot
-              </text>
-              {/* Carol+Dave encrypted view */}
-              <rect x={65} y={51} width={295} height={48} fill="#ddd6fe" />
-              <text x={213} y={80} textAnchor="middle" fontSize={11} fill="#0f172a">
-                encrypted for Carol → Dave
-              </text>
-              {/* Trailing keystream-extended portion */}
-              <rect x={360} y={51} width={340} height={48} fill="#fef3c7" />
-              <text x={530} y={80} textAnchor="middle" fontSize={11} fill="#0f172a">
-                rho-keystream extension (matches Alice's filler)
-              </text>
-            </>
-          )}
-
-          {/* Step 2/3: highlight window for next packet */}
-          {step >= 2 && (
-            <>
-              <rect
-                x={65}
-                y={48}
-                width={340}
-                height={54}
-                fill="none"
-                stroke="#dc2626"
-                strokeWidth={3}
-              />
-              <text x={235} y={120} textAnchor="middle" fontSize={11} fill="#dc2626" fontWeight={600}>
-                next packet's hop_payloads (1,300 bytes)
-              </text>
-            </>
-          )}
-
-          {/* Step 3: ephemeral pubkey advance */}
-          {step >= 3 && (
-            <>
-              <text x={350} y={140} textAnchor="middle" fontSize={11} fill="#16a34a" fontWeight={600}>
-                + advance E_i → E_{"{i+1}"} via blinding
-              </text>
-            </>
-          )}
-        </svg>
+            {/* Step legend (after step 1) */}
+            {step >= 1 && (
+              <div className="mt-4 flex flex-wrap gap-3 text-[11px]">
+                <LegendSwatch fill="#dbeafe" stroke="#3b6aa0" label="Bob's slot (decrypted)" />
+                <LegendSwatch fill="#ede1f3" stroke="#7b4b8a" label="Charlie + Dave (still encrypted for them)" />
+                <LegendSwatch fill="#fef3c7" stroke="#b8860b" label="Bob's keystream extension (matches Alice's filler)" />
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Step controls */}
-      <div className="mt-4 flex flex-col md:flex-row md:items-start md:gap-4">
-        <div className="flex gap-1.5 flex-wrap">
-          {STEPS.map((_, i) => (
+      <div className="px-4 py-3 border-t-[1.5px] border-foreground/30 bg-card">
+        <div className="flex flex-col md:flex-row md:items-start md:gap-4">
+          <div className="flex gap-1.5 items-center flex-wrap shrink-0">
             <button
-              key={i}
-              onClick={() => setStep(i)}
-              className={`px-3 py-1.5 border-2 font-pixel text-xs transition-colors ${
-                step >= i
-                  ? "bg-primary text-foreground border-border"
-                  : "bg-card text-foreground/50 border-border hover:bg-secondary"
-              }`}
-              data-testid={`onion-peel-step-${i}`}
+              onClick={playing ? pause : play}
+              className="px-3 py-1.5 border-[1.5px] border-black bg-black text-white font-bold text-xs tracking-[0.05em] uppercase hover:bg-[#b8860b] hover:border-[#b8860b] transition-colors"
             >
-              {i + 1}
+              {playing
+                ? "❚❚ Pause"
+                : step >= TOTAL_BEATS - 1
+                  ? "↻ Replay"
+                  : "▶ Play"}
             </button>
-          ))}
-        </div>
-        <div className="mt-3 md:mt-0 text-sm leading-relaxed flex-1">
-          <div className="font-semibold mb-1">{STEPS[step].title}</div>
-          <div>{STEPS[step].desc}</div>
+            <button
+              onClick={reset}
+              className="px-3 py-1.5 border-[1.5px] border-foreground/40 bg-card text-foreground text-xs uppercase tracking-[0.05em] hover:bg-secondary transition-colors"
+            >
+              Reset
+            </button>
+            <div className="ml-1 flex gap-1">
+              {Array.from({ length: TOTAL_BEATS }, (_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setStep(i)}
+                  className="w-7 h-7 border-[1.5px] text-xs font-bold transition-colors"
+                  style={{
+                    background: step === i ? "#b8860b" : "#fffdf5",
+                    borderColor: step === i ? "#b8860b" : "rgba(15,23,42,0.4)",
+                    color: step === i ? "#fff" : "#0f172a",
+                  }}
+                >
+                  {i + 1}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="mt-3 md:mt-0 text-sm leading-relaxed flex-1 max-w-2xl">
+            {STEP_CAPTIONS[step]}
+          </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function BufferStrip({ step }: { step: number }) {
+  // Total visible width: split into 5% (Bob slot) + 45% (Charlie/Dave) + 50% (working/filler)
+  const slotPct = 5;
+  const innerPct = 45;
+  const workingPct = 50;
+
+  const showDecrypted = step >= 1;
+  const showWindow = step >= 2;
+
+  return (
+    <div className="relative">
+      <div
+        className="flex border-[1.5px]"
+        style={{
+          height: 60,
+          borderColor: "#0f172a",
+          background: "#fffdf5",
+        }}
+      >
+        {/* Bob's slot (only after decryption) */}
+        {showDecrypted ? (
+          <>
+            <div
+              className="flex items-center justify-center transition-all"
+              style={{
+                width: `${slotPct}%`,
+                background: "#dbeafe",
+                borderRight: "1.5px solid #3b6aa0",
+                color: "#0f172a",
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: "0.02em",
+              }}
+            >
+              Bob
+            </div>
+            <div
+              className="flex items-center justify-center transition-all"
+              style={{
+                width: `${innerPct}%`,
+                background: "#ede1f3",
+                borderRight: "1.5px solid #7b4b8a",
+                color: "#0f172a",
+                fontSize: 11,
+                fontWeight: 600,
+              }}
+            >
+              encrypted for Charlie + Dave
+            </div>
+            <div
+              className="flex items-center justify-center transition-all"
+              style={{
+                width: `${workingPct}%`,
+                background: "#fef3c7",
+                color: "#0f172a",
+                fontSize: 11,
+                fontWeight: 600,
+              }}
+            >
+              rho keystream extension
+            </div>
+          </>
+        ) : (
+          <>
+            <div
+              className="flex items-center justify-center"
+              style={{
+                width: "50%",
+                background: "#cbd5e1",
+                borderRight: "1.5px solid #475569",
+                color: "#0f172a",
+                fontSize: 11,
+                fontWeight: 600,
+                letterSpacing: "0.02em",
+              }}
+            >
+              inbound encrypted hop_payloads (1,300 B)
+            </div>
+            <div
+              className="flex items-center justify-center"
+              style={{
+                width: "50%",
+                background: "#f1f5f9",
+                color: "#475569",
+                fontSize: 11,
+                fontStyle: "italic",
+              }}
+            >
+              zero (working space, 1,300 B)
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* The 1300-byte boundary indicator */}
+      <div
+        className="absolute"
+        style={{
+          left: "50%",
+          top: -8,
+          width: 1,
+          height: 76,
+          borderLeft: "1.5px dashed #475569",
+        }}
+      />
+      <div
+        className="absolute text-[9px]"
+        style={{
+          left: "50%",
+          top: -16,
+          transform: "translateX(-50%)",
+          color: "#475569",
+          fontFamily: MONO,
+        }}
+      >
+        1,300 B
+      </div>
+
+      {/* Window highlight for next packet */}
+      {showWindow && (
+        <>
+          <div
+            className="absolute pointer-events-none transition-all"
+            style={{
+              left: `${slotPct}%`,
+              top: -3,
+              width: `${innerPct + 5}%`,
+              height: 66,
+              border: "2.5px solid #b8860b",
+              boxShadow: "0 0 0 2px rgba(184,134,11,0.18)",
+            }}
+          />
+          <div
+            className="absolute text-[10px] tracking-[0.04em]"
+            style={{
+              left: `${slotPct}%`,
+              top: 70,
+              color: "#b8860b",
+              fontFamily: MONO,
+              fontWeight: 700,
+            }}
+          >
+            next packet's hop_payloads (1,300 B, shifted by Bob's slot)
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function LegendSwatch({
+  fill,
+  stroke,
+  label,
+}: {
+  fill: string;
+  stroke: string;
+  label: string;
+}) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <div
+        style={{
+          width: 14,
+          height: 14,
+          background: fill,
+          border: `1.5px solid ${stroke}`,
+        }}
+      />
+      <span style={{ color: "#475569", letterSpacing: "0.02em" }}>{label}</span>
     </div>
   );
 }

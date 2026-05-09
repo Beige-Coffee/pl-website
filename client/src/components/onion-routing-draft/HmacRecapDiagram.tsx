@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { Tok } from "./mathTokens";
 
 // ────────────────────────────────────────────────────────────────────────────
 // HmacRecapDiagram (DRAFT)
@@ -17,20 +18,22 @@ import { useState, useEffect, useRef } from "react";
 //   - Body sans-serif, monospace for protocol values + hex.
 // ────────────────────────────────────────────────────────────────────────────
 
-type KeyName = "rho" | "mu" | "um" | "pad" | "ammag";
+type KeyName = "rho" | "mu" | "um" | "ammag" | "pad";
+type MsgSource = "perhop" | "session";
 
 interface KeyEntry {
   name: KeyName;
   color: string;
   hex: string;
+  source: MsgSource;
 }
 
 const KEYS: KeyEntry[] = [
-  { name: "rho",   color: "#b8860b", hex: "8f a3 7c d1  4e 09 b2 6a  …  2f c4 12 a7" },
-  { name: "mu",    color: "#3b6aa0", hex: "21 e0 9b 4d  77 c1 38 5f  …  a4 0b 6e 92" },
-  { name: "um",    color: "#2d7a7a", hex: "5c 18 d3 b7  09 4a 6c f2  …  e1 73 28 bd" },
-  { name: "pad",   color: "#7b4b8a", hex: "a9 4f 02 ce  6b 88 11 7d  …  35 9c d8 47" },
-  { name: "ammag", color: "#5a7a2f", hex: "13 b6 6d 8a  c4 27 fe 50  …  72 ee 19 03" },
+  { name: "rho",   color: "#b8860b", hex: "8f a3 7c d1  4e 09 b2 6a  …  2f c4 12 a7", source: "perhop" },
+  { name: "mu",    color: "#3b6aa0", hex: "21 e0 9b 4d  77 c1 38 5f  …  a4 0b 6e 92", source: "perhop" },
+  { name: "um",    color: "#2d7a7a", hex: "5c 18 d3 b7  09 4a 6c f2  …  e1 73 28 bd", source: "perhop" },
+  { name: "ammag", color: "#5a7a2f", hex: "13 b6 6d 8a  c4 27 fe 50  …  72 ee 19 03", source: "perhop" },
+  { name: "pad",   color: "#7b4b8a", hex: "a9 4f 02 ce  6b 88 11 7d  …  35 9c d8 47", source: "session" },
 ];
 
 const BEAT_MS = 1500;
@@ -112,7 +115,14 @@ export function HmacRecapDiagram() {
               </div>
 
               {/* msg pill */}
-              <div className="border-[1.5px] border-[#0f172a] bg-[#fffdf5] px-3 py-2">
+              <div
+                className="border-[1.5px] bg-[#fffdf5] px-3 py-2"
+                style={{
+                  borderColor:
+                    active.source === "session" ? "#7b4b8a" : "#0f172a",
+                  transition: "border-color 400ms ease-out",
+                }}
+              >
                 <div className="text-[9px] uppercase tracking-[0.12em] opacity-60 mb-1">
                   msg
                 </div>
@@ -121,12 +131,16 @@ export function HmacRecapDiagram() {
                   style={{
                     fontFamily: '"JetBrains Mono", "Fira Code", monospace',
                     color: "#0f172a",
+                    transition: "color 400ms ease-out",
                   }}
+                  key={`msg-${active.name}`}
                 >
-                  ss_i
+                  {active.source === "session" ? "session_key" : "ss_i"}
                 </div>
                 <div className="text-[10px] opacity-60 mt-0.5 italic">
-                  the per-hop shared secret
+                  {active.source === "session"
+                    ? "Alice's per-payment session key"
+                    : "the per-hop shared secret"}
                 </div>
               </div>
             </div>
@@ -233,8 +247,17 @@ export function HmacRecapDiagram() {
           className="text-center mt-6 text-sm"
           style={{ fontFamily: '"JetBrains Mono", "Fira Code", monospace' }}
         >
-          <span className="opacity-70">generate_key(name, ss_i) = </span>
-          <span className="font-bold">HMAC-SHA256(name, ss_i)</span>
+          <span className="opacity-70">
+            generate_key(name, secret) ={" "}
+          </span>
+          <span className="font-bold">
+            HMAC-SHA256(name, secret)
+          </span>
+        </div>
+        <div className="text-center mt-1 text-[11px] italic opacity-70">
+          {active.source === "session"
+            ? "for pad, secret = Alice's session_key (per payment)"
+            : <>for {active.name}, secret = <Tok token="ss_i" /> (per hop)</>}
         </div>
 
         {/* Active key indicator dots */}
@@ -279,8 +302,9 @@ export function HmacRecapDiagram() {
             </button>
           </div>
           <div className="mt-3 md:mt-0 text-sm leading-relaxed flex-1 max-w-2xl">
-            Five names, five keys. Same shared secret in, five independent
-            32-byte keys out.
+            Five names, five keys. Four feed from the per-hop shared secret
+            (<Tok token="ss_i" />); pad feeds from Alice's session key. Same
+            HMAC construction either way.
           </div>
         </div>
       </div>

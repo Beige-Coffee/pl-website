@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { HoverTip, Tok as TokBase, Code as CodeBase, Op as OpBase, Fn as FnBase } from "./mathTokens";
 
 // ────────────────────────────────────────────────────────────────────────────
 // BlindingFactorDiagram (DRAFT)
@@ -19,78 +20,19 @@ const CREAM_STAGE = "#fefdfb";
 const CREAM_CARD = "#fffdf5";
 const GOLD = "#b8860b";
 const GOLD_FILL = "#fef3c7";
-const MONO = '"JetBrains Mono", "Fira Code", monospace';
 
 type HopKey = "bob" | "charlie" | "dave";
 
+// Per-hop colors. Charlie's fill is locally lightened from the canonical
+// #ccece8 to #d8efe9 so all three hops have matching perceived luminance
+// (~231 on the 0-255 scale). The canonical Charlie #ccece8 is darker by
+// ~5 luminance points, which reads as "more saturated than Bob and Dave"
+// when the three cells sit side-by-side at equal widths in this matrix.
 const HOP_COLORS: Record<HopKey, { stroke: string; fill: string; soft: string }> = {
   bob: { stroke: "#3b6aa0", fill: "#dbeafe", soft: "#eff6ff" },
-  charlie: { stroke: "#2d7a7a", fill: "#ccece8", soft: "#ecfdf5" },
+  charlie: { stroke: "#2d7a7a", fill: "#d8efe9", soft: "#ecfdf5" },
   dave: { stroke: "#7b4b8a", fill: "#ede1f3", soft: "#faf5ff" },
 };
-
-// ── HoverTip with viewport-clamped fixed positioning ───────────────────────
-
-const TIP_WIDTH = 260;
-
-function HoverTip({ children, info }: { children: ReactNode; info: string }) {
-  const [shown, setShown] = useState(false);
-  const [pos, setPos] = useState({ x: 0, y: 0, above: true });
-  const ref = useRef<HTMLSpanElement>(null);
-
-  function show() {
-    const el = ref.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    const margin = 8;
-    const desiredX = r.left + r.width / 2 - TIP_WIDTH / 2;
-    const x = Math.max(
-      margin,
-      Math.min(window.innerWidth - TIP_WIDTH - margin, desiredX)
-    );
-    const aboveY = r.top - 10;
-    const fitsAbove = aboveY > 100;
-    const y = fitsAbove ? aboveY : r.bottom + 10;
-    setPos({ x, y, above: fitsAbove });
-    setShown(true);
-  }
-
-  return (
-    <span
-      ref={ref}
-      onMouseEnter={show}
-      onMouseLeave={() => setShown(false)}
-      style={{ position: "relative", display: "inline-block" }}
-    >
-      {children}
-      {shown && (
-        <span
-          style={{
-            position: "fixed",
-            left: pos.x,
-            top: pos.above ? undefined : pos.y,
-            bottom: pos.above ? window.innerHeight - pos.y : undefined,
-            width: TIP_WIDTH,
-            zIndex: 50,
-            padding: "8px 10px",
-            background: INK,
-            color: "#fffdf5",
-            fontSize: 11,
-            lineHeight: 1.45,
-            fontFamily: "ui-sans-serif, system-ui, sans-serif",
-            fontWeight: 400,
-            letterSpacing: "0.01em",
-            whiteSpace: "normal",
-            boxShadow: "0 8px 30px rgba(0,0,0,0.25)",
-            pointerEvents: "none",
-          }}
-        >
-          {info}
-        </span>
-      )}
-    </span>
-  );
-}
 
 // ── Token catalog ───────────────────────────────────────────────────────────
 
@@ -128,60 +70,19 @@ const TOKEN_INFO: Record<string, string> = {
     "Concatenation. Joins the bytes of E with the bytes of ss to feed into SHA256.",
 };
 
-// ── Token (mono + hoverable) ────────────────────────────────────────────────
-
-function Tok({
-  token,
-  color,
-  display,
-}: {
-  token: string;
-  color?: string;
-  display?: string;
-}) {
-  const info = TOKEN_INFO[token];
-  const text = display ?? token;
-  const styled = (
-    <span
-      style={{
-        fontFamily: MONO,
-        color: color ?? INK,
-        fontWeight: 700,
-      }}
-    >
-      {text}
-    </span>
-  );
-  if (!info) return styled;
-  return <HoverTip info={info}>{styled}</HoverTip>;
+// Local wrappers that pre-fill the diagram's TOKEN_INFO catalog.
+// (Shared math primitives live in mathTokens.tsx.)
+function Tok({ token, color }: { token: string; color?: string }) {
+  return <TokBase token={token} color={color} info={TOKEN_INFO[token]} />;
 }
-
-// Code-styled inline token for use inside captions. Same as Tok visually
-// but slightly smaller font to read inline in prose.
-function Code({
-  token,
-  color,
-}: {
-  token: string;
-  color?: string;
-}) {
-  const info = TOKEN_INFO[token];
-  const styled = (
-    <span
-      style={{
-        fontFamily: MONO,
-        color: color ?? INK,
-        fontWeight: 700,
-        background: "rgba(15,23,42,0.06)",
-        padding: "1px 5px",
-        fontSize: "0.92em",
-      }}
-    >
-      {token}
-    </span>
-  );
-  if (!info) return styled;
-  return <HoverTip info={info}>{styled}</HoverTip>;
+function Code({ token, color }: { token: string; color?: string }) {
+  return <CodeBase token={token} color={color} info={TOKEN_INFO[token]} />;
+}
+function Op({ op }: { op: string }) {
+  return <OpBase op={op} info={TOKEN_INFO[op]} />;
+}
+function Fn({ name, children }: { name: string; children: ReactNode }) {
+  return <FnBase name={name} info={TOKEN_INFO[name]}>{children}</FnBase>;
 }
 
 // ── Cell formulas ───────────────────────────────────────────────────────────
@@ -192,40 +93,54 @@ interface CellSpec {
 }
 
 const ROW_LABELS = [
-  "Generate session key",
+  "Compute ephemeral private key",
   "Compute ephemeral public key",
   "Compute shared secret",
   "Compute blinding factor",
 ];
 
 const ROW_TOOLTIPS = [
-  "Each hop's session-key-equivalent. For Bob it's the random session key directly. For Charlie and Dave, it's derived from the previous hop's blinding factor.",
-  "Multiply the session-key-equivalent by G to get the ephemeral public key. Only Bob's E_AB ever travels in the packet; Charlie's and Dave's are computed on the fly.",
+  "Each hop's ephemeral private scalar. For Bob it IS the session key directly (Alice's randomly generated 32-byte scalar). For Charlie and Dave, it's the previous hop's scalar multiplied by the previous hop's blinding factor.",
+  "Multiply the ephemeral private key by G to get the ephemeral public key. Only Bob's E_AB ever travels in the packet; Charlie's and Dave's are computed on the fly.",
   "Run ECDH between Alice's ephemeral private key and the hop's published node pubkey, then hash. Both Alice and the hop arrive at the same shared secret.",
-  "Hash the ephemeral pubkey with the shared secret. The next hop uses this to derive its own session-key-equivalent. Dave doesn't compute one (no successor).",
+  "Hash the ephemeral pubkey with the shared secret. The next hop uses this to derive its own ephemeral private key. Dave doesn't compute one (no successor).",
 ];
 
 function buildCells(): Array<Array<CellSpec | null>> {
-  const BOB = HOP_COLORS.bob.stroke;
-  const CHARLIE = HOP_COLORS.charlie.stroke;
   const bob: CellSpec[] = [
     {
       formula: (
-        <>
-          <Tok token="e_AB" /> = <Tok token="sessionkey" />
-        </>
+        <div className="flex flex-col items-center" style={{ gap: 4 }}>
+          <span>
+            <Tok token="e_AB" /> <Op op="=" /> <Tok token="sessionkey" />
+          </span>
+          <span
+            style={{
+              fontSize: 10,
+              fontStyle: "italic",
+              color: SLATE,
+              letterSpacing: "0.02em",
+              fontFamily: "ui-sans-serif, system-ui, sans-serif",
+              opacity: 0.85,
+            }}
+          >
+            Alice's freshly generated random scalar k
+          </span>
+        </div>
       ),
       caption: (
         <>
           Bob: Alice generates a random 32-byte <Code token="sessionkey" />.
-          This is the seed that the rest of the chain unfolds from.
+          This is the seed that the rest of the chain unfolds from. Bob's
+          ephemeral private key is the session key itself; subsequent hops
+          derive theirs by blinding.
         </>
       ),
     },
     {
       formula: (
         <>
-          <Tok token="E_AB" /> = <Tok token="e_AB" /> <Tok token="·" />{" "}
+          <Tok token="E_AB" /> <Op op="=" /> <Tok token="e_AB" /> <Op op="·" />{" "}
           <Tok token="G" />
         </>
       ),
@@ -241,8 +156,10 @@ function buildCells(): Array<Array<CellSpec | null>> {
     {
       formula: (
         <>
-          <Tok token="ss_AB" /> = <Tok token="SHA256" />(<Tok token="e_AB" />{" "}
-          <Tok token="·" /> <Tok token="B" />)
+          <Tok token="ss_AB" /> <Op op="=" />{" "}
+          <Fn name="SHA256">
+            <Tok token="e_AB" /> <Op op="·" /> <Tok token="B" />
+          </Fn>
         </>
       ),
       caption: (
@@ -256,8 +173,10 @@ function buildCells(): Array<Array<CellSpec | null>> {
     {
       formula: (
         <>
-          <Tok token="bf_AB" /> = <Tok token="SHA256" />(<Tok token="E_AB" />{" "}
-          <Tok token="‖" /> <Tok token="ss_AB" />)
+          <Tok token="bf_AB" /> <Op op="=" />{" "}
+          <Fn name="SHA256">
+            <Tok token="E_AB" /> <Op op="‖" /> <Tok token="ss_AB" />
+          </Fn>
         </>
       ),
       caption: (
@@ -273,23 +192,22 @@ function buildCells(): Array<Array<CellSpec | null>> {
     {
       formula: (
         <>
-          <Tok token="e_AC" /> = <Tok token="bf_AB" color={BOB} />{" "}
-          <Tok token="·" /> <Tok token="e_AB" color={BOB} />
+          <Tok token="e_AC" /> <Op op="=" /> <Tok token="bf_AB" />{" "}
+          <Op op="·" /> <Tok token="e_AB" />
         </>
       ),
       caption: (
         <>
-          Charlie: multiply <Code token="bf_AB" color={BOB} /> by{" "}
-          <Code token="e_AB" color={BOB} /> to derive Charlie's
-          session-key-equivalent <Code token="e_AC" />. The blue tokens are
-          values that came from Bob's column.
+          Charlie: multiply <Code token="bf_AB" /> by <Code token="e_AB" /> to
+          derive Charlie's session-key-equivalent <Code token="e_AC" />. The
+          blue arrows trace where each value came from in Bob's column.
         </>
       ),
     },
     {
       formula: (
         <>
-          <Tok token="E_AC" /> = <Tok token="e_AC" /> <Tok token="·" />{" "}
+          <Tok token="E_AC" /> <Op op="=" /> <Tok token="e_AC" /> <Op op="·" />{" "}
           <Tok token="G" />
         </>
       ),
@@ -303,8 +221,10 @@ function buildCells(): Array<Array<CellSpec | null>> {
     {
       formula: (
         <>
-          <Tok token="ss_AC" /> = <Tok token="SHA256" />(<Tok token="e_AC" />{" "}
-          <Tok token="·" /> <Tok token="C" />)
+          <Tok token="ss_AC" /> <Op op="=" />{" "}
+          <Fn name="SHA256">
+            <Tok token="e_AC" /> <Op op="·" /> <Tok token="C" />
+          </Fn>
         </>
       ),
       caption: (
@@ -317,8 +237,10 @@ function buildCells(): Array<Array<CellSpec | null>> {
     {
       formula: (
         <>
-          <Tok token="bf_AC" /> = <Tok token="SHA256" />(<Tok token="E_AC" />{" "}
-          <Tok token="‖" /> <Tok token="ss_AC" />)
+          <Tok token="bf_AC" /> <Op op="=" />{" "}
+          <Fn name="SHA256">
+            <Tok token="E_AC" /> <Op op="‖" /> <Tok token="ss_AC" />
+          </Fn>
         </>
       ),
       caption: (
@@ -333,23 +255,22 @@ function buildCells(): Array<Array<CellSpec | null>> {
     {
       formula: (
         <>
-          <Tok token="e_AD" /> = <Tok token="bf_AC" color={CHARLIE} />{" "}
-          <Tok token="·" /> <Tok token="e_AC" color={CHARLIE} />
+          <Tok token="e_AD" /> <Op op="=" /> <Tok token="bf_AC" />{" "}
+          <Op op="·" /> <Tok token="e_AC" />
         </>
       ),
       caption: (
         <>
-          Dave: multiply <Code token="bf_AC" color={CHARLIE} /> by{" "}
-          <Code token="e_AC" color={CHARLIE} /> to derive Dave's
-          session-key-equivalent <Code token="e_AD" />. Teal tokens came from
-          Charlie's column.
+          Dave: multiply <Code token="bf_AC" /> by <Code token="e_AC" /> to
+          derive Dave's session-key-equivalent <Code token="e_AD" />. The teal
+          arrows trace where each value came from in Charlie's column.
         </>
       ),
     },
     {
       formula: (
         <>
-          <Tok token="E_AD" /> = <Tok token="e_AD" /> <Tok token="·" />{" "}
+          <Tok token="E_AD" /> <Op op="=" /> <Tok token="e_AD" /> <Op op="·" />{" "}
           <Tok token="G" />
         </>
       ),
@@ -363,8 +284,10 @@ function buildCells(): Array<Array<CellSpec | null>> {
     {
       formula: (
         <>
-          <Tok token="ss_AD" /> = <Tok token="SHA256" />(<Tok token="e_AD" />{" "}
-          <Tok token="·" /> <Tok token="D" />)
+          <Tok token="ss_AD" /> <Op op="=" />{" "}
+          <Fn name="SHA256">
+            <Tok token="e_AD" /> <Op op="·" /> <Tok token="D" />
+          </Fn>
         </>
       ),
       caption: (
@@ -460,30 +383,35 @@ function CellTile({
   visible,
   pulse,
   isLatest,
+  cellRef,
 }: {
   cell: CellSpec | null;
   hopKey: HopKey;
   visible: boolean;
   pulse: boolean;
   isLatest: boolean;
+  cellRef?: (el: HTMLDivElement | null) => void;
 }) {
   const c = HOP_COLORS[hopKey];
   if (!cell) {
+    // Dave's "no successor" placeholder for row 4. Same height + dashed
+    // outline so the 3-column grid stays visually aligned with rows 1-3.
     return (
       <div
+        ref={cellRef}
         className="border-[1.5px] border-dashed flex items-center justify-center"
         style={{
           background: CREAM_CARD,
           borderColor: SLATE,
-          opacity: visible ? 0.6 : 0,
+          opacity: visible ? 0.7 : 0,
           transition: "opacity 350ms ease-out",
-          minHeight: 44,
+          minHeight: 48,
           padding: "8px 10px",
         }}
       >
         <span
-          className="text-[10px] italic text-center"
-          style={{ color: SLATE }}
+          className="text-[10.5px] italic text-center"
+          style={{ color: SLATE, fontFamily: "ui-sans-serif, system-ui, sans-serif" }}
         >
           (final hop, no successor)
         </span>
@@ -492,7 +420,8 @@ function CellTile({
   }
   return (
     <div
-      className="px-2.5 py-2 flex items-center justify-center"
+      ref={cellRef}
+      className="px-3 flex items-center justify-center"
       style={{
         background: visible ? c.fill : c.soft,
         border: `1.5px solid ${isLatest ? GOLD : c.stroke}`,
@@ -505,8 +434,10 @@ function CellTile({
             : "0 0 0 0 transparent",
         transition:
           "opacity 400ms ease-out, transform 400ms ease-out, border-color 350ms ease-out, box-shadow 500ms ease-out, background 350ms ease-out",
-        minHeight: 44,
+        minHeight: 48,
         textAlign: "center",
+        fontSize: 14.5,
+        letterSpacing: "0.01em",
       }}
     >
       {cell.formula}
@@ -514,13 +445,156 @@ function CellTile({
   );
 }
 
+type CellRect = { x: number; y: number; w: number; h: number };
+
+interface ArrowSpec {
+  key: string;
+  src: string;                  // source cell key, e.g. "0-0"
+  dest: string;                 // destination cell key (used for gutter geometry)
+  destToken: string;            // specific token within the dest cell to land on
+  gutter: "bob-charlie" | "charlie-dave"; // which column gutter to route through
+  color: string;
+  showAt: number;               // subStep at which the arrow draws in
+  dashed?: boolean;             // render as dashed stroke for visual differentiation
+  gutterOffsetX?: number;       // shift the gutter X so paired arrows run parallel
+  topYOffset?: number;          // shift the routing band Y so paired horizontals don't overlap
+}
+
+type CellRectMap = Record<string, CellRect>;
+
+const ARROWS: ArrowSpec[] = [
+  // SHORT: Bob row 1 (e_AB) → Charlie row 1's e_AB token. Dashed + offset
+  // so it doesn't overlap the long arrow's vertical run up the gutter.
+  {
+    key: "e_AB-to-charlie",
+    src: "0-0", dest: "0-1",
+    destToken: "e_AB",
+    gutter: "bob-charlie",
+    color: "#3b6aa0",
+    showAt: 5,
+    dashed: true,
+    gutterOffsetX: 10,
+    topYOffset: -10,
+  },
+  // LONG: Bob row 4 (bf_AB) → Charlie row 1's bf_AB token. Solid baseline path.
+  {
+    key: "bf_AB-to-charlie",
+    src: "3-0", dest: "0-1",
+    destToken: "bf_AB",
+    gutter: "bob-charlie",
+    color: "#3b6aa0",
+    showAt: 5,
+  },
+  // SHORT: Charlie row 1 (e_AC) → Dave row 1's e_AC token. Dashed + offset.
+  {
+    key: "e_AC-to-dave",
+    src: "0-1", dest: "0-2",
+    destToken: "e_AC",
+    gutter: "charlie-dave",
+    color: "#2d7a7a",
+    showAt: 9,
+    dashed: true,
+    gutterOffsetX: 10,
+    topYOffset: -10,
+  },
+  // LONG: Charlie row 4 (bf_AC) → Dave row 1's bf_AC token. Solid baseline path.
+  {
+    key: "bf_AC-to-dave",
+    src: "3-1", dest: "0-2",
+    destToken: "bf_AC",
+    gutter: "charlie-dave",
+    color: "#2d7a7a",
+    showAt: 9,
+  },
+];
+
+function arrowPath(
+  src: CellRect,
+  destToken: CellRect,
+  gutterX: number,
+  topY: number,
+): string {
+  // Path: source-cell right edge → into the column gutter → straight up past
+  // the top of row 1 → horizontally over to above the target token → straight
+  // down onto the target token from above. Stays entirely outside cell
+  // bodies; the arrowhead lands on the token's top edge.
+  const sx = src.x + src.w;                          // exit right edge of source
+  const sy = src.y + src.h / 2;                      // vertical center of source
+  const tokCenterX = destToken.x + destToken.w / 2;  // land at token's horizontal center
+  const tokTopY = destToken.y - 3;                   // arrowhead 3px above token top
+  const r = 6;                                       // corner radius
+  return [
+    `M ${sx} ${sy}`,
+    `L ${gutterX - r} ${sy}`,
+    `Q ${gutterX} ${sy} ${gutterX} ${sy - r}`,         // corner: turn up
+    `L ${gutterX} ${topY + r}`,                        // vertical up the gutter past row 1
+    `Q ${gutterX} ${topY} ${gutterX + r} ${topY}`,     // corner: turn right at the band
+    `L ${tokCenterX - r} ${topY}`,                     // horizontal across to above the token
+    `Q ${tokCenterX} ${topY} ${tokCenterX} ${topY + r}`, // corner: turn down
+    `L ${tokCenterX} ${tokTopY}`,                      // straight down onto the token
+  ].join(" ");
+}
+
 export function BlindingFactorDiagram() {
   const [subStep, setSubStep] = useState(0);
   const [targetSubStep, setTargetSubStep] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [pulseCellIdx, setPulseCellIdx] = useState<number | null>(null);
+  const [cellRects, setCellRects] = useState<CellRectMap>({});
+  const [containerSize, setContainerSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
   const stepTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const playTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const gridRef = useRef<HTMLDivElement | null>(null);
+  const cellRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  const measure = useCallback(() => {
+    const container = gridRef.current;
+    if (!container) return;
+    const cRect = container.getBoundingClientRect();
+    const next: CellRectMap = {};
+    Object.entries(cellRefs.current).forEach(([key, el]) => {
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      next[key] = {
+        x: r.left - cRect.left,
+        y: r.top - cRect.top,
+        w: r.width,
+        h: r.height,
+      };
+    });
+    // Also locate specific cross-hop target tokens within their dest cells
+    // so arrows can land on the actual variable, not just the cell wall.
+    ARROWS.forEach((a) => {
+      const destCell = cellRefs.current[a.dest];
+      if (!destCell) return;
+      const tokSpan = destCell.querySelector(
+        `[data-math-token="${a.destToken}"]`,
+      ) as HTMLElement | null;
+      if (!tokSpan) return;
+      const r = tokSpan.getBoundingClientRect();
+      next[`tok-${a.key}`] = {
+        x: r.left - cRect.left,
+        y: r.top - cRect.top,
+        w: r.width,
+        h: r.height,
+      };
+    });
+    setCellRects(next);
+    setContainerSize({ w: cRect.width, h: cRect.height });
+  }, []);
+
+  useLayoutEffect(() => {
+    measure();
+    const ro = new ResizeObserver(measure);
+    if (gridRef.current) ro.observe(gridRef.current);
+    return () => ro.disconnect();
+  }, [measure]);
+
+  // Re-measure when subStep changes (cells fade in / change opacity, which
+  // can shift hit-test rects on some browsers).
+  useEffect(() => {
+    measure();
+  }, [subStep, measure]);
 
   useEffect(() => {
     if (subStep >= targetSubStep) return;
@@ -558,13 +632,13 @@ export function BlindingFactorDiagram() {
 
   function setMilestone(idx: number) {
     setPlaying(false);
-    if (idx < subStep) {
-      setSubStep(idx);
-      setTargetSubStep(idx);
-      setPulseCellIdx(null);
-      return;
+    if (stepTimerRef.current) {
+      clearTimeout(stepTimerRef.current);
+      stepTimerRef.current = null;
     }
+    setSubStep(idx);
     setTargetSubStep(idx);
+    setPulseCellIdx(null);
   }
 
   function play() {
@@ -632,73 +706,167 @@ export function BlindingFactorDiagram() {
           </div>
         </div>
 
-        {CELLS.map((rowCells, rowIdx) => {
-          const stepNum = rowIdx + 1;
-          const rowReached =
-            subStep >= cellIndex(rowIdx, 0) ||
-            subStep >= cellIndex(rowIdx, 1) ||
-            subStep >= cellIndex(rowIdx, 2);
-          return (
-            <div key={rowIdx} className="mb-3">
-              <div
-                className="flex items-center gap-2 mb-1.5"
-                style={{
-                  opacity: rowReached ? 1 : 0.45,
-                  transition: "opacity 350ms ease-out",
-                }}
-              >
+        <div ref={gridRef} style={{ position: "relative" }}>
+          {CELLS.map((rowCells, rowIdx) => {
+            const stepNum = rowIdx + 1;
+            const rowReached =
+              subStep >= cellIndex(rowIdx, 0) ||
+              subStep >= cellIndex(rowIdx, 1) ||
+              subStep >= cellIndex(rowIdx, 2);
+            return (
+              <div key={rowIdx} className="mb-3">
                 <div
-                  className="inline-flex items-center justify-center text-[10px] font-bold uppercase tracking-[0.06em]"
+                  className="flex items-center gap-2 mb-1.5"
                   style={{
-                    width: 20,
-                    height: 20,
-                    background: rowReached ? GOLD : CREAM_CARD,
-                    color: rowReached ? "#fffdf5" : INK,
-                    border: `1.5px solid ${rowReached ? GOLD : INK}`,
-                    flexShrink: 0,
+                    opacity: rowReached ? 1 : 0.45,
+                    transition: "opacity 350ms ease-out",
                   }}
                 >
-                  {stepNum}
-                </div>
-                <HoverTip info={ROW_TOOLTIPS[rowIdx]}>
-                  <span
-                    className="text-[11px] font-bold uppercase tracking-[0.05em]"
+                  <div
+                    className="inline-flex items-center justify-center text-[10px] font-bold uppercase tracking-[0.06em]"
                     style={{
-                      color: rowReached ? GOLD : SLATE,
+                      width: 20,
+                      height: 20,
+                      background: rowReached ? GOLD : CREAM_CARD,
+                      color: rowReached ? "#fffdf5" : INK,
+                      border: `1.5px solid ${rowReached ? GOLD : INK}`,
+                      flexShrink: 0,
                     }}
                   >
-                    {ROW_LABELS[rowIdx]}
-                  </span>
-                </HoverTip>
-              </div>
+                    {stepNum}
+                  </div>
+                  <HoverTip info={ROW_TOOLTIPS[rowIdx]}>
+                    <span
+                      className="text-[11px] font-bold uppercase tracking-[0.05em]"
+                      style={{
+                        color: rowReached ? GOLD : SLATE,
+                      }}
+                    >
+                      {ROW_LABELS[rowIdx]}
+                    </span>
+                  </HoverTip>
+                </div>
 
-              <div
-                className="grid"
-                style={{
-                  gridTemplateColumns: "1fr 1fr 1fr",
-                  columnGap: 12,
-                }}
-              >
-                {(["bob", "charlie", "dave"] as HopKey[]).map((hop, colIdx) => {
-                  const idx = cellIndex(rowIdx, colIdx);
-                  const visible = subStep >= idx;
-                  const isLatest = subStep === idx;
-                  const pulse = pulseCellIdx === idx;
-                  return (
-                    <CellTile
-                      key={hop}
-                      cell={rowCells[colIdx]}
-                      hopKey={hop}
-                      visible={visible}
-                      pulse={pulse}
-                      isLatest={isLatest}
-                    />
-                  );
-                })}
+                <div
+                  className="grid"
+                  style={{
+                    gridTemplateColumns: "1fr 1fr 1fr",
+                    columnGap: 12,
+                  }}
+                >
+                  {(["bob", "charlie", "dave"] as HopKey[]).map((hop, colIdx) => {
+                    const idx = cellIndex(rowIdx, colIdx);
+                    const isPlaceholder = rowCells[colIdx] === null;
+                    const visible = isPlaceholder ? subStep >= 9 : subStep >= idx;
+                    const isLatest = !isPlaceholder && subStep === idx;
+                    const pulse = pulseCellIdx === idx;
+                    const cellKey = `${rowIdx}-${colIdx}`;
+                    return (
+                      <CellTile
+                        key={hop}
+                        cell={rowCells[colIdx]}
+                        hopKey={hop}
+                        visible={visible}
+                        pulse={pulse}
+                        isLatest={isLatest}
+                        cellRef={(el) => { cellRefs.current[cellKey] = el; }}
+                      />
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+          {/* Cross-hop dependency arrows. Routed through the column gutters
+              so they don't cross any cell content. Each arrow draws in via
+              stroke-dashoffset when its triggering subStep activates. */}
+          {containerSize.w > 0 && (
+            <svg
+              width={containerSize.w}
+              height={containerSize.h}
+              viewBox={`0 0 ${containerSize.w} ${containerSize.h}`}
+              style={{
+                position: "absolute",
+                inset: 0,
+                pointerEvents: "none",
+                overflow: "visible",
+              }}
+            >
+              <defs>
+                {ARROWS.map((a) => (
+                  <marker
+                    key={`mk-${a.key}`}
+                    id={`arrowhead-${a.key}`}
+                    viewBox="0 0 8 8"
+                    refX="7"
+                    refY="4"
+                    markerWidth="6"
+                    markerHeight="6"
+                    orient="auto-start-reverse"
+                  >
+                    <path d="M 0 0 L 8 4 L 0 8 z" fill={a.color} />
+                  </marker>
+                ))}
+              </defs>
+              {ARROWS.map((a) => {
+                const src = cellRects[a.src];
+                const destCell = cellRects[a.dest];
+                const destTok = cellRects[`tok-${a.key}`];
+                if (!src || !destCell || !destTok) return null;
+                // Gutter X = midpoint of the column gutter we're routing
+                // through. Use any row's cell rects as the X reference
+                // (column geometry doesn't change row to row).
+                const charlieRect = cellRects["0-1"] ?? cellRects["3-1"];
+                if (!charlieRect) return null;
+                const charlieLeft = charlieRect.x;
+                const charlieRight = charlieRect.x + charlieRect.w;
+                const bobCol = cellRects["0-0"];
+                const daveCol = cellRects["0-2"];
+                const bobRight = bobCol ? bobCol.x + bobCol.w : src.x + src.w;
+                const daveLeft = daveCol ? daveCol.x : destCell.x;
+                const baseGutterX =
+                  a.gutter === "bob-charlie"
+                    ? (bobRight + charlieLeft) / 2
+                    : (charlieRight + daveLeft) / 2;
+                // Routing band: 16px above the top of row 1. Sits in the row
+                // 1 label area but above the row 1 cell bodies, so arrows
+                // never cross any cell content.
+                const row1Top = (cellRects["0-0"] ?? cellRects["0-1"])?.y ?? 0;
+                const baseTopY = Math.max(8, row1Top - 16);
+                const gutterX = baseGutterX + (a.gutterOffsetX ?? 0);
+                const topY = baseTopY + (a.topYOffset ?? 0);
+                const reached = subStep >= a.showAt;
+                const path = arrowPath(src, destTok, gutterX, topY);
+                return (
+                  <path
+                    key={a.key}
+                    d={path}
+                    stroke={a.color}
+                    strokeWidth={1.5}
+                    fill="none"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    markerEnd={`url(#arrowhead-${a.key})`}
+                    style={{
+                      // Dashed arrows use a fixed pattern; solid arrows use
+                      // the dashoffset trick to "draw in".
+                      strokeDasharray: a.dashed ? "5 4" : 1000,
+                      strokeDashoffset: a.dashed ? 0 : reached ? 0 : 1000,
+                      opacity: reached
+                        ? subStep === a.showAt
+                          ? 0.95
+                          : 0.4
+                        : 0,
+                      transition: a.dashed
+                        ? "opacity 500ms ease-out"
+                        : "stroke-dashoffset 700ms ease-out, opacity 500ms ease-out",
+                    }}
+                  />
+                );
+              })}
+            </svg>
+          )}
+        </div>
       </div>
 
       <div className="px-4 py-3 border-t-[1.5px] border-foreground/30 bg-card">

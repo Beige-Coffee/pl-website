@@ -16,12 +16,11 @@ import { CollapsibleItem, CollapsibleGroup } from "../components/CollapsibleSect
 import { useIsMobile } from "../hooks/use-mobile";
 import { ONION_ROUTING_EXERCISES_DRAFT as ONION_ROUTING_EXERCISES } from "../data/onion-routing-exercises-draft";
 import { getOnionRoutingDraftExerciseGroupContext as getOnionRoutingExerciseGroupContext } from "../lib/onion-routing-exercise-groups-draft";
+import { Tok as MathTok } from "../components/onion-routing-draft/mathTokens";
 import { NetworkTopologyDiagram } from "../components/onion-routing-draft/NetworkTopologyDiagram";
 import { NaiveVsOnionDiagram } from "../components/onion-routing-draft/NaiveVsOnionDiagram";
 import { EcdhChainDiagram } from "../components/onion-routing-draft/EcdhChainDiagram";
 import { KdfPipelineDiagram } from "../components/onion-routing-draft/KdfPipelineDiagram";
-import { ShrinkingVsFixedDiagram } from "../components/onion-routing-draft/ShrinkingVsFixedDiagram";
-import { OnionPacketLayoutDiagram } from "../components/onion-routing-draft/OnionPacketLayoutDiagram";
 import { FillerTraceDiagram } from "../components/onion-routing-draft/FillerTraceDiagram";
 import { HmacChainDiagram } from "../components/onion-routing-draft/HmacChainDiagram";
 import { OnionPeelDiagram } from "../components/onion-routing-draft/OnionPeelDiagram";
@@ -43,6 +42,17 @@ import { NodeKeyAttemptDiagram } from "../components/onion-routing-draft/NodeKey
 import { HmacRecapDiagram } from "../components/onion-routing-draft/HmacRecapDiagram";
 import { FiveKeysJobsDiagram } from "../components/onion-routing-draft/FiveKeysJobsDiagram";
 import { PerHopKeyMatrixDiagram } from "../components/onion-routing-draft/PerHopKeyMatrixDiagram";
+import { PacketJobsPreviewDiagram } from "../components/onion-routing-draft/PacketJobsPreviewDiagram";
+import { SlicesRecapDiagram } from "../components/onion-routing-draft/SlicesRecapDiagram";
+import { SliceInPacketDiagram } from "../components/onion-routing-draft/SliceInPacketDiagram";
+import { KeyOperationsDiagram } from "../components/onion-routing-draft/KeyOperationsDiagram";
+import { OperationsLifecycleDiagram } from "../components/onion-routing-draft/OperationsLifecycleDiagram";
+import { MathPythonSnippet } from "../components/onion-routing-draft/MathPythonSnippet";
+import { PayloadShrinkDiagram } from "../components/onion-routing-draft/PayloadShrinkDiagram";
+import { PaddingStrategyDiagram } from "../components/onion-routing-draft/PaddingStrategyDiagram";
+import { XorEncryptionDemo } from "../components/onion-routing-draft/XorEncryptionDemo";
+import { WrapPrimerDiagram } from "../components/onion-routing-draft/WrapPrimerDiagram";
+import { PeelPrimerDiagram } from "../components/onion-routing-draft/PeelPrimerDiagram";
 import { RouteComparisonDiagram } from "../components/onion-routing-draft/RouteComparisonDiagram";
 import { CltvSafetyLab } from "../components/onion-routing-draft/CltvSafetyLab";
 import { ForwarderPolicyMap } from "../components/onion-routing-draft/ForwarderPolicyMap";
@@ -62,8 +72,11 @@ const CUSTOM_BLOCK_TAGS = new Set([
   "naive-vs-onion",
   "ecdh-chain",
   "kdf-pipeline",
-  "shrinking-vs-fixed",
-  "onion-packet-layout",
+  "payload-shrink",
+  "padding-strategy",
+  "xor-encryption",
+  "wrap-primer",
+  "peel-primer",
   "filler-trace",
   "hmac-chain",
   "onion-peel",
@@ -81,6 +94,13 @@ const CUSTOM_BLOCK_TAGS = new Set([
   "hmac-recap",
   "five-keys-jobs",
   "per-hop-key-matrix",
+  "packet-jobs-preview",
+  "slices-recap",
+  "slice-in-packet",
+  "key-operations",
+  "operations-lifecycle",
+  "operations-lifecycle-keyed",
+  "math-python",
   "cltv-safety-lab",
   "forwarder-policy-map",
   "knowledge-matrix",
@@ -201,29 +221,40 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
     answer: 1,
     explanation: "Filler exists to make sure that after a hop shifts the inner packet forward, the trailing bytes that get exposed match what the next hop's HMAC was computed over. Dave is the final hop. He doesn't forward, doesn't shift, and there's no 'next hop' whose HMAC has to verify. Alice still pads the bytes after Dave's TLV during construction (typically with zeros, since there's no further structure), but those bytes don't have to align with any keystream because no further peeling happens.",
   },
-  // ── Chapter 5: The Fixed-Size Packet ─────────────────────────────────────
-  "cp-fixed-size-reason-draft": {
-    question: "An onion-routed packet at every hop is encrypted, with each forwarder only able to decrypt its own slice. So why does the packet *also* need to be the same size at every hop? Isn't encryption enough?",
+  // ── Chapter 6: The Fixed-Size Packet & Filler ────────────────────────────
+  "cp-payload-shrink-leak-draft": {
+    question: "Looking at the visual above, the packet's size visibly shrinks at every hop because each forwarder peels its slot off the front and forwards what's left. From the byte count alone, what is every forwarder (or any passive observer of the wire) able to infer that they shouldn't? Select all that apply.",
     options: [
-      "Because the BOLT 4 spec mandates it for backwards compatibility with older onion versions",
-      "Because a packet whose size shrinks (or grows) at each hop lets observers and forwarders infer position from byte count alone, even though the contents are encrypted",
-      "Because all 1,300 bytes must be decrypted before the HMAC can be computed, and ChaCha20 requires fixed-size inputs to operate correctly",
-      "Because the spec requires Alice's wallet to allocate the same buffer size for every payment, regardless of route length",
+      "The number of hops remaining downstream of them",
+      "The number of hops upstream of them (how many forwarders have already peeled the packet)",
+      "The total amount being forwarded",
+      "The sender's identity",
     ],
-    answer: 1,
-    explanation: "Encryption hides the contents but not the metadata. A passive eavesdropper or a curious forwarder can measure the packet's size in bytes and use that to estimate how many hops remain. A 4-hop packet that's 1,500 bytes at hop 1 and 750 bytes at hop 3 advertises its position regardless of how strong the encryption is. Fixing the size to 1,366 bytes at every hop removes this side channel entirely. Every forwarder sees the same byte count, so position can no longer be inferred from packet length. This is exactly the privacy property we wrote down in Chapter 1, and it's what motivates the filler construction we'll meet in Chapter 6.",
+    answer: [0, 1],
+    explanation: "Both the upstream and downstream hop counts leak from the byte count. A forwarder sees the inbound packet size and knows how many slots are still inside (downstream count). They can also compare against what an unpeeled packet would look like (e.g., the maximum 1,300-byte payload area that Alice originally constructs) to figure out how many slots have already been stripped (upstream count). Either way, encryption hides the slot *contents* but not the byte count on the wire, which is exactly the privacy property from chapter 3 falling apart. The other options are not inferable from size alone: amount, sender identity, and payment hash are all encrypted inside slots and don't change the byte count. Sphinx fixes both leaks by padding every packet to exactly 1,366 bytes regardless of route length, and the filler construction in this chapter is what makes that padding work without breaking each hop's HMAC verification.",
   },
   // ── Chapter 4: Key Derivation ────────────────────────────────────────────
-  "cp-key-domain-separation-draft": {
-    question: "Imagine an attacker recovers Bob's rho key (the ChaCha20 stream cipher key for the forward path). What does this let them do, and why doesn't it cascade to the other four keys?",
+  "cp-key-separation-draft": {
+    question: "Imagine BOLT 4 used each hop's shared secret directly as the key for all five operations, instead of deriving five separate keys from it. Which of the following are real problems with that approach? Select all that apply.",
     options: [
-      "They can derive Bob's mu, um, pad, and ammag because all five keys are computed from a single shared seed; recovering one breaks all of them",
-      "They can decrypt Bob's hop payload area, but they cannot derive mu, um, pad, or ammag without also obtaining ss_bob, since each key is HMAC-SHA256 with a different label and inverting HMAC is computationally infeasible",
-      "They cannot do anything: rho is only used by Alice during construction, so a forwarder never possesses it",
-      "They can forge the packet HMAC because rho is XORed with mu inside the protocol, making the two functionally equivalent",
+      "Encryption (stream cipher) and authentication (MAC) are different cryptographic primitives. The standard security proofs (e.g., Bellare and Namprempre's Encrypt-then-MAC analysis) assume their keys are independent; reusing one key for both falls outside the proven envelope.",
+      "Both forward and backward encryption use ChaCha20 with an all-zero nonce. If they shared a key, both directions would produce ciphertexts under the same keystream, and an attacker observing both could XOR them together to recover plaintext (the classic two-time-pad break).",
+      "A forwarder who legitimately verified the forward HMAC would already hold the key needed to author a fake error packet that Alice would accept as authentic, since forward and backward authentication would use the same key.",
+      "With one shared key, the packet would shrink below the BOLT 4 minimum of 1,300 bytes, which would let observers infer route length from the byte count.",
+    ],
+    answer: [0, 1, 2],
+    explanation: "All three of the first reasons are real cryptographic problems with reusing one key for everything, and together they're the reason BOLT 4 derives five separate keys from each shared secret. (1) is the standard generic-composition argument: encryption and authentication are different primitives whose security proofs assume independent keys. (2) is the two-time-pad attack: with the same key driving both directions of an all-zero-nonce ChaCha20, the keystream collides and ciphertexts can be XORed together to recover plaintext. (3) is the forwarder-forging-error attack: a hop legitimately learns the forward HMAC key during routing, and could repurpose it to author fake errors if it were the same as the backward HMAC key. The fourth option is the wrong reason: BOLT 4's 1,300-byte size comes from the packet format itself (and the filler construction we'll meet in chapter 7), not from the keying scheme.",
+  },
+  "cp-key-domain-separation-draft": {
+    question: "Imagine an attacker recovers Bob's `rho` key (the ChaCha20 stream cipher key for the forward path). What does this let them do, and why doesn't it cascade to Bob's other per-hop keys?",
+    options: [
+      "They can derive Bob's `mu`, `um`, and `ammag` because all four per-hop keys are computed from a single shared seed; recovering one breaks all of them",
+      "They can decrypt Bob's hop payload area, but they cannot derive `mu`, `um`, or `ammag` without also obtaining <m>ss_AB</m>, since each key is HMAC-SHA256 with a different label and inverting HMAC is computationally infeasible",
+      "They cannot do anything: `rho` is only used by Alice during construction, so a forwarder never possesses it",
+      "They can forge the packet HMAC because `rho` is XORed with `mu` inside the protocol, making the two functionally equivalent",
     ],
     answer: 1,
-    explanation: "Each per-hop key is HMAC-SHA256(label, shared_secret) for a different ASCII label. HMAC's pseudorandom-function property means that knowing one output (rho_i) gives an attacker no usable information about the other four outputs unless they also know the shared secret ss_i. Recovering rho only lets them attack the forward stream cipher, which is bad enough on its own (they can read Bob's hop payload) but doesn't extend to forging HMACs (mu) or attacking the return path (um, ammag). That's the entire point of domain separation: a leak in one key stays contained to its own role.",
+    explanation: "Each per-hop key is HMAC-SHA256(label, shared_secret) for a different ASCII label. HMAC's pseudorandom-function property means that knowing one output (<m>rho_i</m>) gives an attacker no usable information about the other three per-hop outputs unless they also know the shared secret <m>ss_i</m>. Recovering `rho` only lets them attack the forward stream cipher, which is bad enough on its own (they can read Bob's hop payload) but doesn't extend to forging HMACs (`mu`) or attacking the return path (`um`, `ammag`). That's the entire point of domain separation: a leak in one key stays contained to its own role. (The fifth key, `pad`, is derived from Alice's session key rather than any per-hop secret, so a forwarder couldn't recover it from <m>ss_AB</m> anyway.)",
   },
   // ── Chapter 3: Shared Secrets per Hop ────────────────────────────────────
   "cp-node-key-ecdh-draft": {
@@ -236,7 +267,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
     ],
     answer: [0, 1, 2],
     explanation:
-      "Three real consequences fall out of one design choice, plus a tempting distractor.\n\n**Option 1 (correct).** The pubkey rides at the top of the packet because every forwarder needs it for ECDH. If it's Alice's published node-identity key, any forwarder can match it against the gossip graph and learn who sent the payment. That's exactly the gossip-lookup callout you saw fire at Bob, Charlie, and Dave in the visual.\n\n**Option 2 (correct).** Linkability across payments. Every onion Alice sends would carry the same pubkey, so an observer sitting between her and her first hop, or two colluding forwarders comparing notes, could correlate every one of her payments. The visual only animated one payment, but think about what an observer would see if she sent two.\n\n**Option 3 (correct).** ECDH with both inputs static is deterministic: same inputs always produce the same output. Every payment Alice routes through Bob would derive the *same* shared secret with Bob. That removes per-payment cryptographic separation, so a single shared-secret compromise retroactively breaks every payment Alice ever routed through that forwarder.\n\n**Option 4 (wrong, distractor).** Reusing Alice's side of the ECDH doesn't collapse the per-hop shared secrets. Each forwarder still derives a *different* shared secret because each has a *different* node privkey on its side of the ECDH. Bob computes bob_priv · A; Charlie computes charlie_priv · A; bob_priv ≠ charlie_priv, so the shared secrets differ. Bob cannot decrypt Charlie's slice.",
+      "Three real consequences fall out of one design choice, plus a tempting distractor.\n\n**Option 1 (correct).** The pubkey rides at the top of the packet because every forwarder needs it for ECDH. If it's Alice's published node-identity key, any forwarder can match it against the gossip graph and learn who sent the payment. That's exactly the gossip-lookup callout you saw fire at Bob, Charlie, and Dave in the visual.\n\n**Option 2 (correct).** Linkability across payments. Every onion Alice sends would carry the same pubkey, so an observer sitting between her and her first hop, or two colluding forwarders comparing notes, could correlate every one of her payments. The visual only animated one payment, but think about what an observer would see if she sent two.\n\n**Option 3 (correct).** ECDH with both inputs static is deterministic: same inputs always produce the same output. Every payment Alice routes through Bob would derive the *same* shared secret with Bob. That removes per-payment cryptographic separation, so a single shared-secret compromise retroactively breaks every payment Alice ever routed through that forwarder.\n\n**Option 4 (wrong, distractor).** Reusing Alice's side of the ECDH doesn't collapse the per-hop shared secrets. Each forwarder still derives a *different* shared secret because each has a *different* node privkey on its side of the ECDH. Bob computes `bob_priv` · <m>A</m>; Charlie computes `charlie_priv` · <m>A</m>; `bob_priv` ≠ `charlie_priv`, so the shared secrets differ. Bob cannot decrypt Charlie's slice.",
   },
   "cp-naive-shared-secrets-draft": {
     question: "The fresh-keypair-per-hop design fixes the identity leak from the first attempt, but it pays a price elsewhere that scales with the route length. Select all the real costs of this design.",
@@ -248,19 +279,19 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
     ],
     answer: [0, 2],
     explanation:
-      "Two real costs scale with the route length, and a single insight (the ephemeral key chain) is going to collapse both to one in the next section.\n\n**Option 1 (correct).** Each hop needs its own ephemeral pubkey in plaintext at the front of the packet to run ECDH against. Each pubkey is 33 bytes, so a 3-hop route ships 3 pubkeys (about 100 bytes), a 10-hop route ships 10. The BOLT 4 onion packet is fixed at 1300 bytes total, so every ephemeral pubkey is bytes we can't spend on the actual hop payloads.\n\n**Option 3 (correct).** Alice generates a fresh ephemeral keypair for every hop and has to keep them all in memory until the payment finishes. She can't discard them after sending, because failures come back encrypted with those same shared secrets and she needs the keys to decrypt the error onion. That means an N-hop in-flight payment requires Alice to maintain N keypairs of state for the entire payment lifecycle.\n\nBoth costs scale linearly with route length: the longer the route, the worse it gets. The math works, but the design is wasteful in a way Sphinx wouldn't accept, which is exactly what the ephemeral key chain construction in the next section fixes.\n\n**Option 2 (wrong, distractor).** Shared secrets from fresh ECDH are uniformly random. The elliptic curve discrete log problem rules out predicting them from public information.\n\n**Option 4 (wrong, distractor).** The discrete log problem also keeps each ephemeral private key safe even when the corresponding pubkey is public. A forwarder seeing E_Bob can't recover e_Bob, and the keypairs for other hops are completely independent.",
+      "Two real costs scale with the route length, and a single insight (the ephemeral key chain) is going to collapse both to one in the next section.\n\n**Option 1 (correct).** Each hop needs its own ephemeral pubkey in plaintext at the front of the packet to run ECDH against. Each pubkey is 33 bytes, so a 3-hop route ships 3 pubkeys (about 100 bytes), a 10-hop route ships 10. The BOLT 4 onion packet is fixed at 1300 bytes total, so every ephemeral pubkey is bytes we can't spend on the actual hop payloads.\n\n**Option 3 (correct).** Alice generates a fresh ephemeral keypair for every hop and has to keep them all in memory until the payment finishes. She can't discard them after sending, because failures come back encrypted with those same shared secrets and she needs the keys to decrypt the error onion. That means an N-hop in-flight payment requires Alice to maintain N keypairs of state for the entire payment lifecycle.\n\nBoth costs scale linearly with route length: the longer the route, the worse it gets. The math works, but the design is wasteful in a way Sphinx wouldn't accept, which is exactly what the ephemeral key chain construction in the next section fixes.\n\n**Option 2 (wrong, distractor).** Shared secrets from fresh ECDH are uniformly random. The elliptic curve discrete log problem rules out predicting them from public information.\n\n**Option 4 (wrong, distractor).** The discrete log problem also keeps each ephemeral private key safe even when the corresponding pubkey is public. A forwarder seeing <m>E_Bob</m> can't recover <m>e_Bob</m>, and the keypairs for other hops are completely independent.",
   },
   "cp-blinding-public-draft": {
-    question: "Bob has derived ss_AB and computed bf_AB. He's about to forward the onion to Charlie. Which of the following best describes what Bob does to the ephemeral key field in the outgoing packet, and why Charlie ends up deriving the same ss_AC Alice precomputed?",
+    question: "Bob has derived <m>ss_AB</m> and computed <m>bf_AB</m>. He's about to forward the onion to Charlie. Which of the following best describes what Bob does to the ephemeral key field in the outgoing packet, and why Charlie ends up deriving the same <m>ss_AC</m> Alice precomputed?",
     options: [
-      "Bob appends E_AC after E_AB, so Charlie can scan for his own key. It works because Charlie tries each pubkey until ECDH produces a value that successfully decrypts his slice.",
-      "Bob *replaces* E_AB with E_AC (computed as bf_AB · E_AB). Charlie does ECDH with his node privkey against E_AC and lands on the same ss_AC Alice precomputed, because Alice and Bob independently derive the same E_AC from their respective chains.",
-      "Bob signs E_AC with his node private key and embeds both E_AC and the signature in the packet. Charlie verifies the signature against bob_pubkey before trusting E_AC.",
-      "Bob leaves E_AB in the field; Charlie derives E_AC himself by recomputing the chain from his own position in the route.",
+      "Bob appends <m>E_AC</m> after <m>E_AB</m>, so Charlie can scan for his own key. It works because Charlie tries each pubkey until ECDH produces a value that successfully decrypts his slice.",
+      "Bob *replaces* <m>E_AB</m> with <m>E_AC</m> (computed as <m>bf_AB</m> · <m>E_AB</m>). Charlie does ECDH with his node privkey against <m>E_AC</m> and lands on the same <m>ss_AC</m> Alice precomputed, because Alice and Bob independently derive the same <m>E_AC</m> from their respective chains.",
+      "Bob signs <m>E_AC</m> with his node private key and embeds both <m>E_AC</m> and the signature in the packet. Charlie verifies the signature against `bob_pubkey` before trusting <m>E_AC</m>.",
+      "Bob leaves <m>E_AB</m> in the field; Charlie derives <m>E_AC</m> himself by recomputing the chain from his own position in the route.",
     ],
     answer: 1,
     explanation:
-      "The chain advances by **replacing** the ephemeral key field at each hop, and the construction works because Alice and Bob independently arrive at the same E_AC.\n\n**Option 2 (correct).** Alice's chain produces E_AC as bf_AB · E_AB (since she advances her scalar e_AB by bf_AB to get e_AC, and e_AC · G = bf_AB · E_AB). Bob computes the same E_AC directly via bf_AB · E_AB on the public side. Once both sides agree on E_AC, ECDH between Charlie's node privkey and E_AC produces the same ss_AC Alice computed via e_AC · C, because scalar multiplication commutes.\n\n**Option 1 (wrong).** Appending defeats the fixed-size packet design and reintroduces both flaws we worked to eliminate (the size leak and Alice's key-management burden). The chain-and-replace mechanism is what keeps the packet compact.\n\n**Option 3 (wrong).** There is no signature on the ephemeral key in BOLT 4. Bob is kept honest economically (he loses his fee if he tampers) and via the HMAC we'll add in chapter 7. A signature would also expose Bob's identity to Charlie.\n\n**Option 4 (wrong).** Charlie can't derive E_AC without bf_AB, which requires ss_AB, which requires *Bob's* private key. Charlie has none of those. Each hop derives its own shared secret using the ephemeral key it sees in the packet header, not by recomputing the chain from scratch.",
+      "The chain advances by **replacing** the ephemeral key field at each hop, and the construction works because Alice and Bob independently arrive at the same <m>E_AC</m>.\n\n**Option 2 (correct).** Alice's chain produces <m>E_AC</m> as <m>bf_AB</m> · <m>E_AB</m> (since she advances her scalar <m>e_AB</m> by <m>bf_AB</m> to get <m>e_AC</m>, and <m>e_AC</m> · <m>G</m> = <m>bf_AB</m> · <m>E_AB</m>). Bob computes the same <m>E_AC</m> directly via <m>bf_AB</m> · <m>E_AB</m> on the public side. Once both sides agree on <m>E_AC</m>, ECDH between Charlie's node privkey and <m>E_AC</m> produces the same <m>ss_AC</m> Alice computed via <m>e_AC</m> · <m>C</m>, because scalar multiplication commutes.\n\n**Option 1 (wrong).** Appending defeats the fixed-size packet design and reintroduces both flaws we worked to eliminate (the size leak and Alice's key-management burden). The chain-and-replace mechanism is what keeps the packet compact.\n\n**Option 3 (wrong).** There is no signature on the ephemeral key in BOLT 4. Bob is kept honest economically (he loses his fee if he tampers) and via the HMAC we'll add in chapter 7. A signature would also expose Bob's identity to Charlie.\n\n**Option 4 (wrong).** Charlie can't derive <m>E_AC</m> without <m>bf_AB</m>, which requires <m>ss_AB</m>, which requires *Bob's* private key. Charlie has none of those. Each hop derives its own shared secret using the ephemeral key it sees in the packet header, not by recomputing the chain from scratch.",
   },
   // ── Chapter 2: Pathfinding 101 ───────────────────────────────────────────
   "cp-fees-backward-draft": {
@@ -390,81 +421,81 @@ export const chapters: Chapter[] = [
     file: "/onion_routing_tutorial/4.0-shared-secrets.md",
   },
   {
+    id: "onion-routing-101",
+    title: "Onion Routing 101",
+    section: "Cryptography",
+    kind: "md",
+    file: "/onion_routing_tutorial/5.0-onion-routing-101.md",
+  },
+  {
     id: "key-derivation",
     title: "Key Derivation",
     section: "Cryptography",
     kind: "md",
-    file: "/onion_routing_tutorial/5.0-key-derivation.md",
+    file: "/onion_routing_tutorial/6.0-key-derivation.md",
   },
   {
-    id: "fixed-size-packet",
+    id: "fixed-size-and-filler",
     title: "The Fixed-Size Packet",
     section: "Building the Packet",
     kind: "md",
-    file: "/onion_routing_tutorial/5.0-fixed-size-packet.md",
-  },
-  {
-    id: "filler-construction",
-    title: "Filler Construction",
-    section: "Building the Packet",
-    kind: "md",
-    file: "/onion_routing_tutorial/6.0-filler-construction.md",
+    file: "/onion_routing_tutorial/7.0-fixed-size-and-filler.md",
   },
   {
     id: "wrapping-layer-by-layer",
     title: "Wrapping Layer by Layer",
     section: "Building the Packet",
     kind: "md",
-    file: "/onion_routing_tutorial/7.0-wrapping.md",
+    file: "/onion_routing_tutorial/8.0-wrapping.md",
   },
   {
     id: "peeling-a-layer",
     title: "Peeling a Layer",
     section: "Forwarding",
     kind: "md",
-    file: "/onion_routing_tutorial/8.0-peeling.md",
+    file: "/onion_routing_tutorial/9.0-peeling.md",
   },
   {
     id: "forwarding-validation",
     title: "Forwarding & Validation",
     section: "Forwarding",
     kind: "md",
-    file: "/onion_routing_tutorial/9.0-forwarding-validation.md",
+    file: "/onion_routing_tutorial/10.0-forwarding-validation.md",
   },
   {
     id: "error-onion",
     title: "The Error Onion",
     section: "Failures",
     kind: "md",
-    file: "/onion_routing_tutorial/10.0-error-onion.md",
+    file: "/onion_routing_tutorial/11.0-error-onion.md",
   },
   {
     id: "capstone-success",
     title: "Capstone: Successful Payment",
     section: "Capstone",
     kind: "md",
-    file: "/onion_routing_tutorial/11.0-capstone-success.md",
+    file: "/onion_routing_tutorial/12.0-capstone-success.md",
   },
   {
     id: "capstone-failure",
     title: "Capstone: Failure Path",
     section: "Capstone",
     kind: "md",
-    file: "/onion_routing_tutorial/12.0-capstone-failure.md",
+    file: "/onion_routing_tutorial/13.0-capstone-failure.md",
   },
   {
     id: "beyond-sphinx",
     title: "Beyond Sphinx",
     section: "Beyond",
     kind: "md",
-    file: "/onion_routing_tutorial/13.0-beyond-sphinx.md",
+    file: "/onion_routing_tutorial/14.0-beyond-sphinx.md",
   },
   {
     id: "pay-it-forward",
     title: "Pay It Forward",
     section: "Pay It Forward",
     kind: "md",
-    file: "/onion_routing_tutorial/14.0-pay-it-forward.md",
+    file: "/onion_routing_tutorial/15.0-pay-it-forward.md",
   },
 ];
 
@@ -487,12 +518,12 @@ export const CHAPTER_REQUIREMENTS: Record<string, {
   "pathfinding-101": { checkpoints: ["cp-channel-update-direction-draft", "cp-cheapest-route-draft"], exercises: [] },
   "privacy-problem": { checkpoints: ["cp-naive-plaintext-leak-draft", "cp-still-vulnerable-draft"], exercises: [] },
   "shared-secrets": { checkpoints: ["cp-node-key-ecdh-draft", "cp-naive-shared-secrets-draft", "cp-blinding-public-draft"], exercises: ["exercise-derive-shared-secrets-draft"] },
-  "key-derivation": { checkpoints: ["cp-key-domain-separation-draft"], exercises: ["exercise-derive-keys-draft"] },
-  "fixed-size-packet": { checkpoints: ["cp-fixed-size-reason-draft"], exercises: [] },
-  "filler-construction": { checkpoints: ["cp-filler-purpose-draft", "cp-filler-final-hop-draft"], exercises: ["exercise-generate-filler-draft"] },
+  "onion-routing-101": { checkpoints: [], exercises: [] },
+  "key-derivation": { checkpoints: ["cp-key-separation-draft", "cp-key-domain-separation-draft"], exercises: ["exercise-derive-keys-draft"] },
+  "fixed-size-and-filler": { checkpoints: ["cp-payload-shrink-leak-draft", "cp-filler-purpose-draft", "cp-filler-final-hop-draft"], exercises: ["exercise-generate-filler-draft"] },
   "wrapping-layer-by-layer": { checkpoints: ["cp-build-reverse-order-draft"], exercises: ["exercise-wrap-hop-draft", "exercise-build-packet-draft"] },
   "peeling-a-layer": { checkpoints: ["cp-peel-extended-stream-draft"], exercises: ["exercise-peel-layer-draft"] },
-  "forwarding-validation": { checkpoints: ["cp-validate-before-decrypt-draft", "cp-tlv-final-vs-forward-draft"], exercises: ["exercise-process-onion-draft"] },
+  "forwarding-validation": { checkpoints: ["cp-validate-before-decrypt-draft", "cp-tlv-final-vs-forward-draft"], exercises: ["exercise-verify-hmac-draft", "exercise-process-onion-draft"] },
   "error-onion": { checkpoints: ["cp-error-trial-decrypt-draft"], exercises: ["exercise-build-error-onion-draft", "exercise-decrypt-error-onion-draft"] },
   "capstone-success": { checkpoints: [], exercises: [] },
   "capstone-failure": { checkpoints: [], exercises: [] },
@@ -693,6 +724,16 @@ function ChapterContent({
               {children}
             </code>
           ),
+          // Inline math token: <m>e_AB</m> renders e<sub>AB</sub> with proper
+          // math typography (italic single-letter base + true subscripts).
+          // Multi-letter bases (ss, bf) stay upright per math convention.
+          // Used for math expressions in chapter prose.
+          m: ({ children }: any) => {
+            const tok = String(
+              Array.isArray(children) ? children.join("") : children ?? ""
+            );
+            return <MathTok token={tok} />;
+          },
           // Handle <checkpoint id="..." /> tags in markdown (custom HTML element)
           checkpoint: ({ id }: any) => {
             const cpId = String(id || "");
@@ -922,11 +963,20 @@ function ChapterContent({
           "kdf-pipeline": () => {
             return <KdfPipelineDiagram />;
           },
-          "shrinking-vs-fixed": () => {
-            return <ShrinkingVsFixedDiagram />;
+          "payload-shrink": () => {
+            return <PayloadShrinkDiagram />;
           },
-          "onion-packet-layout": () => {
-            return <OnionPacketLayoutDiagram />;
+          "padding-strategy": () => {
+            return <PaddingStrategyDiagram />;
+          },
+          "xor-encryption": () => {
+            return <XorEncryptionDemo />;
+          },
+          "wrap-primer": () => {
+            return <WrapPrimerDiagram />;
+          },
+          "peel-primer": () => {
+            return <PeelPrimerDiagram />;
           },
           "filler-trace": () => {
             return <FillerTraceDiagram />;
@@ -988,6 +1038,27 @@ function ChapterContent({
           },
           "per-hop-key-matrix": () => {
             return <PerHopKeyMatrixDiagram />;
+          },
+          "packet-jobs-preview": () => {
+            return <PacketJobsPreviewDiagram />;
+          },
+          "slices-recap": () => {
+            return <SlicesRecapDiagram />;
+          },
+          "slice-in-packet": () => {
+            return <SliceInPacketDiagram />;
+          },
+          "key-operations": () => {
+            return <KeyOperationsDiagram />;
+          },
+          "operations-lifecycle": () => {
+            return <OperationsLifecycleDiagram />;
+          },
+          "operations-lifecycle-keyed": () => {
+            return <OperationsLifecycleDiagram showKeys />;
+          },
+          "math-python": ({ id }: any) => {
+            return <MathPythonSnippet id={id} />;
           },
           "cltv-safety-lab": () => {
             return <CltvSafetyLab />;

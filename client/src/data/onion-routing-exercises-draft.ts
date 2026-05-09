@@ -404,6 +404,107 @@ def test_tampered_returns_none():
     groupOrder: 2,
   },
 
+  "exercise-verify-hmac-draft": {
+    id: "exercise-verify-hmac-draft",
+    title: "Verify the HMAC",
+    description:
+      "Implement <code>verify_hmac(packet, mu, associated_data) -> bool</code>. Given a 1366-byte BOLT 4 onion packet, this hop's <code>mu</code> key (32 bytes), and the 32-byte <code>associated_data</code> (payment_hash), recompute <code>HMAC-SHA256(mu, hop_payloads || associated_data)</code> and compare it against the packet's last 32 bytes (the HMAC field). " +
+      "Return <code>True</code> if the comparison succeeds, <code>False</code> otherwise. Use <code>hmac.compare_digest</code> for a constant-time compare to avoid leaking timing information about which byte didn't match.",
+    starterCode: `import hmac, hashlib
+
+def verify_hmac(packet, mu, associated_data):
+    """
+    Verify the integrity tag on an inbound BOLT 4 onion packet.
+
+    Args:
+      packet:           1366-byte BOLT 4 onion packet
+                        (1 version + 33 E_i + 1300 hop_payloads + 32 hmac)
+      mu:               this hop's 32-byte mu key (HMAC-SHA256(b"mu", ss_i))
+      associated_data:  32-byte payment_hash bound into the HMAC by the sender
+
+    Returns: True if the HMAC verifies, False otherwise.
+
+    Steps:
+      1. Length check: packet must be exactly 1366 bytes. Return False if not.
+      2. Slice the hop_payloads field: packet[34:1334] (1300 bytes).
+      3. Slice the inbound HMAC: packet[1334:1366] (32 bytes).
+      4. Compute expected = HMAC-SHA256(mu, hop_payloads || associated_data).
+      5. Return hmac.compare_digest(expected, inbound_hmac).
+    """
+    # TODO: implement
+    pass
+`,
+    testCode: `# Build a packet with a known mu and associated_data so we know the
+# expected HMAC. Then test the function on the well-formed packet AND
+# a tampered version.
+
+MU = bytes.fromhex("0202020202020202020202020202020202020202020202020202020202020202")
+PAYMENT_HASH = bytes.fromhex("4242424242424242424242424242424242424242424242424242424242424242")
+HOP_PAYLOADS = bytes(range(1, 1301))  # 1,300 arbitrary bytes
+EPHEMERAL_PUBKEY = bytes(range(33))   # 33 arbitrary bytes
+
+# Compute the HMAC the way Alice would have during construction.
+expected_hmac = hmac.new(MU, HOP_PAYLOADS + PAYMENT_HASH, hashlib.sha256).digest()
+GOOD_PACKET = b"\\x00" + EPHEMERAL_PUBKEY + HOP_PAYLOADS + expected_hmac
+assert len(GOOD_PACKET) == 1366
+
+def test_well_formed_packet_verifies():
+    assert verify_hmac(GOOD_PACKET, MU, PAYMENT_HASH) is True
+
+def test_tampered_hop_payloads_fails():
+    # Flip a byte in the hop_payloads field.
+    tampered = bytearray(GOOD_PACKET)
+    tampered[100] ^= 0x01
+    assert verify_hmac(bytes(tampered), MU, PAYMENT_HASH) is False
+
+def test_tampered_hmac_fails():
+    # Flip a byte in the HMAC field.
+    tampered = bytearray(GOOD_PACKET)
+    tampered[-1] ^= 0x01
+    assert verify_hmac(bytes(tampered), MU, PAYMENT_HASH) is False
+
+def test_wrong_associated_data_fails():
+    wrong_hash = bytes(32)
+    assert verify_hmac(GOOD_PACKET, MU, wrong_hash) is False
+
+def test_wrong_mu_fails():
+    wrong_mu = bytes(32)
+    assert verify_hmac(GOOD_PACKET, wrong_mu, PAYMENT_HASH) is False
+
+def test_short_packet_returns_false():
+    short = GOOD_PACKET[:1000]
+    assert verify_hmac(short, MU, PAYMENT_HASH) is False
+`,
+    hints: {
+      conceptual:
+        "<strong>Goal:</strong> recompute the HMAC tag the sender baked into the packet and compare it against the inbound HMAC field." +
+        "<br><br><strong>Why this is the first thing the forwarder does:</strong> if the HMAC doesn't verify, we don't trust any of the bytes in the packet. We don't decrypt, we don't parse the TLV, we don't run any of our parser code on adversarial input. Encrypt-then-MAC means we authenticate the encrypted ciphertext as it appears on the wire, before anything else." +
+        "<br><br><strong>Why associated_data is part of the HMAC:</strong> the payment_hash binds the onion to a specific HTLC. An attacker can't lift this onion off one HTLC and re-attach it to another, since the HMAC won't verify with a different payment_hash.",
+      steps:
+        "<strong>1. Length check:</strong> if <code>len(packet) != 1366</code>, return <code>False</code>." +
+        "<br><strong>2. Slice the fields:</strong>" +
+        "<br>&nbsp;&nbsp;&nbsp;&nbsp;<code>hop_payloads = packet[34:1334]</code>" +
+        "<br>&nbsp;&nbsp;&nbsp;&nbsp;<code>inbound_hmac = packet[1334:1366]</code>" +
+        "<br><strong>3. Compute expected HMAC:</strong>" +
+        "<br>&nbsp;&nbsp;&nbsp;&nbsp;<code>expected = hmac.new(mu, hop_payloads + associated_data, hashlib.sha256).digest()</code>" +
+        "<br><strong>4. Constant-time compare:</strong> <code>return hmac.compare_digest(expected, inbound_hmac)</code>.",
+      code:
+        `import hmac, hashlib
+
+def verify_hmac(packet, mu, associated_data):
+    if len(packet) != 1366:
+        return False
+    hop_payloads = packet[34:1334]
+    inbound_hmac = packet[1334:1366]
+    expected = hmac.new(mu, hop_payloads + associated_data, hashlib.sha256).digest()
+    return hmac.compare_digest(expected, inbound_hmac)
+`,
+    },
+    rewardSats: 100,
+    group: "forwarder",
+    groupOrder: 2,
+  },
+
   "exercise-process-onion-draft": {
     id: "exercise-process-onion-draft",
     title: "Process an Inbound Onion",
@@ -814,14 +915,14 @@ def test_dave_can_peel_after_carol():
     hints: {
       conceptual:
         "<strong>Goal:</strong> reverse the wrap_hop operation. Take a packet, derive the keys this hop needs, decrypt the buffer with an extended keystream, lift this hop's slot, and produce the packet to forward." +
-        "<br><br><strong>Why the extended keystream:</strong> when this hop strips its slot off the front and shifts the inner contents forward, the trailing positions must contain the extension of this hop's rho keystream. That's exactly what was XORed into the corresponding filler bytes during construction. By generating 2x the routing info size, we cover both the decrypted hop_payloads AND the keystream-extension that fills the gap.",
+        "<br><br><strong>Why the extended keystream:</strong> when this hop strips its slot off the front and shifts the inner contents forward, the trailing positions must contain the extension of this hop's rho<sub>i</sub> keystream. That's exactly what was XORed into the corresponding filler bytes during construction. By generating 2x the routing info size, we cover both the decrypted hop_payloads AND the keystream-extension that fills the gap.",
       steps:
         "<strong>1. Parse the packet:</strong>" +
         "<br>&nbsp;&nbsp;&nbsp;&nbsp;<code>version = packet[0]</code>" +
         "<br>&nbsp;&nbsp;&nbsp;&nbsp;<code>E_i = packet[1:34]</code>" +
         "<br>&nbsp;&nbsp;&nbsp;&nbsp;<code>hop_payloads = packet[34:1334]</code>" +
         "<br>&nbsp;&nbsp;&nbsp;&nbsp;<code>inbound_hmac = packet[1334:1366]</code>" +
-        "<br><strong>2. Derive keys:</strong> ss = ecdh(node_privkey, E_i); rho = HMAC(b\"rho\", ss)." +
+        "<br><strong>2. Derive keys:</strong> ss<sub>i</sub> = ecdh(node_privkey, <i>E</i><sub>i</sub>); rho<sub>i</sub> = HMAC(b\"rho\", ss<sub>i</sub>)." +
         "<br><strong>3. Working buffer:</strong> <code>work = hop_payloads + b\"\\x00\" * 1300</code>." +
         "<br><strong>4. XOR with extended keystream:</strong> <code>stream = chacha20_keystream(rho, 2600); work = xor_bytes(work, stream)</code>." +
         "<br><strong>5. Parse the bigsize length:</strong> <code>length, header_len = parse_bigsize(work, 0)</code>. The TLV bytes occupy <code>work[0:header_len + length]</code>. The slot size is <code>header_len + length + 32</code>." +
@@ -1141,12 +1242,12 @@ def test_end_to_end_peel_through_route():
         "<br><br><strong>Detail 3 (associated_data in HMAC):</strong> the <code>associated_data</code> argument (32-byte payment_hash) is concatenated with the buffer for every HMAC. This binds the onion to the specific HTLC, preventing replay across payments.",
       steps:
         "<strong>1. Shared secrets:</strong> call <code>self.derive_shared_secrets()</code> first." +
-        "<br><strong>2. Per-hop keys:</strong> for each hop's shared secret, derive rho and mu using HMAC-SHA256 with the b\"rho\" and b\"mu\" labels." +
+        "<br><strong>2. Per-hop keys:</strong> for each hop's shared secret, derive rho<sub>i</sub> and mu<sub>i</sub> using HMAC-SHA256 with the b\"rho\" and b\"mu\" labels." +
         "<br><strong>3. pad_key:</strong> <code>pad_key = hmac.new(b\"pad\", self.session_key, hashlib.sha256).digest()</code>." +
-        "<br><strong>4. Filler:</strong> use rho keys for hops 0..N-2 and their slot sizes. Don't include the final hop." +
+        "<br><strong>4. Filler:</strong> use rho<sub>i</sub> keys for hops 0..<i>N</i>-2 and their slot sizes. Don't include the final hop." +
         "<br><strong>5. Initial buffer:</strong> <code>buffer = bytearray(chacha20_keystream(pad_key, 1300))</code>." +
         "<br><strong>6. Reverse loop:</strong> <code>for i in range(len(payloads) - 1, -1, -1):</code> call <code>wrap_hop(buffer, payloads[i], next_hmac, rho_i, mu_i, associated_data)</code>." +
-        "<br><strong>7. On the FIRST iteration only</strong> (i == len-1, the innermost / destination wrap): overwrite the buffer's trailing filler region and recompute the HMAC:" +
+        "<br><strong>7. On the FIRST iteration only</strong> (<i>i</i> == len-1, the innermost / destination wrap): overwrite the buffer's trailing filler region and recompute the HMAC:" +
         "<br>&nbsp;&nbsp;&nbsp;<code>buffer = buffer[:1300 - len(filler)] + filler</code>" +
         "<br>&nbsp;&nbsp;&nbsp;<code>next_hmac = hmac.new(mu_i, buffer + associated_data, hashlib.sha256).digest()</code>" +
         "<br><strong>8. Final packet:</strong> <code>b'\\x00' + self.ephemeral_pubkeys[0] + buffer + next_hmac</code>.",
@@ -1274,12 +1375,12 @@ def test_empty_rho_keys_returns_empty():
     hints: {
       conceptual:
         "<strong>Goal:</strong> compute the bytes that will appear at the end of the hop_payloads field after each forwarder peels its layer." +
-        "<br><br><strong>Why this works:</strong> Alice can't compute filler in isolation; it has to account for what each rho XOR will do during peeling. By simulating the hops one by one (in order from first forwarder to last forwarder), Alice builds up the cumulative effect of all those XORs in the trailing positions." +
-        "<br><br><strong>Loop invariant:</strong> after iteration i, <code>filler</code> contains exactly what the last <code>sum(payload_sizes[:i+1])</code> bytes of hop i's view of the packet would look like, given that earlier hops' rho XORs have already been applied (virtually).",
+        "<br><br><strong>Why this works:</strong> Alice can't compute filler in isolation; it has to account for what each rho<sub>i</sub> XOR will do during peeling. By simulating the hops one by one (in order from first forwarder to last forwarder), Alice builds up the cumulative effect of all those XORs in the trailing positions." +
+        "<br><br><strong>Loop invariant:</strong> after iteration <i>i</i>, <code>filler</code> contains exactly what the last <code>sum(payload_sizes[:i+1])</code> bytes of hop <i>i</i>'s view of the packet would look like, given that earlier hops' rho XORs have already been applied (virtually).",
       steps:
-        "<strong>For each hop i in 0..len(rho_keys)-1:</strong>" +
+        "<strong>For each hop <i>i</i> in 0..len(rho_keys)-1:</strong>" +
         "<br>1. Extend filler at the END with <code>payload_sizes[i]</code> zero bytes." +
-        "<br>2. Generate this hop's rho keystream of length <code>ROUTING_INFO_SIZE + payload_sizes[i]</code> using <code>chacha20_keystream</code>." +
+        "<br>2. Generate this hop's rho<sub>i</sub> keystream of length <code>ROUTING_INFO_SIZE + payload_sizes[i]</code> using <code>chacha20_keystream</code>." +
         "<br>3. Take the trailing <code>len(filler)</code> bytes of that keystream and XOR them into <code>filler</code> using <code>xor_bytes</code>." +
         "<br><br><strong>Return:</strong> the accumulated filler bytes. Total length = <code>sum(payload_sizes)</code>.",
       code:
@@ -1406,15 +1507,15 @@ def test_hops_can_recover_same_shared_secrets():
     hints: {
       conceptual:
         "<strong>Goal:</strong> turn one session key into a deterministic sequence of (ephemeral_pubkey, shared_secret) pairs, one per hop." +
-        "<br><br><strong>Why a chain:</strong> we want a single ephemeral key (E₀) in the packet, not one per hop. Each forwarder computes the next ephemeral key on its own from public information. The chain advances by multiplying the current ephemeral private key by a 'blinding factor' derived from the current ephemeral pubkey and shared secret." +
-        "<br><br><strong>Key invariant:</strong> after the loop, both Alice and the i-th hop must derive the same ss_i. Alice does it as ecdh(e_i, hop_pubkey_i); the hop does it as ecdh(hop_privkey, E_i). The math works because both sides compute the same point on the curve.",
+        "<br><br><strong>Why a chain:</strong> we want a single ephemeral key (<i>E</i><sub>0</sub>) in the packet, not one per hop. Each forwarder computes the next ephemeral key on its own from public information. The chain advances by multiplying the current ephemeral private key by a 'blinding factor' derived from the current ephemeral pubkey and shared secret." +
+        "<br><br><strong>Key invariant:</strong> after the loop, both Alice and the <i>i</i>-th hop must derive the same ss<sub>i</sub>. Alice does it as ecdh(<i>e</i><sub>i</sub>, hop_pubkey<sub>i</sub>); the hop does it as ecdh(hop_privkey, <i>E</i><sub>i</sub>). The math works because both sides compute the same point on the curve.",
       steps:
-        "<strong>Initial state:</strong> e = session_key. This is the ephemeral private key for hop 0." +
-        "<br><br><strong>For each hop i:</strong>" +
-        "<br>1. Compute the ephemeral pubkey E_i with <code>privkey_to_pubkey(e)</code>. Append it to <code>self.ephemeral_pubkeys</code>." +
-        "<br>2. Compute the shared secret ss_i with <code>ecdh(e, hop_pubkey_i)</code>. Append it to <code>self.shared_secrets</code>." +
-        "<br>3. Compute the blinding factor b_i = SHA256(E_i || ss_i). Use <code>hashlib.sha256(...).digest()</code> to get 32 bytes." +
-        "<br>4. Advance e: <code>e = scalar_mul(e, b_i)</code>." +
+        "<strong>Initial state:</strong> <i>e</i> = session_key. This is the ephemeral private key for hop 0." +
+        "<br><br><strong>For each hop <i>i</i>:</strong>" +
+        "<br>1. Compute the ephemeral pubkey <i>E</i><sub>i</sub> with <code>privkey_to_pubkey(e)</code>. Append it to <code>self.ephemeral_pubkeys</code>." +
+        "<br>2. Compute the shared secret ss<sub>i</sub> with <code>ecdh(e, hop_pubkey_i)</code>. Append it to <code>self.shared_secrets</code>." +
+        "<br>3. Compute the blinding factor <i>b</i><sub>i</sub> = SHA256(<i>E</i><sub>i</sub> ‖ ss<sub>i</sub>). Use <code>hashlib.sha256(...).digest()</code> to get 32 bytes." +
+        "<br>4. Advance <i>e</i>: <code>e = scalar_mul(e, b_i)</code>." +
         "<br><br><strong>Done:</strong> after looping over every hop in <code>self.hop_pubkeys</code>, the two lists are populated and the function returns.",
       code:
         `def derive_shared_secrets(self):
