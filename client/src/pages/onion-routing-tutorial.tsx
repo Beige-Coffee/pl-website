@@ -53,6 +53,7 @@ import { PaddingStrategyDiagram } from "../components/onion-routing-draft/Paddin
 import { XorEncryptionDemo } from "../components/onion-routing-draft/XorEncryptionDemo";
 import { WrapPrimerDiagram } from "../components/onion-routing-draft/WrapPrimerDiagram";
 import { PeelPrimerDiagram } from "../components/onion-routing-draft/PeelPrimerDiagram";
+import { OnionPacketAnatomyDiagram } from "../components/onion-routing-draft/OnionPacketAnatomyDiagram";
 import { RouteComparisonDiagram } from "../components/onion-routing-draft/RouteComparisonDiagram";
 import { CltvSafetyLab } from "../components/onion-routing-draft/CltvSafetyLab";
 import { ForwarderPolicyMap } from "../components/onion-routing-draft/ForwarderPolicyMap";
@@ -77,6 +78,7 @@ const CUSTOM_BLOCK_TAGS = new Set([
   "xor-encryption",
   "wrap-primer",
   "peel-primer",
+  "onion-packet-anatomy",
   "filler-trace",
   "hmac-chain",
   "onion-peel",
@@ -139,6 +141,85 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
   answer: number | number[];
   explanation: string;
 }> = {
+  // ── Chapter 5: Onion Routing 101 ─────────────────────────────────────────
+  "cp-101-keystream-shared-draft": {
+    question:
+      "Why don't Alice and Bob need to send the keystream over the wire?",
+    options: [
+      "The keystream is short enough to memorize",
+      "They can each generate the same keystream deterministically from their shared secret",
+      "The keystream is broadcast publicly so every forwarder has a copy",
+      "They send it once at channel-open, then reuse it for every payment",
+    ],
+    answer: 1,
+    explanation:
+      "ChaCha20 is a deterministic stream cipher: feed it the same key and you get the same output every time. Alice derives her keystream from the shared secret she computed via ECDH; Bob derives his from the same shared secret on his end. They produce the exact same bytes without ever having to transmit them. That's the whole reason XOR-with-keystream works as bidirectional encryption from a single shared secret.",
+  },
+  "cp-101-encrypt-buffer-scope-draft": {
+    question:
+      "When Alice encrypts a single hop's layer during onion construction, which bytes get XOR'd with that hop's keystream?",
+    options: [
+      "Only the hop payload Alice just wrote for that hop",
+      "Only the hop payloads, not the surrounding padding",
+      "The entire 1,300-byte payload buffer",
+      "Just the packet header (version + ephemeral pubkey)",
+    ],
+    answer: 2,
+    explanation:
+      "Each iteration's encryption XORs the WHOLE 1,300-byte buffer with the hop's keystream, hop payloads that were already written, the hop payload Alice just wrote, and the padding alike. That's why the layers stack: by the end of construction, Dave's hop payload has been XOR'd by Dave's, then Charlie's, then Bob's keystream (3 layers); Bob's hop payload has only been XOR'd by Bob's keystream (1 layer). It also explains why each peel hop has to XOR the entire buffer to remove their layer.",
+  },
+  "cp-101-dave-layer-count-draft": {
+    question:
+      "After Alice finishes building the onion, how many encryption layers cover Dave's hop payload?",
+    options: [
+      "1, only Dave's encryption",
+      "2, Dave's and Charlie's",
+      "3, Dave's, Charlie's, and Bob's",
+      "0, the destination's hop payload is left in plaintext for Dave to read",
+    ],
+    answer: 2,
+    explanation:
+      "Dave's hop payload is written first (innermost), so it's present for every subsequent encryption pass. Alice's iteration order is Dave → Charlie → Bob, and each iteration XORs the entire buffer with that hop's keystream. So Dave's hop payload picks up rho_dave, then rho_charlie, then rho_bob, three layers. Bob's hop payload, written last, only gets one layer. That asymmetry is what makes peeling work: Bob's XOR removes one layer from everything, leaving Bob's hop payload in plaintext and the inner hop payloads still encrypted by 2 and 1 layers respectively.",
+  },
+  "cp-101-decrypt-buffer-scope-draft": {
+    question:
+      "When Bob receives the onion and XORs the buffer with his keystream during peeling, which bytes lose an encryption layer?",
+    options: [
+      "Only Bob's hop payload at the front",
+      "Bob's hop payload and the trailing padding",
+      "Every byte in the 1,300-byte buffer",
+      "Only the bytes that Bob's HMAC committed to",
+    ],
+    answer: 2,
+    explanation:
+      "Decryption mirrors encryption exactly. Alice applied Bob's keystream to the whole buffer during construction; Bob has to apply the same keystream to the whole buffer to undo it. Bob's hop payload had only one encryption layer (Bob's), so it comes off completely and his hop payload is now plaintext. Charlie's and Dave's hop payloads had two and three layers respectively; each loses one, leaving them still encrypted. The padding loses one layer too. This symmetry is what makes Sphinx work: every hop runs the exact same operation Alice did during their iteration of the build.",
+  },
+  "cp-101-destination-signal-draft": {
+    question:
+      "How does each forwarder know whether they're a relay (forward the packet) or the destination (claim the payment)?",
+    options: [
+      "They check a 'destination' flag bit in the packet header",
+      "They count the remaining payload bytes and compare to a known route length",
+      "After decrypting their hop payload, they check whether the hop payload's HMAC field is 32 zero bytes",
+      "They look themselves up in the network gossip graph and see if any further channels exist on the route",
+    ],
+    answer: 2,
+    explanation:
+      "Every hop payload ends with a 32-byte HMAC field. For relay hops, this field contains the next hop's HMAC (charlie_hmac in Bob's hop payload, dave_hmac in Charlie's). For the destination, Alice fills the field with all zeros, there is no next hop to commit to. So each hop's algorithm is: decrypt my hop payload, read the HMAC field; if it's all zeros, I'm the destination and I claim the payment. Otherwise the field is the outer HMAC for the next forwarder, so I shift the buffer left by my hop payload size and forward it.",
+  },
+  "cp-101-tamper-detection-draft": {
+    question:
+      "Suppose Charlie is malicious and modifies a few bytes in Dave's encrypted layer before forwarding the packet. What happens?",
+    options: [
+      "Dave can't decrypt his hop payload at all",
+      "Dave's HMAC verification fails: dave_hmac was computed over specific bytes, and those bytes have now changed",
+      "Nothing, the per-hop HMACs only protect against modifications by hostile peers, not by forwarders themselves",
+      "The packet succeeds; only the on-chain settlement would catch the tampering",
+    ],
+    answer: 1,
+    explanation:
+      "Each per-hop HMAC commits to everything beneath it in the onion: the hop payload, the inner-hop HMAC field, and all the encrypted layers underneath. dave_hmac was computed by Alice over Dave's encrypted layer at construction time. If Charlie tampers with any of those bytes, the modified buffer no longer matches dave_hmac. When Charlie forwards the packet to Dave, Dave runs HMAC verification first, and it fails. Dave drops the packet. This is exactly why the per-hop HMACs make onion routing safe even when intermediate hops are malicious: any tampering anywhere below a hop's hop payload is detected at that hop and the packet never gets processed.",
+  },
   // ── Chapter 10: The Error Onion ──────────────────────────────────────────
   "cp-error-trial-decrypt-draft": {
     question: "Alice receives a wrapped error from a 3-hop route Bob → Carol → Dave. She tries hop 0's keys (Bob), the HMAC doesn't verify, then tries hop 1's keys (Carol), the HMAC verifies. What does Alice's algorithm do if Carol's keys hadn't matched either?",
@@ -161,7 +242,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
       "ChaCha20 doesn't initialize correctly until an HMAC has been computed over its input, so the order is forced by the cryptographic library",
     ],
     answer: 1,
-    explanation: "Verify-then-decrypt (encrypt-then-MAC) is a standard secure-construction pattern. Two reasons: (1) Defensive coding — never feed a tampered or malformed packet's bytes to your parser. If the HMAC is wrong, we don't know what's in the packet, so we shouldn't process it. (2) CPU efficiency — generating a 2,600-byte ChaCha20 keystream isn't free, and discarding the work because the packet was bogus is wasted effort. Verifying the 32-byte HMAC tag first costs much less than the keystream generation it gates.",
+    explanation: "Verify-then-decrypt (encrypt-then-MAC) is a standard secure-construction pattern. Two reasons: (1) Defensive coding, never feed a tampered or malformed packet's bytes to your parser. If the HMAC is wrong, we don't know what's in the packet, so we shouldn't process it. (2) CPU efficiency, generating a 2,600-byte ChaCha20 keystream isn't free, and discarding the work because the packet was bogus is wasted effort. Verifying the 32-byte HMAC tag first costs much less than the keystream generation it gates.",
   },
   "cp-tlv-final-vs-forward-draft": {
     question: "After peeling, the forwarder parses the bigsize-prefixed TLV records and finds types 2 (amt_to_forward), 4 (outgoing_cltv_value), and 8 (payment_data). No type 6 record is present. What should the forwarder do?",
@@ -184,7 +265,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
       "The first 1,300 bytes decrypt the inbound packet; the next 1,300 bytes encrypt Bob's outgoing packet by XOR-ing his keystream onto the next ephemeral pubkey field",
     ],
     answer: 2,
-    explanation: "When Bob shifts the inner contents forward (to remove his slot from the front of the buffer), a gap opens up at the end. Those gap bytes have to be the bytes that Alice's chapter-6 filler computation arranged for. The filler was constructed to match the trailing portion of each hop's rho keystream extended past 1,300 bytes. By generating 2,600 bytes of keystream and XOR-ing it across a 2,600-byte working buffer, Bob applies that exact extension naturally: the front 1,300 decrypts his inbound bytes, the trailing 1,300 produces the bytes-of-keystream-XORed-with-zeros that match what Alice baked in.",
+    explanation: "When Bob shifts the inner contents forward (to remove his hop payload from the front of the buffer), a gap opens up at the end. Those gap bytes have to be the bytes that Alice's chapter-6 filler computation arranged for. The filler was constructed to match the trailing portion of each hop's rho keystream extended past 1,300 bytes. By generating 2,600 bytes of keystream and XOR-ing it across a 2,600-byte working buffer, Bob applies that exact extension naturally: the front 1,300 decrypts his inbound bytes, the trailing 1,300 produces the bytes-of-keystream-XORed-with-zeros that match what Alice baked in.",
   },
   // ── Chapter 7: Wrapping Layer-by-Layer ───────────────────────────────────
   "cp-build-reverse-order-draft": {
@@ -196,7 +277,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
       "Forward order would leak the hop count to a passive observer because intermediate buffers would be visible at known sizes",
     ],
     answer: 1,
-    explanation: "The HMAC chain has a strict direction: Bob's HMAC commits to Carol's layer, Carol's HMAC commits to Dave's layer. To compute Bob's HMAC, Carol's layer must already be built. To compute Carol's HMAC, Dave's must already be built. So we have to build the innermost layer first, then wrap it, then wrap again, and so on. Forward order is impossible because the outer hop's HMAC needs bytes that don't yet exist. The reverse order isn't an arbitrary spec choice; it's forced by the data dependencies in the construction.",
+    explanation: "The per-hop HMACs commit in a strict direction: Bob's HMAC commits to Carol's layer, Carol's HMAC commits to Dave's layer. To compute Bob's HMAC, Carol's layer must already be built. To compute Carol's HMAC, Dave's must already be built. So we have to build the innermost layer first, then wrap it, then wrap again, and so on. Forward order is impossible because the outer hop's HMAC needs bytes that don't yet exist. The reverse order isn't an arbitrary spec choice; it's forced by the data dependencies in the construction.",
   },
   // ── Chapter 6: Filler Construction ───────────────────────────────────────
   "cp-filler-purpose-draft": {
@@ -208,14 +289,14 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
       "Zeros at the end of the payload area would be visible to a passive observer as a quantity-of-trailing-zeros side channel, leaking the route length",
     ],
     answer: 1,
-    explanation: "The forwarder XORs the entire 1,300-byte hop_payloads field with its rho keystream before reading anything. If Bob shifted in zeros and Carol XORed those zeros with her keystream, she'd get her rho keystream values at those positions — which is a deterministic value, but isn't what Alice computed Carol's HMAC over. Carol's HMAC verification would fail and the payment would be rejected. The filler is precomputed by Alice exactly so that the trailing positions, after each peel, contain bytes that match what the next hop's HMAC expected.",
+    explanation: "The forwarder XORs the entire 1,300-byte hop_payloads field with its rho keystream before reading anything. If Bob shifted in zeros and Carol XORed those zeros with her keystream, she'd get her rho keystream values at those positions, which is a deterministic value, but isn't what Alice computed Carol's HMAC over. Carol's HMAC verification would fail and the payment would be rejected. The filler is precomputed by Alice exactly so that the trailing positions, after each peel, contain bytes that match what the next hop's HMAC expected.",
   },
   "cp-filler-final-hop-draft": {
     question: "In a 3-hop route Bob → Carol → Dave, Alice generates filler covering Bob's and Carol's hop sizes but does not generate any filler for Dave. Why?",
     options: [
       "Dave's filler would have to be 1,300 bytes long, which exceeds the maximum keystream length of ChaCha20 with a 32-byte key",
       "Dave is the destination and doesn't shift any bytes forward. His HMAC is computed over a buffer Alice fully controls, so there are no 'trailing positions' that need to match a future hop's keystream",
-      "Dave's payload always has type 8 (payment_data), which BOLT 4 mandates must be the only TLV record in the final hop's slot, leaving no room for filler",
+      "Dave's payload always has type 8 (payment_data), which BOLT 4 mandates must be the only TLV record in the final hop's hop payload, leaving no room for filler",
       "The final hop's filler is generated client-side by Dave's wallet using the payment_secret and is not Alice's responsibility",
     ],
     answer: 1,
@@ -223,7 +304,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
   },
   // ── Chapter 6: The Fixed-Size Packet & Filler ────────────────────────────
   "cp-payload-shrink-leak-draft": {
-    question: "Looking at the visual above, the packet's size visibly shrinks at every hop because each forwarder peels its slot off the front and forwards what's left. From the byte count alone, what is every forwarder (or any passive observer of the wire) able to infer that they shouldn't? Select all that apply.",
+    question: "Looking at the visual above, the packet's size visibly shrinks at every hop because each forwarder peels its hop payload off the front and forwards what's left. From the byte count alone, what is every forwarder (or any passive observer of the wire) able to infer that they shouldn't? Select all that apply.",
     options: [
       "The number of hops remaining downstream of them",
       "The number of hops upstream of them (how many forwarders have already peeled the packet)",
@@ -231,7 +312,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
       "The sender's identity",
     ],
     answer: [0, 1],
-    explanation: "Both the upstream and downstream hop counts leak from the byte count. A forwarder sees the inbound packet size and knows how many slots are still inside (downstream count). They can also compare against what an unpeeled packet would look like (e.g., the maximum 1,300-byte payload area that Alice originally constructs) to figure out how many slots have already been stripped (upstream count). Either way, encryption hides the slot *contents* but not the byte count on the wire, which is exactly the privacy property from chapter 3 falling apart. The other options are not inferable from size alone: amount, sender identity, and payment hash are all encrypted inside slots and don't change the byte count. Sphinx fixes both leaks by padding every packet to exactly 1,366 bytes regardless of route length, and the filler construction in this chapter is what makes that padding work without breaking each hop's HMAC verification.",
+    explanation: "Both the upstream and downstream hop counts leak from the byte count. A forwarder sees the inbound packet size and knows how many hop payloads are still inside (downstream count). They can also compare against what an unpeeled packet would look like (e.g., the maximum 1,300-byte payload area that Alice originally constructs) to figure out how many hop payloads have already been stripped (upstream count). Either way, encryption hides the hop payload *contents* but not the byte count on the wire, which is exactly the privacy property from chapter 3 falling apart. The other options are not inferable from size alone: amount, sender identity, and payment hash are all encrypted inside hop payloads and don't change the byte count. Sphinx fixes both leaks by padding every packet to exactly 1,366 bytes regardless of route length, and the filler construction in this chapter is what makes that padding work without breaking each hop's HMAC verification.",
   },
   // ── Chapter 4: Key Derivation ────────────────────────────────────────────
   "cp-key-separation-draft": {
@@ -518,7 +599,17 @@ export const CHAPTER_REQUIREMENTS: Record<string, {
   "pathfinding-101": { checkpoints: ["cp-channel-update-direction-draft", "cp-cheapest-route-draft"], exercises: [] },
   "privacy-problem": { checkpoints: ["cp-naive-plaintext-leak-draft", "cp-still-vulnerable-draft"], exercises: [] },
   "shared-secrets": { checkpoints: ["cp-node-key-ecdh-draft", "cp-naive-shared-secrets-draft", "cp-blinding-public-draft"], exercises: ["exercise-derive-shared-secrets-draft"] },
-  "onion-routing-101": { checkpoints: [], exercises: [] },
+  "onion-routing-101": {
+    checkpoints: [
+      "cp-101-keystream-shared-draft",
+      "cp-101-encrypt-buffer-scope-draft",
+      "cp-101-dave-layer-count-draft",
+      "cp-101-decrypt-buffer-scope-draft",
+      "cp-101-destination-signal-draft",
+      "cp-101-tamper-detection-draft",
+    ],
+    exercises: [],
+  },
   "key-derivation": { checkpoints: ["cp-key-separation-draft", "cp-key-domain-separation-draft"], exercises: ["exercise-derive-keys-draft"] },
   "fixed-size-and-filler": { checkpoints: ["cp-payload-shrink-leak-draft", "cp-filler-purpose-draft", "cp-filler-final-hop-draft"], exercises: ["exercise-generate-filler-draft"] },
   "wrapping-layer-by-layer": { checkpoints: ["cp-build-reverse-order-draft"], exercises: ["exercise-wrap-hop-draft", "exercise-build-packet-draft"] },
@@ -771,7 +862,7 @@ function ChapterContent({
           "checkpoint-group": ({ id, ids }: any) => {
             const groupId = String(id || "");
             const questionIds = String(ids || "").split(",").map((s: string) => s.trim()).filter(Boolean);
-            // Filter out any multi-select questions — CheckpointGroup's
+            // Filter out any multi-select questions, CheckpointGroup's
             // grouped reward UI only supports single-answer questions today.
             const groupQuestions = questionIds
               .map((qid: string) => {
@@ -977,6 +1068,9 @@ function ChapterContent({
           },
           "peel-primer": () => {
             return <PeelPrimerDiagram />;
+          },
+          "onion-packet-anatomy": () => {
+            return <OnionPacketAnatomyDiagram />;
           },
           "filler-trace": () => {
             return <FillerTraceDiagram />;

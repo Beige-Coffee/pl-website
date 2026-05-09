@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 // HmacChainDiagram (rebuilt 2026-05-08)
 //
 // Reverse-order wrap loop. Three layers stack from innermost (Dave, top)
-// outward (Bob, bottom). Each step lights up one layer, showing the slot
+// outward (Bob, bottom). Each step lights up one layer, showing the hop payload
 // being written, the rho XOR happening, and the HMAC being computed and
 // passed up to the next iteration.
 //
@@ -35,9 +35,9 @@ const HOP_LABEL: Record<HopId, string> = {
 const ITERATION_ORDER: HopId[] = ["dave", "charlie", "bob"];
 
 const STEP_CAPTIONS: Record<number, string> = {
-  0: "Iteration 1 — Dave (innermost). Shift the buffer right by Dave's slot size. Write Dave's TLV payload + 32 zero bytes (no inner hop, so no HMAC to point to). XOR with Dave's rho keystream. Apply the filler overlay over the trailing positions. Compute dave_hmac with Dave's mu. Save it as next_hmac for Charlie's iteration.",
-  1: "Iteration 2 — Charlie. Shift right by Charlie's slot size. Write Charlie's TLV payload, then append dave_hmac (which we computed last iteration). XOR with Charlie's rho. Compute charlie_hmac with Charlie's mu. Save it as next_hmac for Bob.",
-  2: "Iteration 3 — Bob (outermost). Shift right by Bob's slot size. Write Bob's TLV payload, then append charlie_hmac. XOR with Bob's rho. Compute bob_hmac with Bob's mu. This is the value that goes in the packet's hmac field; Bob will verify it before decrypting anything.",
+  0: "Iteration 1, Dave (innermost). Shift the buffer right by Dave's hop payload size. Write Dave's TLV payload + 32 zero bytes (no inner hop, so no HMAC to point to). XOR with Dave's rho keystream. Apply the filler overlay over the trailing positions. Compute dave_hmac with Dave's mu. Save it as next_hmac for Charlie's iteration.",
+  1: "Iteration 2, Charlie. Shift right by Charlie's hop payload size. Write Charlie's TLV payload, then append dave_hmac (which we computed last iteration). XOR with Charlie's rho. Compute charlie_hmac with Charlie's mu. Save it as next_hmac for Bob.",
+  2: "Iteration 3, Bob (outermost). Shift right by Bob's hop payload size. Write Bob's TLV payload, then append charlie_hmac. XOR with Bob's rho. Compute bob_hmac with Bob's mu. This is the value that goes in the packet's hmac field; Bob will verify it before decrypting anything.",
 };
 
 export function HmacChainDiagram() {
@@ -75,7 +75,7 @@ export function HmacChainDiagram() {
         <div className="flex items-center gap-2">
           <div className="w-1.5 h-1.5 rounded-full bg-[#b8860b]" />
           <span className="text-sm font-bold tracking-[0.08em] uppercase">
-            HMAC chain — innermost first
+            Per-hop HMACs, innermost first
           </span>
         </div>
       </div>

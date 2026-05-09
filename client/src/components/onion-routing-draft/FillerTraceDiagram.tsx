@@ -14,7 +14,7 @@ import { useEffect, useState } from "react";
 //   3: prepend charlie_size zeros (light cells stacked on left)
 //   4: XOR with last (bob+charlie) bytes of Charlie's extended rho keystream
 //      (Charlie's keystream layered over both halves)
-//   5: final filler — Charlie on top of Bob (left), Charlie on top of zeros (right)
+//   5: final filler, Charlie on top of Bob (left), Charlie on top of zeros (right)
 //
 // Visual style follows the locked onion-routing format spec.
 // ────────────────────────────────────────────────────────────────────────────

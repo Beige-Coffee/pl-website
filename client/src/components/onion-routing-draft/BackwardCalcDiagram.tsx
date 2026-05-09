@@ -21,7 +21,7 @@ const NODES = [
   { id: "dave", label: "Dave", role: "Receiver", x: 570 },
 ];
 
-// Canonical onion-routing palette — must match EncryptedSliceReveal,
+// Canonical onion-routing palette, must match EncryptedSliceReveal,
 // HtlcPropagationDiagram, EcdhChainDiagram, FiveKeysJobsDiagram, TlvByteBreakdown.
 //   Alice (sender)     = gold   #b8860b
 //   Bob (forwarder 1)  = indigo #3b6aa0
@@ -167,7 +167,7 @@ export function BackwardCalcDiagram() {
               );
             })}
 
-            {/* HTLC labels — appear as steps unlock */}
+            {/* HTLC labels, appear as steps unlock */}
             {visible.map((s) => {
               const node = NODES[s.receiverIdx];
               return (

@@ -320,7 +320,7 @@ export function CommitmentTxCard(props: CommitmentTxCardProps) {
     );
   }
 
-  // Full mode — BOLT-3-flavored card with version/locktime/inputs/witness.
+  // Full mode, BOLT-3-flavored card with version/locktime/inputs/witness.
   // Hovering an output row reveals a side panel showing that output's witness
   // script and a SHA256 indicator pointing back to the <script_hash>
   // placeholder in scriptPubKey. State lives at the card level so the side
@@ -430,7 +430,7 @@ function CommitmentTxCardFullView({
           <Tooltip label="Transaction ID of the previous output being spent. For a commitment tx, this is the funding transaction's txid, the on-chain anchor of the channel.">
             <div>
               <span className="opacity-60">txid:</span>{" "}
-              <span className="font-bold">{fundingTxid ?? "—"}</span>
+              <span className="font-bold">{fundingTxid ?? "-"}</span>
             </div>
           </Tooltip>
           <Tooltip label="Output index within the funding transaction. The funding output is at index 0 in our model.">
@@ -513,7 +513,7 @@ function CommitmentTxCardFullView({
       </div>
     </div>
 
-    {/* Witness-script side panel — appears when an output with a
+    {/* Witness-script side panel, appears when an output with a
         witnessScript is hovered. Shows the script, a SHA256 indicator, and
         an arrow back to the <script_hash> placeholder in the main card. */}
     {showWitness && hoveredOutput?.witnessScript && (
@@ -527,7 +527,7 @@ function CommitmentTxCardFullView({
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// WitnessScriptPanel — side panel rendered next to the full-mode card when an
+// WitnessScriptPanel, side panel rendered next to the full-mode card when an
 // output is hovered. Echoes the BOLT 3 layout: the witness script lines on
 // top, a SHA256 diamond beneath, and a callout indicating the resulting hash
 // fills the <script_hash> placeholder in the parent output's scriptPubKey.

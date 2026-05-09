@@ -8,7 +8,7 @@ import { Tok } from "./mathTokens";
 // addresses one strawman concern and shows how the blinding chain resolves
 // it:
 //   Panel 1 , ALICE STORES: a single key icon labeled session_key (e).
-//   Panel 2 , PACKET CARRIES: a fixed-size strip with a single E_AB slot
+//   Panel 2 , PACKET CARRIES: a fixed-size strip with a single E_AB hop payload
 //             plus a generic payload band, regardless of route length.
 //   Panel 3 , EVERY HOP HAS: three colored shared-secret tiles (Bob/Charlie/
 //             Dave), one per hop, all derived from the chain.
@@ -194,7 +194,7 @@ export function SharedSecretsRecapDiagram() {
                   className="text-[11px] text-center"
                   style={{ color: SLATE, maxWidth: 240 }}
                 >
-                  one ephemeral pubkey, no per-hop slot count
+                  one ephemeral pubkey, no per-hop hop payload count
                 </div>
               </div>
             </Panel>

@@ -22,7 +22,7 @@ import { useState, useEffect, useRef } from "react";
 
 type HopId = "alice" | "bob" | "charlie" | "dave";
 
-// Canonical hop palette — must stay aligned with HtlcPropagationDiagram and
+// Canonical hop palette, must stay aligned with HtlcPropagationDiagram and
 // ForwarderPolicyMap so the same characters carry the same colors across the
 // course.
 const HOP_COLORS: Record<HopId, { stroke: string; fill: string }> = {
@@ -107,7 +107,7 @@ function isRemoved(forHop: "bob" | "charlie" | "dave", step: number): boolean {
 
 // Which hops have actually read this slice while it was on the wire.
 // A slice is read by every hop that processed the message while the slice was
-// still in the stack — i.e. up to and including the hop that peels it off.
+// still in the stack, i.e. up to and including the hop that peels it off.
 function seenByAt(forHop: "bob" | "charlie" | "dave", step: number): string[] {
   const out: string[] = [];
   if (forHop === "bob") {
@@ -171,7 +171,7 @@ export function PlaintextMessageTear() {
       data-testid="onion-message-tear"
       style={{ fontFamily: "ui-sans-serif, system-ui, sans-serif" }}
     >
-      {/* Black section header — Noise capstone style */}
+      {/* Black section header, Noise capstone style */}
       <div className="bg-black text-white px-4 py-2 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="w-1.5 h-1.5 rounded-full bg-[#b8860b]" />
@@ -185,7 +185,7 @@ export function PlaintextMessageTear() {
       <div className="relative bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-6" style={{ minHeight: 440 }}>
         {/* Hop track */}
         <div className="relative" style={{ height: 88 }}>
-          {/* Backbone dashes — HTML divs aligned to the vertical center of the
+          {/* Backbone dashes, HTML divs aligned to the vertical center of the
               circular nodes (which are 60px tall, so center sits at y=30). The
               segments start/end 30px out from each node's center to clear the
               circle's radius, plus a small visual buffer. */}
@@ -206,7 +206,7 @@ export function PlaintextMessageTear() {
             );
           })}
 
-          {/* Circular hop nodes — match the canonical hop palette used in
+          {/* Circular hop nodes, match the canonical hop palette used in
               HtlcPropagationDiagram and ForwarderPolicyMap. */}
           {(["alice", "bob", "charlie", "dave"] as HopId[]).map((id) => {
             const isActive = active === id;
@@ -290,7 +290,7 @@ export function PlaintextMessageTear() {
           </div>
 
           {/* Envelope body. We don't introduce the onion_routing_packet
-              sub-field here yet — that's a Sphinx concept and we haven't
+              sub-field here yet, that's a Sphinx concept and we haven't
               motivated it. payment_hash sits at the envelope level (BOLT 2)
               and stays the same across hops, so it doubles as a small
               reminder that there's a real envelope around the slice stack. */}

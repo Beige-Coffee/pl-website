@@ -48,7 +48,7 @@ import {
 
 type HopId = "alice" | "bob" | "charlie" | "dave";
 
-// Canonical hop palette — shared with ForwarderPolicyMap, ComputedRouteDiagram,
+// Canonical hop palette, shared with ForwarderPolicyMap, ComputedRouteDiagram,
 // RouteCalcExercise, and the chapter 1 visuals. Used to color-code each
 // commitment-tx output row by the party whose balance it represents.
 const HOP_PALETTE: Record<HopId, { stroke: string; fill: string }> = {
@@ -294,7 +294,7 @@ function buildOutputs(
       valueSats: remoteSats,
       immediate: true,
       accentColor: HOP_PALETTE[remoteId].stroke,
-      // P2WPKH — no witness script (just a pubkey hash); no panel on hover.
+      // P2WPKH, no witness script (just a pubkey hash); no panel on hover.
     },
   ];
 
@@ -433,7 +433,7 @@ export function HtlcPropagationDiagram() {
   const [playing, setPlaying] = useState(false);
   const [popover, setPopover] = useState<PinnedPopover | null>(null);
   // User-clicked override on which channel is expanded. Reset to null on every
-  // beat change, so the animation drives focus while playing — but a manual
+  // beat change, so the animation drives focus while playing, but a manual
   // click during a pause overrides until the next beat.
   const [overrideExpanded, setOverrideExpanded] = useState<ChannelId | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -543,7 +543,7 @@ export function HtlcPropagationDiagram() {
         className="relative bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-6"
         style={{ minHeight: 460, minWidth: 720 }}
       >
-        {/* Hop track — same NODE_X_PCT layout as the sibling visuals. */}
+        {/* Hop track, same NODE_X_PCT layout as the sibling visuals. */}
         <div className="relative" style={{ height: 160 }}>
           {/* Backbone dashes between circles. Circle radius is 38px (76px
               diameter), so backbone center sits at y=38 and the dashes start

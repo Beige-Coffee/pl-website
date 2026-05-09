@@ -65,9 +65,9 @@ const SECRET_TOKEN: Record<ForwarderId, string> = {
   dave: "ss_AD",
 };
 
-// Per-spec slot internals: each hop's slot ends with a 32-byte HMAC pointing
-// to the *next* hop's view of hop_payloads. Bob's slot carries the HMAC for
-// Charlie; Charlie's slot carries the HMAC for Dave; Dave's slot ends in
+// Per-spec hop payload internals: each hop's hop payload ends with a 32-byte HMAC pointing
+// to the *next* hop's view of hop_payloads. Bob's hop payload carries the HMAC for
+// Charlie; Charlie's hop payload carries the HMAC for Dave; Dave's hop payload ends in
 // 32 zero bytes (no next hop).
 const NEXT_HOP_LABEL: Record<ForwarderId, string> = {
   bob: "→ Charlie",
@@ -269,14 +269,14 @@ function LayeredPayloadArea({ step }: { step: number }) {
     >
       {/* Three encryption layers, each progressively offset from the left
           so the nested wrapping is visible: Bob's hatch covers the entire
-          payload area, Charlie's hatch covers from Charlie's slot to the
-          end, Dave's hatch covers only Dave's slot region. */}
+          payload area, Charlie's hatch covers from Charlie's hop payload to the
+          end, Dave's hatch covers only Dave's hop payload region. */}
       {LAYER_ORDER.map((hop) => {
         const color = HOP_KEY_COLORS[hop];
         const angle = LAYER_ANGLES[hop];
         const visible = isLayerActive(hop, step);
-        // Bob's slot occupies bytes 0-33%, Charlie 33-66%, Dave 66-100%.
-        // Each layer's hatch starts at its slot's left edge.
+        // Bob's hop payload occupies bytes 0-33%, Charlie 33-66%, Dave 66-100%.
+        // Each layer's hatch starts at its hop payload's left edge.
         const leftPct = hop === "bob" ? 0 : hop === "charlie" ? 33.33 : 66.67;
         return (
           <div
@@ -296,7 +296,7 @@ function LayeredPayloadArea({ step }: { step: number }) {
         );
       })}
 
-      {/* Decrypted slice with per-spec slot internals: [len | TLV | HMAC].
+      {/* Decrypted slice with per-spec hop payload internals: [len | TLV | HMAC].
           Animates in via width + opacity when a hop peels. */}
       <div
         className="absolute top-0 bottom-0 left-0 flex"
@@ -365,7 +365,7 @@ function LayeredPayloadArea({ step }: { step: number }) {
                 </div>
               </SlotSubCell>
 
-              {/* HMAC sub-cell — next-hop HMAC */}
+              {/* HMAC sub-cell, next-hop HMAC */}
               <SlotSubCell
                 section="hmac"
                 style={{

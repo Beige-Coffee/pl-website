@@ -76,7 +76,7 @@ const HOPS: HopRow[] = [
     forwarderLines: [
       "ss₂ = SHA256(dave_privkey · E₂)",
       "(final hop)",
-      "—",
+      "(no next hop)",
     ],
   },
 ];
@@ -209,7 +209,7 @@ export function SharedSecretSymmetryDiagram() {
                   fontFamily: '"JetBrains Mono", "Fira Code", monospace',
                 }}
               >
-                Alice — sender side
+                Alice, sender side
               </div>
             </div>
             <div />
@@ -223,7 +223,7 @@ export function SharedSecretSymmetryDiagram() {
                   fontFamily: '"JetBrains Mono", "Fira Code", monospace',
                 }}
               >
-                Forwarder — receiver side
+                Forwarder, receiver side
               </div>
             </div>
           </div>

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 
 // ────────────────────────────────────────────────────────────────────────────
-// CltvSafetyLab (DRAFT) — editable HTLC expiries + sequential preimage walk
+// CltvSafetyLab (DRAFT), editable HTLC expiries + sequential preimage walk
 //
 // Three editable expiry blocks (one per HTLC contract) and a "blocks per hop"
 // claim latency. Constraint: each upstream HTLC's expiry must be ≥ the next
@@ -148,7 +148,7 @@ function viewAtStep(sim: Sim, step: number): StepView {
       bcStatus: "expired",
       cdStatus: "claimed",
       nodeOk: { alice: "neutral", bob: "neutral", charlie: "burned", dave: "ok" },
-      caption: `Block ${sim.charlieClaimsBobAt}. Charlie tried to claim Bob's HTLC, but it already expired at block ${sim.expiryBC}. Bob's HTLC times out and Bob refunds. Charlie is out ${DAVE_AMOUNT.toLocaleString("en-US")} sats — he paid Dave but couldn't recover from Bob.`,
+      caption: `Block ${sim.charlieClaimsBobAt}. Charlie tried to claim Bob's HTLC, but it already expired at block ${sim.expiryBC}. Bob's HTLC times out and Bob refunds. Charlie is out ${DAVE_AMOUNT.toLocaleString("en-US")} sats, he paid Dave but couldn't recover from Bob.`,
     };
   }
   if (step === 3) {
@@ -171,7 +171,7 @@ function viewAtStep(sim: Sim, step: number): StepView {
         bcStatus: "claimed",
         cdStatus: "claimed",
         nodeOk: { alice: "neutral", bob: "burned", charlie: "ok", dave: "ok" },
-        caption: `Block ${sim.bobClaimsAliceAt}. Bob has the preimage but Alice's HTLC already expired at block ${sim.expiryAB}. Alice's timeout fired and she clawed her funds back. Bob is out ${BOB_TO_CHARLIE.toLocaleString("en-US")} sats — he paid Charlie but couldn't recover from Alice.`,
+        caption: `Block ${sim.bobClaimsAliceAt}. Bob has the preimage but Alice's HTLC already expired at block ${sim.expiryAB}. Alice's timeout fired and she clawed her funds back. Bob is out ${BOB_TO_CHARLIE.toLocaleString("en-US")} sats, he paid Charlie but couldn't recover from Alice.`,
       };
     }
     // Both Charlie and Bob lost in step 2 (Charlie's claim failed earlier)
@@ -185,7 +185,7 @@ function viewAtStep(sim: Sim, step: number): StepView {
       caption: `Block ${sim.bobClaimsAliceAt}. Alice's HTLC has also expired (block ${sim.expiryAB}). Bob never paid Charlie, so Bob is fine, and Alice gets refunded. Only Charlie is out of pocket.`,
     };
   }
-  // step 4 — final summary
+  // step 4, final summary
   let summary: string;
   if (sim.bobClaimSucceeds) {
     summary = `Final state. Everyone settled cleanly. Charlie earned ${CHARLIE_FEE} sats, Bob earned ${BOB_FEE} sat, Alice paid ${ALICE_TO_BOB.toLocaleString("en-US")} sats to deliver ${DAVE_AMOUNT.toLocaleString("en-US")} to Dave. The CLTV margins gave each forwarder enough time to react.`;
@@ -281,7 +281,7 @@ export function CltvSafetyLab() {
         className="relative bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-6"
         style={{ minWidth: 760, minHeight: 480 }}
       >
-        {/* Block counter — prominent */}
+        {/* Block counter, prominent */}
         <div className="flex items-center justify-center mb-4">
           <div
             className="px-4 py-1.5 border-[1.5px] flex items-center gap-2"
@@ -590,7 +590,7 @@ function ContractCard({
     borderColor = RED;
     background = "#fde0e0";
     borderStyle = "dashed";
-    statusText = `⏱ expired — refunded to ${fromLabel}`;
+    statusText = `⏱ expired, refunded to ${fromLabel}`;
     statusColor = RED;
   }
 

@@ -3,7 +3,7 @@ import { useRef, useState, type ReactNode, type CSSProperties } from "react";
 // ────────────────────────────────────────────────────────────────────────────
 // SlotSubCell
 //
-// Shared sub-cell component used across slot-rendering diagrams (slice-in-
+// Shared sub-cell component used across hop payload-rendering diagrams (slice-in-
 // packet, payload-shrink, padding-strategy). Each sub-cell represents one
 // of the three logical fields per BOLT 4 spec:
 //
@@ -27,7 +27,7 @@ const TOOLTIP_CONTENT: Record<SlotSection, { title: string; body: string }> = {
   },
   hmac: {
     title: "Next-hop HMAC",
-    body: "32-byte HMAC-SHA256 tag bound to the next layer of the onion. When this hop forwards, it extracts this tag and writes it into the outer HMAC field of the new packet — so the next hop can verify their own layer before peeling.",
+    body: "32-byte HMAC-SHA256 tag bound to the next layer of the onion. When this hop forwards, it extracts this tag and writes it into the outer HMAC field of the new packet, so the next hop can verify their own layer before peeling.",
   },
 };
 

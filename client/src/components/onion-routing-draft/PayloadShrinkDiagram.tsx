@@ -9,13 +9,13 @@ import { SlotSubCell } from "./SlotSubCell";
 // WITHOUT filler. Reuses the same OnionContainer framing (HEADER | PAYLOAD
 // AREA | HMAC) with a black "ONION_ROUTING_PACKET (X → Y)" label, but the
 // PAYLOAD AREA's width shrinks at each hop because each forwarder peels its
-// slot off the front and forwards a smaller buffer.
+// hop payload off the front and forwards a smaller buffer.
 //
 // 4 beats:
-//   0: Alice has the full 3-slot packet (about to leave Alice)
-//   1: Bob has peeled his slot — packet is now 2 slots
-//   2: Charlie has peeled — packet is 1 slot
-//   3: Dave has consumed his slot — packet empty
+//   0: Alice has the full 3-hop payload packet (about to leave Alice)
+//   1: Bob has peeled his hop payload, packet is now 2 hop payloads
+//   2: Charlie has peeled, packet is 1 hop payload
+//   3: Dave has consumed his hop payload, packet empty
 //
 // Visual style follows the locked onion-routing format spec.
 // ────────────────────────────────────────────────────────────────────────────
@@ -64,8 +64,8 @@ const NODE_X_PCT: Record<HopId, number> = {
 
 interface State {
   holder: HopId;
-  // Slots in order from front to back of the payload area.
-  slots: ForwarderId[];
+  // Hop payloads in order from front to back of the payload area.
+  hopPayloads: ForwarderId[];
   bytes: number;
   // Where the packet just came FROM (or null at step 0).
   fromHop: HopId | null;
@@ -78,7 +78,7 @@ interface State {
 const STATE_BY_STEP: State[] = [
   {
     holder: "alice",
-    slots: ["bob", "charlie", "dave"],
+    hopPayloads: ["bob", "charlie", "dave"],
     bytes: 1300,
     fromHop: null,
     toHop: "alice",
@@ -86,7 +86,7 @@ const STATE_BY_STEP: State[] = [
   },
   {
     holder: "bob",
-    slots: ["charlie", "dave"],
+    hopPayloads: ["charlie", "dave"],
     bytes: 870,
     fromHop: "alice",
     toHop: "bob",
@@ -94,18 +94,18 @@ const STATE_BY_STEP: State[] = [
   },
   {
     holder: "charlie",
-    slots: ["dave"],
+    hopPayloads: ["dave"],
     bytes: 430,
     fromHop: "bob",
     toHop: "charlie",
     outerKey: "dave",
   },
   {
-    // Dave is the destination. His slot is still present when the packet
+    // Dave is the destination. His hop payload is still present when the packet
     // arrives (it carries his payment_data). The packet is ~430 bytes,
     // not empty.
     holder: "dave",
-    slots: ["dave"],
+    hopPayloads: ["dave"],
     bytes: 430,
     fromHop: "charlie",
     toHop: "dave",
@@ -114,10 +114,10 @@ const STATE_BY_STEP: State[] = [
 ];
 
 const STEP_CAPTIONS: Record<number, string> = {
-  0: "Alice prepares the packet. Three encrypted slots — one for Bob, one for Charlie, one for Dave — concatenated into roughly 1,300 bytes of payload. Click play to watch the packet travel.",
-  1: "Bob received the packet and decrypted his slot off the front. He forwards what's left to Charlie: about 870 bytes. The packet has visibly shrunk.",
-  2: "Charlie does the same: peels his slot, forwards what's left. The packet is down to ~430 bytes, just Dave's slot remaining.",
-  3: "Dave receives ~430 bytes — his own slot, which carries the payment_data and final amount. He decrypts it and claims the HTLC. Notice that anyone watching the wire could read the byte count at every hop and tell exactly where each forwarder sits in the route.",
+  0: "Alice prepares the packet. Three encrypted hop payloads, one for Bob, one for Charlie, one for Dave, concatenated into roughly 1,300 bytes of payload. Click play to watch the packet travel.",
+  1: "Bob received the packet and decrypted his hop payload off the front. He forwards what's left to Charlie: about 870 bytes. The packet has visibly shrunk.",
+  2: "Charlie does the same: peels his hop payload, forwards what's left. The packet is down to ~430 bytes, just Dave's hop payload remaining.",
+  3: "Dave receives ~430 bytes, his own hop payload, which carries the payment_data and final amount. He decrypts it and claims the HTLC. Notice that anyone watching the wire could read the byte count at every hop and tell exactly where each forwarder sits in the route.",
 };
 
 const TOTAL_BEATS = 4;
@@ -185,7 +185,7 @@ export function PayloadShrinkDiagram() {
             {/* The shrinking onion packet */}
             <ShrinkingOnionContainer state={state} />
 
-            {/* Byte/slot annotation */}
+            {/* Byte/hop payload annotation */}
             <div className="text-center mt-4">
               <div
                 className="inline-flex items-center gap-3 border-[1.5px] px-3 py-1.5"
@@ -208,10 +208,10 @@ export function PayloadShrinkDiagram() {
                     borderLeft: "1.5px solid rgba(15,23,42,0.2)",
                   }}
                 >
-                  slots remaining:
+                  hop payloads remaining:
                 </span>
                 <span style={{ fontWeight: 700, color: "#0f172a", fontSize: 14 }}>
-                  {state.slots.length}
+                  {state.hopPayloads.length}
                 </span>
               </div>
             </div>
@@ -268,12 +268,12 @@ export function PayloadShrinkDiagram() {
 // Mini onion packet that slides on the wire below the hop circles. Same
 // visual language as MiniOnionFlyer in OperationsLifecycleDiagram and the
 // TravelingPacket in slice-in-packet, with the addition that the packet's
-// total width SHRINKS as slots are peeled (the no-filler educational point).
+// total width SHRINKS as hop payloads are peeled (the no-filler educational point).
 function TravelingPacket({ state }: { state: State }) {
   // Width shrinks per step. Step 0 = full (110px), step 3 = remnant (28px).
   const fullBytes = STATE_BY_STEP[0].bytes;
   const widthPx =
-    state.slots.length === 0
+    state.hopPayloads.length === 0
       ? 28
       : 28 + (state.bytes / fullBytes) * (110 - 28);
 
@@ -320,13 +320,13 @@ function TravelingPacket({ state }: { state: State }) {
             transition: "background 600ms ease-out",
           }}
         />
-        {/* Mini PAYLOAD with stacked hatches per remaining slot */}
+        {/* Mini PAYLOAD with stacked hatches per remaining hop payload */}
         <div
           className="relative"
           style={{ flex: 1, overflow: "hidden", minWidth: 0 }}
         >
-          {state.slots.length === 0 ? null : (
-            state.slots.map((hop) => (
+          {state.hopPayloads.length === 0 ? null : (
+            state.hopPayloads.map((hop) => (
               <div
                 key={hop}
                 className="absolute inset-0"
@@ -355,7 +355,7 @@ function TravelingPacket({ state }: { state: State }) {
 function HopTrack({ state }: { state: State }) {
   return (
     <div className="relative mb-4" style={{ height: 100 }}>
-      {/* Backbone — aligned with the vertical middle of 48px circular nodes */}
+      {/* Backbone, aligned with the vertical middle of 48px circular nodes */}
       <div
         className="absolute"
         style={{
@@ -388,7 +388,7 @@ function HopTrack({ state }: { state: State }) {
         </div>
       )}
 
-      {/* Nodes — circular badges matching slice-in-packet's HopCircle */}
+      {/* Nodes, circular badges matching slice-in-packet's HopCircle */}
       {HOPS.map((id) => {
         const isHolder = id === state.holder;
         const size = 48;
@@ -436,7 +436,7 @@ function HopTrack({ state }: { state: State }) {
         );
       })}
 
-      {/* Traveling mini onion packet — slides between holders and shrinks. */}
+      {/* Traveling mini onion packet, slides between holders and shrinks. */}
       <TravelingPacket state={state} />
     </div>
   );
@@ -452,12 +452,12 @@ function ShrinkingOnionContainer({ state }: { state: State }) {
   const FULL_WIDTH_PCT = 100;
   const MIN_WIDTH_PCT = 28;
   const widthPct =
-    state.slots.length === 0
+    state.hopPayloads.length === 0
       ? MIN_WIDTH_PCT
       : MIN_WIDTH_PCT +
         (state.bytes / fullBytes) * (FULL_WIDTH_PCT - MIN_WIDTH_PCT);
 
-  // Header label — "ONION_ROUTING_PACKET (X → Y)" reflecting the segment
+  // Header label, "ONION_ROUTING_PACKET (X → Y)" reflecting the segment
   // the packet has just traversed. At step 0, the packet hasn't moved yet,
   // so we show "AT ALICE" instead.
   const segmentLabel = state.fromHop
@@ -627,7 +627,7 @@ function ShrinkingOnionContainer({ state }: { state: State }) {
   );
 }
 
-// Per-spec slot internals: each slot is [bigsize length | TLV payload |
+// Per-spec hop payload internals: each hop payload is [bigsize length | TLV payload |
 // 32-byte HMAC pointing to the next hop].
 const NEXT_HOP_LABEL: Record<ForwarderId, string> = {
   bob: "→ Charlie",
@@ -641,7 +641,7 @@ const NEXT_HOP_COLOR: Record<ForwarderId, string> = {
 };
 
 // Diagonal-stripe angle per layer. Outermost (Bob) is steeper, innermost
-// (Dave) is more shallow — same convention as slice-in-packet.
+// (Dave) is more shallow, same convention as slice-in-packet.
 const LAYER_ANGLES: Record<ForwarderId, number> = {
   bob: 135,
   charlie: 45,
@@ -649,14 +649,14 @@ const LAYER_ANGLES: Record<ForwarderId, number> = {
 };
 
 // Layered encryption hatches showing nested wrapping. Bob's hatch covers
-// the entire payload area; Charlie's covers from Charlie's slot to the
-// end; Dave's covers only Dave's slot + padding. This is what makes the
+// the entire payload area; Charlie's covers from Charlie's hop payload to the
+// end; Dave's covers only Dave's hop payload + padding. This is what makes the
 // onion's layered structure visible.
-function LayeredHatches({ slots }: { slots: ForwarderId[] }) {
+function LayeredHatches({ hopPayloads }: { hopPayloads: ForwarderId[] }) {
   return (
     <>
-      {slots.map((hop, i) => {
-        const leftPct = (i / slots.length) * 100;
+      {hopPayloads.map((hop, i) => {
+        const leftPct = (i / hopPayloads.length) * 100;
         const angle = LAYER_ANGLES[hop];
         const color = HOP_STROKE[hop];
         return (
@@ -690,7 +690,7 @@ function ShrinkingPayloadInner({ state }: { state: State }) {
         overflow: "hidden",
       }}
     >
-      {state.slots.length === 0 ? (
+      {state.hopPayloads.length === 0 ? (
         <div
           className="absolute inset-0 flex items-center justify-center italic"
           style={{
@@ -705,10 +705,10 @@ function ShrinkingPayloadInner({ state }: { state: State }) {
       ) : (
         <>
           <div className="flex h-full" style={{ position: "relative", zIndex: 1 }}>
-            {state.slots.map((forwarder, i) => {
+            {state.hopPayloads.map((forwarder, i) => {
               const color = HOP_STROKE[forwarder];
               const fill = HOP_FILL[forwarder];
-              const isLast = i === state.slots.length - 1;
+              const isLast = i === state.hopPayloads.length - 1;
               const nextColor = NEXT_HOP_COLOR[forwarder];
               return (
                 <div
@@ -742,7 +742,7 @@ function ShrinkingPayloadInner({ state }: { state: State }) {
                     len
                   </SlotSubCell>
 
-                  {/* TLV payload sub-cell — no per-slot hatch; the layered
+                  {/* TLV payload sub-cell, no per-hop payload hatch; the layered
                       hatches above show the nested encryption wrapping. */}
                   <SlotSubCell
                     section="tlv"
@@ -766,7 +766,7 @@ function ShrinkingPayloadInner({ state }: { state: State }) {
                     </div>
                   </SlotSubCell>
 
-                  {/* HMAC sub-cell — next-hop HMAC */}
+                  {/* HMAC sub-cell, next-hop HMAC */}
                   <SlotSubCell
                     section="hmac"
                     style={{
@@ -802,7 +802,7 @@ function ShrinkingPayloadInner({ state }: { state: State }) {
             })}
           </div>
           {/* Layered encryption hatches showing the nested wrapping */}
-          <LayeredHatches slots={state.slots} />
+          <LayeredHatches hopPayloads={state.hopPayloads} />
         </>
       )}
     </div>

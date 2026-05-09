@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 // Forward-direction visualization of one forwarder peeling its layer. Shows
 // the 2,600-byte working buffer Bob allocates, the rho-keystream XOR over
 // the full 2,600-byte region, and how the next 1,300-byte slice (window
-// shifted forward by slot size) becomes Charlie's view.
+// shifted forward by hop payload size) becomes Charlie's view.
 //
 // Visual style follows the locked onion-routing format spec.
 // ────────────────────────────────────────────────────────────────────────────
@@ -15,8 +15,8 @@ const MONO = '"JetBrains Mono", "Fira Code", monospace';
 
 const STEP_CAPTIONS: Record<number, string> = {
   0: "Bob receives the packet. He copies the inbound 1,300-byte hop_payloads field into the front of a 2,600-byte working buffer. The trailing 1,300 bytes start as zeros. None of the bytes are decrypted yet; he doesn't know what's in any of them.",
-  1: "Bob generates 2,600 bytes of ChaCha20 keystream from his rho key and XORs it onto the working buffer. The first 1,300 bytes now have the encryption layer removed — Bob's TLV slot at the front, Charlie's view in the rest. The trailing 1,300 bytes are now Bob's keystream applied to zeros, exactly the bytes Alice baked into the filler so Charlie's HMAC will line up.",
-  2: "Bob reads his slot off the front: the bigsize length, the TLV records, and the next_hmac that points to Charlie's layer. He computes slot_size = bigsize_header + tlv_length + 32. The next packet's hop_payloads is the 1,300-byte window of the working buffer starting at slot_size — sliding the window forward by exactly Bob's slot.",
+  1: "Bob generates 2,600 bytes of ChaCha20 keystream from his rho key and XORs it onto the working buffer. The first 1,300 bytes now have the encryption layer removed, Bob's TLV hop payload at the front, Charlie's view in the rest. The trailing 1,300 bytes are now Bob's keystream applied to zeros, exactly the bytes Alice baked into the filler so Charlie's HMAC will line up.",
+  2: "Bob reads his hop payload off the front: the bigsize length, the TLV records, and the next_hmac that points to Charlie's layer. He computes slot_size = bigsize_header + tlv_length + 32. The next packet's hop_payloads is the 1,300-byte window of the working buffer starting at slot_size, sliding the window forward by exactly Bob's hop payload.",
   3: "Bob assembles the outgoing packet: version || E_AC (advanced via the blinding chain) || next_hop_payloads || next_hmac. The packet Charlie receives is indistinguishable from one Alice could have built directly for her.",
 };
 
@@ -91,7 +91,7 @@ export function OnionPeelDiagram() {
             {/* Step legend (after step 1) */}
             {step >= 1 && (
               <div className="mt-4 flex flex-wrap gap-3 text-[11px]">
-                <LegendSwatch fill="#dbeafe" stroke="#3b6aa0" label="Bob's slot (decrypted)" />
+                <LegendSwatch fill="#dbeafe" stroke="#3b6aa0" label="Bob's hop payload (decrypted)" />
                 <LegendSwatch fill="#ede1f3" stroke="#7b4b8a" label="Charlie + Dave (still encrypted for them)" />
                 <LegendSwatch fill="#fef3c7" stroke="#b8860b" label="Bob's keystream extension (matches Alice's filler)" />
               </div>
@@ -147,7 +147,7 @@ export function OnionPeelDiagram() {
 }
 
 function BufferStrip({ step }: { step: number }) {
-  // Total visible width: split into 5% (Bob slot) + 45% (Charlie/Dave) + 50% (working/filler)
+  // Total visible width: split into 5% (Bob hop payload) + 45% (Charlie/Dave) + 50% (working/filler)
   const slotPct = 5;
   const innerPct = 45;
   const workingPct = 50;
@@ -165,7 +165,7 @@ function BufferStrip({ step }: { step: number }) {
           background: "#fffdf5",
         }}
       >
-        {/* Bob's slot (only after decryption) */}
+        {/* Bob's hop payload (only after decryption) */}
         {showDecrypted ? (
           <>
             <div
@@ -288,7 +288,7 @@ function BufferStrip({ step }: { step: number }) {
               fontWeight: 700,
             }}
           >
-            next packet's hop_payloads (1,300 B, shifted by Bob's slot)
+            next packet's hop_payloads (1,300 B, shifted by Bob's hop payload)
           </div>
         </>
       )}

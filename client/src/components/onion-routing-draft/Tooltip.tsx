@@ -5,7 +5,7 @@ import { useRef, useState } from "react";
 //
 // Lightweight hover tooltip that matches the locked Onion Routing visual
 // format: cream body (#fffdf5), 1.5px ink border, soft shadow, sans-serif at
-// 11px. Shows immediately on hover, hides on mouse-out — no native HTML
+// 11px. Shows immediately on hover, hides on mouse-out, no native HTML
 // `title` delay, no question-mark cursor.
 //
 // Wraps its child via a `display: contents` span so it doesn't perturb the

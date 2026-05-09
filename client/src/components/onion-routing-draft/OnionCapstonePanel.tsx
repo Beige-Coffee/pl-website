@@ -253,7 +253,7 @@ export function OnionCapstonePanel({
         <div className="flex items-center gap-2">
           <div className="w-1.5 h-1.5 rounded-full bg-[#b8860b]" />
           <span className="text-sm font-bold tracking-[0.08em] uppercase">
-            Capstone —{" "}
+            Capstone ·{" "}
             {mode === "success" ? "successful payment" : "failure path"}
           </span>
         </div>

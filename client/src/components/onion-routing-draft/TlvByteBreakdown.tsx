@@ -85,7 +85,7 @@ export function TlvByteBreakdown({ caption, fields }: TlvByteBreakdownProps) {
       data-testid="onion-tlv-breakdown"
       style={{ fontFamily: "ui-sans-serif, system-ui, sans-serif" }}
     >
-      {/* Black section header — locked onion-routing format */}
+      {/* Black section header, locked onion-routing format */}
       <div className="bg-black text-white px-4 py-2 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="w-1.5 h-1.5 rounded-full bg-[#b8860b]" />

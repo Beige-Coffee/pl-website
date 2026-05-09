@@ -188,6 +188,13 @@ export const CHECKPOINT_ANSWER_KEY: Record<string, number | number[]> = {
   "cp-naive-shared-secrets-draft": [0, 2],
   "cp-blinding-public-draft": 1,
   "exercise-derive-shared-secrets-draft": 0,
+  // Chapter 5: Onion Routing 101 (draft)
+  "cp-101-keystream-shared-draft": 1,
+  "cp-101-encrypt-buffer-scope-draft": 2,
+  "cp-101-dave-layer-count-draft": 2,
+  "cp-101-decrypt-buffer-scope-draft": 2,
+  "cp-101-destination-signal-draft": 2,
+  "cp-101-tamper-detection-draft": 1,
   // Chapter 4: Key Derivation (draft)
   "cp-key-separation-draft": [0, 1, 2],
   "cp-key-domain-separation-draft": 1,

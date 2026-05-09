@@ -67,7 +67,7 @@ const LAYER_COLORS: Record<ForwarderId, string> = {
   dave: "#7b4b8a",
 };
 
-// Per-spec slot internals: each hop's slot ends with a 32-byte HMAC pointing
+// Per-spec hop payload internals: each hop's hop payload ends with a 32-byte HMAC pointing
 // to the *next* hop's view of hop_payloads.
 const NEXT_HOP_LABEL: Record<ForwarderId, string> = {
   bob: "→ Charlie",
@@ -1104,7 +1104,7 @@ function ForwardPacketContainer({
               {/* Three encryption layers, each progressively offset from the
                   left so the nested wrapping is visible: Bob's hatch covers
                   the entire payload area, Charlie's covers from Charlie's
-                  slot to the end, Dave's covers only Dave's slot region. At
+                  hop payload to the end, Dave's covers only Dave's hop payload region. At
                   step 1 they sweep in via encryption-sweep keyframe;
                   otherwise use the standard opacity transition. */}
               {(["dave", "charlie", "bob"] as ForwarderId[]).map((hop, _idx) => {
@@ -1730,7 +1730,7 @@ export function OperationsLifecycleDiagram({
         </div>
       </div>
 
-      {/* Hover tooltip for the key chip — portal-mounted so it isn't clipped
+      {/* Hover tooltip for the key chip, portal-mounted so it isn't clipped
           by the diagram's overflow-x-auto wrapper. */}
       {tooltipPos &&
         showKeys &&

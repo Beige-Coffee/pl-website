@@ -6,7 +6,7 @@ import { SlotSubCell } from "./SlotSubCell";
 // PaddingStrategyDiagram (built 2026-05-08)
 //
 // Tabbed comparison of three padding strategies for the trailing region of
-// the Sphinx packet after a hop peels its slot:
+// the Sphinx packet after a hop peels its hop payload:
 //
 //   1. Pad with zeros    → Charlie's HMAC fails (rejected)
 //   2. Pad with random   → Charlie's HMAC fails (rejected)
@@ -72,8 +72,8 @@ const ERROR_RED = "#a13a3a";
 interface StepState {
   holder: HopId;
   fromHop: HopId | null;
-  // Slots still present in the payload area, front to back.
-  slots: ForwarderId[];
+  // Hop payloads still present in the payload area, front to back.
+  hopPayloads: ForwarderId[];
   // What's at the trailing region after a peel:
   //   - "ciphertext": legitimate encrypted bytes (Alice's original construction)
   //   - "zeros":      0x00 padding from Bob
@@ -109,7 +109,7 @@ const STRATEGIES: StrategyDef[] = [
       {
         holder: "alice",
         fromHop: null,
-        slots: ["bob", "charlie", "dave"],
+        hopPayloads: ["bob", "charlie", "dave"],
         trailingKind: "ciphertext",
         outerKey: "bob",
         bytes: 1300,
@@ -117,7 +117,7 @@ const STRATEGIES: StrategyDef[] = [
       {
         holder: "bob",
         fromHop: "alice",
-        slots: ["bob", "charlie", "dave"],
+        hopPayloads: ["bob", "charlie", "dave"],
         trailingKind: "ciphertext",
         outerKey: "bob",
         bytes: 1300,
@@ -125,7 +125,7 @@ const STRATEGIES: StrategyDef[] = [
       {
         holder: "bob",
         fromHop: "alice",
-        slots: ["charlie", "dave"],
+        hopPayloads: ["charlie", "dave"],
         trailingKind: "zeros",
         outerKey: "charlie",
         bytes: 1300,
@@ -133,7 +133,7 @@ const STRATEGIES: StrategyDef[] = [
       {
         holder: "charlie",
         fromHop: "bob",
-        slots: ["charlie", "dave"],
+        hopPayloads: ["charlie", "dave"],
         trailingKind: "zeros",
         outerKey: "charlie",
         hmacResult: "fail",
@@ -141,10 +141,10 @@ const STRATEGIES: StrategyDef[] = [
       },
     ],
     captions: [
-      "Alice has just constructed the packet. Three encrypted slots concatenated into the 1,300-byte payload area, plus a 32-byte HMAC Alice computed for Bob, plus a header. Total: 1,366 bytes.",
-      "Bob has received the packet. He's about to peel his slot off the front and figure out what to ship to Charlie.",
-      "Bob peels his slot off, shifts the remaining content forward, and pads the trailing 65 bytes with zeros. The packet is still 1,366 bytes total. He forwards it to Charlie.",
-      "Charlie computes HMAC-SHA256(mu_charlie, hop_payloads) and compares against the HMAC field. It doesn't match — Alice baked her HMAC over a specific sequence of bytes, and zeros aren't part of that sequence. Charlie rejects the packet with `invalid_onion_hmac`.",
+      "Alice has just constructed the packet. Three encrypted hop payloads concatenated into the 1,300-byte payload area, plus a 32-byte HMAC Alice computed for Bob, plus a header. Total: 1,366 bytes.",
+      "Bob has received the packet. He's about to peel his hop payload off the front and figure out what to ship to Charlie.",
+      "Bob peels his hop payload off, shifts the remaining content forward, and pads the trailing 65 bytes with zeros. The packet is still 1,366 bytes total. He forwards it to Charlie.",
+      "Charlie computes HMAC-SHA256(mu_charlie, hop_payloads) and compares against the HMAC field. It doesn't match, Alice baked her HMAC over a specific sequence of bytes, and zeros aren't part of that sequence. Charlie rejects the packet with `invalid_onion_hmac`.",
     ],
   },
   // ── Tab 2: random ────────────────────────────────────────────────────────
@@ -159,7 +159,7 @@ const STRATEGIES: StrategyDef[] = [
       {
         holder: "alice",
         fromHop: null,
-        slots: ["bob", "charlie", "dave"],
+        hopPayloads: ["bob", "charlie", "dave"],
         trailingKind: "ciphertext",
         outerKey: "bob",
         bytes: 1300,
@@ -167,7 +167,7 @@ const STRATEGIES: StrategyDef[] = [
       {
         holder: "bob",
         fromHop: "alice",
-        slots: ["bob", "charlie", "dave"],
+        hopPayloads: ["bob", "charlie", "dave"],
         trailingKind: "ciphertext",
         outerKey: "bob",
         bytes: 1300,
@@ -175,7 +175,7 @@ const STRATEGIES: StrategyDef[] = [
       {
         holder: "bob",
         fromHop: "alice",
-        slots: ["charlie", "dave"],
+        hopPayloads: ["charlie", "dave"],
         trailingKind: "random",
         outerKey: "charlie",
         bytes: 1300,
@@ -183,7 +183,7 @@ const STRATEGIES: StrategyDef[] = [
       {
         holder: "charlie",
         fromHop: "bob",
-        slots: ["charlie", "dave"],
+        hopPayloads: ["charlie", "dave"],
         trailingKind: "random",
         outerKey: "charlie",
         hmacResult: "fail",
@@ -192,8 +192,8 @@ const STRATEGIES: StrategyDef[] = [
     ],
     captions: [
       "Alice has just constructed the packet. Same starting state as before.",
-      "Bob has received the packet. He's about to peel his slot.",
-      "Bob peels his slot, shifts forward, and this time pads the trailing 65 bytes with random-looking bytes. Looks like ciphertext, no obvious zero-pattern. He forwards.",
+      "Bob has received the packet. He's about to peel his hop payload.",
+      "Bob peels his hop payload, shifts forward, and this time pads the trailing 65 bytes with random-looking bytes. Looks like ciphertext, no obvious zero-pattern. He forwards.",
       "Charlie's HMAC verification still fails. The HMAC Alice baked in is a deterministic function of the *specific* bytes that Alice's `rho` cascade produced. Random bytes don't match that. Charlie rejects with `invalid_onion_hmac`.",
     ],
   },
@@ -209,7 +209,7 @@ const STRATEGIES: StrategyDef[] = [
       {
         holder: "alice",
         fromHop: null,
-        slots: ["bob", "charlie", "dave"],
+        hopPayloads: ["bob", "charlie", "dave"],
         trailingKind: "filler",
         outerKey: "bob",
         bytes: 1300,
@@ -217,7 +217,7 @@ const STRATEGIES: StrategyDef[] = [
       {
         holder: "bob",
         fromHop: "alice",
-        slots: ["bob", "charlie", "dave"],
+        hopPayloads: ["bob", "charlie", "dave"],
         trailingKind: "filler",
         outerKey: "bob",
         bytes: 1300,
@@ -225,7 +225,7 @@ const STRATEGIES: StrategyDef[] = [
       {
         holder: "bob",
         fromHop: "alice",
-        slots: ["charlie", "dave"],
+        hopPayloads: ["charlie", "dave"],
         trailingKind: "filler",
         outerKey: "charlie",
         bytes: 1300,
@@ -233,7 +233,7 @@ const STRATEGIES: StrategyDef[] = [
       {
         holder: "charlie",
         fromHop: "bob",
-        slots: ["charlie", "dave"],
+        hopPayloads: ["charlie", "dave"],
         trailingKind: "filler",
         outerKey: "charlie",
         hmacResult: "pass",
@@ -241,9 +241,9 @@ const STRATEGIES: StrategyDef[] = [
       },
     ],
     captions: [
-      "Alice has constructed the packet, but this time she's pre-baked filler bytes at the trailing position. The filler is the cumulative XOR of every downstream hop's `rho` keystream applied to zeros — bytes that *will* line up after each forwarder peels its layer.",
+      "Alice has constructed the packet, but this time she's pre-baked filler bytes at the trailing position. The filler is the cumulative XOR of every downstream hop's `rho` keystream applied to zeros, bytes that *will* line up after each forwarder peels its layer.",
       "Bob has received the 1,366-byte packet. Same shape as before, but the trailing region is the filler Alice precomputed.",
-      "Bob peels his slot and shifts forward. Crucially, his `rho` keystream extends past 1,300 bytes during the shift, producing exactly the bytes that match what Charlie's HMAC was computed over. The trailing region is now filler that's been XORed with Bob's keystream extension.",
+      "Bob peels his hop payload and shifts forward. Crucially, his `rho` keystream extends past 1,300 bytes during the shift, producing exactly the bytes that match what Charlie's HMAC was computed over. The trailing region is now filler that's been XORed with Bob's keystream extension.",
       "Charlie computes HMAC-SHA256(mu_charlie, hop_payloads) and it matches the HMAC field. ✓ Verification passes. Charlie peels his layer and forwards to Dave. The chain works.",
     ],
   },
@@ -298,7 +298,7 @@ export function PaddingStrategyDiagram() {
         <div className="flex items-center gap-2">
           <div className="w-1.5 h-1.5 rounded-full bg-[#b8860b]" />
           <span className="text-sm font-bold tracking-[0.08em] uppercase">
-            Padding strategies — which one works?
+            Padding strategies, which one works?
           </span>
         </div>
       </div>
@@ -482,7 +482,7 @@ function HopTrack({ state }: { state: StepState }) {
         </div>
       )}
 
-      {/* Nodes — circular badges */}
+      {/* Nodes, circular badges */}
       {HOPS.map((id) => {
         const isHolder = id === state.holder;
         const showHmacBadge =
@@ -579,7 +579,7 @@ function TravelingPacket({ state }: { state: StepState }) {
   const trailingFill: string = (() => {
     if (state.trailingKind === "zeros") return "#94a3b8";
     if (state.trailingKind === "random") return "#cbd5e1";
-    return "#fef3c7"; // ciphertext or filler — gold-ish
+    return "#fef3c7"; // ciphertext or filler, gold-ish
   })();
 
   return (
@@ -619,7 +619,7 @@ function TravelingPacket({ state }: { state: StepState }) {
           className="relative"
           style={{ flex: 1, overflow: "hidden", minWidth: 0 }}
         >
-          {state.slots.map((hop) => (
+          {state.hopPayloads.map((hop) => (
             <div
               key={hop}
               className="absolute inset-0"
@@ -827,7 +827,7 @@ function DetailedOnionPacket({ state }: { state: StepState }) {
   );
 }
 
-// Per-spec slot internals: each slot is [bigsize length | TLV payload |
+// Per-spec hop payload internals: each hop payload is [bigsize length | TLV payload |
 // 32-byte HMAC pointing to the next hop].
 const NEXT_HOP_LABEL: Record<ForwarderId, string> = {
   bob: "→ Charlie",
@@ -847,23 +847,23 @@ const LAYER_ANGLES: Record<ForwarderId, number> = {
 };
 
 // Layered encryption hatches showing nested wrapping. Bob's hatch covers
-// the entire payload area; Charlie's covers from Charlie's slot to the
-// end; Dave's covers only Dave's slot + padding.
+// the entire payload area; Charlie's covers from Charlie's hop payload to the
+// end; Dave's covers only Dave's hop payload + padding.
 function LayeredHatches({
-  slots,
+  hopPayloads,
   trailingPortionPct,
 }: {
-  slots: ForwarderId[];
+  hopPayloads: ForwarderId[];
   trailingPortionPct: number;
 }) {
-  // Slot region width is (100 - trailingPortionPct)%; each slot takes
-  // 1/slots.length of that, so slot i starts at i/slots.length of the slot
-  // region. Trailing region starts after slots end.
+  // Hop payload region width is (100 - trailingPortionPct)%; each hop payload takes
+  // 1/hopPayloads.length of that, so hop payload i starts at i/hopPayloads.length of the hop payload
+  // region. Trailing region starts after hop payloads end.
   const slotRegionPct = 100 - trailingPortionPct;
   return (
     <>
-      {slots.map((hop, i) => {
-        const leftPct = (i / slots.length) * slotRegionPct;
+      {hopPayloads.map((hop, i) => {
+        const leftPct = (i / hopPayloads.length) * slotRegionPct;
         const angle = LAYER_ANGLES[hop];
         const color = HOP_KEY_COLORS[hop];
         return (
@@ -887,7 +887,7 @@ function LayeredHatches({
 }
 
 function PayloadInner({ state }: { state: StepState }) {
-  const slots = state.slots;
+  const hopPayloads = state.hopPayloads;
   const trailingPortionPct = state.trailingKind === "ciphertext" ? 0 : 22;
 
   return (
@@ -900,7 +900,7 @@ function PayloadInner({ state }: { state: StepState }) {
         overflow: "hidden",
       }}
     >
-      {/* Slots region */}
+      {/* Hop payloads region */}
       <div
         className="absolute top-0 bottom-0 left-0 flex"
         style={{
@@ -909,10 +909,10 @@ function PayloadInner({ state }: { state: StepState }) {
           zIndex: 1,
         }}
       >
-        {slots.map((forwarder, i) => {
+        {hopPayloads.map((forwarder, i) => {
           const color = HOP_KEY_COLORS[forwarder];
           const fill = HOP_FILL[forwarder];
-          const isLast = i === slots.length - 1 && trailingPortionPct === 0;
+          const isLast = i === hopPayloads.length - 1 && trailingPortionPct === 0;
           const nextColor = NEXT_HOP_COLOR[forwarder];
           return (
             <div
@@ -945,7 +945,7 @@ function PayloadInner({ state }: { state: StepState }) {
                 len
               </SlotSubCell>
 
-              {/* TLV payload sub-cell — no per-slot hatch; layered hatches
+              {/* TLV payload sub-cell, no per-hop payload hatch; layered hatches
                   above show the nested encryption wrapping. */}
               <SlotSubCell
                 section="tlv"
@@ -969,7 +969,7 @@ function PayloadInner({ state }: { state: StepState }) {
                 </div>
               </SlotSubCell>
 
-              {/* HMAC sub-cell — next-hop HMAC */}
+              {/* HMAC sub-cell, next-hop HMAC */}
               <SlotSubCell
                 section="hmac"
                 style={{
@@ -1075,7 +1075,7 @@ function PayloadInner({ state }: { state: StepState }) {
       )}
 
       {/* Layered encryption hatches showing nested wrapping. */}
-      <LayeredHatches slots={slots} trailingPortionPct={trailingPortionPct} />
+      <LayeredHatches hopPayloads={hopPayloads} trailingPortionPct={trailingPortionPct} />
     </div>
   );
 }

@@ -31,7 +31,7 @@ const TOTAL_BEATS = 4;
 
 const STEP_CAPTIONS: Record<number, string> = {
   0: "Alice has just received 292 bytes of opaque encrypted data on the return HTLC. She doesn't know which hop failed; she has to find out by trial-decrypting layer by layer.",
-  1: "Iteration i=0. Try Bob's keys first (the outermost layer). XOR with ammag_bob, then check HMAC(um_bob, peeled[32:]) against peeled[:32]. The HMAC doesn't match — Bob isn't the failing hop. Continue.",
+  1: "Iteration i=0. Try Bob's keys first (the outermost layer). XOR with ammag_bob, then check HMAC(um_bob, peeled[32:]) against peeled[:32]. The HMAC doesn't match, Bob isn't the failing hop. Continue.",
   2: "Iteration i=1. Try Charlie's keys. XOR with ammag_charlie, then check HMAC(um_charlie, peeled[32:]) against peeled[:32]. ✓ The HMAC verifies. Charlie is the failing hop.",
   3: "Parse the failure message. The first 2 bytes of payload are a u16 BE giving failure_len. The next failure_len bytes are the failure message itself (e.g., temporary_channel_failure with a channel_update appended). Alice can now retry on a different route or surface the failure to her wallet.",
 };

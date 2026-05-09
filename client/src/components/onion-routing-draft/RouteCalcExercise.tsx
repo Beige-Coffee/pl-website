@@ -855,21 +855,21 @@ function RoutePickerPanel({
       </div>
       <div className="flex flex-wrap gap-2">
         <RouteChoiceButton
-          label="Route A — 1,300 sats"
+          label="Route A, 1,300 sats"
           selected={choice === "a"}
           isCorrect={false}
           finalized={choice !== null}
           onClick={() => onChoose("a")}
         />
         <RouteChoiceButton
-          label="Route B — 2,002 sats"
+          label="Route B, 2,002 sats"
           selected={choice === "b"}
           isCorrect={false}
           finalized={choice !== null}
           onClick={() => onChoose("b")}
         />
         <RouteChoiceButton
-          label="Route C — 1,226 sats"
+          label="Route C, 1,226 sats"
           selected={choice === "c"}
           isCorrect={true}
           finalized={choice !== null}
@@ -886,7 +886,7 @@ function RoutePickerPanel({
           {choice === "c" && (
             <span>
               <strong style={{ color: GREEN }}>✓ Correct.</strong> Route C is
-              the cheapest at 1,226 sats — 74 sats less than Route A and 776
+              the cheapest at 1,226 sats, 74 sats less than Route A and 776
               sats less than Route B. It's also the same path Alice picked back
               in chapter 1: through Bob and Charlie. The fee total wins on
               policy, not hop count.
@@ -895,13 +895,13 @@ function RoutePickerPanel({
           {choice === "a" && (
             <span>
               <strong style={{ color: RED }}>✗ Not quite.</strong> Route A
-              costs 1,300 sats — 74 sats more than Route C (Bob → Charlie).
+              costs 1,300 sats, 74 sats more than Route C (Bob → Charlie).
             </span>
           )}
           {choice === "b" && (
             <span>
               <strong style={{ color: RED }}>✗ That's actually the most expensive option.</strong>{" "}
-              Route B costs 2,002 sats — 776 sats more than Route C.
+              Route B costs 2,002 sats, 776 sats more than Route C.
             </span>
           )}
         </div>

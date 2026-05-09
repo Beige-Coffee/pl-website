@@ -13,7 +13,7 @@ import { Tok } from "./mathTokens";
 //
 // Animation rhythm matches PlaintextMessageTear and NodeKeyAttemptDiagram:
 // six steps total (setup → highlight at Bob → mark processed → highlight at
-// Charlie → mark processed → highlight at Dave). Slots stay in the packet
+// Charlie → mark processed → highlight at Dave). Hop payloads stay in the packet
 // after processing (they go neutral gray) so the visual never suggests the
 // packet shrinks. The point is structural: it always carries N pubkeys.
 //
@@ -41,10 +41,10 @@ const NODE_X_PCT: Record<HopId, number> = {
   dave: 80,
 };
 
-// Decrypted-slot palette (neutral gray, deliberately not Alice's gold).
+// Decrypted-hop payload palette (neutral gray, deliberately not Alice's gold).
 const PROCESSED = { stroke: "#94a3b8", fill: "#f1f5f9", accent: "#475569" };
 
-const SLOTS = [
+const HOP_PAYLOADS = [
   {
     forHop: "bob" as const,
     color: HOP_COLORS.bob,
@@ -75,10 +75,10 @@ const TOTAL_STEPS = 6;
 
 const STEP_CAPTIONS: Record<number, string> = {
   0: "Alice generates a fresh ephemeral keypair for every hop and packs all three pubkeys into the packet, alongside their encrypted slices. Hover the chip under Alice to see the three keypairs she has to keep around.",
-  1: "Bob receives the packet. He uses his own private key against E_Bob from his slot to derive ss_AB and decrypts his slice. The other two slots (Charlie's and Dave's) are still in the packet and are still pubkeys he doesn't need.",
-  2: "Bob's slot is now processed. He forwards the packet on to Charlie. Notice the packet still carries E_Charlie and E_Dave: the structure didn't shrink, the cost didn't go away.",
-  3: "Charlie does the same with his slot: ECDH against E_Charlie produces ss_AC, and Charlie decrypts his slice.",
-  4: "Charlie's slot is processed. The packet keeps moving with E_Dave still in it.",
+  1: "Bob receives the packet. He uses his own private key against E_Bob from his hop payload to derive ss_AB and decrypts his slice. The other two hop payloads (Charlie's and Dave's) are still in the packet and are still pubkeys he doesn't need.",
+  2: "Bob's hop payload is now processed. He forwards the packet on to Charlie. Notice the packet still carries E_Charlie and E_Dave: the structure didn't shrink, the cost didn't go away.",
+  3: "Charlie does the same with his hop payload: ECDH against E_Charlie produces ss_AC, and Charlie decrypts his slice.",
+  4: "Charlie's hop payload is processed. The packet keeps moving with E_Dave still in it.",
   5: "Dave finishes the route. ECDH against E_Dave produces ss_AD and he decrypts his slice. The math worked, but every packet carried three pubkeys, and Alice had to manage three keypairs the whole time.",
 };
 
@@ -202,7 +202,7 @@ function AliceKeysChip() {
             >
               Alice persists per payment
             </div>
-            {SLOTS.map((s) => (
+            {HOP_PAYLOADS.map((s) => (
               <div
                 key={s.forHop}
                 className="flex items-center gap-1.5 px-2 py-1 border-[1.5px]"
@@ -428,7 +428,7 @@ export function NaivePacketDiagram() {
                   </span>
                 </div>
                 <div className="space-y-1">
-                  {SLOTS.map((s) => {
+                  {HOP_PAYLOADS.map((s) => {
                     const processed = isProcessed(s.forHop, step);
                     const isActiveEntry = highlightedAt(step, s.forHop);
                     const borderColor = isActiveEntry
@@ -482,7 +482,7 @@ export function NaivePacketDiagram() {
               {/* Encrypted slices: one per hop, paired with the pubkey list
                   by index. Goes gray on processing; never removed. */}
               <div className="space-y-1.5">
-                {SLOTS.map((s) => {
+                {HOP_PAYLOADS.map((s) => {
                   const processed = isProcessed(s.forHop, step);
                   const isActiveSlot = highlightedAt(step, s.forHop);
                   const borderColor = isActiveSlot
@@ -515,7 +515,7 @@ export function NaivePacketDiagram() {
                         className="text-[9px] uppercase tracking-wider mb-0.5 flex items-center gap-1"
                         style={{ color: labelColor }}
                       >
-                        <span>slot for {s.forHop}</span>
+                        <span>hop payload for {s.forHop}</span>
                         <span className="ml-auto opacity-80 normal-case tracking-normal">
                           {processed ? "✓ decrypted" : "encrypted"}
                         </span>
@@ -596,7 +596,7 @@ export function NaivePacketDiagram() {
                     className="text-[10px]"
                     style={{ color: SLATE }}
                   >
-                    (from this hop's slot)
+                    (from this hop's hop payload)
                   </span>
                 </div>
 

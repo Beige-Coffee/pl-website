@@ -25,7 +25,7 @@ const STEPS = [
   },
   {
     name: "Peel layer",
-    desc: "ECDH, derive rho, decrypt with extended keystream, extract slot.",
+    desc: "ECDH, derive rho, decrypt with extended keystream, extract hop payload.",
     failureCode: null,
     accent: "#2d7a7a",
   },

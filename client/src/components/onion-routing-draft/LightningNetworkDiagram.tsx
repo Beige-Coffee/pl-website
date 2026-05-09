@@ -167,12 +167,12 @@ export function LightningNetworkDiagram() {
       data-testid="onion-lightning-network"
       style={{ fontFamily: "ui-sans-serif, system-ui, sans-serif" }}
     >
-      {/* Black section header — Noise capstone style */}
+      {/* Black section header, Noise capstone style */}
       <div className="bg-black text-white px-4 py-2 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="w-1.5 h-1.5 rounded-full bg-[#b8860b]" />
           <span className="text-sm font-bold tracking-[0.08em] uppercase">
-            Lightning Network — One Path Among Many
+            Lightning Network, One Path Among Many
           </span>
         </div>
       </div>
@@ -227,7 +227,7 @@ export function LightningNetworkDiagram() {
             />
           ))}
 
-          {/* Highlighted route — canonical hop palette so the cast renders
+          {/* Highlighted route, canonical hop palette so the cast renders
               identically to ForwarderPolicyMap and the chapter 2 route
               diagrams. Each node carries its own color (Alice gold, Bob
               indigo, Charlie teal, Dave violet) and shows the first letter

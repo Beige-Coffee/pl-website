@@ -39,7 +39,7 @@ const HOP_KEY_COLORS: Record<ForwarderId, string> = {
 };
 
 
-// Canonical hop palette — must stay aligned with HtlcPropagationDiagram,
+// Canonical hop palette, must stay aligned with HtlcPropagationDiagram,
 // ForwarderPolicyMap, and PlaintextMessageTear.
 const HOP_COLORS: Record<HopId, { stroke: string; fill: string }> = {
   alice:   { stroke: "#b8860b", fill: "#fef3c7" },
@@ -101,7 +101,7 @@ const TOTAL_STEPS = 6;
 
 const STEP_CAPTIONS: Record<number, string> = {
   0: "Alice now encrypts each per-hop slice with that hop's own key. The slices are still in the message, but they're locked. Without the right key, every slice looks like noise.",
-  1: "The message arrives at Bob. He runs his key against the stack and only his slice unlocks. Charlie's and Dave's slices are right there too, but Bob can't read them — different keys, different locks.",
+  1: "The message arrives at Bob. He runs his key against the stack and only his slice unlocks. Charlie's and Dave's slices are right there too, but Bob can't read them, different keys, different locks.",
   2: "Bob peels his slice off and forwards Charlie's and Dave's encrypted slices onward. Bob never learned anything about Dave or the final amount, because those slices stayed sealed while passing through him.",
   3: "Charlie runs his key. His slice unlocks; Dave's stays encrypted. Charlie still can't see who the destination is or what they'll receive.",
   4: "Charlie peels his slice off and forwards Dave's encrypted slice on alone. Each forwarder consumed only what their own key opened.",
@@ -362,7 +362,7 @@ export function EncryptedSliceReveal() {
                       borderWidth: removed ? 0 : undefined,
                     }}
                   >
-                    {/* Slice header — show the recipient's public-key icon
+                    {/* Slice header, show the recipient's public-key icon
                         next to their name so it's unambiguous which key opens
                         this slice. */}
                     <div className="text-[9px] uppercase tracking-wider mb-0.5 flex items-center gap-1.5 relative z-20">

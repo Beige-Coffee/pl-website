@@ -478,7 +478,7 @@ export function KnowledgeMatrix() {
             <strong style={{ color: INK }}>Tip:</strong> The privacy rubric is
             asymmetric. Alice (the sender) is the only one who needs to see the
             full picture. Bob and Charlie should know almost nothing about the
-            wider route — only their immediate neighbors and the slice they're
+            wider route, only their immediate neighbors and the slice they're
             forwarding. Dave (the receiver) sits in between: he knows the
             payment is for him and learns whatever metadata Alice put in the
             invoice, but not who paid him or how the route reached him.

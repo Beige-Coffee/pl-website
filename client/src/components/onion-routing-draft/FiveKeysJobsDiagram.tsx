@@ -97,7 +97,7 @@ export function FiveKeysJobsDiagram() {
       </div>
 
       {/* Stage. Wrapped in overflow-x-auto so the row scrolls on narrow
-          viewports rather than collapsing — the side-by-side comparison is
+          viewports rather than collapsing, the side-by-side comparison is
           the educational point. */}
       <div className="overflow-x-auto">
         <div

@@ -9,9 +9,9 @@ import { ChannelUpdateCard } from "./ChannelUpdateCard";
 //   1. Hover any node to see a floating popover of that node's channel_update
 //      records (one per outgoing channel).
 //   2. Three canonical routes are highlighted in their hop colors:
-//        Route A — gold   — Alice → Hazel → Dave
-//        Route B — teal   — Alice → Frank → Greg → Dave
-//        Route C — orange — Alice → Bob → Charlie → Dave
+//        Route A, gold  , Alice → Hazel → Dave
+//        Route B, teal  , Alice → Frank → Greg → Dave
+//        Route C, orange, Alice → Bob → Charlie → Dave
 //   3. Ambient gossip animation: every few seconds a random background node
 //      "broadcasts" a channel_announcement or channel_update, the relevant
 //      edge flashes gold, and a small gossip card pops up next to the node.
@@ -105,7 +105,7 @@ interface ChannelUpdate {
 }
 
 const NAMED_CHANNEL_UPDATES: ChannelUpdate[] = [
-  // Hazel → Dave  (Route A's direct forwarder — punitive CLTV makes this
+  // Hazel → Dave  (Route A's direct forwarder, punitive CLTV makes this
   // route fail Alice's max_total_cltv_expiry_delta ceiling)
   { from: "hazel",   to: "dave",    baseFee: 100, feePpm: 3000, cltvDelta: 1000 },
   // Bob → Charlie → Dave  (Route C, the chapter-1 path)
@@ -114,7 +114,7 @@ const NAMED_CHANNEL_UPDATES: ChannelUpdate[] = [
   // Frank → Greg → Dave  (Route B)
   { from: "frank",   to: "greg",    baseFee: 200, feePpm: 2000, cltvDelta: 22 },
   { from: "greg",    to: "dave",    baseFee: 200, feePpm: 2000, cltvDelta: 20 },
-  // Alice's outgoing channels (she's the sender, doesn't forward — but she has
+  // Alice's outgoing channels (she's the sender, doesn't forward, but she has
   // channels with each of her first-hop neighbors).
   { from: "alice",   to: "hazel",   baseFee: 0,   feePpm: 0,    cltvDelta: 40 },
   { from: "alice",   to: "bob",     baseFee: 0,   feePpm: 0,    cltvDelta: 40 },
@@ -297,7 +297,7 @@ export function ForwarderPolicyMap() {
 
   // Index every node's channel partners (undirected). A node may have channels
   // with counterparties even when it doesn't publish channel_updates of its
-  // own — e.g. Dave is a receiver, has channels with Bob/Eve/Greg, but doesn't
+  // own, e.g. Dave is a receiver, has channels with Bob/Eve/Greg, but doesn't
   // forward, so the channels are advertised by the other side. The popover
   // uses this to explain the asymmetry instead of just saying "no channels."
   const partnersByNode = useMemo(() => {
@@ -552,7 +552,7 @@ export function ForwarderPolicyMap() {
             );
           })}
 
-          {/* 2c. Pulsing gossip edge — newcomer node ↔ Hazel.
+          {/* 2c. Pulsing gossip edge, newcomer node ↔ Hazel.
               Uses SMIL <animate> so the blink is pure SVG, no extra state. */}
           {(() => {
             const partner = nodeById.get(GOSSIP_PARTNER_ID);
@@ -691,7 +691,7 @@ export function ForwarderPolicyMap() {
             );
           })}
 
-          {/* 5. channel_announcement pill — anchored directly above the
+          {/* 5. channel_announcement pill, anchored directly above the
               newcomer gossip node so the connector points at the node it's
               labeling, not at the edge midpoint. */}
           {(() => {
@@ -796,7 +796,7 @@ export function ForwarderPolicyMap() {
 
       {/* Footer hint */}
       <div className="px-4 py-2 border-t-[1.5px] border-foreground/30 text-xs opacity-70 bg-card">
-        Each named node publishes a <span className="font-semibold">channel_update</span> per outgoing channel. Hover any node to see what it's advertising. The pulsing badge in the upper-right is a fresh <span className="font-semibold">channel_announcement</span> entering the gossip layer — hover it for details.
+        Each named node publishes a <span className="font-semibold">channel_update</span> per outgoing channel. Hover any node to see what it's advertising. The pulsing badge in the upper-right is a fresh <span className="font-semibold">channel_announcement</span> entering the gossip layer, hover it for details.
       </div>
 
       {/* channel_announcement detail tooltip */}
@@ -903,7 +903,7 @@ export function ForwarderPolicyMap() {
               fontFamily: "ui-sans-serif, system-ui, sans-serif",
             }}
           >
-            {/* Header strip — colored by hop palette */}
+            {/* Header strip, colored by hop palette */}
             <div
               className="px-2 py-1.5 border-b-[1.5px] flex items-center gap-1.5"
               style={{

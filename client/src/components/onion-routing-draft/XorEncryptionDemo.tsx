@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 // ────────────────────────────────────────────────────────────────────────────
-// XorEncryptionDemo — two-tab interactive (rebuild 2026-05-08)
+// XorEncryptionDemo, two-tab interactive (rebuild 2026-05-08)
 //
-// ALICE tab: edit Bob's TLV slot, click Encrypt; ciphertext bytes appear
+// ALICE tab: edit Bob's TLV hop payload, click Encrypt; ciphertext bytes appear
 // left-to-right in a gold wave. Final state shows a copyable hex string of
 // the 23-byte ciphertext.
 //
@@ -29,6 +29,39 @@ const KEYSTREAM = [
 const TOTAL_BYTES = KEYSTREAM.length;
 
 const SCID_BYTES = [0x00, 0x0a, 0xae, 0x60, 0x00, 0x00, 0x01, 0x00];
+const DEFAULT_SCID = "700000:1:0";
+
+// BOLT 7 short_channel_id: "block:tx:output", encoded as 8 bytes
+//   3 bytes block_height || 3 bytes tx_index || 2 bytes output_index
+function parseSCID(input: string): { bytes: number[] | null; valid: boolean } {
+  const parts = input.split(":").map((s) => s.trim());
+  if (parts.length !== 3) return { bytes: null, valid: false };
+  const block = parseInt(parts[0], 10);
+  const tx = parseInt(parts[1], 10);
+  const out = parseInt(parts[2], 10);
+  if (
+    !Number.isFinite(block) ||
+    !Number.isFinite(tx) ||
+    !Number.isFinite(out)
+  )
+    return { bytes: null, valid: false };
+  if (block < 0 || block > 0xffffff) return { bytes: null, valid: false };
+  if (tx < 0 || tx > 0xffffff) return { bytes: null, valid: false };
+  if (out < 0 || out > 0xffff) return { bytes: null, valid: false };
+  return {
+    bytes: [
+      (block >> 16) & 0xff,
+      (block >> 8) & 0xff,
+      block & 0xff,
+      (tx >> 16) & 0xff,
+      (tx >> 8) & 0xff,
+      tx & 0xff,
+      (out >> 8) & 0xff,
+      out & 0xff,
+    ],
+    valid: true,
+  };
+}
 const MAX_AMT = 1099511627775;
 const MAX_CLTV = 16777215;
 
@@ -58,14 +91,18 @@ function bytesToUint(bytes: number[]): number {
   return bytes.reduce((acc, b) => acc * 256 + b, 0);
 }
 
-function computePlaintextBytes(amt: number, cltv: number): number[] {
+function computePlaintextBytes(
+  amt: number,
+  cltv: number,
+  scidBytes: number[],
+): number[] {
   const amtBytes = uintToBytes(amt, 5);
   const cltvBytes = uintToBytes(cltv, 3);
   return [
     0x16,
     0x02, 0x05, ...amtBytes,
     0x04, 0x03, ...cltvBytes,
-    0x06, 0x08, ...SCID_BYTES,
+    0x06, 0x08, ...scidBytes,
   ];
 }
 
@@ -192,6 +229,14 @@ export function XorEncryptionDemo() {
   // Alice state
   const [amt, setAmt] = useState(10001000);
   const [cltv, setCltv] = useState(220);
+  const [scidStr, setScidStr] = useState(DEFAULT_SCID);
+  const scidParsed = useMemo(() => parseSCID(scidStr), [scidStr]);
+  // If the user types something invalid, freeze the encoded bytes at the
+  // last good value so the byte row doesn't churn, but still flag the
+  // input as invalid in the card.
+  const lastGoodScidRef = useRef<number[]>(SCID_BYTES);
+  if (scidParsed.bytes) lastGoodScidRef.current = scidParsed.bytes;
+  const scidBytes = lastGoodScidRef.current;
   const [aliceEncrypted, setAliceEncrypted] = useState(false);
   const [aliceRevealed, setAliceRevealed] = useState(0);
   const [aliceDir, setAliceDir] = useState<Direction>(null);
@@ -207,8 +252,8 @@ export function XorEncryptionDemo() {
   const bobTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const plaintext = useMemo(
-    () => computePlaintextBytes(amt, cltv),
-    [amt, cltv],
+    () => computePlaintextBytes(amt, cltv, scidBytes),
+    [amt, cltv, scidBytes],
   );
   const aliceCiphertext = useMemo(
     () => plaintext.map((b, i) => b ^ KEYSTREAM[i]),
@@ -332,7 +377,7 @@ export function XorEncryptionDemo() {
       <div className="bg-black text-white px-4 py-2 flex items-center gap-2">
         <div className="w-1.5 h-1.5 rounded-full bg-[#b8860b]" />
         <span className="text-sm font-bold tracking-[0.08em] uppercase">
-          XOR encryption — try it
+          XOR encryption, try it
         </span>
       </div>
 
@@ -348,7 +393,7 @@ export function XorEncryptionDemo() {
           active={tab === "alice"}
           color={ALICE_HOP}
           onClick={() => setTab("alice")}
-          label="Alice — encrypt"
+          label="Alice, encrypt"
           letter="A"
           ready={aliceEncrypted}
         />
@@ -356,7 +401,7 @@ export function XorEncryptionDemo() {
           active={tab === "bob"}
           color={BOB_HOP}
           onClick={() => setTab("bob")}
-          label="Bob — decrypt"
+          label="Bob, decrypt"
           letter="B"
           ready={bobDecrypted}
         />
@@ -373,6 +418,9 @@ export function XorEncryptionDemo() {
             setAmt={setAmt}
             cltv={cltv}
             setCltv={setCltv}
+            scidStr={scidStr}
+            setScidStr={setScidStr}
+            scidValid={scidParsed.valid}
             plaintext={plaintext}
             ciphertext={aliceCiphertext}
             encrypted={aliceEncrypted}
@@ -413,6 +461,11 @@ export function XorEncryptionDemo() {
           0% { transform: translateY(-6px); opacity: 0; }
           100% { transform: translateY(0); opacity: 1; }
         }
+        @keyframes byte-edit-pulse {
+          0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(184,134,11,0); }
+          40% { transform: scale(1.18); box-shadow: 0 0 0 3px rgba(184,134,11,0.55), 0 0 12px rgba(184,134,11,0.55); }
+          100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(184,134,11,0); }
+        }
       `}</style>
     </div>
   );
@@ -425,6 +478,9 @@ function AliceTab(props: {
   setAmt: (n: number) => void;
   cltv: number;
   setCltv: (n: number) => void;
+  scidStr: string;
+  setScidStr: (s: string) => void;
+  scidValid: boolean;
   plaintext: number[];
   ciphertext: number[];
   encrypted: boolean;
@@ -442,6 +498,9 @@ function AliceTab(props: {
     setAmt,
     cltv,
     setCltv,
+    scidStr,
+    setScidStr,
+    scidValid,
     plaintext,
     ciphertext,
     encrypted,
@@ -457,45 +516,76 @@ function AliceTab(props: {
 
   const showCipherRow = encrypted || isAnimating;
 
+  // Track which bytes just changed so we can pulse them when the user
+  // edits a value. Compares the current plaintext to the previous render.
+  const prevPlaintextRef = useRef<number[]>(plaintext);
+  const [pulseIndices, setPulseIndices] = useState<Set<number>>(new Set());
+  useEffect(() => {
+    const prev = prevPlaintextRef.current;
+    const changed = new Set<number>();
+    for (let i = 0; i < plaintext.length; i++) {
+      if (prev[i] !== plaintext[i]) changed.add(i);
+    }
+    if (changed.size > 0) {
+      setPulseIndices(changed);
+      const t = setTimeout(() => setPulseIndices(new Set()), 450);
+      prevPlaintextRef.current = plaintext;
+      return () => clearTimeout(t);
+    }
+    prevPlaintextRef.current = plaintext;
+  }, [plaintext]);
+
   return (
     <div className="overflow-x-auto">
       <div style={{ minWidth: 760 }}>
-        {/* Compact value strip — no border, no header */}
+        {/* Protocol-message card. The values look like fields in a wire
+            protocol message (think update_add_htlc or similar): each row
+            is color-coded to match the bytes it produces in the plaintext
+            row directly below. Editing a value pulses the corresponding
+            bytes so you can see the encoding in flight. */}
+        <ProtocolMessageCard
+          amt={amt}
+          setAmt={setAmt}
+          cltv={cltv}
+          setCltv={setCltv}
+          scidStr={scidStr}
+          setScidStr={setScidStr}
+          scidValid={scidValid}
+          isAnimating={isAnimating}
+        />
+
+        {/* Connector arrow into the plaintext row */}
         <div
-          className="flex flex-wrap gap-x-5 gap-y-1.5 items-center mb-4"
-          style={{
-            fontFamily: MONO,
-            fontSize: 11,
-            opacity: isAnimating ? 0.5 : 1,
-            transition: "opacity 200ms ease-out",
-            pointerEvents: isAnimating ? "none" : "auto",
-          }}
+          className="flex items-center justify-center"
+          style={{ marginTop: 6, marginBottom: 8 }}
         >
-          <FormField
-            label="amt_to_forward"
-            unit="msat"
-            value={amt}
-            setValue={setAmt}
-            min={0}
-            max={MAX_AMT}
-          />
-          <FormField
-            label="outgoing_cltv"
-            unit="block"
-            value={cltv}
-            setValue={setCltv}
-            min={0}
-            max={MAX_CLTV}
-          />
+          <div
+            style={{
+              fontFamily: MONO,
+              fontSize: 11,
+              fontWeight: 700,
+              color: "#475569",
+              letterSpacing: "0.05em",
+              padding: "3px 12px",
+              border: "1.5px solid rgba(15,23,42,0.35)",
+              background: "#fffdf5",
+              textTransform: "uppercase",
+            }}
+          >
+            ↓ encoded as TLV bytes ↓
+          </div>
         </div>
 
-        {/* PLAINTEXT row */}
+        {/* PLAINTEXT row, region-tinted so each section maps back to a
+            field in the protocol message above. */}
         <ByteRow
           label="PLAINTEXT"
           bytes={plaintext}
           fill={PLAIN_FILL}
           stroke={PLAIN_STROKE}
+          regionColors
           activeColumn={activeColumn}
+          pulseIndices={pulseIndices}
         />
 
         <OperatorRow op="⊕" />
@@ -509,7 +599,7 @@ function AliceTab(props: {
           activeColumn={activeColumn}
         />
 
-        {/* CIPHERTEXT row — slides in */}
+        {/* CIPHERTEXT row, slides in */}
         <div
           style={{
             overflow: "visible",
@@ -747,7 +837,7 @@ function BobTab(props: {
           activeColumn={cipherValid ? activeColumn : null}
         />
 
-        {/* PLAINTEXT row — slides in during decrypt */}
+        {/* PLAINTEXT row, slides in during decrypt */}
         <div
           style={{
             overflow: "visible",
@@ -804,7 +894,7 @@ function BobTab(props: {
                 </>
               ) : (
                 <>
-                  Bytes decrypted, but they don't decode as a valid TLV record. (The XOR worked; the source bytes weren't a real onion slot.)
+                  Bytes decrypted, but they don't decode as a valid TLV record. (The XOR worked; the source bytes weren't a real onion hop payload.)
                 </>
               )
             ) : !cipherValid ? (
@@ -813,13 +903,13 @@ function BobTab(props: {
               </>
             ) : (
               <>
-                Ciphertext loaded. Click <strong style={{ color: BOB_HOP }}>Decrypt</strong> to apply the same XOR — XOR is its own inverse, so the plaintext will fall right back out.
+                Ciphertext loaded. Click <strong style={{ color: BOB_HOP }}>Decrypt</strong> to apply the same XOR, XOR is its own inverse, so the plaintext will fall right back out.
               </>
             )}
           </div>
         </div>
 
-        {/* Decoded TLV panel — appears after decryption */}
+        {/* Decoded TLV panel, appears after decryption */}
         {decrypted && !isAnimating && (
           <div
             className="mt-5 border-[1.5px] px-4 py-3"
@@ -843,7 +933,7 @@ function BobTab(props: {
                     marginBottom: 8,
                   }}
                 >
-                  ▶ Decoded TLV records — Bob's slot
+                  ▶ Decoded TLV records, Bob's hop payload
                 </div>
                 <div
                   style={{
@@ -888,7 +978,7 @@ function BobTab(props: {
                   letterSpacing: "0.02em",
                 }}
               >
-                ✗ Decrypted bytes don't decode as a valid TLV record. The XOR ran fine; the source bytes just weren't a real Sphinx slot. Try Alice's ciphertext.
+                ✗ Decrypted bytes don't decode as a valid TLV record. The XOR ran fine; the source bytes just weren't a real Sphinx hop payload. Try Alice's ciphertext.
               </div>
             )}
           </div>
@@ -1014,6 +1104,239 @@ function TabButton({
   );
 }
 
+// Renders the editable values as a wire-protocol-style message card:
+// black header with the type name, body with one row per field. Each row's
+// background tint matches the byte regions in the plaintext row so the
+// reader can see which slice of bytes encodes which field.
+function ProtocolMessageCard({
+  amt,
+  setAmt,
+  cltv,
+  setCltv,
+  scidStr,
+  setScidStr,
+  scidValid,
+  isAnimating,
+}: {
+  amt: number;
+  setAmt: (n: number) => void;
+  cltv: number;
+  setCltv: (n: number) => void;
+  scidStr: string;
+  setScidStr: (s: string) => void;
+  scidValid: boolean;
+  isAnimating: boolean;
+}) {
+  return (
+    <div
+      className="border-[1.5px] mb-2"
+      style={{
+        background: "#fffdf5",
+        borderColor: "#0f172a",
+        opacity: isAnimating ? 0.55 : 1,
+        transition: "opacity 200ms ease-out",
+        pointerEvents: isAnimating ? "none" : "auto",
+      }}
+    >
+      {/* Black header, protocol message style */}
+      <div
+        className="bg-black text-white px-3 py-1.5 flex items-center gap-2"
+        style={{ fontFamily: MONO }}
+      >
+        <span
+          style={{
+            width: 8,
+            height: 8,
+            background: "#b8860b",
+            display: "inline-block",
+          }}
+        />
+        <span className="text-[11px] uppercase tracking-[0.08em] font-bold">
+          bob's TLV record
+        </span>
+      </div>
+
+      {/* Field rows */}
+      <ProtocolFieldNumber
+        name="amt_to_forward"
+        unit="msat"
+        value={amt}
+        setValue={setAmt}
+        min={0}
+        max={MAX_AMT}
+        tint={REGION_TINT.amtTlv}
+        border={REGION_BORDER.amtTlv}
+      />
+      <ProtocolFieldNumber
+        name="outgoing_cltv_value"
+        unit="block"
+        value={cltv}
+        setValue={setCltv}
+        min={0}
+        max={MAX_CLTV}
+        tint={REGION_TINT.cltvTlv}
+        border={REGION_BORDER.cltvTlv}
+      />
+      <ProtocolFieldText
+        name="short_channel_id"
+        unit="block:tx:out"
+        value={scidStr}
+        setValue={setScidStr}
+        valid={scidValid}
+        tint={REGION_TINT.scidTlv}
+        border={REGION_BORDER.scidTlv}
+      />
+    </div>
+  );
+}
+
+function ProtocolFieldNumber({
+  name,
+  unit,
+  value,
+  setValue,
+  min,
+  max,
+  tint,
+  border,
+}: {
+  name: string;
+  unit: string;
+  value: number;
+  setValue: (n: number) => void;
+  min: number;
+  max: number;
+  tint: string;
+  border: string;
+}) {
+  return (
+    <div
+      className="grid items-center px-3 py-1.5 border-t-[1.5px]"
+      style={{
+        gridTemplateColumns: "minmax(160px, 200px) 1fr auto",
+        gap: 12,
+        background: tint,
+        borderColor: "rgba(15,23,42,0.12)",
+      }}
+    >
+      <span
+        className="font-bold"
+        style={{
+          fontFamily: MONO,
+          fontSize: 12,
+          color: border,
+          letterSpacing: "0.02em",
+        }}
+      >
+        {name}
+      </span>
+      <input
+        type="number"
+        value={value}
+        min={min}
+        max={max}
+        onChange={(e) => {
+          const v = Number(e.target.value);
+          if (!Number.isFinite(v) || v < min) return;
+          setValue(Math.min(v, max));
+        }}
+        className="border-[1.5px] px-1.5 py-0.5"
+        style={{
+          background: "#fff",
+          borderColor: border,
+          fontFamily: MONO,
+          fontSize: 12,
+          fontWeight: 700,
+          color: "#0f172a",
+          letterSpacing: "0.02em",
+          width: "100%",
+        }}
+      />
+      <span
+        style={{
+          fontFamily: MONO,
+          fontSize: 10,
+          color: "#475569",
+          minWidth: 70,
+          textAlign: "left",
+        }}
+      >
+        {unit}
+      </span>
+    </div>
+  );
+}
+
+function ProtocolFieldText({
+  name,
+  unit,
+  value,
+  setValue,
+  valid,
+  tint,
+  border,
+}: {
+  name: string;
+  unit: string;
+  value: string;
+  setValue: (s: string) => void;
+  valid: boolean;
+  tint: string;
+  border: string;
+}) {
+  return (
+    <div
+      className="grid items-center px-3 py-1.5 border-t-[1.5px]"
+      style={{
+        gridTemplateColumns: "minmax(160px, 200px) 1fr auto",
+        gap: 12,
+        background: tint,
+        borderColor: "rgba(15,23,42,0.12)",
+      }}
+    >
+      <span
+        className="font-bold"
+        style={{
+          fontFamily: MONO,
+          fontSize: 12,
+          color: border,
+          letterSpacing: "0.02em",
+        }}
+      >
+        {name}
+      </span>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        spellCheck={false}
+        className="border-[1.5px] px-1.5 py-0.5"
+        style={{
+          background: "#fff",
+          borderColor: valid ? border : "#dc2626",
+          fontFamily: MONO,
+          fontSize: 12,
+          fontWeight: 700,
+          color: valid ? "#0f172a" : "#9b1c1c",
+          letterSpacing: "0.02em",
+          width: "100%",
+        }}
+      />
+      <span
+        style={{
+          fontFamily: MONO,
+          fontSize: 10,
+          color: valid ? "#475569" : "#9b1c1c",
+          minWidth: 70,
+          textAlign: "left",
+        }}
+      >
+        {valid ? unit : "invalid"}
+      </span>
+    </div>
+  );
+}
+
 function FormField({
   label,
   unit,
@@ -1073,6 +1396,7 @@ function ByteRow({
   totalCount,
   activeColumn,
   popOnReveal,
+  pulseIndices,
 }: {
   label: string;
   sublabel?: string;
@@ -1084,6 +1408,7 @@ function ByteRow({
   totalCount?: number;
   activeColumn?: number | null;
   popOnReveal?: boolean;
+  pulseIndices?: Set<number>;
 }) {
   const total = totalCount ?? bytes.length;
   const revealed = revealedCount ?? bytes.length;
@@ -1123,9 +1448,17 @@ function ByteRow({
           const byte = hasByte ? bytes[i] : 0;
           const isHidden = i >= revealed || !hasByte;
           const isActive = activeColumn === i && !isHidden;
+          const isPulsing = pulseIndices?.has(i) ?? false;
           const region = BYTE_REGIONS[i];
           const cellFill = regionColors ? REGION_TINT[region] : fill;
           const cellStroke = regionColors ? REGION_BORDER[region] : stroke;
+
+          let animation: string | undefined;
+          if (popOnReveal && isActive) {
+            animation = `byte-pop 350ms cubic-bezier(0.34, 1.56, 0.64, 1)`;
+          } else if (isPulsing && !isHidden) {
+            animation = `byte-edit-pulse 450ms ease-out`;
+          }
 
           return (
             <div
@@ -1148,11 +1481,8 @@ function ByteRow({
                 boxShadow: isActive
                   ? `0 0 0 2px ${ACTIVE_GOLD}55, 0 0 14px ${ACTIVE_GOLD}88`
                   : "none",
-                animation:
-                  popOnReveal && isActive
-                    ? `byte-pop 350ms cubic-bezier(0.34, 1.56, 0.64, 1)`
-                    : undefined,
-                zIndex: isActive ? 5 : 1,
+                animation,
+                zIndex: isActive ? 5 : isPulsing ? 4 : 1,
               }}
             >
               {!isHidden && byte.toString(16).padStart(2, "0")}

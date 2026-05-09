@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 // FeeCalculatorModal (DRAFT)
 //
 // Draggable floating panel that lets students plug numbers into the BOLT 7
-// forwarding fee formula and see the result. No backdrop — the rest of the
+// forwarding fee formula and see the result. No backdrop, the rest of the
 // page stays interactive while the calculator is open. Click anywhere outside
 // the panel to dismiss it; drag the header to reposition.
 //
@@ -31,7 +31,7 @@ export function FeeCalculatorModal({ open, onClose }: FeeCalculatorModalProps) {
   const [feePpm, setFeePpm] = useState<string>("3000");
   const [amount, setAmount] = useState<string>("400000");
 
-  // Position state. null means "unset" — we compute the initial center the
+  // Position state. null means "unset", we compute the initial center the
   // first time the panel opens. Subsequent opens preserve the previous
   // position so a student who drags it to a corner finds it there next time.
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
@@ -86,7 +86,7 @@ export function FeeCalculatorModal({ open, onClose }: FeeCalculatorModalProps) {
     };
   }, [open, onClose]);
 
-  // Drag handlers — attached globally while dragging so the panel keeps
+  // Drag handlers, attached globally while dragging so the panel keeps
   // following the cursor even when it leaves the header.
   useEffect(() => {
     if (!dragging) return;
@@ -154,7 +154,7 @@ export function FeeCalculatorModal({ open, onClose }: FeeCalculatorModalProps) {
       }}
       data-testid="fee-calculator-modal"
     >
-      {/* Header — drag handle */}
+      {/* Header, drag handle */}
       <div
         className="bg-black text-white px-4 py-2 flex items-center justify-between"
         style={{

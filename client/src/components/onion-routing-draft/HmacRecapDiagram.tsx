@@ -9,7 +9,7 @@ import { Tok } from "./mathTokens";
 // ASCII names ("rho", "mu", "um", "pad", "ammag"). Same shared secret in,
 // five independent 32-byte keys out.
 //
-// This component shows the operation only — the next visual
+// This component shows the operation only, the next visual
 // (FiveKeysJobsDiagram) shows what each of the five outputs is used for.
 //
 // Visual style follows the pinned onion-routing format:
@@ -85,7 +85,7 @@ export function HmacRecapDiagram() {
             className="relative mx-auto"
             style={{ minWidth: 720, maxWidth: 820, height: 200 }}
           >
-            {/* LEFT — stacked input pills */}
+            {/* LEFT, stacked input pills */}
             <div
               className="absolute flex flex-col gap-3"
               style={{ left: 0, top: 20, width: 200 }}
@@ -145,7 +145,7 @@ export function HmacRecapDiagram() {
               </div>
             </div>
 
-            {/* ARROWS — left inputs converging into the box */}
+            {/* ARROWS, left inputs converging into the box */}
             <svg
               className="absolute pointer-events-none"
               style={{ left: 200, top: 20, width: 140, height: 160 }}
@@ -174,7 +174,7 @@ export function HmacRecapDiagram() {
               <polygon points="128,100 122,97 122,103" fill="#0f172a" />
             </svg>
 
-            {/* CENTER — black HMAC box */}
+            {/* CENTER, black HMAC box */}
             <div
               className="absolute flex items-center justify-center"
               style={{
@@ -196,7 +196,7 @@ export function HmacRecapDiagram() {
               </span>
             </div>
 
-            {/* ARROW — out of the box */}
+            {/* ARROW, out of the box */}
             <svg
               className="absolute pointer-events-none"
               style={{ left: 480, top: 90, width: 80, height: 20 }}
@@ -213,7 +213,7 @@ export function HmacRecapDiagram() {
               <polygon points="68,10 62,7 62,13" fill="#0f172a" />
             </svg>
 
-            {/* RIGHT — output pill */}
+            {/* RIGHT, output pill */}
             <div
               className="absolute border-[1.5px] bg-[#fffdf5] px-3 py-2"
               style={{

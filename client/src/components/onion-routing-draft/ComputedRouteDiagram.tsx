@@ -330,7 +330,7 @@ export function ComputedRouteDiagram({
                       HTLC Amount
                     </div>
                     <div className="text-[14px] font-bold tabular-nums">
-                      {amount?.toLocaleString("en-US") ?? "—"}
+                      {amount?.toLocaleString("en-US") ?? "-"}
                     </div>
                   </div>
                   <div
@@ -349,7 +349,7 @@ export function ComputedRouteDiagram({
                       HTLC Timeout
                     </div>
                     <div className="text-[14px] font-bold tabular-nums">
-                      {timeout ?? "—"}
+                      {timeout ?? "-"}
                     </div>
                   </div>
                 </div>

@@ -59,11 +59,11 @@ function OnionPanel() {
         className="bg-white dark:bg-slate-900 border-2 border-emerald-300 dark:border-emerald-700 p-3 text-xs leading-relaxed"
         style={{ fontFamily: '"JetBrains Mono", "Fira Code", monospace' }}
       >
-        <div className="text-emerald-700 dark:text-emerald-300">[bob's layer — readable]</div>
+        <div className="text-emerald-700 dark:text-emerald-300">[bob's layer, readable]</div>
         <div className="ml-2">forward 10,002 sats to Charlie</div>
         <div className="ml-2">outgoing CLTV: block 180</div>
-        <div className="mt-2 text-foreground/40">[charlie's layer — encrypted, only Charlie can open]</div>
-        <div className="text-foreground/40">[dave's layer — encrypted, only Dave can open]</div>
+        <div className="mt-2 text-foreground/40">[charlie's layer, encrypted, only Charlie can open]</div>
+        <div className="text-foreground/40">[dave's layer, encrypted, only Dave can open]</div>
         <div className="text-foreground/40">[padding to 1366 bytes total]</div>
       </div>
       <div className="mt-3 text-sm leading-snug">
