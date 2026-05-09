@@ -55,10 +55,12 @@ const HOP_LABEL: Record<HopId, string> = {
   dave: "Dave",
 };
 
+// Match PeelPrimer / WrapPrimer angles so the encryption hatches read as
+// the *same* layers across all the chapter visuals.
 const LAYER_ANGLES: Record<ForwarderId, number> = {
   dave: 0,
   charlie: 45,
-  bob: 135,
+  bob: 90,
 };
 
 const LAYER_COLORS: Record<ForwarderId, string> = {
@@ -88,6 +90,35 @@ function hexToRgba(hex: string, alpha: number): string {
   const g = parseInt(h.slice(2, 4), 16);
   const b = parseInt(h.slice(4, 6), 16);
   return `rgba(${r},${g},${b},${alpha})`;
+}
+
+// Render a caption string with backtick-quoted segments styled as inline
+// code chips (monospace, light background, subtle border). Matches
+// PeelPrimer's `renderCaptionWithCode` so captions across the chapter
+// pick up the same code styling for protocol identifiers.
+function renderCaptionWithCode(text: string) {
+  const parts = text.split(/(`[^`]+`)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith("`") && part.endsWith("`") && part.length >= 2) {
+      return (
+        <code
+          key={i}
+          style={{
+            fontFamily: MONO,
+            background: "#f1f5f9",
+            border: "1px solid rgba(15,23,42,0.14)",
+            padding: "0px 5px",
+            fontSize: "0.92em",
+            color: "#0f172a",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {part.slice(1, -1)}
+        </code>
+      );
+    }
+    return <span key={i}>{part}</span>;
+  });
 }
 
 // Comprehensive hover-tooltip showing the active key's full derivation chain
@@ -285,7 +316,14 @@ interface StepState {
   returnArrow: boolean; // bob → alice
   badgeColor: string;
   badgeLabel: string;
+  // Unkeyed caption: shown in the first instance (`<operations-lifecycle>`),
+  // before any of the five named keys have been introduced. Stays key-free
+  // so the visual focuses on the *operations* themselves.
   caption: string;
+  // Keyed caption: shown in the second instance (`<operations-lifecycle-keyed>`),
+  // after the five keys are derived. Explicitly names the per-hop key driving
+  // each operation so students see operation→key mapping.
+  keyedCaption: string;
   activeHop: HopId;
   // The packet region that's the focus of this step. Other regions render
   // at lower opacity so the eye is drawn to the operation in motion.
@@ -313,6 +351,8 @@ const STEPS: StepState[] = [
     badgeLabel: "Initialize the empty buffer",
     caption:
       "Alice fills the empty packet's payload area with random-looking bytes before doing anything else. Without this, unused space at the back of the packet would tell observers how short the route really is.",
+    keyedCaption:
+      "Alice fills the empty packet's payload area with random-looking bytes derived from `pad` before doing anything else. Without this, unused space at the back of the packet would tell observers how short the route really is.",
     activeHop: "alice",
     focus: "payload",
     keyName: "pad",
@@ -334,6 +374,8 @@ const STEPS: StepState[] = [
     badgeLabel: "Encrypt the forward payload",
     caption:
       "Alice scrambles the entire payload with a stream cipher, layering one round of encryption per hop in the route. The bytes are now ciphertext that only the right hops can unscramble.",
+    keyedCaption:
+      "Alice scrambles the entire payload with `rho`, a `ChaCha20` keystream that layers one round of encryption per hop in the route. The bytes are now ciphertext that only the right hops can unscramble.",
     activeHop: "alice",
     focus: "payload",
     keyName: "rho",
@@ -354,7 +396,9 @@ const STEPS: StepState[] = [
     badgeColor: ACCENT_COLOR,
     badgeLabel: "Authenticate the forward packet",
     caption:
-      "Alice computes a 32-byte authentication tag over the payload using mu and attaches it to the back of the packet. Each forwarder will recompute and verify this tag on receipt, before any decryption, so any tampering en route gets rejected immediately.",
+      "Alice computes a 32-byte authentication tag (`HMAC-SHA256`) over the payload and attaches it to the back of the packet. Each forwarder will recompute and verify this tag on receipt, before any decryption, so any tampering en route gets rejected immediately.",
+    keyedCaption:
+      "Alice computes a 32-byte authentication tag over the payload using `mu` and attaches it to the back of the packet. Each forwarder will recompute and verify this tag on receipt, before any decryption, so any tampering en route gets rejected immediately.",
     activeHop: "alice",
     focus: "hmac",
     keyName: "mu",
@@ -375,7 +419,9 @@ const STEPS: StepState[] = [
     badgeColor: ACCENT_COLOR,
     badgeLabel: "Encrypt the return error",
     caption:
-      "Bob can't forward the payment (say his channel to Charlie is temporarily out of liquidity). He writes a small error message with the BOLT 4 failure code temporary_channel_failure (0x1007) and encrypts it with a different stream cipher.",
+      "Bob can't forward the payment (say his channel to Charlie is temporarily out of liquidity). He writes a small error message with the BOLT 4 failure code `temporary_channel_failure` (`0x1007`) and encrypts it with a different stream cipher.",
+    keyedCaption:
+      "Bob can't forward the payment (say his channel to Charlie is temporarily out of liquidity). He writes a small error message with the BOLT 4 failure code `temporary_channel_failure` (`0x1007`) and encrypts it with `ammag`.",
     activeHop: "bob",
     focus: "payload",
     keyName: "ammag",
@@ -396,7 +442,9 @@ const STEPS: StepState[] = [
     badgeColor: ACCENT_COLOR,
     badgeLabel: "Authenticate the return error",
     caption:
-      "Bob computes a 32-byte authentication tag over the error packet using um and attaches it to the back. The error packet is now sealed and ready to ship back to Alice.",
+      "Bob computes a 32-byte authentication tag (`HMAC-SHA256`) over the error packet and attaches it to the back. The error packet is now sealed and ready to ship back to Alice.",
+    keyedCaption:
+      "Bob computes a 32-byte authentication tag over the error packet using `um` and attaches it to the back. The error packet is now sealed and ready to ship back to Alice.",
     activeHop: "bob",
     focus: "hmac",
     keyName: "um",
@@ -405,7 +453,14 @@ const STEPS: StepState[] = [
   },
 ];
 
-const DIM_OPACITY = 0.32;
+// Match PeelPrimer's locked focus/dim discipline: non-focal regions fade
+// hard (0.18) and the focal region picks up a soft gold ring identical to
+// the wrap/peel primers, so the three visuals teach with the same UI grammar.
+const DIM_OPACITY = 0.18;
+const DIM_TRANSITION =
+  "opacity 400ms ease-out, box-shadow 400ms ease-out, background 400ms ease-out";
+const FOCUS_RING_INSET =
+  "inset 0 0 0 2px rgba(184,134,11,0.55), inset 0 0 18px rgba(184,134,11,0.35)";
 
 const TOTAL_STEPS = STEPS.length;
 const STEP_MS = 2800;
@@ -556,9 +611,9 @@ function FailureExclamation({ step }: { step: number }) {
 function MiniErrorFlyer() {
   // Mini error packet that flies Bob → Alice during the back half of step 5.
   // Has the same shape as the error packet (PAYLOAD + HMAC, no HEADER) but
-  // small enough to ride the hop track wire. Plays after the HMAC has been
-  // attached at Bob, so the visual reads as "Bob seals the error and ships
-  // it home."
+  // small enough to ride the hop track wire. Sized to match PeelPrimer's
+  // MiniOnionPacket (84×22) so the chapter's traveling-packet vocabulary
+  // stays consistent.
   return (
     <div
       className="absolute pointer-events-none"
@@ -572,14 +627,14 @@ function MiniErrorFlyer() {
       }}
     >
       <div
-        className="border-[1.5px] flex"
+        className="flex"
         style={{
-          width: 100,
-          height: 26,
+          width: 84,
+          height: 22,
           background: "#fffdf5",
-          borderColor: ERROR_COLOR,
+          border: `1.5px solid ${ERROR_COLOR}`,
           overflow: "hidden",
-          boxShadow: "0 2px 6px rgba(161,58,58,0.25)",
+          boxShadow: "0 2px 8px rgba(161,58,58,0.25)",
         }}
       >
         {/* Mini ERROR PAYLOAD: red diagonal hatch */}
@@ -590,15 +645,15 @@ function MiniErrorFlyer() {
           <div
             className="absolute inset-0"
             style={{
-              backgroundImage: `repeating-linear-gradient(135deg, ${ERROR_COLOR}90 0px, ${ERROR_COLOR}90 3px, transparent 3px, transparent 8px)`,
+              backgroundImage: `repeating-linear-gradient(135deg, ${ERROR_COLOR}99 0px, ${ERROR_COLOR}99 1px, transparent 1px, transparent 5px)`,
             }}
           />
         </div>
         {/* Mini HMAC */}
         <div
           style={{
-            flexBasis: "20%",
-            background: `${ERROR_COLOR}1F`,
+            width: 14,
+            background: `${ERROR_COLOR}55`,
             borderLeft: `1.5px solid ${ERROR_COLOR}`,
           }}
         />
@@ -609,8 +664,8 @@ function MiniErrorFlyer() {
 
 function MiniOnionFlyer() {
   // Mini packet: HEADER strip + payload area with stacked hatches + HMAC
-  // strip. Reads as "the encrypted onion packet" at a glance. Animated via
-  // the `onion-flyer` keyframe defined in the parent component.
+  // strip. Sized to match PeelPrimer's MiniOnionPacket (84×22) so the
+  // traveling-packet vocabulary is identical across the chapter visuals.
   return (
     <div
       className="absolute pointer-events-none"
@@ -623,21 +678,21 @@ function MiniOnionFlyer() {
       }}
     >
       <div
-        className="border-[1.5px] flex"
+        className="flex"
         style={{
-          width: 100,
-          height: 26,
+          width: 84,
+          height: 22,
           background: "#fffdf5",
-          borderColor: "#0f172a",
+          border: "1.5px solid #0f172a",
           overflow: "hidden",
-          boxShadow: "0 2px 6px rgba(15,23,42,0.18)",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.16)",
         }}
       >
         {/* Mini HEADER */}
         <div
           style={{
-            flexBasis: "14%",
-            background: `${LAYER_COLORS.bob}24`,
+            width: 16,
+            background: "#f1f5f9",
             borderRight: "1.5px solid #0f172a",
           }}
         />
@@ -651,7 +706,7 @@ function MiniOnionFlyer() {
               key={hop}
               className="absolute inset-0"
               style={{
-                backgroundImage: `repeating-linear-gradient(${LAYER_ANGLES[hop]}deg, ${LAYER_COLORS[hop]}A0 0px, ${LAYER_COLORS[hop]}A0 3px, transparent 3px, transparent 8px)`,
+                backgroundImage: `repeating-linear-gradient(${LAYER_ANGLES[hop]}deg, ${LAYER_COLORS[hop]}A0 0px, ${LAYER_COLORS[hop]}A0 1.5px, transparent 1.5px, transparent 5px)`,
               }}
             />
           ))}
@@ -659,8 +714,8 @@ function MiniOnionFlyer() {
         {/* Mini HMAC */}
         <div
           style={{
-            flexBasis: "14%",
-            background: `${LAYER_COLORS.bob}24`,
+            width: 14,
+            background: `${LAYER_COLORS.bob}55`,
             borderLeft: "1.5px solid #0f172a",
           }}
         />
@@ -857,13 +912,9 @@ function ForwardPacketContainer({
                   ? `${accentColor}1F`
                   : `${LAYER_COLORS.bob}24`,
               opacity: state.focus === "header" ? 1 : DIM_OPACITY,
-              filter: state.focus === "header" ? "none" : "saturate(0.7)",
               boxShadow:
-                state.focus === "header"
-                  ? `inset 0 0 0 2px ${accentColor}`
-                  : "none",
-              transition:
-                "opacity 500ms ease-out, filter 500ms ease-out, background 500ms ease-out, box-shadow 500ms ease-out",
+                state.focus === "header" ? FOCUS_RING_INSET : "none",
+              transition: DIM_TRANSITION,
             }}
           >
             <span
@@ -922,13 +973,9 @@ function ForwardPacketContainer({
               background:
                 state.focus === "payload" ? `${accentColor}1F` : "transparent",
               opacity: state.focus === "payload" ? 1 : DIM_OPACITY,
-              filter: state.focus === "payload" ? "none" : "saturate(0.7)",
               boxShadow:
-                state.focus === "payload"
-                  ? `inset 0 0 0 2px ${accentColor}`
-                  : "none",
-              transition:
-                "opacity 500ms ease-out, filter 500ms ease-out, background 500ms ease-out, box-shadow 500ms ease-out",
+                state.focus === "payload" ? FOCUS_RING_INSET : "none",
+              transition: DIM_TRANSITION,
             }}
           >
             <div className="text-center mb-1.5">
@@ -943,10 +990,10 @@ function ForwardPacketContainer({
               className="relative border-[1.5px]"
               style={{
                 background: "#fffdf5",
-                borderColor: state.focus === "payload" ? accentColor : "#0f172a",
+                borderColor: state.focus === "payload" ? "#b8860b" : "#0f172a",
                 height: 96,
                 overflow: "hidden",
-                transition: "border-color 500ms ease-out",
+                transition: "border-color 400ms ease-out",
               }}
             >
               {/* Random bytes layer. At step 0 (Init), animates in left-to-right
@@ -1159,13 +1206,11 @@ function ForwardPacketContainer({
                 : state.focus === "hmac"
                 ? 1
                 : DIM_OPACITY,
-              filter: state.focus === "hmac" ? "none" : "saturate(0.7)",
               boxShadow:
-                state.focus === "hmac"
-                  ? `inset 0 0 0 2px ${accentColor}`
-                  : "none",
+                state.focus === "hmac" ? FOCUS_RING_INSET : "none",
               transition:
-                "flex-basis 600ms ease-out, padding 600ms ease-out, background 600ms ease-out, opacity 500ms ease-out, filter 500ms ease-out, box-shadow 500ms ease-out",
+                "flex-basis 600ms ease-out, padding 600ms ease-out, " +
+                DIM_TRANSITION,
             }}
           >
             <span
@@ -1264,13 +1309,9 @@ function ErrorPacketContainer({
               background:
                 state.focus === "payload" ? `${accentColor}1F` : "transparent",
               opacity: state.focus === "payload" ? 1 : DIM_OPACITY,
-              filter: state.focus === "payload" ? "none" : "saturate(0.7)",
               boxShadow:
-                state.focus === "payload"
-                  ? `inset 0 0 0 2px ${accentColor}`
-                  : "none",
-              transition:
-                "opacity 500ms ease-out, filter 500ms ease-out, background 500ms ease-out, box-shadow 500ms ease-out",
+                state.focus === "payload" ? FOCUS_RING_INSET : "none",
+              transition: DIM_TRANSITION,
             }}
           >
             <div className="text-center mb-1.5">
@@ -1281,58 +1322,170 @@ function ErrorPacketContainer({
                 ERROR PAYLOAD
               </span>
             </div>
+            {/* Slot-format error payload mirroring BOLT 4 error_packet:
+                FAIL slot at the front (LEN bigsize + TLV with the failure
+                code/name, no HMAC subcell since the error packet's HMAC is
+                the outer region) followed by a padding region that fills the
+                rest of the 256-byte buffer. Encryption hatch sweeps over
+                everything when errorLayerVisible. */}
             <div
               className="relative border-[1.5px]"
               style={{
-                background: "#fde0e0",
+                background: "#fffdf5",
                 borderColor: ERROR_COLOR,
-                height: 80,
+                height: 88,
                 overflow: "hidden",
               }}
             >
-              {/* Bytes */}
+              {/* FAIL slot */}
               <div
-                className="absolute inset-0 flex flex-wrap content-start"
+                className="absolute flex"
                 style={{
-                  padding: "8px 6px",
-                  gap: 3,
-                  opacity: state.bytesVisible ? 1 : 0,
-                  transition: "opacity 700ms ease-out",
+                  top: 8,
+                  bottom: 8,
+                  left: 8,
+                  width: "40%",
+                  background: "#fde0e0",
+                  border: `1.5px solid ${ERROR_COLOR}`,
+                  overflow: "hidden",
+                  zIndex: 3,
                 }}
               >
-                {Array.from({ length: 36 }).map((_, i) => (
-                  <span
-                    key={i}
-                    className="text-[8px] leading-none"
+                <SlotSubCell
+                  section="len"
+                  className="flex flex-col items-center justify-center"
+                  style={{
+                    width: 28,
+                    flexShrink: 0,
+                    background: "#fde0e0",
+                    borderRight: `1px dashed ${ERROR_COLOR}80`,
+                    padding: "0 2px",
+                  }}
+                >
+                  <div
                     style={{
                       fontFamily: MONO,
-                      color: ERROR_COLOR,
-                      opacity: 0.55,
+                      fontSize: 7.5,
+                      color: "#475569",
+                      letterSpacing: "0.08em",
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      lineHeight: 1,
                     }}
                   >
-                    {((i * 41 + 7) % 256).toString(16).padStart(2, "0")}
-                  </span>
-                ))}
+                    LEN
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: MONO,
+                      fontSize: 9.5,
+                      color: ERROR_COLOR,
+                      fontWeight: 700,
+                      marginTop: 2,
+                      lineHeight: 1,
+                    }}
+                  >
+                    0x02
+                  </div>
+                </SlotSubCell>
+                <SlotSubCell
+                  section="tlv"
+                  className="flex-1 flex flex-col items-center justify-center"
+                  style={{
+                    background: "#fde0e0",
+                    padding: "0 4px",
+                    minWidth: 0,
+                  }}
+                >
+                  <div
+                    style={{
+                      fontFamily: MONO,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: ERROR_COLOR,
+                      letterSpacing: "0.05em",
+                      textTransform: "uppercase",
+                      lineHeight: 1,
+                    }}
+                  >
+                    FAIL
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: MONO,
+                      fontSize: 8,
+                      color: ERROR_COLOR,
+                      fontWeight: 700,
+                      marginTop: 2,
+                      lineHeight: 1.15,
+                      textAlign: "center",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    temporary_channel_failure
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: MONO,
+                      fontSize: 8,
+                      color: "#475569",
+                      marginTop: 1.5,
+                      lineHeight: 1,
+                    }}
+                  >
+                    0x1007
+                  </div>
+                </SlotSubCell>
               </div>
 
-              {/* Single encryption layer */}
+              {/* Padding region */}
               <div
-                className="absolute inset-0"
+                className="absolute"
                 style={{
-                  backgroundImage: `repeating-linear-gradient(135deg, ${ERROR_COLOR}90 0px, ${ERROR_COLOR}90 4px, transparent 4px, transparent 10px)`,
-                  opacity: state.errorLayerVisible ? 1 : 0,
+                  top: 8,
+                  bottom: 8,
+                  left: "calc(40% + 14px)",
+                  right: 8,
+                  background: "#e2e8f0",
+                  border: "1px dashed rgba(15,23,42,0.18)",
+                  overflow: "hidden",
+                  zIndex: 2,
+                }}
+              >
+                <div
+                  className="absolute inset-0 flex flex-col items-center justify-center"
+                  style={{
+                    fontFamily: MONO,
+                    color: "#475569",
+                    gap: 2,
+                  }}
+                >
+                  <div style={{ fontSize: 10, fontWeight: 700 }}>padding</div>
+                  <div style={{ fontSize: 9 }}>~192 bytes</div>
+                </div>
+              </div>
+
+              {/* Encryption layer (light wash + diagonal hatch) sweeps over
+                  the whole buffer when errorLayerVisible. */}
+              <div
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                  background: ERROR_COLOR,
+                  opacity: state.errorLayerVisible ? 0.08 : 0,
                   transition: "opacity 700ms ease-out",
+                  zIndex: 4,
+                }}
+              />
+              <div
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                  backgroundImage: `repeating-linear-gradient(135deg, ${ERROR_COLOR} 0px, ${ERROR_COLOR} 2.5px, transparent 2.5px, transparent 11px)`,
+                  opacity: state.errorLayerVisible ? 0.6 : 0,
+                  transition: "opacity 700ms ease-out",
+                  zIndex: 4,
                 }}
               />
             </div>
-            {state.failureNote && (
-              <div
-                className="text-[10px] mt-2 font-bold"
-                style={{ color: ERROR_COLOR, fontFamily: MONO }}
-              >
-                ⚠ temporary_channel_failure (0x1007)
-              </div>
-            )}
           </div>
 
           {/* HMAC region. Hidden until the tag is attached. */}
@@ -1354,13 +1507,11 @@ function ErrorPacketContainer({
                 : state.focus === "hmac"
                 ? 1
                 : DIM_OPACITY,
-              filter: state.focus === "hmac" ? "none" : "saturate(0.7)",
               boxShadow:
-                state.focus === "hmac"
-                  ? `inset 0 0 0 2px ${accentColor}`
-                  : "none",
+                state.focus === "hmac" ? FOCUS_RING_INSET : "none",
               transition:
-                "flex-basis 600ms ease-out, padding 600ms ease-out, background 600ms ease-out, opacity 500ms ease-out, filter 500ms ease-out, box-shadow 500ms ease-out",
+                "flex-basis 600ms ease-out, padding 600ms ease-out, " +
+                DIM_TRANSITION,
             }}
           >
             <span
@@ -1573,36 +1724,39 @@ export function OperationsLifecycleDiagram({
           >
             <HopTrack state={current} step={step} />
 
-            {/* Operation badge + caption */}
-            <div className="flex flex-col items-center text-center mb-4">
+            {/* Step action panel: bordered card with operation-colored left
+                edge, header bar with the operation label (and optional key
+                chip), body with the caption rendered through
+                renderCaptionWithCode so backtick-quoted identifiers pick up
+                the same inline-code styling as PeelPrimer. */}
+            <div
+              className="border-[1.5px] mb-4"
+              style={{
+                background: "#fffdf5",
+                borderColor: "rgba(15,23,42,0.25)",
+                borderLeft: `3px solid ${accentColor}`,
+                transition: "border-color 400ms ease-out",
+              }}
+            >
               <div
-                className="inline-flex items-center gap-2 px-3 py-1.5 border-[1.5px]"
+                className="px-3 py-1.5 border-b-[1.5px] flex items-center gap-3 flex-wrap"
                 style={{
-                  borderColor: accentColor,
+                  borderColor: "rgba(15,23,42,0.15)",
                   background: `${accentColor}14`,
-                  transition:
-                    "border-color 500ms ease-out, background 500ms ease-out",
+                  transition: "background 400ms ease-out",
                 }}
               >
                 <span
-                  style={{
-                    width: 10,
-                    height: 10,
-                    background: accentColor,
-                    transition: "background 500ms ease-out",
-                  }}
-                />
-                <span
                   className="text-[10px] uppercase tracking-[0.08em] font-bold"
-                  style={{ color: "#475569", fontFamily: MONO }}
+                  style={{ fontFamily: MONO, color: "#475569" }}
                 >
-                  Step {step + 1}
+                  Step {step + 1} of {TOTAL_STEPS}
                 </span>
                 <span
-                  className="text-sm font-bold"
+                  className="text-sm font-bold flex-1"
                   style={{
                     color: accentColor,
-                    transition: "color 500ms ease-out",
+                    transition: "color 400ms ease-out",
                   }}
                 >
                   {current.badgeLabel}
@@ -1610,17 +1764,14 @@ export function OperationsLifecycleDiagram({
                 {showKeys && (
                   <span
                     ref={chipRef}
-                    className="text-sm font-bold"
+                    className="text-sm font-bold inline-flex"
                     style={{
                       color: current.keyColor,
                       fontFamily: MONO,
-                      borderLeft: `1.5px solid ${current.keyColor}40`,
-                      paddingLeft: 8,
-                      marginLeft: 2,
-                      transition: "color 500ms ease-out",
-                      position: "relative",
                       cursor: "help",
                       borderBottom: `1px dotted ${current.keyColor}80`,
+                      padding: "0 2px",
+                      transition: "color 400ms ease-out",
                     }}
                     key={`key-${current.keyName}`}
                     onMouseEnter={showKeyTooltip}
@@ -1632,14 +1783,18 @@ export function OperationsLifecycleDiagram({
                 )}
               </div>
               <div
-                className="mt-3 text-sm leading-relaxed italic px-4 mx-auto"
+                className="px-3 py-2.5"
                 style={{
-                  color: "#475569",
-                  maxWidth: 640,
+                  fontFamily: "ui-sans-serif, system-ui, sans-serif",
+                  fontSize: 12.5,
+                  lineHeight: 1.7,
+                  color: "#0f172a",
                   minHeight: 60,
                 }}
               >
-                {current.caption}
+                {renderCaptionWithCode(
+                  showKeys ? current.keyedCaption : current.caption,
+                )}
               </div>
             </div>
 
@@ -1702,29 +1857,76 @@ export function OperationsLifecycleDiagram({
               Reset
             </button>
           </div>
-          <div className="flex gap-1 items-center">
-            {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
-              <button
-                key={i}
-                onClick={() => {
-                  setPlaying(false);
-                  setStep(i);
-                }}
-                className="border-[1.5px] text-[11px] font-bold transition-colors"
-                style={{
-                  width: 26,
-                  height: 26,
-                  borderColor: i === step ? "#b8860b" : "#0f172a",
-                  background: i === step ? "#b8860b" : "transparent",
-                  color: i === step ? "#fffdf5" : "#0f172a",
-                  fontFamily: MONO,
-                  cursor: "pointer",
-                }}
-                aria-label={`Step ${i + 1}`}
-                data-testid={`operations-lifecycle-step-${i}`}
+          {/* Grouped step buttons matching PeelPrimer's pattern: SETUP /
+              FORWARD / RETURN. Header colors echo the hop-track arrows
+              (slate for setup, gold for forward, red for return). */}
+          <div className="ml-1 flex gap-2 flex-wrap items-end">
+            {(
+              [
+                {
+                  label: "SETUP",
+                  color: "#475569",
+                  fill: "#f1f5f9",
+                  steps: [0],
+                },
+                {
+                  label: "FORWARD",
+                  color: "#b8860b",
+                  fill: "#fef3c7",
+                  steps: [1, 2],
+                },
+                {
+                  label: "RETURN",
+                  color: ERROR_COLOR,
+                  fill: "#fde0e0",
+                  steps: [3, 4],
+                },
+              ] as const
+            ).map((g) => (
+              <div
+                key={g.label}
+                className="flex flex-col items-stretch gap-0.5"
               >
-                {i + 1}
-              </button>
+                <div
+                  className="text-center px-1.5 py-0.5 border-[1.5px]"
+                  style={{
+                    background: g.fill,
+                    borderColor: g.color,
+                    color: g.color,
+                    fontFamily: MONO,
+                    fontSize: 8.5,
+                    fontWeight: 700,
+                    letterSpacing: "0.06em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  {g.label}
+                </div>
+                <div className="flex gap-1">
+                  {g.steps.map((i) => (
+                    <button
+                      key={i}
+                      onClick={() => {
+                        setPlaying(false);
+                        setStep(i);
+                      }}
+                      className="w-7 h-7 border-[1.5px] text-xs font-bold transition-colors"
+                      style={{
+                        background: step === i ? "#b8860b" : "#fffdf5",
+                        borderColor:
+                          step === i ? "#b8860b" : g.color + "80",
+                        color: step === i ? "#fff" : "#0f172a",
+                        fontFamily: MONO,
+                        cursor: "pointer",
+                      }}
+                      aria-label={`Step ${i + 1}`}
+                      data-testid={`operations-lifecycle-step-${i}`}
+                    >
+                      {i + 1}
+                    </button>
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         </div>

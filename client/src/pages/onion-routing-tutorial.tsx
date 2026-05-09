@@ -47,7 +47,7 @@ import { SlicesRecapDiagram } from "../components/onion-routing-draft/SlicesReca
 import { SliceInPacketDiagram } from "../components/onion-routing-draft/SliceInPacketDiagram";
 import { KeyOperationsDiagram } from "../components/onion-routing-draft/KeyOperationsDiagram";
 import { OperationsLifecycleDiagram } from "../components/onion-routing-draft/OperationsLifecycleDiagram";
-import { MathPythonSnippet } from "../components/onion-routing-draft/MathPythonSnippet";
+import { PythonSnippet } from "../components/onion-routing-draft/PythonSnippet";
 import { PayloadShrinkDiagram } from "../components/onion-routing-draft/PayloadShrinkDiagram";
 import { PaddingStrategyDiagram } from "../components/onion-routing-draft/PaddingStrategyDiagram";
 import { XorEncryptionDemo } from "../components/onion-routing-draft/XorEncryptionDemo";
@@ -102,7 +102,7 @@ const CUSTOM_BLOCK_TAGS = new Set([
   "key-operations",
   "operations-lifecycle",
   "operations-lifecycle-keyed",
-  "math-python",
+  "python-snippet",
   "cltv-safety-lab",
   "forwarder-policy-map",
   "knowledge-matrix",
@@ -1151,8 +1151,8 @@ function ChapterContent({
           "operations-lifecycle-keyed": () => {
             return <OperationsLifecycleDiagram showKeys />;
           },
-          "math-python": ({ id }: any) => {
-            return <MathPythonSnippet id={id} />;
+          "python-snippet": ({ id }: any) => {
+            return <PythonSnippet id={id} />;
           },
           "cltv-safety-lab": () => {
             return <CltvSafetyLab />;
