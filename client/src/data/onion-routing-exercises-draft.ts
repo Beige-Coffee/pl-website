@@ -31,6 +31,13 @@ export interface CodeExerciseData {
   description: string;
   starterCode: string;
   testCode: string;
+  /**
+   * Sent to the Scratchpad sandbox when the student clicks "Send to Sandbox".
+   * Should be EXPLORATORY code that demonstrates the relevant building blocks
+   * with print statements, NOT the exercise's starter code. The student is
+   * meant to modify and re-run it to internalize the concepts before solving.
+   */
+  sampleCode?: string;
   hints: {
     conceptual: string;
     steps: string;
@@ -1288,8 +1295,58 @@ def test_end_to_end_peel_through_route():
     title: "Generate the Filler",
     description:
       "Implement <code>OnionPacketBuilder.generate_filler</code>. Given the <code>rho</code> keys and per-hop payload sizes for hops <code>0..N-2</code> (every hop except the final one), produce the filler bytes that will appear at the trailing positions of each hop's <code>hop_payloads</code> view after peeling. " +
-      "The filler grows by one hop's payload size on each iteration: prepend that many zero bytes, then XOR the running filler with the trailing portion of that hop's <code>rho</code> keystream (extended to <code>ROUTING_INFO_SIZE + cumulative_size</code>). " +
+      "The filler grows by one hop's payload size on each iteration: append that many zero bytes, then XOR the running filler with the trailing <code>len(filler)</code> bytes of that hop's <code>rho</code> keystream (extended to <code>ROUTING_INFO_SIZE + payload_sizes[i]</code>). " +
       "Reference: BOLT 4 'Filler Generation'. Helpers in scope: <code>chacha20_keystream</code>, <code>xor_bytes</code>.",
+    sampleCode: `# Filler construction sandbox - explore the BOLT 4 algorithm
+#
+# Filler is built one iteration at a time. Each iteration:
+#   1. Append slot_size zero bytes to the filler
+#   2. XOR the trailing len(filler) bytes of an extended rho keystream
+#      (length ROUTING_INFO_SIZE + slot_size) into filler
+#
+# Try changing the rho_keys, sizes, or number of hops and re-running.
+
+import hashlib
+
+# Simplified keystream stand-in for the sandbox. In the real exercise,
+# chacha20_keystream() is provided as a helper.
+def chacha20_keystream(key: bytes, length: int) -> bytes:
+    out = b""
+    counter = 0
+    while len(out) < length:
+        out += hashlib.sha256(key + counter.to_bytes(8, "big")).digest()
+        counter += 1
+    return out[:length]
+
+def xor_bytes(a: bytes, b: bytes) -> bytes:
+    return bytes(x ^ y for x, y in zip(a, b))
+
+ROUTING_INFO_SIZE = 1300
+
+# 2-forwarder route (Bob, Charlie). Tiny slot sizes so the output is
+# readable byte-by-byte.
+rho_keys = [b"BOB" + b"\\x00" * 29, b"CHARLIE" + b"\\x00" * 25]
+sizes    = [8, 6]
+
+filler = b""
+print(f"start: filler length = {len(filler)}\\n")
+
+for i, (rho, size) in enumerate(zip(rho_keys, sizes)):
+    # Step 1: append slot_size zero bytes
+    filler = filler + b"\\x00" * size
+    print(f"iteration {i+1}: appended {size} zeros, filler length = {len(filler)}")
+
+    # Step 2: XOR with the trailing len(filler) bytes of the extended keystream
+    stream = chacha20_keystream(rho, ROUTING_INFO_SIZE + size)
+    chunk_offset = ROUTING_INFO_SIZE + size - len(filler)
+    chunk = stream[chunk_offset:]
+    print(f"   chunk offset = {chunk_offset}, chunk length = {len(chunk)}")
+
+    filler = xor_bytes(filler, chunk)
+    print(f"   filler after XOR = {filler.hex()}\\n")
+
+print(f"final filler ({len(filler)} bytes): {filler.hex()}")
+`,
     starterCode: `class OnionPacketBuilder:
     def generate_filler(self, rho_keys, payload_sizes):
         """

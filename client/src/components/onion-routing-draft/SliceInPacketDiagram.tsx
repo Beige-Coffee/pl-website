@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Tok } from "./mathTokens";
 import { SlotSubCell } from "./SlotSubCell";
+import {
+  LAYER_ANGLES as SHARED_LAYER_ANGLES,
+  LAYER_COLORS as SHARED_LAYER_COLORS,
+} from "./encryptionHatch";
 
 // ────────────────────────────────────────────────────────────────────────────
 // SliceInPacketDiagram (DRAFT)
@@ -239,14 +243,9 @@ const STEP_CAPTIONS: Record<number, string> = {
 const TOTAL_STEPS = 6;
 const STEP_MS = 2400;
 
-// Each encryption layer is rendered as a hatch overlay at a different angle
-// so they read as distinguishable layers when stacked. Outermost layer is
-// rendered last (highest in the DOM stack) so it visually sits "on top."
-const LAYER_ANGLES: Record<ForwarderId, number> = {
-  dave: 0,      // innermost, vertical stripes
-  charlie: 45,  // middle, diagonal up
-  bob: 135,     // outermost, diagonal down
-};
+// Encryption layer angles are pinned to the shared spec so this visual
+// stays in lockstep with WrapPrimer/PeelPrimer.
+const LAYER_ANGLES = SHARED_LAYER_ANGLES;
 
 const LAYER_ORDER: ForwarderId[] = ["dave", "charlie", "bob"];
 
@@ -272,7 +271,7 @@ function LayeredPayloadArea({ step }: { step: number }) {
           payload area, Charlie's hatch covers from Charlie's hop payload to the
           end, Dave's hatch covers only Dave's hop payload region. */}
       {LAYER_ORDER.map((hop) => {
-        const color = HOP_KEY_COLORS[hop];
+        const color = SHARED_LAYER_COLORS[hop];
         const angle = LAYER_ANGLES[hop];
         const visible = isLayerActive(hop, step);
         // Bob's hop payload occupies bytes 0-33%, Charlie 33-66%, Dave 66-100%.
@@ -287,12 +286,23 @@ function LayeredPayloadArea({ step }: { step: number }) {
               bottom: 0,
               left: `${leftPct}%`,
               right: 0,
-              backgroundImage: `repeating-linear-gradient(${angle}deg, ${color}A0 0px, ${color}A0 4px, transparent 4px, transparent 10px)`,
               opacity: visible ? 1 : 0,
               transition: "opacity 700ms ease-out",
             }}
             data-testid={`payload-layer-${hop}`}
-          />
+          >
+            <div
+              className="absolute inset-0"
+              style={{ background: color, opacity: 0.08 }}
+            />
+            <div
+              className="absolute inset-0"
+              style={{
+                backgroundImage: `repeating-linear-gradient(${angle}deg, ${color} 0px, ${color} 2.5px, transparent 2.5px, transparent 11px)`,
+                opacity: 0.6,
+              }}
+            />
+          </div>
         );
       })}
 
@@ -521,7 +531,7 @@ function TravelingPacket({ step }: { step: number }) {
               key={hop}
               className="absolute inset-0"
               style={{
-                backgroundImage: `repeating-linear-gradient(${LAYER_ANGLES[hop]}deg, ${HOP_KEY_COLORS[hop]}A0 0px, ${HOP_KEY_COLORS[hop]}A0 3px, transparent 3px, transparent 8px)`,
+                backgroundImage: `repeating-linear-gradient(${LAYER_ANGLES[hop]}deg, ${SHARED_LAYER_COLORS[hop]} 0px, ${SHARED_LAYER_COLORS[hop]} 2.5px, transparent 2.5px, transparent 11px)`,
                 transition: "opacity 500ms ease-out",
               }}
             />

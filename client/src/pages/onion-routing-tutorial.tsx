@@ -12,8 +12,11 @@ import FeedbackWidget from "../components/FeedbackWidget";
 import CheckpointQuestion from "../components/CheckpointQuestion";
 import CheckpointGroup from "../components/CheckpointGroup";
 import CodeExercise from "../components/CodeExercise";
+import Scratchpad from "../components/Scratchpad";
 import { CollapsibleItem, CollapsibleGroup } from "../components/CollapsibleSection";
 import { useIsMobile } from "../hooks/use-mobile";
+import { PanelStateContext, usePanelStateProvider } from "../hooks/use-panel-state";
+import { Tooltip, TooltipTrigger, TooltipContent } from "../components/ui/tooltip";
 import { ONION_ROUTING_EXERCISES_DRAFT as ONION_ROUTING_EXERCISES } from "../data/onion-routing-exercises-draft";
 import { getOnionRoutingDraftExerciseGroupContext as getOnionRoutingExerciseGroupContext } from "../lib/onion-routing-exercise-groups-draft";
 import { Tok as MathTok } from "../components/onion-routing-draft/mathTokens";
@@ -22,6 +25,7 @@ import { NaiveVsOnionDiagram } from "../components/onion-routing-draft/NaiveVsOn
 import { EcdhChainDiagram } from "../components/onion-routing-draft/EcdhChainDiagram";
 import { KdfPipelineDiagram } from "../components/onion-routing-draft/KdfPipelineDiagram";
 import { FillerTraceDiagram } from "../components/onion-routing-draft/FillerTraceDiagram";
+import { ForwarderPeelDiagram } from "../components/onion-routing-draft/ForwarderPeelDiagram";
 import { HmacChainDiagram } from "../components/onion-routing-draft/HmacChainDiagram";
 import { OnionPeelDiagram } from "../components/onion-routing-draft/OnionPeelDiagram";
 import { ValidationFlowDiagram } from "../components/onion-routing-draft/ValidationFlowDiagram";
@@ -48,6 +52,7 @@ import { SliceInPacketDiagram } from "../components/onion-routing-draft/SliceInP
 import { KeyOperationsDiagram } from "../components/onion-routing-draft/KeyOperationsDiagram";
 import { OperationsLifecycleDiagram } from "../components/onion-routing-draft/OperationsLifecycleDiagram";
 import { PythonSnippet } from "../components/onion-routing-draft/PythonSnippet";
+import { SpecFormula } from "../components/onion-routing-draft/SpecFormula";
 import { PayloadShrinkDiagram } from "../components/onion-routing-draft/PayloadShrinkDiagram";
 import { PaddingStrategyDiagram } from "../components/onion-routing-draft/PaddingStrategyDiagram";
 import { XorEncryptionDemo } from "../components/onion-routing-draft/XorEncryptionDemo";
@@ -75,6 +80,7 @@ const CUSTOM_BLOCK_TAGS = new Set([
   "kdf-pipeline",
   "payload-shrink",
   "padding-strategy",
+  "forwarder-peel",
   "xor-encryption",
   "wrap-primer",
   "peel-primer",
@@ -103,6 +109,7 @@ const CUSTOM_BLOCK_TAGS = new Set([
   "operations-lifecycle",
   "operations-lifecycle-keyed",
   "python-snippet",
+  "spec-formula",
   "cltv-safety-lab",
   "forwarder-policy-map",
   "knowledge-matrix",
@@ -280,39 +287,39 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
     explanation: "The per-hop HMACs commit in a strict direction: Bob's HMAC commits to Carol's layer, Carol's HMAC commits to Dave's layer. To compute Bob's HMAC, Carol's layer must already be built. To compute Carol's HMAC, Dave's must already be built. So we have to build the innermost layer first, then wrap it, then wrap again, and so on. Forward order is impossible because the outer hop's HMAC needs bytes that don't yet exist. The reverse order isn't an arbitrary spec choice; it's forced by the data dependencies in the construction.",
   },
   // ── Chapter 6: Filler Construction ───────────────────────────────────────
-  "cp-filler-purpose-draft": {
-    question: "Bob peels his layer of the onion. He decrypts, reads his TLV payload, shifts the inner contents forward, and needs to fill the trailing 65 bytes that the shift opened up. Why can't he just pad those 65 bytes with zeros?",
+  "cp-filler-shared-keystream-draft": {
+    question: "Alice's filler is just bytes she precomputes ahead of time, in her own kitchen, that turn out to be <em>exactly</em> what Bob's peel produces at the back of his forwarded packet. How is this possible?",
     options: [
-      "Zeros are reserved by BOLT 4 as a sentinel for 'final hop reached', so padding with zeros would mislead Carol into thinking she's the destination",
-      "When Carol peels her layer, she XORs her rho keystream over the entire 1,300-byte hop_payloads field. Zero-padded trailing bytes XORed with her keystream would produce structured keystream output, which isn't what Alice baked Carol's HMAC over, so verification fails",
-      "ChaCha20 produces undefined output when applied to runs of zero bytes longer than 32, so Carol's stream cipher would crash before she could verify the HMAC",
-      "Zeros at the end of the payload area would be visible to a passive observer as a quantity-of-trailing-zeros side channel, leaking the route length",
+      "Alice runs Bob's exact code on her side, simulating every byte he will touch in advance",
+      "Alice and Bob share the same <code>rho_B</code> keystream (derived from <code>ss_AB</code>, the ECDH shared secret only they hold). Same key + same zeros + same XOR = same result",
+      "The filler bytes are always zeros, so any forwarder would produce identical bytes at the back",
+      "Bob uses a deterministic random number generator with a public seed that Alice can replicate",
     ],
     answer: 1,
-    explanation: "The forwarder XORs the entire 1,300-byte hop_payloads field with its rho keystream before reading anything. If Bob shifted in zeros and Carol XORed those zeros with her keystream, she'd get her rho keystream values at those positions, which is a deterministic value, but isn't what Alice computed Carol's HMAC over. Carol's HMAC verification would fail and the payment would be rejected. The filler is precomputed by Alice exactly so that the trailing positions, after each peel, contain bytes that match what the next hop's HMAC expected.",
+    explanation: "This is the whole reason the filler trick works. Filler isn't a trick for hiding values from Bob; it's Alice <em>recreating</em> bytes Bob will produce. Because Alice and Bob share an ECDH secret <code>ss_AB</code>, they both derive the same <code>rho_B</code> key, and thus generate the same ChaCha20 keystream. Alice can take that keystream, XOR it into zeros (or her growing filler), and produce the exact byte pattern Bob will later create when he XORs his keystream over his extended buffer. Without the shared secret, this would require Alice to literally run Bob's code; with it, she just runs the same primitive locally.",
   },
-  "cp-filler-final-hop-draft": {
-    question: "In a 3-hop route Bob → Carol → Dave, Alice generates filler covering Bob's and Carol's hop sizes but does not generate any filler for Dave. Why?",
+  "cp-filler-reach-back-draft": {
+    question: "In step 3 of the filler algorithm, Alice XORs the <strong>last <code>s_B + s_C</code> bytes</strong> of Charlie's <code>rho</code> keystream into the filler, not just the last <code>s_C</code>. The <code>s_B + s_C</code>-byte slice reaches <em>back</em> into Charlie's regular 1,300-byte keystream region by <code>s_B</code> bytes. Why is the reach-back necessary?",
     options: [
-      "Dave's filler would have to be 1,300 bytes long, which exceeds the maximum keystream length of ChaCha20 with a 32-byte key",
-      "Dave is the destination and doesn't shift any bytes forward. His HMAC is computed over a buffer Alice fully controls, so there are no 'trailing positions' that need to match a future hop's keystream",
-      "Dave's payload always has type 8 (payment_data), which BOLT 4 mandates must be the only TLV record in the final hop's hop payload, leaving no room for filler",
-      "The final hop's filler is generated client-side by Dave's wallet using the payment_secret and is not Alice's responsibility",
+      "Without it, Charlie's keystream wouldn't be long enough to cover the full 1,300-byte <code>hop_payloads</code> field",
+      "The reach-back compensates for an off-by-one error in Python's negative indexing",
+      "By the time Charlie peels, Bob's filler bytes will be sitting at exactly those <code>s_B</code> positions in Charlie's regular 1,300 region. Charlie's XOR pass needs to stack his encryption layer onto Bob's bytes, just like it does for everything else in the buffer",
+      "The reach-back is what authenticates Charlie's HMAC; without it, HMAC verification would fail at Charlie",
     ],
-    answer: 1,
-    explanation: "Filler exists to make sure that after a hop shifts the inner packet forward, the trailing bytes that get exposed match what the next hop's HMAC was computed over. Dave is the final hop. He doesn't forward, doesn't shift, and there's no 'next hop' whose HMAC has to verify. Alice still pads the bytes after Dave's TLV during construction (typically with zeros, since there's no further structure), but those bytes don't have to align with any keystream because no further peeling happens.",
+    answer: 2,
+    explanation: "When Charlie peels, he XORs his <code>rho_C</code> keystream over the <em>entire</em> 1,300 + <code>s_C</code> extended buffer, including the positions where Bob's filler bytes are already sitting. So Alice has to pre-bake Charlie's keystream into those positions too, otherwise Charlie's XOR will scramble Bob's bytes and the next hop's HMAC over the forwarded buffer won't match what Alice computed during construction. The reach-back doesn't extend the keystream's length (it's the same <code>1300 + s_C</code> stream as always); it's about where Alice slices from so that her precomputed filler accounts for Charlie's encryption layer landing on top of Bob's bytes.",
   },
   // ── Chapter 6: The Fixed-Size Packet & Filler ────────────────────────────
   "cp-payload-shrink-leak-draft": {
-    question: "Looking at the visual above, the packet's size visibly shrinks at every hop because each forwarder peels its hop payload off the front and forwards what's left. From the byte count alone, what is every forwarder (or any passive observer of the wire) able to infer that they shouldn't? Select all that apply.",
+    question: "Charlie is a middle forwarder in this 3-hop route. He receives a packet that's ~936 bytes, smaller than the 1,366 bytes Alice originally constructed but larger than what Dave will eventually see. From the byte count alone, what is Charlie able to infer that he shouldn't? Select all that apply.",
     options: [
-      "The number of hops remaining downstream of them",
-      "The number of hops upstream of them (how many forwarders have already peeled the packet)",
+      "The number of hops remaining downstream of him",
+      "The number of hops upstream of him (how many forwarders have already peeled the packet)",
       "The total amount being forwarded",
       "The sender's identity",
     ],
     answer: [0, 1],
-    explanation: "Both the upstream and downstream hop counts leak from the byte count. A forwarder sees the inbound packet size and knows how many hop payloads are still inside (downstream count). They can also compare against what an unpeeled packet would look like (e.g., the maximum 1,300-byte payload area that Alice originally constructs) to figure out how many hop payloads have already been stripped (upstream count). Either way, encryption hides the hop payload *contents* but not the byte count on the wire, which is exactly the privacy property from chapter 3 falling apart. The other options are not inferable from size alone: amount, sender identity, and payment hash are all encrypted inside hop payloads and don't change the byte count. Sphinx fixes both leaks by padding every packet to exactly 1,366 bytes regardless of route length, and the filler construction in this chapter is what makes that padding work without breaking each hop's HMAC verification.",
+    explanation: "Charlie can read both leaks at once. (1) He sees ~936 bytes still on the wire and knows hop payloads are roughly equal-sized, so he counts how many remain inside the packet (himself plus one downstream hop). (2) He compares 936 against the maximum unpeeled packet size (1,366 bytes) and works out that exactly one forwarder has already peeled, putting him at position 2 in the route. Either reading lands him in the same spot. Encryption hides the *contents* of each hop payload, not the byte count on the wire, which is exactly the privacy property from chapter 3 falling apart. The other options aren't size-derivable: amount, sender identity, and payment hash all live encrypted inside hop payloads and don't shift the byte count. Sphinx fixes both leaks by padding every packet to exactly 1,366 bytes regardless of route length, and the filler construction in this chapter is what makes that padding work without breaking each hop's HMAC verification.",
   },
   // ── Chapter 4: Key Derivation ────────────────────────────────────────────
   "cp-key-separation-draft": {
@@ -611,7 +618,7 @@ export const CHAPTER_REQUIREMENTS: Record<string, {
     exercises: [],
   },
   "key-derivation": { checkpoints: ["cp-key-separation-draft", "cp-key-domain-separation-draft"], exercises: ["exercise-derive-keys-draft"] },
-  "fixed-size-and-filler": { checkpoints: ["cp-payload-shrink-leak-draft", "cp-filler-purpose-draft", "cp-filler-final-hop-draft"], exercises: ["exercise-generate-filler-draft"] },
+  "fixed-size-and-filler": { checkpoints: ["cp-payload-shrink-leak-draft", "cp-filler-shared-keystream-draft", "cp-filler-reach-back-draft"], exercises: ["exercise-generate-filler-draft"] },
   "wrapping-layer-by-layer": { checkpoints: ["cp-build-reverse-order-draft"], exercises: ["exercise-wrap-hop-draft", "exercise-build-packet-draft"] },
   "peeling-a-layer": { checkpoints: ["cp-peel-extended-stream-draft"], exercises: ["exercise-peel-layer-draft"] },
   "forwarding-validation": { checkpoints: ["cp-validate-before-decrypt-draft", "cp-tlv-final-vs-forward-draft"], exercises: ["exercise-verify-hmac-draft", "exercise-process-onion-draft"] },
@@ -1060,6 +1067,9 @@ function ChapterContent({
           "padding-strategy": () => {
             return <PaddingStrategyDiagram />;
           },
+          "forwarder-peel": () => {
+            return <ForwarderPeelDiagram />;
+          },
           "xor-encryption": () => {
             return <XorEncryptionDemo />;
           },
@@ -1153,6 +1163,9 @@ function ChapterContent({
           },
           "python-snippet": ({ id }: any) => {
             return <PythonSnippet id={id} />;
+          },
+          "spec-formula": ({ source, children }: any) => {
+            return <SpecFormula source={source}>{children}</SpecFormula>;
           },
           "cltv-safety-lab": () => {
             return <CltvSafetyLab />;
@@ -1340,10 +1353,26 @@ function OnionRoutingDraftTutorialShell({ activeId }: { activeId: string }) {
     }
   }, [sidebarCollapsed]);
 
+  // Scratchpad / side-panel state. Mirrors noise-tutorial wiring so the
+  // "Send to Sandbox" button on each exercise opens the scratchpad with
+  // the exercise's sample code (CodeExercise dispatches a custom event the
+  // Scratchpad listens for).
+  const panelState = usePanelStateProvider();
+  const panelPadding = isMobile
+    ? 0
+    : panelState.activePanel
+      ? panelState.panelWidth
+      : 0;
+  const panelTransition = panelState.isDragging
+    ? "none"
+    : "padding-right 300ms cubic-bezier(0.4, 0, 0.2, 1)";
+
   return (
+    <PanelStateContext.Provider value={panelState}>
     <div
       className={`min-h-screen ${t.pageBg} ${t.pageText}`}
       data-theme={theme}
+      style={{ paddingRight: panelPadding, transition: panelTransition }}
     >
       <div className={`w-full border-b-4 ${t.headerBorder} ${t.headerBg} px-2 py-2 md:px-4 md:py-3 flex items-center justify-between sticky top-0 z-50`}>
         <div className="flex items-center gap-2 md:gap-3">
@@ -1645,6 +1674,55 @@ function OnionRoutingDraftTutorialShell({ activeId }: { activeId: string }) {
         </main>
       </div>
 
+      {/* Scratchpad button: floating on the right edge of the header,
+          slides with the panel padding so it never hides behind the open
+          panel. Hidden on small screens where the panel doesn't fit. */}
+      <div
+        className={`fixed top-[78px] z-40 hidden lg:block border-2 rounded ${
+          theme === "dark"
+            ? "bg-[#0b1220] border-[#2a3552]"
+            : "bg-[#fdf9f2] border-[#d4c9a8]"
+        }`}
+        style={{
+          right: panelPadding + 16,
+          transition: panelTransition,
+          padding: "8px 10px",
+        }}
+      >
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={() => panelState.switchPanel("scratchpad")}
+              className={`flex items-center gap-2 font-pixel text-[14px] tracking-wide cursor-pointer ${
+                theme === "dark"
+                  ? "text-slate-300 hover:text-slate-100"
+                  : "text-foreground/70 hover:text-foreground"
+              }`}
+            >
+              <span>SCRATCHPAD</span>
+            </button>
+          </TooltipTrigger>
+          <TooltipContent
+            side="left"
+            className={`max-w-[220px] text-sm leading-snug ${
+              theme === "dark"
+                ? "bg-[#1a2332] border-[#FFD700]/30 text-slate-200"
+                : "bg-white border-[#b8860b]/30 text-foreground/80"
+            }`}
+            style={{
+              boxShadow:
+                theme === "dark"
+                  ? "3px 3px 0 rgba(255,215,0,0.15)"
+                  : "3px 3px 0 rgba(0,0,0,0.08)",
+            }}
+          >
+            Open the Python scratchpad to experiment with code and test inputs from exercises
+          </TooltipContent>
+        </Tooltip>
+      </div>
+
+      <Scratchpad theme={theme} courseKey="onion-routing" />
+
       <FeedbackWidget
         theme={theme}
         chapterTitle={active.title}
@@ -1662,6 +1740,7 @@ function OnionRoutingDraftTutorialShell({ activeId }: { activeId: string }) {
         />
       )}
     </div>
+    </PanelStateContext.Provider>
   );
 }
 

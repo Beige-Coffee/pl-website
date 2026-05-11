@@ -37,10 +37,19 @@ const lightHighlightStyle = HighlightStyle.define([
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const STORAGE_KEY_CODE = "pl-scratchpad-code";
+// Code is scoped per course (so Noise/Lightning/Onion-routing don't share
+// scratchpad contents). Layout state (open/width/split) stays global so
+// the user's preferred panel size persists across courses.
+const STORAGE_KEY_CODE_BASE = "pl-scratchpad-code";
 const STORAGE_KEY_OPEN = "pl-scratchpad-open";
 const STORAGE_KEY_WIDTH = "pl-scratchpad-width";
 const STORAGE_KEY_SPLIT = "pl-scratchpad-split";
+
+function codeStorageKey(courseKey?: string): string {
+  return courseKey
+    ? `${STORAGE_KEY_CODE_BASE}:${courseKey}`
+    : STORAGE_KEY_CODE_BASE;
+}
 
 const DEFAULT_WIDTH = 420;
 const MIN_WIDTH = 300;
@@ -70,9 +79,17 @@ print("Length:", len(pub), "bytes (33-byte compressed SEC1)")
 
 interface ScratchpadProps {
   theme: "light" | "dark";
+  /**
+   * Optional course identifier (e.g. "onion-routing", "noise", "lightning").
+   * When provided, the scratchpad's saved code is scoped per-course so each
+   * course gets its own persistent buffer. Layout state (open/width/split)
+   * stays global. Omitting this preserves the original shared behavior for
+   * backward compatibility with existing tutorial wiring.
+   */
+  courseKey?: string;
 }
 
-export default function Scratchpad({ theme }: ScratchpadProps) {
+export default function Scratchpad({ theme, courseKey }: ScratchpadProps) {
   const dark = theme === "dark";
   const isMobile = useIsMobile();
   const panel = usePanelState();
@@ -180,19 +197,22 @@ export default function Scratchpad({ theme }: ScratchpadProps) {
     if (isOpen) preloadWorker();
   }, [isOpen]);
 
-  // Listen for "send to scratchpad" events from exercises
+  // Listen for "send to scratchpad" events from exercises. Always replaces
+  // the editor contents in full (the user explicitly opted in by clicking
+  // SEND TO SANDBOX, so we don't preserve whatever they had open).
   useEffect(() => {
     const handler = (e: Event) => {
       const code = (e as CustomEvent<string>).detail;
       if (code) {
+        const key = codeStorageKey(courseKey);
         if (viewRef.current) {
           viewRef.current.dispatch({
             changes: { from: 0, to: viewRef.current.state.doc.length, insert: code },
           });
-          try { localStorage.setItem(STORAGE_KEY_CODE, code); } catch {}
+          try { localStorage.setItem(key, code); } catch {}
         } else {
           pendingCodeRef.current = code;
-          try { localStorage.setItem(STORAGE_KEY_CODE, code); } catch {}
+          try { localStorage.setItem(key, code); } catch {}
         }
       }
       if (!isOpen) {
@@ -202,7 +222,7 @@ export default function Scratchpad({ theme }: ScratchpadProps) {
     };
     window.addEventListener("scratchpad-send-code", handler);
     return () => window.removeEventListener("scratchpad-send-code", handler);
-  }, [isOpen]);
+  }, [isOpen, courseKey]);
 
   // ── Horizontal drag (panel width) ──────────────────────────────────────
 
@@ -295,7 +315,7 @@ export default function Scratchpad({ theme }: ScratchpadProps) {
       pendingCodeRef.current = null;
     } else {
       try {
-        const saved = localStorage.getItem(STORAGE_KEY_CODE);
+        const saved = localStorage.getItem(codeStorageKey(courseKey));
         if (saved) initialCode = saved;
       } catch {}
     }
@@ -317,7 +337,7 @@ export default function Scratchpad({ theme }: ScratchpadProps) {
         if (update.docChanged) {
           const code = update.state.doc.toString();
           try {
-            localStorage.setItem(STORAGE_KEY_CODE, code);
+            localStorage.setItem(codeStorageKey(courseKey), code);
           } catch {}
         }
       }),
@@ -353,7 +373,7 @@ export default function Scratchpad({ theme }: ScratchpadProps) {
       view.destroy();
       viewRef.current = null;
     };
-  }, [isOpen, dark]);
+  }, [isOpen, dark, courseKey]);
 
   // Destroy editor when closing
   useEffect(() => {

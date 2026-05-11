@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Tok } from "./mathTokens";
 import { SlotSubCell } from "./SlotSubCell";
+import { HatchOverlay, LAYER_ANGLES, LAYER_COLORS } from "./encryptionHatch";
+import { renderCaption } from "./captionMarkup";
 
 // ────────────────────────────────────────────────────────────────────────────
 // PayloadShrinkDiagram (rebuilt 2026-05-08)
@@ -79,7 +81,7 @@ const STATE_BY_STEP: State[] = [
   {
     holder: "alice",
     hopPayloads: ["bob", "charlie", "dave"],
-    bytes: 1300,
+    bytes: 1366,
     fromHop: null,
     toHop: "alice",
     outerKey: "bob",
@@ -87,7 +89,7 @@ const STATE_BY_STEP: State[] = [
   {
     holder: "bob",
     hopPayloads: ["charlie", "dave"],
-    bytes: 870,
+    bytes: 936,
     fromHop: "alice",
     toHop: "bob",
     outerKey: "charlie",
@@ -95,18 +97,18 @@ const STATE_BY_STEP: State[] = [
   {
     holder: "charlie",
     hopPayloads: ["dave"],
-    bytes: 430,
+    bytes: 506,
     fromHop: "bob",
     toHop: "charlie",
     outerKey: "dave",
   },
   {
     // Dave is the destination. His hop payload is still present when the packet
-    // arrives (it carries his payment_data). The packet is ~430 bytes,
+    // arrives (it carries his payment_data). The packet is ~506 bytes,
     // not empty.
     holder: "dave",
     hopPayloads: ["dave"],
-    bytes: 430,
+    bytes: 506,
     fromHop: "charlie",
     toHop: "dave",
     outerKey: "dave",
@@ -114,10 +116,10 @@ const STATE_BY_STEP: State[] = [
 ];
 
 const STEP_CAPTIONS: Record<number, string> = {
-  0: "Alice prepares the packet. Three encrypted hop payloads, one for Bob, one for Charlie, one for Dave, concatenated into roughly 1,300 bytes of payload. Click play to watch the packet travel.",
-  1: "Bob received the packet and decrypted his hop payload off the front. He forwards what's left to Charlie: about 870 bytes. The packet has visibly shrunk.",
-  2: "Charlie does the same: peels his hop payload, forwards what's left. The packet is down to ~430 bytes, just Dave's hop payload remaining.",
-  3: "Dave receives ~430 bytes, his own hop payload, which carries the payment_data and final amount. He decrypts it and claims the HTLC. Notice that anyone watching the wire could read the byte count at every hop and tell exactly where each forwarder sits in the route.",
+  0: "Alice prepares the packet: a 1,366-byte onion holding three encrypted hop payloads (one for Bob, one for Charlie, one for Dave) inside the 1,300-byte hop_payloads field, plus a fixed 66-byte version + ephemeral pubkey + HMAC envelope. Click play to watch the packet travel.",
+  1: "Bob received the packet and decrypted his hop payload off the front. He forwards what's left to Charlie: about 936 bytes. The packet has visibly shrunk.",
+  2: "Charlie does the same: peels his hop payload, forwards what's left. The packet is down to ~506 bytes, just Dave's hop payload remaining inside the envelope.",
+  3: "Dave receives ~506 bytes. Inside is his own hop payload, which carries the payment_data and final amount. He decrypts it and claims the HTLC. Notice that anyone watching the wire could read the byte count at every hop and tell exactly where each forwarder sits in the route.",
 };
 
 const TOTAL_BEATS = 4;
@@ -179,7 +181,7 @@ export function PayloadShrinkDiagram() {
               className="text-center text-[12px] mb-4 italic px-4 leading-relaxed"
               style={{ color: "#475569", minHeight: 40 }}
             >
-              {STEP_CAPTIONS[step]}
+              {renderCaption(STEP_CAPTIONS[step])}
             </div>
 
             {/* The shrinking onion packet */}
@@ -257,7 +259,7 @@ export function PayloadShrinkDiagram() {
             </div>
           </div>
           <div className="mt-3 md:mt-0 text-sm leading-relaxed flex-1 max-w-2xl">
-            {STEP_CAPTIONS[step]}
+            {renderCaption(STEP_CAPTIONS[step])}
           </div>
         </div>
       </div>
@@ -280,11 +282,6 @@ function TravelingPacket({ state }: { state: State }) {
   // Outermost-key tint: at step 0 it's Bob, then Charlie, then Dave.
   const outerKey = state.outerKey;
   const tintColor = HOP_KEY_COLORS[outerKey];
-  const hopAngles: Record<ForwarderId, number> = {
-    dave: 0,
-    charlie: 45,
-    bob: 135,
-  };
 
   return (
     <div
@@ -331,7 +328,7 @@ function TravelingPacket({ state }: { state: State }) {
                 key={hop}
                 className="absolute inset-0"
                 style={{
-                  backgroundImage: `repeating-linear-gradient(${hopAngles[hop]}deg, ${HOP_KEY_COLORS[hop]}A0 0px, ${HOP_KEY_COLORS[hop]}A0 3px, transparent 3px, transparent 8px)`,
+                  backgroundImage: `repeating-linear-gradient(${LAYER_ANGLES[hop]}deg, ${LAYER_COLORS[hop]} 0px, ${LAYER_COLORS[hop]} 2.5px, transparent 2.5px, transparent 11px)`,
                 }}
               />
             ))
@@ -640,25 +637,27 @@ const NEXT_HOP_COLOR: Record<ForwarderId, string> = {
   dave: "#475569",
 };
 
-// Diagonal-stripe angle per layer. Outermost (Bob) is steeper, innermost
-// (Dave) is more shallow, same convention as slice-in-packet.
-const LAYER_ANGLES: Record<ForwarderId, number> = {
-  bob: 135,
-  charlie: 45,
-  dave: 0,
-};
-
-// Layered encryption hatches showing nested wrapping. Bob's hatch covers
-// the entire payload area; Charlie's covers from Charlie's hop payload to the
-// end; Dave's covers only Dave's hop payload + padding. This is what makes the
-// onion's layered structure visible.
+// Layered encryption hatches showing nested wrapping. Per BOLT 4 wrap order
+// (innermost-first: Dave → Charlie → Bob), each slot accumulates wraps from
+// the outermost hop down to its own depth:
+//
+//   Bob's slot     = 1 layer  (Bob's wrap only, outermost)
+//   Charlie's slot = 2 layers (Bob + Charlie)
+//   Dave's slot    = 3 layers (Bob + Charlie + Dave, deepest)
+//
+// Each slot gets its own confined overlay (no extending to the right edge),
+// so the layer counts don't compound across slots. stripeOpacity is 0.10
+// (vs. the spec's 0.6 default); at 1/2/3 layers that gives ~10/19/27%
+// cumulative hatch visibility, keeping slot labels crisp.
 function LayeredHatches({ hopPayloads }: { hopPayloads: ForwarderId[] }) {
+  if (hopPayloads.length === 0) return null;
+  const slotWidthPct = 100 / hopPayloads.length;
   return (
     <>
       {hopPayloads.map((hop, i) => {
-        const leftPct = (i / hopPayloads.length) * 100;
-        const angle = LAYER_ANGLES[hop];
-        const color = HOP_STROKE[hop];
+        const leftPct = i * slotWidthPct;
+        // Slot i has wraps from the outermost hop (index 0) down to itself.
+        const layersHere = hopPayloads.slice(0, i + 1);
         return (
           <div
             key={`hatch-${hop}`}
@@ -667,12 +666,12 @@ function LayeredHatches({ hopPayloads }: { hopPayloads: ForwarderId[] }) {
               top: 0,
               bottom: 0,
               left: `${leftPct}%`,
-              right: 0,
-              backgroundImage: `repeating-linear-gradient(${angle}deg, ${color}80 0px, ${color}80 2.5px, transparent 2.5px, transparent 8px)`,
-              opacity: 0.45,
-              zIndex: 5 + i,
+              width: `${slotWidthPct}%`,
+              zIndex: 5,
             }}
-          />
+          >
+            <HatchOverlay hops={layersHere} zIndex={0} stripeOpacity={0.1} />
+          </div>
         );
       })}
     </>
@@ -766,13 +765,15 @@ function ShrinkingPayloadInner({ state }: { state: State }) {
                     </div>
                   </SlotSubCell>
 
-                  {/* HMAC sub-cell, next-hop HMAC */}
+                  {/* HMAC sub-cell: tinted with the slot owner's fill (matching
+                      LEN + TLV) so the slot reads as one unit; the next-hop
+                      pointer color lives in the inner text. */}
                   <SlotSubCell
                     section="hmac"
                     style={{
                       width: 50,
                       flexShrink: 0,
-                      background: `${nextColor}24`,
+                      background: fill,
                       borderLeft: `1px dashed ${color}90`,
                       display: "flex",
                       flexDirection: "column",

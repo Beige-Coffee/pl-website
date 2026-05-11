@@ -79,16 +79,14 @@ const ERROR_COLOR = "#a13a3a";
 // Canonical hop palette used inside the demo packet (HEADER tint, layered
 // payload hatches). Matches the forward packet's encryption layers shown in
 // SliceInPacketDiagram and OperationsLifecycleDiagram.
-const LAYER_COLORS = {
-  bob: "#3b6aa0",
-  charlie: "#2d7a7a",
-  dave: "#7b4b8a",
-} as const;
-const LAYER_ANGLES = {
-  dave: 0,
-  charlie: 45,
-  bob: 135,
-} as const;
+// Encryption hatch styling pinned to the shared spec (encryptionHatch.tsx)
+// so this visual stays in lockstep with WrapPrimer/PeelPrimer.
+import {
+  LAYER_ANGLES as SHARED_LAYER_ANGLES,
+  LAYER_COLORS as SHARED_LAYER_COLORS,
+} from "./encryptionHatch";
+const LAYER_COLORS = SHARED_LAYER_COLORS;
+const LAYER_ANGLES = SHARED_LAYER_ANGLES;
 type ForwarderId = keyof typeof LAYER_COLORS;
 
 function hexToRgba(hex: string, alpha: number): string {
@@ -837,39 +835,64 @@ function DemoPacket({
                 ))}
               </div>
 
-              {/* Encryption hatches */}
+              {/* Encryption hatches: shared-spec angles + stripe density,
+                  with a tiny solid wash underneath each layer. Animation
+                  sweep stays the same; only the density / angles changed
+                  to match the locked HatchOverlay vocabulary. */}
               {hatchesVisible && !isError &&
                 (["dave", "charlie", "bob"] as ForwarderId[]).map((hop) => {
                   const c = LAYER_COLORS[hop];
                   const angle = LAYER_ANGLES[hop];
+                  const delay =
+                    ["dave", "charlie", "bob"].indexOf(hop) * 200;
+                  const animation = hatchSweep
+                    ? `demo-hatch-sweep 1800ms ease-out ${delay}ms forwards`
+                    : undefined;
                   return (
-                    <div
-                      key={hop}
-                      className="absolute inset-0"
-                      style={{
-                        backgroundImage: `repeating-linear-gradient(${angle}deg, ${c}A0 0px, ${c}A0 4px, transparent 4px, transparent 10px)`,
-                        opacity: 1,
-                        animation: hatchSweep
-                          ? `demo-hatch-sweep 1800ms ease-out ${
-                              ["dave", "charlie", "bob"].indexOf(hop) * 200
-                            }ms forwards`
-                          : undefined,
-                      }}
-                    />
+                    <div key={hop} className="absolute inset-0">
+                      <div
+                        className="absolute inset-0"
+                        style={{
+                          background: c,
+                          opacity: 0.08,
+                          animation,
+                        }}
+                      />
+                      <div
+                        className="absolute inset-0"
+                        style={{
+                          backgroundImage: `repeating-linear-gradient(${angle}deg, ${c} 0px, ${c} 2.5px, transparent 2.5px, transparent 11px)`,
+                          opacity: 0.6,
+                          animation,
+                        }}
+                      />
+                    </div>
                   );
                 })}
               {/* Single red hatch for error packet */}
               {hatchesVisible && isError && (
-                <div
-                  className="absolute inset-0"
-                  style={{
-                    backgroundImage: `repeating-linear-gradient(135deg, ${ERROR_COLOR}90 0px, ${ERROR_COLOR}90 4px, transparent 4px, transparent 10px)`,
-                    opacity: 1,
-                    animation: hatchSweep
-                      ? `demo-hatch-sweep 1800ms ease-out forwards`
-                      : undefined,
-                  }}
-                />
+                <div className="absolute inset-0">
+                  <div
+                    className="absolute inset-0"
+                    style={{
+                      background: ERROR_COLOR,
+                      opacity: 0.08,
+                      animation: hatchSweep
+                        ? `demo-hatch-sweep 1800ms ease-out forwards`
+                        : undefined,
+                    }}
+                  />
+                  <div
+                    className="absolute inset-0"
+                    style={{
+                      backgroundImage: `repeating-linear-gradient(135deg, ${ERROR_COLOR} 0px, ${ERROR_COLOR} 2.5px, transparent 2.5px, transparent 11px)`,
+                      opacity: 0.6,
+                      animation: hatchSweep
+                        ? `demo-hatch-sweep 1800ms ease-out forwards`
+                        : undefined,
+                    }}
+                  />
+                </div>
               )}
             </div>
           </div>

@@ -1162,25 +1162,41 @@ function ForwardPacketContainer({
                 // sequence is what matters: Bob = 0, Charlie = 33%,
                 // Dave = 66%.
                 const leftPct = hop === "bob" ? 0 : hop === "charlie" ? 33.33 : 66.67;
+                const sweep =
+                  step === 1 && state.forwardLayersVisible
+                    ? `encryption-sweep ${stepDurationMs(step)}ms ease-out forwards`
+                    : undefined;
+                const baseTransition =
+                  step === 1 ? undefined : "opacity 700ms ease-out";
                 return (
                   <div
                     key={`hatch-${hop}-${step}`}
-                    className="absolute"
+                    className="absolute pointer-events-none"
                     style={{
                       top: 0,
                       bottom: 0,
                       left: `${leftPct}%`,
                       right: 0,
-                      backgroundImage: `repeating-linear-gradient(${angle}deg, ${c}A0 0px, ${c}A0 4px, transparent 4px, transparent 10px)`,
                       opacity: state.forwardLayersVisible ? 1 : 0,
-                      animation:
-                        step === 1 && state.forwardLayersVisible
-                          ? `encryption-sweep ${stepDurationMs(step)}ms ease-out forwards`
-                          : undefined,
-                      transition:
-                        step === 1 ? undefined : "opacity 700ms ease-out",
+                      animation: sweep,
+                      transition: baseTransition,
                     }}
-                  />
+                  >
+                    {/* Locked-spec encryption hatch: 8% solid wash + 60%
+                        stripes at 2.5px on an 11px period (matches
+                        WrapPrimer / PeelPrimer / shared HatchOverlay). */}
+                    <div
+                      className="absolute inset-0"
+                      style={{ background: c, opacity: 0.08 }}
+                    />
+                    <div
+                      className="absolute inset-0"
+                      style={{
+                        backgroundImage: `repeating-linear-gradient(${angle}deg, ${c} 0px, ${c} 2.5px, transparent 2.5px, transparent 11px)`,
+                        opacity: 0.6,
+                      }}
+                    />
+                  </div>
                 );
               })}
             </div>

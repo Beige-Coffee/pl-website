@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Tooltip } from "./Tooltip";
+import { LAYER_ANGLES } from "./encryptionHatch";
 
 // ────────────────────────────────────────────────────────────────────────────
 // EncryptedSliceReveal (DRAFT)
@@ -428,15 +429,31 @@ export function EncryptedSliceReveal() {
                           </div>
                         ))}
                       </div>
-                      {/* Diagonal stripe overlay in the hop's key color */}
+                      {/* Locked-spec encryption hatch: per-hop angle so
+                          this intro visual already trains "vertical = Bob's
+                          encryption", "diagonal = Charlie", "horizontal =
+                          Dave" before students hit the layered chapters. */}
                       <div
                         className="absolute inset-0 pointer-events-none"
                         style={{
-                          opacity: decrypted ? 0 : 0.55,
-                          backgroundImage: `repeating-linear-gradient(135deg, ${color} 0px, ${color} 3px, transparent 3px, transparent 7px)`,
+                          opacity: decrypted ? 0 : 1,
+                          background: color,
+                          mixBlendMode: "normal",
                           transition: "opacity 600ms ease-in-out",
                         }}
-                      />
+                      >
+                        <div
+                          className="absolute inset-0"
+                          style={{ background: color, opacity: 0.08 }}
+                        />
+                        <div
+                          className="absolute inset-0"
+                          style={{
+                            backgroundImage: `repeating-linear-gradient(${LAYER_ANGLES[s.forHop]}deg, ${color} 0px, ${color} 2.5px, transparent 2.5px, transparent 11px)`,
+                            opacity: 0.6,
+                          }}
+                        />
+                      </div>
                     </div>
                   </div>
                 );

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Tok } from "./mathTokens";
+import { LAYER_ANGLES } from "./encryptionHatch";
 
 // ────────────────────────────────────────────────────────────────────────────
 // SlicesRecapDiagram (DRAFT)
@@ -279,7 +280,7 @@ function SliceBlock({
           background: decrypted ? `${color}24` : `${color}14`,
           backgroundImage: decrypted
             ? "none"
-            : `repeating-linear-gradient(135deg, ${color}33 0px, ${color}33 6px, transparent 6px, transparent 12px)`,
+            : `repeating-linear-gradient(${LAYER_ANGLES[slice.forHop]}deg, ${color} 0px, ${color} 2.5px, transparent 2.5px, transparent 11px)`,
           transition:
             "background-image 600ms ease-out, background 500ms ease-out",
         }}

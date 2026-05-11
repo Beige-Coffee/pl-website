@@ -201,8 +201,8 @@ export const CHECKPOINT_ANSWER_KEY: Record<string, number | number[]> = {
   "exercise-derive-keys-draft": 0,
   // Chapter 6: The Fixed-Size Packet & Filler (draft)
   "cp-payload-shrink-leak-draft": [0, 1],
-  "cp-filler-purpose-draft": 1,
-  "cp-filler-final-hop-draft": 1,
+  "cp-filler-shared-keystream-draft": 1,
+  "cp-filler-reach-back-draft": 2,
   "exercise-generate-filler-draft": 0,
   // Chapter 7: Wrapping Layer-by-Layer (draft)
   "cp-build-reverse-order-draft": 1,
