@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Tok } from "./mathTokens";
+import { Tok, mathLineToSvgTspans } from "./mathTokens";
 
 // ────────────────────────────────────────────────────────────────────────────
 // KdfPipelineDiagram (DRAFT)
@@ -332,7 +332,7 @@ function renderFormulaBoxes() {
               fill={k.color}
               style={{ fontFamily: MONO }}
             >
-              HMAC("{k.name}", {sourceLabel})
+              {mathLineToSvgTspans(`HMAC('${k.name}', ${sourceLabel})`)}
             </text>
           </g>
         );

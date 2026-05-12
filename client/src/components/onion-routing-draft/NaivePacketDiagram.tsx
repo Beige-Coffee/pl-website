@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Tok } from "./mathTokens";
+import { Tok, MathLine } from "./mathTokens";
 
 // ────────────────────────────────────────────────────────────────────────────
 // NaivePacketDiagram (DRAFT)
@@ -600,14 +600,14 @@ export function NaivePacketDiagram() {
                   </span>
                 </div>
 
-                <div
-                  className="text-[10px] mb-2"
-                  style={{
-                    color: SLATE,
-                    fontFamily: '"JetBrains Mono", "Fira Code", monospace',
-                  }}
-                >
-                  = SHA256(curve_point)
+                <div className="text-[10px] mb-2" style={{ color: SLATE }}>
+                  {"= "}
+                  <MathLine
+                    text="SHA256(curve_point)"
+                    color={SLATE}
+                    fontSize={10}
+                    weight={500}
+                  />
                 </div>
 
                 <div className="flex items-center gap-1.5 mb-1 flex-wrap">

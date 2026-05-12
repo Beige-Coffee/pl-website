@@ -50,6 +50,10 @@ def chacha20_keystream(key, length):
     enc = cipher.encryptor()
     return enc.update(b"\\x00" * length)
 
+def generate_cipher_stream(key, length):
+    """Compatibility alias for older snippets; prefer chacha20_keystream."""
+    return chacha20_keystream(key, length)
+
 def xor_bytes(a, b):
     return bytes(x ^ y for x, y in zip(a, b))
 
@@ -109,8 +113,32 @@ def scalar_mul(scalar_a_bytes, scalar_b_bytes):
 `;
 
 const BUILDER_SETUP = CURVE_HELPERS + `
+import hmac, hashlib
+
 class _OnionPacketBuilderBase:
-    pass
+    """Hidden base providing one helper used by the build exercise.
+
+    _derive_build_keys() does pure HMAC-label key derivation — the same
+    pattern you wrote in the derive_keys exercise (chapter 6). It's packaged
+    here so the build loop stays focused on the conceptual moves (pad-init,
+    reverse loop, filler overlay, final assembly) instead of repeating
+    boilerplate.
+    """
+    def _derive_build_keys(self, payloads):
+        """Returns (rho_keys, mu_keys, pad_key, sizes) ready for the build loop.
+
+        Calls self.derive_shared_secrets() first, then derives rho_i and mu_i
+        for each hop from self.shared_secrets, derives pad_key from
+        self.session_key, and computes the hop-payload sizes list for the filler.
+        """
+        self.derive_shared_secrets()
+        rho_keys = [hmac.new(b"rho", ss, hashlib.sha256).digest()
+                    for ss in self.shared_secrets]
+        mu_keys = [hmac.new(b"mu", ss, hashlib.sha256).digest()
+                   for ss in self.shared_secrets]
+        pad_key = hmac.new(b"pad", self.session_key, hashlib.sha256).digest()
+        sizes = [len(p) + 32 for p in payloads[:-1]]
+        return rho_keys, mu_keys, pad_key, sizes
 `;
 const FORWARDER_SETUP = CURVE_HELPERS;
 // Errors group needs the same helpers (chacha20, xor) from CURVE_HELPERS.
@@ -129,11 +157,15 @@ const BUILDER_PREAMBLE = `# Provided helpers (in scope at runtime):
 #   chacha20_keystream(key: bytes, length: int) -> bytes
 #   xor_bytes(a: bytes, b: bytes) -> bytes
 # Crypto reference: see Noise course /noise-tutorial/crypto-primitives
+#
+# OnionPacketBuilder inherits from _OnionPacketBuilderBase, which provides
+# self._derive_build_keys(payloads) — a boilerplate helper used by the
+# build exercise. The base class is hidden infrastructure; nothing else.
 import hashlib
 
 ROUTING_INFO_SIZE = 1300  # BOLT 4 hop_payloads field length
 
-class OnionPacketBuilder:`;
+class OnionPacketBuilder(_OnionPacketBuilderBase):`;
 
 const FORWARDER_PREAMBLE = `# Provided helpers (in scope at runtime):
 #   privkey_to_pubkey, ecdh, point_mul_pubkey, scalar_mul
@@ -188,7 +220,7 @@ export const ONION_ROUTING_DRAFT_EXERCISE_GROUPS: Record<string, OnionRoutingExe
     label: "sphinx/forwarder.py",
     setupCode: FORWARDER_SETUP,
     preamble: FORWARDER_PREAMBLE,
-    exerciseIds: ["exercise-peel-layer-draft", "exercise-process-onion-draft"],
+    exerciseIds: ["exercise-peel-layer-draft", "exercise-verify-hmac-draft", "exercise-process-onion-draft"],
     crossGroupDependencies: [],
   },
 

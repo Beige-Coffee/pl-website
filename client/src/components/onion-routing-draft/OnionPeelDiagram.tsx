@@ -16,7 +16,7 @@ const MONO = '"JetBrains Mono", "Fira Code", monospace';
 const STEP_CAPTIONS: Record<number, string> = {
   0: "Bob receives the packet. He copies the inbound 1,300-byte hop_payloads field into the front of a 2,600-byte working buffer. The trailing 1,300 bytes start as zeros. None of the bytes are decrypted yet; he doesn't know what's in any of them.",
   1: "Bob generates 2,600 bytes of ChaCha20 keystream from his rho key and XORs it onto the working buffer. The first 1,300 bytes now have the encryption layer removed, Bob's TLV hop payload at the front, Charlie's view in the rest. The trailing 1,300 bytes are now Bob's keystream applied to zeros, exactly the bytes Alice baked into the filler so Charlie's HMAC will line up.",
-  2: "Bob reads his hop payload off the front: the bigsize length, the TLV records, and the next_hmac that points to Charlie's layer. He computes slot_size = bigsize_header + tlv_length + 32. The next packet's hop_payloads is the 1,300-byte window of the working buffer starting at slot_size, sliding the window forward by exactly Bob's hop payload.",
+  2: "Bob reads his hop payload off the front: the bigsize length, the TLV records, and the next_hmac that points to Charlie's layer. He computes hop_size = bigsize_header + tlv_length + 32. The next packet's hop_payloads is the 1,300-byte window of the working buffer starting at hop_size, sliding the window forward by exactly Bob's hop payload.",
   3: "Bob assembles the outgoing packet: version || E_AC (advanced via the blinding chain) || next_hop_payloads || next_hmac. The packet Charlie receives is indistinguishable from one Alice could have built directly for her.",
 };
 

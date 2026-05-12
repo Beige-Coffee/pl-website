@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { HatchOverlay, LAYER_COLORS, type ForwarderId } from "./encryptionHatch";
 import { renderCaption } from "./captionMarkup";
+import { KeyDerivationCard } from "./KeyDerivationCard";
 
 // ────────────────────────────────────────────────────────────────────────────
 // ForwarderPeelDiagram (rebuilt 2026-05-10 for BOLT 4 accuracy)
@@ -108,7 +109,7 @@ const STEPS: StepDef[] = [
     step: 6,
     title: "Bob slices off his hop payload — the rest is Charlie's hop_payloads",
     caption:
-      "Bob drops the first 60 bytes from the XOR result (his plaintext hop payload, including `charlie_hmac` lifted from the TLV). What remains is exactly 1,300 bytes: Charlie's slot at the front, then Dave's, then the encrypted padding, and the last 60 bytes are the new ones the XOR produced. Those 60 bytes are exactly what Alice's filler precomputed.",
+      "Bob drops the first 60 bytes from the XOR result (his plaintext hop payload, including `charlie_hmac` lifted from the TLV). What remains is exactly 1,300 bytes: Charlie's hop payload at the front, then Dave's, then the encrypted padding, and the last 60 bytes are the new ones the XOR produced. Those 60 bytes are exactly what Alice's filler precomputed.",
   },
   {
     step: 7,
@@ -651,308 +652,54 @@ function StepBanner({ def }: { def: StepDef }) {
 // ── Key derivation callout (step 2) ──────────────────────────────────────
 //
 // Mini KDF-pipeline visualization showing only the two keys Bob uses while
-// peeling: rho_B (stream cipher, gold) and mu_B (packet HMAC, blue). The
-// shape — source box → HMAC formula box → key chip — mirrors the full
-// KdfPipelineDiagram from chapter 6 so the visual reads as "this is the
-// same derivation, but just the two Bob needs."
+// peeling: rho_B (stream cipher, gold) and mu_B (packet HMAC, blue). Reuses
+// the shared KeyDerivationCard component so this visual stays consistent
+// with the wrap-direction iteration cards in WrapTraceDiagram.
 
 const RHO_COLOR = "#b8860b";
 const MU_COLOR = "#3b6aa0";
 
-interface KdfRow {
-  formula: string;
-  keyName: string;
-  color: string;
-  useTitle: string;
-  useSubtitle: string;
-}
-
-const BOB_KDF_ROWS: KdfRow[] = [
-  {
-    formula: "HMAC('mu', ss_AB)",
-    keyName: "mu_B",
-    color: MU_COLOR,
-    useTitle: "Packet HMAC key",
-    useSubtitle: "used next, in step 3",
-  },
-  {
-    formula: "HMAC('rho', ss_AB)",
-    keyName: "rho_B",
-    color: RHO_COLOR,
-    useTitle: "Stream cipher key",
-    useSubtitle: "used in step 5 (XOR pass)",
-  },
-];
-
 function KeyDerivationCallout({ step }: { step: number }) {
   if (step !== 2) return null;
   return (
-    <div
-      className="my-4 mx-auto border-[1.5px] overflow-hidden"
-      style={{
-        borderColor: HOP_STROKE_COLOR.bob,
-        background: "#fffdf5",
-        maxWidth: 720,
+    <KeyDerivationCard
+      title="Bob derives two keys from ss_AB"
+      source={{
+        name: "ss_AB",
+        subtitle: "ECDH shared secret",
+        accent: HOP_STROKE_COLOR.bob,
       }}
-    >
-      <div
-        className="px-3 py-1.5 flex items-center gap-2"
-        style={{
-          background: `${HOP_STROKE_COLOR.bob}18`,
-          borderBottom: `1.5px solid ${HOP_STROKE_COLOR.bob}40`,
-        }}
-      >
-        <div
-          className="w-1.5 h-1.5 rounded-full shrink-0"
-          style={{ background: HOP_STROKE_COLOR.bob }}
-        />
-        <span
-          className="text-[10px] uppercase tracking-[0.08em] font-bold"
-          style={{ fontFamily: MONO, color: HOP_STROKE_COLOR.bob }}
-        >
-          Bob derives two keys from ss_AB
-        </span>
-      </div>
-
-      <div className="px-3 py-3">
-        <svg
-          viewBox="0 0 680 150"
-          className="w-full"
-          style={{ fontFamily: "ui-sans-serif, system-ui, sans-serif" }}
-        >
-          {renderKdfSource()}
-          {renderKdfConnectors()}
-          {renderKdfFormulaBoxes()}
-          {renderKdfArrows()}
-          {renderKdfKeyChips()}
-        </svg>
-      </div>
-    </div>
+      upstream={{
+        inputA: {
+          name: "bob_privkey",
+          subtitle: "Bob's static node privkey",
+        },
+        inputB: {
+          name: "E_AB",
+          subtitle: "ephemeral from packet header",
+        },
+        formulaOverride: "SHA256(bob_privkey · E_AB)",
+      }}
+      rows={[
+        {
+          formula: "HMAC('mu', ss_AB)",
+          keyName: "mu_B",
+          bytes: "32 bytes",
+          useTitle: "Packet HMAC key",
+          useSubtitle: "used next, in step 3",
+          color: MU_COLOR,
+        },
+        {
+          formula: "HMAC('rho', ss_AB)",
+          keyName: "rho_B",
+          bytes: "32 bytes",
+          useTitle: "Stream cipher key",
+          useSubtitle: "used in step 5 (XOR pass)",
+          color: RHO_COLOR,
+        },
+      ]}
+    />
   );
-}
-
-// ── KDF mini-pipeline geometry ───────────────────────────────────────────
-
-const KDF_SRC_X = 20;
-const KDF_SRC_W = 140;
-const KDF_SRC_Y = 42;
-const KDF_SRC_H = 66;
-const KDF_SRC_CY = KDF_SRC_Y + KDF_SRC_H / 2;
-const KDF_SRC_RIGHT = KDF_SRC_X + KDF_SRC_W;
-
-const KDF_FORMULA_X = 210;
-const KDF_FORMULA_W = 200;
-const KDF_FORMULA_H = 42;
-const KDF_FORMULA_RIGHT = KDF_FORMULA_X + KDF_FORMULA_W;
-
-const KDF_KEY_X = 450;
-const KDF_KEY_W = 210;
-const KDF_KEY_H = 60;
-
-function kdfRowCY(i: number): number {
-  return i === 0 ? 44 : 106;
-}
-
-function renderKdfSource() {
-  return (
-    <g>
-      <rect
-        x={KDF_SRC_X}
-        y={KDF_SRC_Y}
-        width={KDF_SRC_W}
-        height={KDF_SRC_H}
-        rx={2}
-        fill="#fffdf5"
-        stroke={HOP_STROKE_COLOR.bob}
-        strokeWidth={1.5}
-      />
-      <text
-        x={KDF_SRC_X + KDF_SRC_W / 2}
-        y={KDF_SRC_CY - 4}
-        textAnchor="middle"
-        fontSize={14}
-        fontWeight={700}
-        fill="#0f172a"
-        style={{ fontFamily: MONO }}
-      >
-        ss_AB
-      </text>
-      <text
-        x={KDF_SRC_X + KDF_SRC_W / 2}
-        y={KDF_SRC_CY + 14}
-        textAnchor="middle"
-        fontSize={10}
-        fill={NEUTRAL_TEXT}
-        style={{ fontStyle: "italic" }}
-      >
-        ECDH shared secret
-      </text>
-    </g>
-  );
-}
-
-function renderKdfConnectors() {
-  return (
-    <g>
-      {BOB_KDF_ROWS.map((row, i) => {
-        const targetY = kdfRowCY(i);
-        const cx1 = KDF_SRC_RIGHT + 22;
-        const cx2 = KDF_FORMULA_X - 22;
-        return (
-          <path
-            key={`kdf-conn-${row.keyName}`}
-            d={`M${KDF_SRC_RIGHT},${KDF_SRC_CY} C${cx1},${KDF_SRC_CY} ${cx2},${targetY} ${KDF_FORMULA_X},${targetY}`}
-            fill="none"
-            stroke={row.color}
-            strokeWidth={1.5}
-            opacity={0.85}
-          />
-        );
-      })}
-    </g>
-  );
-}
-
-function renderKdfFormulaBoxes() {
-  return (
-    <g>
-      {BOB_KDF_ROWS.map((row, i) => {
-        const cy = kdfRowCY(i);
-        const y = cy - KDF_FORMULA_H / 2;
-        return (
-          <g key={`kdf-formula-${row.keyName}`}>
-            <rect
-              x={KDF_FORMULA_X}
-              y={y}
-              width={KDF_FORMULA_W}
-              height={KDF_FORMULA_H}
-              rx={2}
-              fill="#fffdf5"
-              stroke={row.color}
-              strokeWidth={1.5}
-            />
-            <text
-              x={KDF_FORMULA_X + KDF_FORMULA_W / 2}
-              y={cy + 5}
-              textAnchor="middle"
-              fontSize={13}
-              fontWeight={700}
-              fill={row.color}
-              style={{ fontFamily: MONO }}
-            >
-              {row.formula}
-            </text>
-          </g>
-        );
-      })}
-    </g>
-  );
-}
-
-function renderKdfArrows() {
-  return (
-    <g>
-      {BOB_KDF_ROWS.map((row, i) => {
-        const y = kdfRowCY(i);
-        const arrowEnd = KDF_KEY_X - 4;
-        return (
-          <g key={`kdf-arrow-${row.keyName}`}>
-            <line
-              x1={KDF_FORMULA_RIGHT}
-              y1={y}
-              x2={arrowEnd - 6}
-              y2={y}
-              stroke={row.color}
-              strokeWidth={1.5}
-            />
-            <polygon
-              points={`${arrowEnd},${y} ${arrowEnd - 8},${y - 4} ${
-                arrowEnd - 8
-              },${y + 4}`}
-              fill={row.color}
-            />
-          </g>
-        );
-      })}
-    </g>
-  );
-}
-
-function renderKdfKeyChips() {
-  return (
-    <g>
-      {BOB_KDF_ROWS.map((row, i) => {
-        const cy = kdfRowCY(i);
-        const y = cy - KDF_KEY_H / 2;
-        const fill = hexToRgbaForKdf(row.color, 0.16);
-        return (
-          <g key={`kdf-chip-${row.keyName}`}>
-            <rect
-              x={KDF_KEY_X}
-              y={y}
-              width={KDF_KEY_W}
-              height={KDF_KEY_H}
-              rx={3}
-              fill={fill}
-              stroke={row.color}
-              strokeWidth={1.5}
-            />
-            <text
-              x={KDF_KEY_X + 14}
-              y={y + 25}
-              fontSize={18}
-              fontWeight={700}
-              fill={row.color}
-              style={{ fontFamily: MONO }}
-            >
-              {row.keyName}
-            </text>
-            <text
-              x={KDF_KEY_X + 14}
-              y={y + 44}
-              fontSize={10}
-              fill={row.color}
-              style={{
-                fontFamily: MONO,
-                fontStyle: "italic",
-                opacity: 0.75,
-              }}
-            >
-              32 bytes
-            </text>
-            <text
-              x={KDF_KEY_X + KDF_KEY_W - 12}
-              y={y + 25}
-              textAnchor="end"
-              fontSize={11}
-              fontWeight={700}
-              fill="#0f172a"
-            >
-              {row.useTitle}
-            </text>
-            <text
-              x={KDF_KEY_X + KDF_KEY_W - 12}
-              y={y + 44}
-              textAnchor="end"
-              fontSize={10}
-              fill={NEUTRAL_TEXT}
-              style={{ fontStyle: "italic" }}
-            >
-              {row.useSubtitle}
-            </text>
-          </g>
-        );
-      })}
-    </g>
-  );
-}
-
-function hexToRgbaForKdf(hex: string, alpha: number): string {
-  const h = hex.replace("#", "");
-  const r = parseInt(h.slice(0, 2), 16);
-  const g = parseInt(h.slice(2, 4), 16);
-  const b = parseInt(h.slice(4, 6), 16);
-  return `rgba(${r},${g},${b},${alpha})`;
 }
 
 // ── Connector arrow ──────────────────────────────────────────────────────
@@ -1779,7 +1526,7 @@ function UnifiedXorPanel({ step }: { step: number }) {
         <>
           <BigSym>=</BigSym>
           <ExtendedBufferRow
-            label="result · Bob's slot is plaintext, last 60 B are new"
+            label="result · Bob's hop payload is plaintext, last 60 B are new"
             layout="post-xor"
             emphasize
           />

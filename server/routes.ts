@@ -175,15 +175,15 @@ export const CHECKPOINT_ANSWER_KEY: Record<string, number | number[]> = {
   // checkpoint IDs to preserve persisted user progress) ─────────────────
   // Intro: Naive plaintext routing leak (draft)
   "cp-naive-plaintext-leak-draft": 2,
-  // Chapter 1: The Privacy Problem (draft)
+  // Chapter 3: The Privacy Problem (draft)
   "cp-privacy-property-draft": 1,
   "cp-still-vulnerable-draft": [1, 2],
-  // Chapter 2: Anatomy of a Route (draft)
+  // Chapter 2: Pathfinding 101 (draft)
   "cp-fees-backward-draft": 1,
   "cp-intermediate-vs-final-draft": 2,
   "cp-channel-update-direction-draft": 1,
   "cp-cheapest-route-draft": 2,
-  // Chapter 3: Shared Secrets per Hop (draft)
+  // Chapter 4: Shared Secrets per Hop (draft)
   "cp-node-key-ecdh-draft": [0, 1, 2],
   "cp-naive-shared-secrets-draft": [0, 2],
   "cp-blinding-public-draft": 1,
@@ -195,28 +195,30 @@ export const CHECKPOINT_ANSWER_KEY: Record<string, number | number[]> = {
   "cp-101-decrypt-buffer-scope-draft": 2,
   "cp-101-destination-signal-draft": 2,
   "cp-101-tamper-detection-draft": 1,
-  // Chapter 4: Key Derivation (draft)
+  // Chapter 6: Key Derivation (draft)
   "cp-key-separation-draft": [0, 1, 2],
   "cp-key-domain-separation-draft": 1,
   "exercise-derive-keys-draft": 0,
-  // Chapter 6: The Fixed-Size Packet & Filler (draft)
+  // Chapter 7: The Fixed-Size Packet & Filler (draft)
   "cp-payload-shrink-leak-draft": [0, 1],
   "cp-filler-shared-keystream-draft": 1,
   "cp-filler-reach-back-draft": 2,
   "exercise-generate-filler-draft": 0,
-  // Chapter 7: Wrapping Layer-by-Layer (draft)
+  // Chapter 8: Wrapping Layer-by-Layer (draft)
   "cp-build-reverse-order-draft": 1,
+  "cp-hmac-commits-to-draft": 1,
   "exercise-wrap-hop-draft": 0,
   "exercise-build-packet-draft": 0,
-  // Chapter 8: Peeling a Layer (draft)
+  // Chapter 9: Peeling a Layer (draft)
   "cp-peel-extended-stream-draft": 2,
+  "cp-peel-next-hmac-draft": 1,
   "exercise-peel-layer-draft": 0,
-  // Chapter 9: Forwarding & Validation (draft)
+  // Chapter 10: Forwarding & Validation (draft)
   "cp-validate-before-decrypt-draft": 1,
   "cp-tlv-final-vs-forward-draft": 1,
   "exercise-verify-hmac-draft": 0,
   "exercise-process-onion-draft": 0,
-  // Chapter 10: The Error Onion (draft)
+  // Chapter 11: The Error Onion (draft)
   "cp-error-trial-decrypt-draft": 1,
   "exercise-build-error-onion-draft": 0,
   "exercise-decrypt-error-onion-draft": 0,

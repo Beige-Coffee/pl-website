@@ -60,6 +60,83 @@ const SNIPPETS: Record<string, Snippet> = {
     python:
       'def generate_key(name: str, secret: bytes) -> bytes:\n    return hmac.new(name.encode(), secret, hashlib.sha256).digest()',
   },
+
+  // ── Chapter 8: wrap algorithm ────────────────────────────────────────────
+  "wrap-pad-init": {
+    python:
+      'pad_key = hmac.new(b"pad", session_key, hashlib.sha256).digest()\nbuffer = bytearray(chacha20_keystream(pad_key, 1300))',
+  },
+
+  "wrap-shift": {
+    python:
+      '# Drop the last hop_size bytes off the right; prepend hop_size bytes of\n# placeholder space at the front. Total length stays at 1300.\nhop_size = len(payload) + 32\nbuffer = bytearray(hop_size) + bytearray(buffer[:-hop_size])',
+  },
+
+  "wrap-write": {
+    python:
+      '# Write the bigsize-prefixed TLV payload followed by the 32-byte next_hmac\n# into the freshly-vacated front.\nbuffer[:len(payload) + 32] = payload + next_hmac',
+  },
+
+  "wrap-xor": {
+    python:
+      '# Encrypt the entire 1,300-byte buffer with this hop\'s rho.\nstream = chacha20_keystream(rho, 1300)\nbuffer = xor_bytes(buffer, stream)',
+  },
+
+  "wrap-filler-overlay": {
+    python:
+      '# Innermost iteration only: overwrite the trailing len(filler) bytes\n# of the buffer with the precomputed filler from chapter 7.\nbuffer = buffer[:1300 - len(filler)] + filler',
+  },
+
+  "wrap-hmac": {
+    python:
+      '# HMAC over (encrypted buffer || associated_data). The 32-byte\n# associated_data is the payment_hash; it binds the onion to one HTLC.\nthis_hop_hmac = hmac.new(mu, buffer + associated_data, hashlib.sha256).digest()',
+  },
+
+  "packet-assemble": {
+    python:
+      '# After the outermost wrap, the buffer is the packet\'s hop_payloads\n# field and the final this_hop_hmac is the packet\'s outer HMAC tag.\npacket = b"\\x00" + ephemeral_pubkey + bytes(buffer) + bob_hmac\n# Total: 1 + 33 + 1300 + 32 = 1366 bytes.',
+  },
+
+  // ── Chapter 9: peel algorithm ────────────────────────────────────────────
+  "peel-parse": {
+    python:
+      '# Split the 1,366-byte packet into its four fields.\nversion = packet[0:1]\nephemeral_pubkey = packet[1:34]      # E_AB · 33 bytes\nhop_payloads = packet[34:1334]       # 1,300 bytes (still encrypted)\nouter_hmac = packet[1334:1366]       # 32 bytes',
+  },
+
+  "peel-derive-keys": {
+    python:
+      '# Bob ECDHs his node privkey with E_AB to recover ss_AB,\n# then derives the two keys he needs for this hop.\nshared_secret = ecdh(node_privkey, ephemeral_pubkey)\nmu_B = generate_key("mu", shared_secret)\nrho_B = generate_key("rho", shared_secret)',
+  },
+
+  "peel-verify-hmac": {
+    python:
+      '# Recompute the HMAC tag and compare against the received outer HMAC.\nexpected = hmac.new(\n    mu_B, hop_payloads + associated_data, hashlib.sha256\n).digest()\nif not hmac.compare_digest(expected, outer_hmac):\n    raise InvalidOnionHmacError()',
+  },
+
+  "peel-extend-xor": {
+    python:
+      '# Extend hop_payloads with 1,300 zero bytes, then XOR the whole\n# 2,600-byte buffer with rho_B\'s keystream.\nextended = bytearray(hop_payloads) + bytearray(1300)\nstream = chacha20_keystream(rho_B, 2600)\nextended = xor_bytes(extended, stream)',
+  },
+
+  "peel-read-payload": {
+    python:
+      '# Parse the bigsize length prefix, then the TLV records, then the\n# 32-byte next_hmac that follows the TLVs.\npayload_len, tlv_start = read_bigsize(extended, 0)\ntlv_end = tlv_start + payload_len\nthis_hop_payload = extended[tlv_start:tlv_end]\nnext_hmac = bytes(extended[tlv_end:tlv_end + 32])\nhop_size = tlv_end + 32  # offset into the buffer where this hop ends',
+  },
+
+  "peel-lift-next": {
+    python:
+      "# The next 1,300 bytes after Bob's hop payload become Charlie's\n# hop_payloads field — same fixed wire size as what Bob received.\nnext_hop_payloads = bytes(extended[hop_size:hop_size + 1300])",
+  },
+
+  "peel-advance-ephemeral": {
+    python:
+      '# Blind Alice\'s ephemeral pubkey forward so Charlie sees a fresh\n# E_AC on the wire. The blinding factor is deterministic, so Charlie\n# can recompute the same ss_AC from his node privkey + E_AC.\nblinding = sha256(ephemeral_pubkey + shared_secret)\nnext_ephemeral = point_mul(ephemeral_pubkey, blinding)',
+  },
+
+  "peel-assemble": {
+    python:
+      '# Bob ships the 1,366-byte packet to Charlie. The next_hmac Bob read\n# from his own hop payload becomes the outer HMAC tag of the outgoing\n# packet.\nnext_packet = b"\\x00" + next_ephemeral + next_hop_payloads + next_hmac',
+  },
 };
 
 // ── Python syntax highlighting ──────────────────────────────────────────────

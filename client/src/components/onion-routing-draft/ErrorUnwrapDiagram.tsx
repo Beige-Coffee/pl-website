@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { MathLine } from "./mathTokens";
 
 // ────────────────────────────────────────────────────────────────────────────
 // ErrorUnwrapDiagram (rebuilt 2026-05-08)
@@ -301,11 +302,13 @@ function Iteration({
           {result === "match" ? "✓ HMAC matches" : "✗ HMAC fails"}
         </div>
       </div>
-      <div
-        className="mt-1 text-[11px]"
-        style={{ color: "#475569", fontFamily: MONO, letterSpacing: "0.02em" }}
-      >
-        XOR with ammag_{hop} → check HMAC(um_{hop}, peeled[32:]) ?= peeled[:32]
+      <div className="mt-1 text-[11px]" style={{ color: "#475569" }}>
+        <MathLine
+          text={`XOR with ammag_${hop} → check HMAC(um_${hop}, peeled[32:]) ?= peeled[:32]`}
+          color="#475569"
+          fontSize={11}
+          weight={500}
+        />
       </div>
     </div>
   );

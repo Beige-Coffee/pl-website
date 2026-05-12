@@ -1,17 +1,19 @@
 import { Fragment, type ReactNode } from "react";
+import { MathLine } from "./mathTokens";
 
 // ────────────────────────────────────────────────────────────────────────────
 // Caption markup renderer
 //
 // Lightweight markdown for caption strings inside onion-routing visuals.
 // Supports two inline tokens:
-//   • `code`     →  monospace pill (JetBrains Mono on cream w/ thin border)
+//   • `code`     →  monospace pill, content routed through MathLine for
+//                   LaTeX-style subscripts and italic single-letter vars
 //   • *italic*   →  <em> (visually italic, or upright if the caption is
 //                   already italic-styled — both read as "emphasized")
 //
 // Use this in any visual that renders captions/descriptions to text. Keeps
 // caption authoring as plain strings while letting protocol identifiers
-// (`rho`, `invalid_onion_hmac`, etc.) and emphasis tokens render correctly.
+// (`mu_B`, `rho_C`, `ss_AB`) render with proper math typography.
 // ────────────────────────────────────────────────────────────────────────────
 
 const MONO = '"JetBrains Mono", "Fira Code", monospace';
@@ -39,7 +41,7 @@ export function renderCaption(text: string): ReactNode {
     ) {
       return (
         <code key={i} style={CODE_STYLE}>
-          {part.slice(1, -1)}
+          <MathLine text={part.slice(1, -1)} inline />
         </code>
       );
     }

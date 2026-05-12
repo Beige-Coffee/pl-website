@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Tok } from "./mathTokens";
+import { Tok, MathLine } from "./mathTokens";
 
 // ────────────────────────────────────────────────────────────────────────────
 // NodeKeyAttemptDiagram (DRAFT)
@@ -458,14 +458,14 @@ export function NodeKeyAttemptDiagram() {
                 </div>
 
                 {/* SHA256 row */}
-                <div
-                  className="text-[10px] mb-2"
-                  style={{
-                    color: "#475569",
-                    fontFamily: '"JetBrains Mono", "Fira Code", monospace',
-                  }}
-                >
-                  = SHA256(curve_point)
+                <div className="text-[10px] mb-2" style={{ color: "#475569" }}>
+                  {"= "}
+                  <MathLine
+                    text="SHA256(curve_point)"
+                    color="#475569"
+                    fontSize={10}
+                    weight={500}
+                  />
                 </div>
 
                 {/* Output row */}

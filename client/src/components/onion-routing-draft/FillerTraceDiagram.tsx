@@ -106,7 +106,7 @@ const STEPS: StepDef[] = [
     iterLabel: "Iteration 1 of 2 (Bob)",
     title: "Append Bob's 60 zero bytes",
     caption:
-      "Bob's slot is 60 bytes wide (a small intermediate-hop TLV plus the 32-byte HMAC). We tack 60 zeros onto the empty filler. They're placeholders for Bob's keystream extension to XOR into.",
+      "Bob's hop payload is 60 bytes wide (a small intermediate-hop TLV plus the 32-byte HMAC). We tack 60 zeros onto the empty filler. They're placeholders for Bob's keystream extension to XOR into.",
   },
   {
     beat: 3,
@@ -139,7 +139,7 @@ const STEPS: StepDef[] = [
     iterLabel: "Iteration 2 of 2 (Charlie)",
     title: "Append Charlie's 80 zero bytes",
     caption:
-      "Charlie's slot is 80 bytes wide, different from Bob's, because hop payloads vary. Tack 80 fresh zero bytes onto the END of the filler. Filler is now 140 bytes: 60 in Bob's encryption layer, plus 80 fresh zeros for Charlie's iteration.",
+      "Charlie's hop payload is 80 bytes wide, different from Bob's, because hop payloads vary. Tack 80 fresh zero bytes onto the END of the filler. Filler is now 140 bytes: 60 in Bob's encryption layer, plus 80 fresh zeros for Charlie's iteration.",
   },
   {
     beat: 7,
@@ -180,7 +180,7 @@ const STEPS: StepDef[] = [
     iterLabel: "Wrap preview · chapter 8",
     title: "Wrap Dave's layer · splice the filler",
     caption:
-      "Iteration 1 (innermost, Dave). Alice writes Dave's slot at the front, XORs the entire buffer with Dave's `rho` keystream, then OVERWRITES the trailing 140 bytes with the filler we just computed. The filler lands at the trailing positions exactly once, on the innermost iteration only.",
+      "Iteration 1 (innermost, Dave). Alice writes Dave's hop payload at the front, XORs the entire buffer with Dave's `rho` keystream, then OVERWRITES the trailing 140 bytes with the filler we just computed. The filler lands at the trailing positions exactly once, on the innermost iteration only.",
   },
   {
     beat: 12,
@@ -188,7 +188,7 @@ const STEPS: StepDef[] = [
     iterLabel: "Wrap preview · chapter 8",
     title: "Wrap Charlie's layer",
     caption:
-      "Iteration 2. Alice shifts the buffer right by Charlie's slot size (80 bytes), writes Charlie's slot at the front, then XORs the entire buffer with Charlie's `rho` keystream. Charlie's slot now carries 1 layer (Charlie). Dave's slot, which was already wrapped, picks up Charlie's hatch on top of Dave's: 2 layers.",
+      "Iteration 2. Alice shifts the buffer right by Charlie's hop-payload size (80 bytes), writes Charlie's hop payload at the front, then XORs the entire buffer with Charlie's `rho` keystream. Charlie's hop payload now carries 1 layer (Charlie). Dave's hop payload, which was already wrapped, picks up Charlie's hatch on top of Dave's: 2 layers.",
   },
   {
     beat: 13,
@@ -196,7 +196,7 @@ const STEPS: StepDef[] = [
     iterLabel: "Wrap preview · chapter 8",
     title: "Wrap Bob's layer",
     caption:
-      "Iteration 3 (outermost). Alice shifts right by Bob's slot size (60 bytes), writes Bob's slot, then XORs with Bob's `rho` keystream. After this final iteration the buffer is fully wrapped: Bob's slot has 1 layer, Charlie's has 2, Dave's has 3.",
+      "Iteration 3 (outermost). Alice shifts right by Bob's hop-payload size (60 bytes), writes Bob's hop payload, then XORs with Bob's `rho` keystream. After this final iteration the buffer is fully wrapped: Bob's hop payload has 1 layer, Charlie's has 2, Dave's has 3.",
   },
   {
     beat: 14,
@@ -1056,14 +1056,14 @@ function DaveWrapView() {
           <HoverTooltip
             content={
               <span>
-                After this wrap iteration the buffer holds Dave's slot
+                After this wrap iteration the buffer holds Dave's hop payload
                 (encrypted by Dave's <code style={{ fontFamily: MONO }}>rho</code>) at the front, the
                 Dave-encrypted middle region, and the spliced filler at the
                 trailing positions.
               </span>
             }
           >
-            Dave's slot · encrypted noise · filler
+            Dave's hop payload · encrypted noise · filler
           </HoverTooltip>
         }
       />
@@ -1194,9 +1194,9 @@ function CharlieWrapView() {
             content={
               <span>
                 Charlie's wrap shifts the buffer right by 80 bytes, writes his
-                slot at the front, then XORs the entire buffer with Charlie's
-                <code style={{ fontFamily: MONO }}> rho</code>. Charlie's slot
-                gets 1 layer (Charlie), Dave's slot picks up Charlie on top of
+                hop payload at the front, then XORs the entire buffer with Charlie's
+                <code style={{ fontFamily: MONO }}> rho</code>. Charlie's hop payload
+                gets 1 layer (Charlie), Dave's hop payload picks up Charlie on top of
                 Dave (2 layers), and the rest of the buffer carries both.
               </span>
             }
@@ -1282,9 +1282,9 @@ function BobWrapView() {
           <HoverTooltip
             content={
               <span>
-                Each wrap shifts the buffer right by that hop's slot size and
+                Each wrap shifts the buffer right by that hop's hop-payload size and
                 XORs with that hop's <code style={{ fontFamily: MONO }}>rho</code>. After Bob's wrap (the
-                outermost), the leading slots have 1, 2, and 3 layers; the
+                outermost), the leading hop payloads have 1, 2, and 3 layers; the
                 trailing pad-noise carries all 3.
               </span>
             }
