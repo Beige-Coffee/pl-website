@@ -57,8 +57,9 @@ export function HoverTip({ children, info }: { children: ReactNode; info: string
             width: TIP_WIDTH,
             zIndex: 50,
             padding: "8px 10px",
-            background: INK,
-            color: "#fffdf5",
+            background: "#fffdf5",
+            color: INK,
+            border: "1.5px solid #0f172a",
             fontSize: 11,
             lineHeight: 1.45,
             fontFamily: "ui-sans-serif, system-ui, sans-serif",
@@ -131,7 +132,7 @@ export function renderMath(token: string): ReactNode {
 
 // ── Math-base allowlist ────────────────────────────────────────────────────
 //
-// Disambiguates math tokens (`mu_B`, `ss_AB`, `b_AB`, `E_AC`) from
+// Disambiguates math tokens (`mu_B`, `ss_AB`, `bf_AB`, `E_AC`) from
 // identifiers that happen to contain underscores (`hop_payloads`,
 // `associated_data`, `payment_hash`). Math tokens get LaTeX-style typography
 // (italic single-letter base, subscripted suffix). Identifiers render
@@ -179,7 +180,7 @@ function renderBase(base: string): { glyph: string; italic: boolean } {
 //
 // Takes a formula string like:
 //   "HMAC(mu_B, hop_payloads ‖ associated_data)"
-//   "b_AB = SHA256(E_AB ‖ ss_AB)"
+//   "bf_AB = SHA256(E_AB ‖ ss_AB)"
 //   "chacha20(rho_B, 2600)"
 //
 // Tokenizes into function calls, math tokens (with Greek substitution and

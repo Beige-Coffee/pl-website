@@ -1,4 +1,10 @@
-import { useRef, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { Tok } from "./mathTokens";
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -12,6 +18,64 @@ import { Tok } from "./mathTokens";
 // ────────────────────────────────────────────────────────────────────────────
 
 const MONO = '"JetBrains Mono", "Fira Code", monospace';
+
+// ── Cross-link with the prose ────────────────────────────────────────────────
+// Hovering a HEADER / PAYLOAD AREA / HMAC TAG term in the chapter text (via the
+// <anatomy-term> inline tag) highlights that region in this diagram and dims
+// the others. The provider wraps the chapter markdown; AnatomyTerm sets the
+// active part; this diagram reads it.
+export type AnatomyPart = "header" | "payload" | "hmac" | null;
+
+const AnatomyHighlightContext = createContext<{
+  part: AnatomyPart;
+  setPart: (p: AnatomyPart) => void;
+}>({ part: null, setPart: () => {} });
+
+export function AnatomyHighlightProvider({ children }: { children: ReactNode }) {
+  const [part, setPart] = useState<AnatomyPart>(null);
+  return (
+    <AnatomyHighlightContext.Provider value={{ part, setPart }}>
+      {children}
+    </AnatomyHighlightContext.Provider>
+  );
+}
+
+export function AnatomyTerm({
+  region,
+  children,
+}: {
+  region: "header" | "payload" | "hmac";
+  children: ReactNode;
+}) {
+  const { setPart } = useContext(AnatomyHighlightContext);
+  const [hovered, setHovered] = useState(false);
+  return (
+    <strong
+      onMouseEnter={() => {
+        setHovered(true);
+        setPart(region);
+      }}
+      onMouseLeave={() => {
+        setHovered(false);
+        setPart(null);
+      }}
+      style={{
+        display: "inline-block",
+        cursor: "help",
+        padding: "0 6px",
+        border: `1.5px solid ${hovered ? "#b8860b" : "rgba(184,134,11,0.5)"}`,
+        background: hovered ? "#fadf97" : "#fef3c7",
+        color: "#0f172a",
+        boxShadow: hovered ? "1.5px 1.5px 0 #b8860b" : "none",
+        transition:
+          "background 150ms ease-out, border-color 150ms ease-out, box-shadow 150ms ease-out",
+        lineHeight: 1.3,
+      }}
+    >
+      {children}
+    </strong>
+  );
+}
 
 const HOP_FILL = {
   bob: "#dbeafe",
@@ -35,37 +99,37 @@ interface Tip {
 
 const HEADER_TIP: Tip = {
   title: "HEADER (34 bytes)",
-  body: "Two fields: a 1-byte version (0x00 for the current Sphinx format) and the 33-byte ephemeral public key for the current hop. The ephemeral pubkey is what each forwarder combines with their own node private key (via ECDH) to derive their shared secret with Alice. Without the header, no shared secret can be derived and the forwarder can't decrypt anything.",
+  body: "Two fields: a 1-byte version (0x00) and the 33-byte ephemeral public key. Each forwarder performs ECDH between this pubkey and its node private key to derive its shared secret with Alice. Without it, nothing decrypts.",
 };
 
 const PAYLOAD_TIP: Tip = {
   title: "PAYLOAD AREA (1,300 bytes)",
-  body: "Fixed-size buffer carrying one TLV hop payload per hop in the route, plus pseudo-random padding to fill the rest. Always 1,300 bytes regardless of how many hops the packet will visit, which hides the route length from anyone who sees the packet on the wire (including the forwarders themselves).",
+  body: "A fixed 1,300-byte buffer: one TLV hop payload per hop, plus pseudo-random padding for the rest. Always the same size whatever the route length, so no one (forwarders included) can tell how long the route is.",
 };
 
 const HMAC_TIP: Tip = {
   title: "HMAC TAG (32 bytes)",
-  body: "Outer authentication tag covering the payload area. The receiving hop computes their own tag using a key derived from their shared secret with Alice, and checks it matches this one before decrypting anything. If it doesn't match, the packet is dropped immediately. The way each hop's HMAC commits to the inner layer is what makes onion routing safe under malicious intermediate hops.",
+  body: "Authentication tag over the payload area. The hop recomputes it from its shared secret with Alice and checks it before decrypting; a mismatch drops the packet. Committing each HMAC to the inner layer is what keeps onion routing safe.",
 };
 
 const SLOT_TIPS: Record<HopId, Tip> = {
   bob: {
-    title: "Bob's hop payload (65 bytes)",
-    body: "First forwarder's TLV record. Carries amt_to_forward, outgoing_cltv_value, and short_channel_id so Bob knows which channel to forward over and how much to send. The hop payload ends with a 32-byte HMAC field holding charlie_hmac. Bob extracts this when he forwards and uses it as the new outer HMAC of the packet he sends to Charlie.",
+    title: "Bob's hop payload (60 bytes)",
+    body: "First forwarder's TLV: amt_to_forward, outgoing_cltv_value, and short_channel_id, so Bob knows where and how much to forward. Ends with a 32-byte HMAC field (charlie_hmac), which Bob lifts into the outer HMAC of the packet he sends Charlie.",
   },
   charlie: {
-    title: "Charlie's hop payload (65 bytes)",
-    body: "Second forwarder's TLV record. Same shape as Bob's: amt_to_forward, outgoing_cltv_value, short_channel_id. The hop payload's HMAC field carries dave_hmac, which Charlie extracts when he forwards to Dave and elevates to the outer tag of the new packet.",
+    title: "Charlie's hop payload (80 bytes)",
+    body: "Second forwarder's TLV, same shape as Bob's. Its HMAC field carries dave_hmac, which Charlie lifts into the outer tag of the packet he forwards to Dave.",
   },
   dave: {
     title: "Dave's hop payload (100 bytes)",
-    body: "Destination's TLV record. Carries amt_to_forward, outgoing_cltv_value, and payment_data (the payment_secret and total_msat that Alice committed to in the invoice). The hop payload's HMAC field is 32 zero bytes, the universal \"you're the destination\" signal that tells Dave to claim the payment instead of forwarding. Larger than the relay hop payloads because payment_data takes more bytes.",
+    body: "Destination's TLV: amt_to_forward, outgoing_cltv_value, and payment_data (payment_secret + total_msat from the invoice). Its HMAC field is 32 zero bytes, the signal that Dave is the destination and should claim the payment, not forward it.",
   },
 };
 
 const PADDING_TIP: Tip = {
   title: "Padding",
-  body: "Pseudo-random bytes filling the rest of the buffer to bring the total payload area to exactly 1,300 bytes. Initialized by Alice via a deterministic stream cipher seeded by the session key. Without this padding, packets earlier in the route would be longer than packets later in the route, and an observer could count hop payloads to figure out where in the route they're looking.",
+  body: "Pseudo-random bytes filling the buffer to exactly 1,300 bytes, generated by Alice from a stream cipher seeded by her session key. Without it, an observer could gauge route position from how much real payload remains.",
 };
 
 const TIP_WIDTH = 320;
@@ -134,11 +198,11 @@ function HoverTip({
             width: TIP_WIDTH,
             zIndex: 50,
             padding: "10px 12px",
-            background: "#0f172a",
-            color: "#fffdf5",
+            background: "#fffdf5",
+            color: "#0f172a",
             fontSize: 11.5,
             lineHeight: 1.5,
-            border: "1.5px solid #b8860b",
+            border: "1.5px solid #0f172a",
             fontFamily: '"JetBrains Mono", "Fira Code", monospace',
             pointerEvents: "none",
           }}
@@ -148,7 +212,7 @@ function HoverTip({
               fontWeight: 700,
               letterSpacing: "0.04em",
               textTransform: "uppercase",
-              color: "#fef3c7",
+              color: "#b8860b",
               fontSize: 10,
               marginBottom: 4,
             }}
@@ -186,8 +250,8 @@ function SlotBlock({
     : hop === "bob"
       ? HOP_STROKE.charlie
       : HOP_STROKE.dave;
-  const slotBytes = isDave ? 100 : 65;
-  const lenHex = isDave ? "0x63" : "0x40";
+  const slotBytes = hop === "dave" ? 100 : hop === "charlie" ? 80 : 60;
+  const lenHex = hop === "dave" ? "0x64" : hop === "charlie" ? "0x50" : "0x3C";
   const hopName = hop[0].toUpperCase() + hop.slice(1);
 
   return (
@@ -371,7 +435,7 @@ function PaddingBlock({ widthPct }: { widthPct: number }) {
             lineHeight: 1,
           }}
         >
-          1,070 bytes
+          1,060 bytes
         </div>
       </div>
     </HoverTip>
@@ -381,6 +445,10 @@ function PaddingBlock({ widthPct }: { widthPct: number }) {
 // ── Main component ─────────────────────────────────────────────────────────
 
 export function OnionPacketAnatomyDiagram() {
+  const { part } = useContext(AnatomyHighlightContext);
+  // Dim a region to 0.2 when a *different* region is hovered from the prose;
+  // full opacity when this region is the hovered one or nothing is hovered.
+  const dim = (id: AnatomyPart) => (part && part !== id ? 0.2 : 1);
   // Hop payload widths inside payload area (% of payload, not total). Sized to
   // give each hop payload real breathing room, the hop payload-internal LEN | name |
   // HMAC layout matches the wrap/peel diagrams. Padding takes whatever
@@ -426,6 +494,8 @@ export function OnionPacketAnatomyDiagram() {
                   flexShrink: 0,
                   borderRight: "1.5px solid #0f172a",
                   background: HEADER_FILL,
+                  opacity: dim("header"),
+                  transition: "opacity 220ms ease-out",
                 }}
               >
                 <div
@@ -519,6 +589,8 @@ export function OnionPacketAnatomyDiagram() {
                   padding: "10px 12px",
                   borderRight: "1.5px solid #0f172a",
                   minWidth: 0,
+                  opacity: dim("payload"),
+                  transition: "opacity 220ms ease-out",
                 }}
               >
                 <HoverTip
@@ -562,6 +634,8 @@ export function OnionPacketAnatomyDiagram() {
                   flexBasis: "13%",
                   flexShrink: 0,
                   background: `${HOP_STROKE.bob}20`,
+                  opacity: dim("hmac"),
+                  transition: "opacity 220ms ease-out",
                 }}
               >
                 <div

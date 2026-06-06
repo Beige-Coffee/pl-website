@@ -62,7 +62,7 @@ function tooltips(mode: Mode) {
       B: "Bob's public key, computed as b · G. Safe to share.",
       G: "The generator point. A fixed point on the elliptic curve known to everyone.",
       shared:
-        "The shared point. Both parties arrive at this value, but neither sent it. An eavesdropper sees A and B but cannot combine them into ab · G without recovering one of the private keys.",
+        "The shared point. Both parties arrive at it without ever sending it. An eavesdropper sees A and B but can't combine them into ab · G without a private key.",
     };
   }
   return {
@@ -72,7 +72,7 @@ function tooltips(mode: Mode) {
     B: "Bob's public key, computed as 5 · G.",
     G: "The generator point. A fixed, well-known point on the elliptic curve.",
     shared:
-      "The shared point. Alice and Bob both arrive at 15 · G because 3 · 5 = 5 · 3. Neither party had to send 15 · G; they each derived it independently.",
+      "The shared point. Both reach 15 · G because 3 · 5 = 5 · 3, and neither had to send it. Each derived it independently.",
   };
 }
 
@@ -125,8 +125,9 @@ function HoverTip({ children, info }: { children: ReactNode; info: string }) {
             width: TIP_WIDTH,
             zIndex: 50,
             padding: "8px 10px",
-            background: INK,
-            color: "#fffdf5",
+            background: "#fffdf5",
+            color: INK,
+            border: "1.5px solid #0f172a",
             fontSize: 11,
             lineHeight: 1.45,
             fontFamily: "ui-sans-serif, system-ui, sans-serif",

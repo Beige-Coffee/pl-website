@@ -102,7 +102,7 @@ const ROW_LABELS = [
 const ROW_TOOLTIPS = [
   "Each hop's ephemeral private scalar. For Bob it IS the session key directly (Alice's randomly generated 32-byte scalar). For Charlie and Dave, it's the previous hop's scalar multiplied by the previous hop's blinding factor.",
   "Multiply the ephemeral private key by G to get the ephemeral public key. Only Bob's E_AB ever travels in the packet; Charlie's and Dave's are computed on the fly.",
-  "Run ECDH between Alice's ephemeral private key and the hop's published node pubkey, then hash. Both Alice and the hop arrive at the same shared secret.",
+  "Perform ECDH between Alice's ephemeral private key and the hop's published node pubkey, then hash. Both Alice and the hop arrive at the same shared secret.",
   "Hash the ephemeral pubkey with the shared secret. The next hop uses this to derive its own ephemeral private key. Dave doesn't compute one (no successor).",
 ];
 

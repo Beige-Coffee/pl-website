@@ -48,7 +48,7 @@ const STEP_CAPTIONS: Record<number, string> = {
   0: "Alice constructs an onion using her published node-identity public key as the sender pubkey. The pubkey rides at the top of the packet in plaintext, because every forwarder needs it to derive a shared secret with her.",
   1: "The packet arrives at Bob. He combines his own private key with Alice's public key to derive ss_AB, then uses ss_AB to decrypt his slice. Notice: the same pubkey lookup also tells him the sender is Alice.",
   2: "Bob peels his slice off the packet and forwards the rest to Charlie. The pubkey field stays intact, so the next hop sees the same Alice key.",
-  3: "Charlie does the same: ECDH against Alice's public key produces ss_AC. He decrypts his slice and learns Alice is the sender for free.",
+  3: "Charlie does the same: ECDH between his node private key and Alice's public key produces ss_AC. He decrypts his slice and learns Alice is the sender for free.",
   4: "Charlie peels his slice off and forwards what remains to Dave.",
   5: "Dave performs ECDH to derive ss_AD and decrypts his slice. The math worked at every hop, but every forwarder along the way deanonymized Alice from the pubkey field that's there for cryptographic reasons.",
 };
@@ -67,7 +67,7 @@ function isRemoved(forHop: "bob" | "charlie" | "dave", step: number): boolean {
   return false;
 }
 
-// Whether a slice is decrypted. Latched on once its hop runs ECDH.
+// Whether a slice is decrypted. Latched on once its hop performs ECDH.
 function isDecrypted(forHop: "bob" | "charlie" | "dave", step: number): boolean {
   if (forHop === "bob") return step >= 1;
   if (forHop === "charlie") return step >= 3;

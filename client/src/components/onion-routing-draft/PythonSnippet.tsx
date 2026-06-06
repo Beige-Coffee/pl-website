@@ -105,7 +105,7 @@ const SNIPPETS: Record<string, Snippet> = {
 
   "peel-derive-keys": {
     python:
-      '# Bob ECDHs his node privkey with E_AB to recover ss_AB,\n# then derives the two keys he needs for this hop.\nshared_secret = ecdh(node_privkey, ephemeral_pubkey)\nmu_B = generate_key("mu", shared_secret)\nrho_B = generate_key("rho", shared_secret)',
+      '# Bob performs ECDH between his node privkey and E_AB to recover ss_AB,\n# then derives the two keys he needs for this hop.\nshared_secret = ecdh(node_privkey, ephemeral_pubkey)\nmu_B = generate_key("mu", shared_secret)\nrho_B = generate_key("rho", shared_secret)',
   },
 
   "peel-verify-hmac": {

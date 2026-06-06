@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Tok, MathLine } from "./mathTokens";
+import { HatchOverlay, singleHatchBackground } from "./encryptionHatch";
 
 // ────────────────────────────────────────────────────────────────────────────
 // NaivePacketDiagram (DRAFT)
@@ -77,9 +78,9 @@ const STEP_CAPTIONS: Record<number, string> = {
   0: "Alice generates a fresh ephemeral keypair for every hop and packs all three pubkeys into the packet, alongside their encrypted slices. Hover the chip under Alice to see the three keypairs she has to keep around.",
   1: "Bob receives the packet. He uses his own private key against E_Bob from his hop payload to derive ss_AB and decrypts his slice. The other two hop payloads (Charlie's and Dave's) are still in the packet and are still pubkeys he doesn't need.",
   2: "Bob's hop payload is now processed. He forwards the packet on to Charlie. Notice the packet still carries E_Charlie and E_Dave: the structure didn't shrink, the cost didn't go away.",
-  3: "Charlie does the same with his hop payload: ECDH against E_Charlie produces ss_AC, and Charlie decrypts his slice.",
+  3: "Charlie does the same with his hop payload: ECDH between his node private key and E_Charlie produces ss_AC, and Charlie decrypts his slice.",
   4: "Charlie's hop payload is processed. The packet keeps moving with E_Dave still in it.",
-  5: "Dave finishes the route. ECDH against E_Dave produces ss_AD and he decrypts his slice. The math worked, but every packet carried three pubkeys, and Alice had to manage three keypairs the whole time.",
+  5: "Dave finishes the route. ECDH between his node private key and E_Dave produces ss_AD and he decrypts his slice. The math worked, but every packet carried three pubkeys, and Alice had to manage three keypairs the whole time.",
 };
 
 function activeHopAt(step: number): HopId {
@@ -423,6 +424,12 @@ export function NaivePacketDiagram() {
                   style={{ color: SLATE }}
                 >
                   <span>ephemeral_pubkeys</span>
+                  <span
+                    className="normal-case tracking-normal"
+                    style={{ color: "#5a7a2f", fontWeight: 700 }}
+                  >
+                    · in the clear
+                  </span>
                   <span className="ml-auto opacity-70 normal-case tracking-normal">
                     3 entries
                   </span>
@@ -503,7 +510,7 @@ export function NaivePacketDiagram() {
                   return (
                     <div
                       key={s.forHop}
-                      className="border-[1.5px] px-2 py-1.5"
+                      className="border-[1.5px] px-2 py-1.5 relative overflow-hidden"
                       style={{
                         borderColor,
                         background,
@@ -511,21 +518,51 @@ export function NaivePacketDiagram() {
                           "background 400ms ease-in-out, border-color 400ms ease-in-out",
                       }}
                     >
+                      {!processed && (
+                        <HatchOverlay
+                          hops={[s.forHop]}
+                          zIndex={1}
+                          stripeOpacity={0.45}
+                        />
+                      )}
                       <div
-                        className="text-[9px] uppercase tracking-wider mb-0.5 flex items-center gap-1"
-                        style={{ color: labelColor }}
+                        className="text-[9px] uppercase tracking-wider mb-0.5 flex items-center gap-1 relative"
+                        style={{ color: labelColor, zIndex: 2 }}
                       >
-                        <span>hop payload for {s.forHop}</span>
-                        <span className="ml-auto opacity-80 normal-case tracking-normal">
+                        <span
+                          style={{
+                            background: processed
+                              ? "transparent"
+                              : "rgba(255,253,245,0.85)",
+                            padding: processed ? 0 : "0 3px",
+                          }}
+                        >
+                          hop payload for {s.forHop}
+                        </span>
+                        <span
+                          className="ml-auto normal-case tracking-normal flex items-center gap-1"
+                          style={{
+                            background: processed
+                              ? "transparent"
+                              : "rgba(255,253,245,0.85)",
+                            padding: processed ? 0 : "0 3px",
+                          }}
+                        >
+                          {!processed && <LockTile tint={labelColor} />}
                           {processed ? "✓ decrypted" : "encrypted"}
                         </span>
                       </div>
                       <div
-                        className="text-[10px] leading-tight"
+                        className="text-[10px] leading-tight relative inline-block"
                         style={{
                           color: INK,
                           letterSpacing: "0.04em",
-                          opacity: processed ? 0.95 : 0.7,
+                          zIndex: 2,
+                          opacity: processed ? 0.95 : 1,
+                          background: processed
+                            ? "transparent"
+                            : "rgba(255,253,245,0.82)",
+                          padding: processed ? 0 : "1px 4px",
                         }}
                       >
                         {processed ? "(plaintext payload)" : s.ciphertext}
@@ -538,7 +575,7 @@ export function NaivePacketDiagram() {
           </div>
 
           {/* ECDH calculation panel beside the packet at active forwarder
-              steps. Each hop runs ECDH with its OWN ephemeral pubkey from
+              steps. Each hop performs ECDH with its OWN ephemeral pubkey from
               the packet (not Alice's pubkey, unlike the first attempt). */}
           {isForwarder && ecdh && (
             <div style={{ width: 280 }}>
@@ -633,6 +670,38 @@ export function NaivePacketDiagram() {
               </div>
             </div>
           )}
+        </div>
+
+        {/* Legend: hatched = encrypted, solid = readable */}
+        <div
+          className="mt-5 flex items-center justify-center gap-5 text-[11px]"
+          style={{ color: SLATE }}
+        >
+          <span className="flex items-center gap-1.5">
+            <span
+              style={{
+                display: "inline-block",
+                width: 18,
+                height: 12,
+                border: `1.5px solid ${HOP_COLORS.bob.stroke}`,
+                backgroundColor: HOP_COLORS.bob.fill,
+                backgroundImage: singleHatchBackground("bob"),
+              }}
+            />
+            encrypted (hatched)
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span
+              style={{
+                display: "inline-block",
+                width: 18,
+                height: 12,
+                border: `1.5px solid ${HOP_COLORS.bob.stroke}`,
+                backgroundColor: HOP_COLORS.bob.fill,
+              }}
+            />
+            readable / in the clear (solid)
+          </span>
         </div>
 
         {/* Bottom callout: both costs scale with route length */}

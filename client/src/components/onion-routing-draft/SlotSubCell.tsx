@@ -27,7 +27,7 @@ const TOOLTIP_CONTENT: Record<SlotSection, { title: string; body: string }> = {
   },
   hmac: {
     title: "Next-hop HMAC",
-    body: "32-byte HMAC-SHA256 tag bound to the next layer of the onion. When this hop forwards, it extracts this tag and writes it into the outer HMAC field of the new packet, so the next hop can verify their own layer before peeling.",
+    body: "32-byte HMAC committing to the inner layer. The forwarder lifts it into the outer HMAC field of the packet it sends on, so the next hop can verify before peeling.",
   },
 };
 
@@ -104,14 +104,14 @@ export function SlotSubCell({
             width: TIP_WIDTH,
             zIndex: 50,
             padding: "10px 12px",
-            background: "#0f172a",
-            color: "#fffdf5",
+            background: "#fffdf5",
+            color: "#0f172a",
             fontSize: 11.5,
             lineHeight: 1.5,
             fontFamily: "ui-sans-serif, system-ui, sans-serif",
             boxShadow: "0 8px 30px rgba(0,0,0,0.25)",
             pointerEvents: "none",
-            border: "1.5px solid #b8860b",
+            border: "1.5px solid #0f172a",
           }}
         >
           <div

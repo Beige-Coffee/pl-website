@@ -140,13 +140,22 @@ function KeyDerivationTooltip({
   const sessionColor = "#7b4b8a";
   const sharedColor = "#b8860b";
 
+  // Clamp horizontally so the 360px card never spills past the viewport edge
+  // (it's centered on the trigger via translateX(-50%)).
+  const TIP_W = 360;
+  const EDGE_MARGIN = 10;
+  const clampedLeft = Math.max(
+    TIP_W / 2 + EDGE_MARGIN,
+    Math.min(window.innerWidth - TIP_W / 2 - EDGE_MARGIN, pos.left),
+  );
+
   return (
     <div
       role="tooltip"
       style={{
         position: "fixed",
         top: pos.top,
-        left: pos.left,
+        left: clampedLeft,
         transform: "translate(-50%, -100%)",
         background: "#fffdf5",
         border: `1.5px solid ${keyColor}`,

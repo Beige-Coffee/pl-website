@@ -26,7 +26,7 @@ export const SNIPPET_VAR_DOCS: Record<string, VarDoc> = {
     name: "filler",
     signature: "bytes",
     description:
-      "The accumulating filler buffer Alice builds up across iterations. Starts as b\"\" (empty), grows by one hop's payload size on each iteration, and ends at s_B + s_C bytes (140 in our running example) once both forwarder iterations have run.",
+      "The accumulating filler buffer Alice builds up across iterations. Starts as b\"\" (empty), grows by one hop's payload size each iteration, and ends at s_B + s_C bytes (140 in our example).",
   },
   s_B: {
     name: "s_B",
@@ -62,7 +62,7 @@ export const SNIPPET_VAR_DOCS: Record<string, VarDoc> = {
     name: "keystream_overlay",
     signature: "bytes",
     description:
-      "The trailing portion of `stream` that gets XORed into the filler. Its length equals len(filler): s_B bytes on Bob's iteration (the keystream's extension past 1,300), and s_B + s_C bytes on Charlie's iteration (the extension plus s_B bytes reaching back into Charlie's regular 1,300 region — exactly where Bob's filler bytes will already be sitting when Charlie peels).",
+      "The trailing portion of `stream` that gets XORed into the filler. Its length equals len(filler): s_B bytes on Bob's iteration (the keystream's extension past 1,300), and s_B + s_C on Charlie's iteration, reaching back into the region where Bob's filler bytes already sit.",
   },
 
   // ── Constants that appear bare in snippets ────────────────────────────
@@ -70,6 +70,6 @@ export const SNIPPET_VAR_DOCS: Record<string, VarDoc> = {
     name: "1,300",
     signature: "ROUTING_INFO_SIZE",
     description:
-      "Per BOLT 4, every onion's hop_payloads field is exactly 1,300 bytes. This constant is the boundary between the 'regular' keystream region (positions 0..1,299) and the 'extension' Bob computes for filler purposes (positions 1,300+).",
+      "Per BOLT 4, every onion's hop_payloads field is exactly 1,300 bytes. It's the boundary between the regular keystream region (0..1,299) and the extension Bob computes for filler (1,300+).",
   },
 };

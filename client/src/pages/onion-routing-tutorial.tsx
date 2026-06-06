@@ -60,7 +60,7 @@ import { PaddingStrategyDiagram } from "../components/onion-routing-draft/Paddin
 import { XorEncryptionDemo } from "../components/onion-routing-draft/XorEncryptionDemo";
 import { WrapPrimerDiagram } from "../components/onion-routing-draft/WrapPrimerDiagram";
 import { PeelPrimerDiagram } from "../components/onion-routing-draft/PeelPrimerDiagram";
-import { OnionPacketAnatomyDiagram } from "../components/onion-routing-draft/OnionPacketAnatomyDiagram";
+import { OnionPacketAnatomyDiagram, AnatomyHighlightProvider, AnatomyTerm } from "../components/onion-routing-draft/OnionPacketAnatomyDiagram";
 import { RouteComparisonDiagram } from "../components/onion-routing-draft/RouteComparisonDiagram";
 import { CltvSafetyLab } from "../components/onion-routing-draft/CltvSafetyLab";
 import { ForwarderPolicyMap } from "../components/onion-routing-draft/ForwarderPolicyMap";
@@ -613,6 +613,12 @@ export const chapters: Chapter[] = [
   },
 ];
 
+// Global chapter number (1-based) keyed by id, matching the file order
+// (1.0 … 15.0). Rendered as a muted prefix on each sidebar title.
+const chapterNumber: Record<string, number> = Object.fromEntries(
+  chapters.map((c, i) => [c.id, i + 1]),
+);
+
 export const sectionOrder: Chapter["section"][] = [
   "Foundations",
   "Cryptography",
@@ -810,6 +816,7 @@ function ChapterContent({
   // Markdown chapters use the full ReactMarkdown pipeline
   return (
     <div className={`noise-md noise-md-${theme}`} data-testid="container-markdown">
+      <AnatomyHighlightProvider>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeRaw, rehypeUnwrapCustomBlockTags, rehypeHighlight]}
@@ -858,6 +865,11 @@ function ChapterContent({
             );
             return <MathTok token={tok} />;
           },
+          // Inline term that cross-highlights the onion-packet-anatomy diagram
+          // on hover: <anatomy-term region="header|payload|hmac">…</anatomy-term>
+          "anatomy-term": ({ region, children }: any) => (
+            <AnatomyTerm region={region}>{children}</AnatomyTerm>
+          ),
           // Handle <checkpoint id="..." /> tags in markdown (custom HTML element)
           checkpoint: ({ id }: any) => {
             const cpId = String(id || "");
@@ -1219,6 +1231,7 @@ function ChapterContent({
       >
         {rewriteTutorialImagePaths(md)}
       </ReactMarkdown>
+      </AnatomyHighlightProvider>
 
       {(() => {
         const reqs = CHAPTER_REQUIREMENTS[chapter.id];
@@ -1634,7 +1647,15 @@ function OnionRoutingDraftTutorialShell({ activeId }: { activeId: string }) {
                                   {isComplete && "\u2713"}
                                 </span>
                               )}
-                              <div className="flex-1 min-w-0 text-[16px] leading-snug" style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>{c.title}</div>
+                              <div className="flex-1 min-w-0 text-[16px] leading-snug" style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
+                                <span
+                                  style={{ display: "inline-block", minWidth: "1.4em", textAlign: "right", opacity: 0.45, fontVariantNumeric: "tabular-nums" }}
+                                >
+                                  {chapterNumber[c.id]}
+                                </span>
+                                <span style={{ opacity: 0.3, margin: "0 0.4em" }}>·</span>
+                                {c.title}
+                              </div>
                             </div>
                           </button>
                         );

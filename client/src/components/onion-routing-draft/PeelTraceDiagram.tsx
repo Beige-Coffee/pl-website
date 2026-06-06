@@ -16,7 +16,7 @@
 //   6.  XOR      — chacha20(rho_B, 2,600) strips Bob's layer + reveals filler
 //   7.  Read     — Bob's hop payload at the front: bigsize | TLV | next_hmac
 //   8.  Lift     — slice bytes 60..1,360 as Charlie's hop_payloads
-//   9.  Advance  — b_AB = SHA256(E_AB ‖ ss_AB); E_AC = b_AB · E_AB
+//   9.  Advance  — bf_AB = SHA256(E_AB ‖ ss_AB); E_AC = bf_AB · E_AB
 //   10. Ship     — assemble + send 1,366-byte packet to Charlie
 //
 // Reuses primitives exported from WrapTraceDiagram (HopTrack, IterationBanner,
@@ -107,7 +107,7 @@ const BEATS: Beat[] = [
     subLabel: "DERIVE",
     title: "Derive `mu_B` and `rho_B` from `ss_AB`",
     caption:
-      "Bob ECDHs his node privkey with `E_AB` to get the same `ss_AB` Alice computed. From `ss_AB`, two HMACs produce the keys Bob needs: `mu_B = HMAC('mu', ss_AB)` for verifying the HMAC tag, and `rho_B = HMAC('rho', ss_AB)` for the 2,600-byte XOR keystream.",
+      "Bob performs ECDH between his node privkey and `E_AB` to get the same `ss_AB` Alice computed. From `ss_AB`, two HMACs produce the keys Bob needs: `mu_B = HMAC('mu', ss_AB)` for verifying the HMAC tag, and `rho_B = HMAC('rho', ss_AB)` for the 2,600-byte XOR keystream.",
   },
   {
     step: 4,
@@ -156,9 +156,9 @@ const BEATS: Beat[] = [
     step: 9,
     iterLabel: "Bob peels",
     subLabel: "ADVANCE",
-    title: "Advance the ephemeral: `E_AC = b_AB · E_AB`",
+    title: "Advance the ephemeral: `E_AC = bf_AB · E_AB`",
     caption:
-      "Bob computes the blinding factor `b_AB = SHA256(E_AB ‖ ss_AB)`, then multiplies Alice's ephemeral pubkey by it to produce `E_AC`. Charlie will combine `E_AC` with his own node privkey to ECDH the same `ss_AC` Alice used. The blinding makes each hop's published ephemeral pubkey look unrelated to the others' on the wire.",
+      "Bob computes the blinding factor `bf_AB = SHA256(E_AB ‖ ss_AB)`, then multiplies Alice's ephemeral pubkey by it to produce `E_AC`. Charlie will combine `E_AC` with his own node privkey to ECDH the same `ss_AC` Alice used. The blinding makes each hop's published ephemeral pubkey look unrelated to the others' on the wire.",
   },
   {
     step: 10,
@@ -1255,7 +1255,7 @@ function EphemeralAdvanceView() {
           />
 
           <FormulaChip
-            text="b_AB = SHA256(E_AB ‖ ss_AB)"
+            text="bf_AB = SHA256(E_AB ‖ ss_AB)"
             sublabel="blinding factor · 32 B scalar"
             accent={FOCUS_GOLD}
           />
@@ -1263,7 +1263,7 @@ function EphemeralAdvanceView() {
           <ArrowGlyph />
 
           <FormulaChip
-            text="E_AC = b_AB · E_AB"
+            text="E_AC = bf_AB · E_AB"
             sublabel="EC scalar multiplication"
             accent={HOP_STROKE.charlie}
           />

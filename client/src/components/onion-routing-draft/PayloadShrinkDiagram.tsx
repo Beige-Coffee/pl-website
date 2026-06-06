@@ -55,6 +55,9 @@ const EPH_PUBKEY_TOKEN: Record<ForwarderId, string> = {
   charlie: "E_AC",
   dave: "E_AD",
 };
+// Realistic per-hop payload sizes (bigsize LEN + TLV + 32-byte HMAC), matching
+// the 60/80/100 used throughout the rest of the chapter.
+const SLOT_BYTES: Record<ForwarderId, number> = { bob: 60, charlie: 80, dave: 100 };
 
 const HOPS: HopId[] = ["alice", "bob", "charlie", "dave"];
 const NODE_X_PCT: Record<HopId, number> = {
@@ -62,6 +65,14 @@ const NODE_X_PCT: Record<HopId, number> = {
   bob: 38,
   charlie: 62,
   dave: 88,
+};
+// The hop each holder forwards to (null for the destination). Used to label
+// the card by the leg it actually shows and to draw the outgoing arrow.
+const NEXT_HOP: Record<HopId, HopId | null> = {
+  alice: "bob",
+  bob: "charlie",
+  charlie: "dave",
+  dave: null,
 };
 
 interface State {
@@ -75,13 +86,18 @@ interface State {
   toHop: HopId;
   // The "outermost" key whose ephemeral pubkey sits in the header right now.
   outerKey: ForwarderId;
+  // Destination has decrypted and claimed its hop payload (final step).
+  decrypted?: boolean;
 }
 
 const STATE_BY_STEP: State[] = [
   {
+    // No fixed size in this hypothetical: the packet is just the 66-byte
+    // envelope (version + ephemeral pubkey + HMAC) plus the stacked hop
+    // payloads (60 + 80 + 100 = 240), so 306 bytes.
     holder: "alice",
     hopPayloads: ["bob", "charlie", "dave"],
-    bytes: 1366,
+    bytes: 306,
     fromHop: null,
     toHop: "alice",
     outerKey: "bob",
@@ -89,7 +105,7 @@ const STATE_BY_STEP: State[] = [
   {
     holder: "bob",
     hopPayloads: ["charlie", "dave"],
-    bytes: 936,
+    bytes: 246,
     fromHop: "alice",
     toHop: "bob",
     outerKey: "charlie",
@@ -97,29 +113,30 @@ const STATE_BY_STEP: State[] = [
   {
     holder: "charlie",
     hopPayloads: ["dave"],
-    bytes: 506,
+    bytes: 166,
     fromHop: "bob",
     toHop: "charlie",
     outerKey: "dave",
   },
   {
-    // Dave is the destination. His hop payload is still present when the packet
-    // arrives (it carries his payment_data). The packet is ~506 bytes,
-    // not empty.
+    // Dave is the destination. The 166-byte packet (envelope + his 100-byte
+    // payload) arrives; he decrypts it, reads the payment_data, and claims the
+    // HTLC. We show it decrypted (no longer an encrypted block to forward).
     holder: "dave",
     hopPayloads: ["dave"],
-    bytes: 506,
+    bytes: 166,
     fromHop: "charlie",
     toHop: "dave",
     outerKey: "dave",
+    decrypted: true,
   },
 ];
 
 const STEP_CAPTIONS: Record<number, string> = {
-  0: "Alice prepares the packet: a 1,366-byte onion holding three encrypted hop payloads (one for Bob, one for Charlie, one for Dave) inside the 1,300-byte hop_payloads field, plus a fixed 66-byte version + ephemeral pubkey + HMAC envelope. Click play to watch the packet travel.",
-  1: "Bob received the packet and decrypted his hop payload off the front. He forwards what's left to Charlie: about 936 bytes. The packet has visibly shrunk.",
-  2: "Charlie does the same: peels his hop payload, forwards what's left. The packet is down to ~506 bytes, just Dave's hop payload remaining inside the envelope.",
-  3: "Dave receives ~506 bytes. Inside is his own hop payload, which carries the payment_data and final amount. He decrypts it and claims the HTLC. Notice that anyone watching the wire could read the byte count at every hop and tell exactly where each forwarder sits in the route.",
+  0: "Without a fixed size, Alice just stacks the three encrypted hop payloads (60, 80, and 100 bytes) behind a fixed 66-byte envelope (version + ephemeral pubkey + HMAC), so this packet is 306 bytes. Click play to watch it travel, and shrink.",
+  1: "Bob received the packet and decrypted his hop payload off the front. He forwards what's left to Charlie: 246 bytes. The packet has visibly shrunk.",
+  2: "Charlie does the same: peels his 80-byte hop payload and forwards what's left. The packet is down to 166 bytes, just Dave's hop payload inside the envelope.",
+  3: "Dave's packet held just his own hop payload (166 bytes on the wire). He decrypts it, reads the payment_data and final amount, and claims the HTLC, the onion is fully unwrapped with nothing left to forward. And notice the real problem this whole section is about: the byte count shrank at every hop, so anyone watching the wire could tell exactly where each forwarder sits in the route.",
 };
 
 const TOTAL_BEATS = 4;
@@ -210,10 +227,10 @@ export function PayloadShrinkDiagram() {
                     borderLeft: "1.5px solid rgba(15,23,42,0.2)",
                   }}
                 >
-                  hop payloads remaining:
+                  {state.decrypted ? "status:" : "hop payloads remaining:"}
                 </span>
-                <span style={{ fontWeight: 700, color: "#0f172a", fontSize: 14 }}>
-                  {state.hopPayloads.length}
+                <span style={{ fontWeight: 700, color: state.decrypted ? "#1f7a4a" : "#0f172a", fontSize: state.decrypted ? 12 : 14 }}>
+                  {state.decrypted ? "✓ decrypted & claimed by Dave" : state.hopPayloads.length}
                 </span>
               </div>
             </div>
@@ -350,6 +367,7 @@ function TravelingPacket({ state }: { state: State }) {
 }
 
 function HopTrack({ state }: { state: State }) {
+  const fwd = NEXT_HOP[state.holder];
   return (
     <div className="relative mb-4" style={{ height: 100 }}>
       {/* Backbone, aligned with the vertical middle of 48px circular nodes */}
@@ -363,14 +381,14 @@ function HopTrack({ state }: { state: State }) {
         }}
       />
 
-      {/* Active arrow segment from previous hop to current holder. */}
-      {state.fromHop && (
+      {/* Active arrow segment from the current holder to the hop it forwards to. */}
+      {fwd && (
         <div
           className="absolute pointer-events-none"
           style={{
             top: 18,
-            left: `calc(${NODE_X_PCT[state.fromHop]}% + 28px)`,
-            width: `calc(${NODE_X_PCT[state.holder] - NODE_X_PCT[state.fromHop]}% - 56px)`,
+            left: `calc(${NODE_X_PCT[state.holder]}% + 28px)`,
+            width: `calc(${NODE_X_PCT[fwd] - NODE_X_PCT[state.holder]}% - 56px)`,
           }}
         >
           <svg
@@ -457,9 +475,10 @@ function ShrinkingOnionContainer({ state }: { state: State }) {
   // Header label, "ONION_ROUTING_PACKET (X → Y)" reflecting the segment
   // the packet has just traversed. At step 0, the packet hasn't moved yet,
   // so we show "AT ALICE" instead.
-  const segmentLabel = state.fromHop
-    ? `${HOP_LABEL[state.fromHop]} → ${HOP_LABEL[state.holder]}`
-    : `at ${HOP_LABEL[state.holder]}`;
+  const nextHop = NEXT_HOP[state.holder];
+  const segmentLabel = nextHop
+    ? `${HOP_LABEL[state.holder]} → ${HOP_LABEL[nextHop]}`
+    : `delivered to ${HOP_LABEL[state.holder]}`;
 
   const outerColor = HOP_KEY_COLORS[state.outerKey];
 
@@ -679,6 +698,26 @@ function LayeredHatches({ hopPayloads }: { hopPayloads: ForwarderId[] }) {
 }
 
 function ShrinkingPayloadInner({ state }: { state: State }) {
+  if (state.decrypted) {
+    return (
+      <div
+        className="relative border-[1.5px] flex"
+        style={{ background: HOP_FILL.dave, borderColor: HOP_STROKE.dave, height: 64 }}
+      >
+        <div className="flex-1 flex flex-col items-center justify-center text-center" style={{ padding: "0 8px" }}>
+          <div style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700, color: HOP_STROKE.dave, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            Dave's payload · 100 B
+          </div>
+          <div style={{ fontFamily: MONO, fontSize: 8.5, color: "#475569", marginTop: 3 }}>
+            payment_data · final amount
+          </div>
+          <div style={{ fontFamily: MONO, fontSize: 9.5, fontWeight: 700, color: "#1f7a4a", marginTop: 5 }}>
+            ✓ decrypted &amp; claimed — nothing to forward
+          </div>
+        </div>
+      </div>
+    );
+  }
   return (
     <div
       className="relative border-[1.5px]"
@@ -712,8 +751,10 @@ function ShrinkingPayloadInner({ state }: { state: State }) {
               return (
                 <div
                   key={forwarder}
-                  className="flex-1 flex"
+                  className="flex"
                   style={{
+                    flexGrow: SLOT_BYTES[forwarder],
+                    flexBasis: 0,
                     borderRight: isLast ? "none" : `1.5px solid ${color}`,
                     minWidth: 0,
                     transition: "all 500ms ease-out",
@@ -761,7 +802,7 @@ function ShrinkingPayloadInner({ state }: { state: State }) {
                       className="relative text-[9px] mt-0.5 opacity-70"
                       style={{ color: "#475569", fontFamily: MONO }}
                     >
-                      TLV
+                      TLV · {SLOT_BYTES[forwarder]} B
                     </div>
                   </SlotSubCell>
 

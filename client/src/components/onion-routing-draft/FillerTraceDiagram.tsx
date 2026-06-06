@@ -781,9 +781,8 @@ function KeystreamBar({
                   ROUTING_INFO_SIZE + payload_sizes[i]
                 </code>{" "}
                 = 1,300 + {sLabel} = {totalLen.toLocaleString()}. The extra{" "}
-                {sLabel} bytes simulate {HOP_LABEL[hop]}'s shift during peeling
-                and produce the bytes that downstream HMACs expect at trailing
-                positions.
+                {sLabel} bytes simulate {HOP_LABEL[hop]}'s shift and produce the
+                bytes downstream HMACs expect at the trailing positions.
               </span>
             }
           >
@@ -1056,10 +1055,9 @@ function DaveWrapView() {
           <HoverTooltip
             content={
               <span>
-                After this wrap iteration the buffer holds Dave's hop payload
-                (encrypted by Dave's <code style={{ fontFamily: MONO }}>rho</code>) at the front, the
-                Dave-encrypted middle region, and the spliced filler at the
-                trailing positions.
+                After this wrap the buffer holds Dave's hop payload (encrypted by
+                Dave's <code style={{ fontFamily: MONO }}>rho</code>) at the front, the
+                Dave-encrypted middle, and the spliced filler at the trailing positions.
               </span>
             }
           >
@@ -1193,11 +1191,10 @@ function CharlieWrapView() {
           <HoverTooltip
             content={
               <span>
-                Charlie's wrap shifts the buffer right by 80 bytes, writes his
-                hop payload at the front, then XORs the entire buffer with Charlie's
-                <code style={{ fontFamily: MONO }}> rho</code>. Charlie's hop payload
-                gets 1 layer (Charlie), Dave's hop payload picks up Charlie on top of
-                Dave (2 layers), and the rest of the buffer carries both.
+                Charlie's wrap shifts the buffer right by 80, writes his hop
+                payload, then XORs with Charlie's
+                <code style={{ fontFamily: MONO }}> rho</code>. Now Charlie's hop payload
+                has 1 layer, Dave's has 2 (Charlie over Dave), and the rest carries both.
               </span>
             }
           >
@@ -1282,10 +1279,9 @@ function BobWrapView() {
           <HoverTooltip
             content={
               <span>
-                Each wrap shifts the buffer right by that hop's hop-payload size and
-                XORs with that hop's <code style={{ fontFamily: MONO }}>rho</code>. After Bob's wrap (the
-                outermost), the leading hop payloads have 1, 2, and 3 layers; the
-                trailing pad-noise carries all 3.
+                Each wrap shifts right by that hop's payload size and XORs with its
+                <code style={{ fontFamily: MONO }}> rho</code>. After Bob's outermost wrap, the
+                hop payloads carry 1, 2, and 3 layers; the trailing pad-noise carries all 3.
               </span>
             }
           >
