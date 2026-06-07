@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { StepCaption } from "./StepCaption";
 
 // ────────────────────────────────────────────────────────────────────────────
 // XorEncryptionDemo, two-tab interactive (rebuild 2026-05-08)
@@ -681,13 +682,19 @@ function AliceTab(props: {
               </>
             )}
           </div>
+        </div>
 
-          {/* Caption */}
-          <div
-            className="text-[12px] leading-relaxed text-center max-w-2xl mt-2 px-2"
-            style={{ color: "#475569" }}
-          >
-            {isAnimating ? (
+        <StepCaption
+          label={
+            isAnimating
+              ? "Alice · encrypting"
+              : encrypted
+                ? "Alice · on the wire"
+                : "Alice · plaintext"
+          }
+          accentColor={ALICE_HOP}
+          caption={
+            isAnimating ? (
               <>
                 <strong style={{ color: ACTIVE_GOLD }}>Encrypting…</strong>{" "}
                 a wave sweeps left to right, XORing each plaintext byte with the keystream byte to produce the ciphertext byte below.
@@ -700,9 +707,9 @@ function AliceTab(props: {
               <>
                 You're looking at <strong style={{ color: "#0f172a" }}>plaintext</strong>: the values are readable and the bytes encode the TLV records directly. Click <strong style={{ color: "#0f172a" }}>Encrypt</strong> to XOR each byte with the rho keystream.
               </>
-            )}
-          </div>
-        </div>
+            )
+          }
+        />
       </div>
     </div>
   );
@@ -876,13 +883,21 @@ function BobTab(props: {
               {decrypted ? "↻ Re-decrypt" : "▶ Decrypt"}
             </button>
           </div>
+        </div>
 
-          {/* Caption */}
-          <div
-            className="text-[12px] leading-relaxed text-center max-w-2xl mt-2 px-2"
-            style={{ color: "#475569" }}
-          >
-            {isAnimating ? (
+        <StepCaption
+          label={
+            isAnimating
+              ? "Bob · decrypting"
+              : decrypted
+                ? "Bob · recovered"
+                : !cipherValid
+                  ? "Bob · awaiting ciphertext"
+                  : "Bob · ready to decrypt"
+          }
+          accentColor={BOB_HOP}
+          caption={
+            isAnimating ? (
               <>
                 <strong style={{ color: ACTIVE_GOLD }}>Decrypting…</strong>{" "}
                 same XOR, applied to the ciphertext. The keystream cancels itself out and the plaintext re-emerges.
@@ -905,9 +920,9 @@ function BobTab(props: {
               <>
                 Ciphertext loaded. Click <strong style={{ color: BOB_HOP }}>Decrypt</strong> to apply the same XOR, XOR is its own inverse, so the plaintext will fall right back out.
               </>
-            )}
-          </div>
-        </div>
+            )
+          }
+        />
 
         {/* Decoded TLV panel, appears after decryption */}
         {decrypted && !isAnimating && (

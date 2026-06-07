@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Tok, MathLine } from "./mathTokens";
 import { MorphBox } from "./morph";
+import { StepCaption } from "./StepCaption";
 
 // ────────────────────────────────────────────────────────────────────────────
 // NodeKeyAttemptDiagram (DRAFT)
@@ -53,6 +54,24 @@ const STEP_CAPTIONS: Record<number, string> = {
   3: "Charlie does the same: ECDH between his node private key and Alice's public key produces ss_AC. He decrypts his slice and learns Alice is the sender for free.",
   4: "Charlie peels his slice off and forwards what remains to Dave.",
   5: "Dave performs ECDH to derive ss_AD and decrypts his slice. The math worked at every hop, but every forwarder along the way deanonymized Alice from the pubkey field that's there for cryptographic reasons.",
+};
+
+const STEP_TITLES: Record<number, string> = {
+  0: "Alice reuses her node pubkey",
+  1: "Bob derives ss_AB and decrypts",
+  2: "Bob peels and forwards to Charlie",
+  3: "Charlie derives ss_AC and decrypts",
+  4: "Charlie peels and forwards to Dave",
+  5: "Dave derives ss_AD and decrypts",
+};
+
+const STEP_LABELS: Record<number, string> = {
+  0: "Step 1 of 6 · Alice · Build",
+  1: "Step 2 of 6 · Bob · Decrypt",
+  2: "Step 3 of 6 · Bob · Forward",
+  3: "Step 4 of 6 · Charlie · Decrypt",
+  4: "Step 5 of 6 · Charlie · Forward",
+  5: "Step 6 of 6 · Dave · Decrypt",
 };
 
 function activeHopAt(step: number): HopId {
@@ -540,6 +559,15 @@ export function NodeKeyAttemptDiagram() {
             )}
           </AnimatePresence>
         </div>
+
+        <div className="mx-auto" style={{ maxWidth: 660 }}>
+          <StepCaption
+            label={STEP_LABELS[step]}
+            title={STEP_TITLES[step]}
+            caption={STEP_CAPTIONS[step]}
+            accentColor={HOP_COLORS[active].stroke}
+          />
+        </div>
       </div>
 
       <div className="px-4 py-3 border-t-[1.5px] border-foreground/30 bg-card">
@@ -583,9 +611,6 @@ export function NodeKeyAttemptDiagram() {
                 </button>
               ))}
             </div>
-          </div>
-          <div className="mt-3 md:mt-0 text-sm leading-relaxed flex-1 max-w-2xl">
-            {STEP_CAPTIONS[step]}
           </div>
         </div>
       </div>

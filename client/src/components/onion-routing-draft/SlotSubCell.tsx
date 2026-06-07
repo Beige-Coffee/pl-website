@@ -1,4 +1,6 @@
 import { useRef, useState, type ReactNode, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
+import { renderCaption } from "./captionMarkup";
 
 // ────────────────────────────────────────────────────────────────────────────
 // SlotSubCell
@@ -23,7 +25,7 @@ const TOOLTIP_CONTENT: Record<SlotSection, { title: string; body: string }> = {
   },
   tlv: {
     title: "TLV payload",
-    body: "Type-Length-Value records carrying this hop's routing instructions: amt_to_forward, outgoing_cltv_value, and short_channel_id (or payment_data for the destination).",
+    body: "Type-Length-Value records carrying this hop's routing instructions: `amt_to_forward`, `outgoing_cltv_value`, and `short_channel_id` (or `payment_data` for the destination).",
   },
   hmac: {
     title: "Next-hop HMAC",
@@ -93,42 +95,45 @@ export function SlotSubCell({
       >
         {children}
       </div>
-      {hovered && (
-        <div
-          role="tooltip"
-          style={{
-            position: "fixed",
-            left: pos.x,
-            top: pos.above ? undefined : pos.y,
-            bottom: pos.above ? window.innerHeight - pos.y : undefined,
-            width: TIP_WIDTH,
-            zIndex: 50,
-            padding: "10px 12px",
-            background: "#fffdf5",
-            color: "#0f172a",
-            fontSize: 11.5,
-            lineHeight: 1.5,
-            fontFamily: "ui-sans-serif, system-ui, sans-serif",
-            boxShadow: "0 8px 30px rgba(0,0,0,0.25)",
-            pointerEvents: "none",
-            border: "1.5px solid #0f172a",
-          }}
-        >
+      {hovered &&
+        typeof document !== "undefined" &&
+        createPortal(
           <div
+            role="tooltip"
             style={{
-              fontSize: 9.5,
-              fontWeight: 700,
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-              color: "#b8860b",
-              marginBottom: 5,
+              position: "fixed",
+              left: pos.x,
+              top: pos.above ? undefined : pos.y,
+              bottom: pos.above ? window.innerHeight - pos.y : undefined,
+              width: TIP_WIDTH,
+              zIndex: 9999,
+              padding: "10px 12px",
+              background: "#fffdf5",
+              color: "#0f172a",
+              fontSize: 11.5,
+              lineHeight: 1.5,
+              fontFamily: "ui-sans-serif, system-ui, sans-serif",
+              boxShadow: "0 8px 30px rgba(0,0,0,0.25)",
+              pointerEvents: "none",
+              border: "1.5px solid #0f172a",
             }}
           >
-            {content.title}
-          </div>
-          <div>{content.body}</div>
-        </div>
-      )}
+            <div
+              style={{
+                fontSize: 9.5,
+                fontWeight: 700,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                color: "#b8860b",
+                marginBottom: 5,
+              }}
+            >
+              {content.title}
+            </div>
+            <div>{renderCaption(content.body)}</div>
+          </div>,
+          document.body,
+        )}
     </>
   );
 }

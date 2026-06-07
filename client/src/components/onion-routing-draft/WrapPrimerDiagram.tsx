@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { SlotSubCell } from "./SlotSubCell";
 import { Tok } from "./mathTokens";
+import { StepCaption } from "./StepCaption";
 
 // ────────────────────────────────────────────────────────────────────────────
 // WrapPrimerDiagram (byte-accurate rebuild 2026-05-08)
@@ -50,9 +51,9 @@ const HOP_LABEL: Record<HopId, string> = {
   dave: "Dave",
 };
 const NEXT_HOP_LABEL: Record<ForwarderId, string> = {
-  bob: "→Charlie",
-  charlie: "→Dave",
-  dave: "0x00…",
+  bob: "for Charlie",
+  charlie: "for Dave",
+  dave: "none",
 };
 const NEXT_HOP_COLOR: Record<ForwarderId, string> = {
   bob: HOP_STROKE.charlie,
@@ -280,8 +281,31 @@ export function WrapPrimerDiagram() {
             {/* HMAC chain indicator */}
             <HmacChainIndicator state={state} />
 
-            {/* Step action panel, explains what the current step is doing */}
-            <StepActionPanel step={step} />
+            {/* Per-step explanation (shared StepCaption, below the visual) */}
+            {(() => {
+              const hop = state.currentHop;
+              const sub = state.currentSubStep;
+              const accent = hop ? HOP_STROKE[hop] : "#475569";
+              let label: string;
+              let title: string;
+              if (hop && sub) {
+                const iter = BUILD_ORDER.indexOf(hop) + 1;
+                const subIdx = SUB_STEPS.indexOf(sub) + 1;
+                label = `Iteration ${iter}: ${HOP_LABEL[hop]} · Sub-step ${subIdx}/3`;
+                title = SUB_STEP_LABEL[sub];
+              } else {
+                label = "Initial state";
+                title = "Initialize the buffer";
+              }
+              return (
+                <StepCaption
+                  label={label}
+                  title={title}
+                  caption={renderCaptionWithCode(captionForStep(step))}
+                  accentColor={accent}
+                />
+              );
+            })()}
           </div>
         </div>
       </div>
@@ -610,7 +634,7 @@ function DetailedPacket({ state, step }: { state: BuildState; step: number }) {
                   color: HOP_STROKE.bob,
                 }}
               >
-                → Bob
+                for Bob
               </span>
               <span
                 className="text-[8.5px] opacity-60 mt-0.5"
@@ -1006,7 +1030,7 @@ function SlotCell({ hop }: { hop: ForwarderId }) {
               fontStyle: "italic",
             }}
           >
-            TLV ({SLOT_BYTES[hop] - 33} B)
+            {SLOT_BYTES[hop]} bytes
           </div>
         </div>
       </SlotSubCell>
@@ -1150,63 +1174,6 @@ function renderCaptionWithCode(text: string) {
     }
     return <span key={i}>{part}</span>;
   });
-}
-
-// ── Step action panel, prose explanation of the current step ──────────────
-
-function StepActionPanel({ step }: { step: number }) {
-  const state = buildStateAtStep(step);
-  const hop = state.currentHop;
-  const sub = state.currentSubStep;
-  const accent = hop ? HOP_STROKE[hop] : "#475569";
-
-  // Header text combines iteration + sub-step (the info that used to live in
-  // the now-removed top SubStepIndicator).
-  let headerText: string;
-  if (hop && sub) {
-    const iter = BUILD_ORDER.indexOf(hop) + 1;
-    const subIdx = SUB_STEPS.indexOf(sub) + 1;
-    headerText = `Iteration ${iter}: ${HOP_LABEL[hop]} · Sub-step ${subIdx}/3 · ${SUB_STEP_LABEL[sub]}`;
-  } else {
-    headerText = "Initial state";
-  }
-
-  return (
-    <div
-      className="border-[1.5px]"
-      style={{
-        background: "#fffdf5",
-        borderColor: "rgba(15,23,42,0.25)",
-        borderLeft: `3px solid ${accent}`,
-      }}
-    >
-      <div
-        className="px-3 py-1.5 border-b-[1.5px]"
-        style={{
-          borderColor: "rgba(15,23,42,0.15)",
-          background: hop ? HOP_FILL[hop] : "#f1f5f9",
-        }}
-      >
-        <span
-          className="text-[10px] uppercase tracking-[0.08em] font-bold"
-          style={{ fontFamily: MONO, color: "#0f172a" }}
-        >
-          {headerText}
-        </span>
-      </div>
-      <div
-        className="px-3 py-2.5"
-        style={{
-          fontFamily: "ui-sans-serif, system-ui, sans-serif",
-          fontSize: 12.5,
-          lineHeight: 1.7,
-          color: "#0f172a",
-        }}
-      >
-        {renderCaptionWithCode(captionForStep(step))}
-      </div>
-    </div>
-  );
 }
 
 // ── Step buttons grouped under iteration headers ───────────────────────────

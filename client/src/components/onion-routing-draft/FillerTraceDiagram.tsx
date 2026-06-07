@@ -4,8 +4,9 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import { HatchOverlay, LAYER_COLORS, type ForwarderId } from "./encryptionHatch";
-import { renderCaption } from "./captionMarkup";
+import { StepCaption } from "./StepCaption";
 import { MorphBox, CrossfadeSwap } from "./morph";
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -248,30 +249,33 @@ function HoverTooltip({
       >
         {children}
       </span>
-      {show && (
-        <div
-          style={{
-            position: "fixed",
-            left: pos.x,
-            top: pos.y - 8,
-            transform: "translate(-50%, -100%)",
-            background: "#fffdf5",
-            color: INK,
-            fontFamily: SANS,
-            fontSize: 14,
-            lineHeight: 1.5,
-            padding: "12px 14px",
-            border: "1.5px solid #0f172a",
-            borderRadius: 4,
-            maxWidth: 360,
-            boxShadow: "0 8px 30px rgba(0,0,0,0.25)",
-            zIndex: 50,
-            pointerEvents: "none",
-          }}
-        >
-          {content}
-        </div>
-      )}
+      {show &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            style={{
+              position: "fixed",
+              left: pos.x,
+              top: pos.y - 8,
+              transform: "translate(-50%, -100%)",
+              background: "#fffdf5",
+              color: INK,
+              fontFamily: SANS,
+              fontSize: 14,
+              lineHeight: 1.5,
+              padding: "12px 14px",
+              border: "1.5px solid #0f172a",
+              borderRadius: 4,
+              maxWidth: 360,
+              boxShadow: "0 8px 30px rgba(0,0,0,0.25)",
+              zIndex: 9999,
+              pointerEvents: "none",
+            }}
+          >
+            {content}
+          </div>,
+          document.body,
+        )}
     </>
   );
 }
@@ -303,6 +307,14 @@ export function FillerTraceDiagram() {
   };
 
   const def = STEPS[step - 1];
+  // Accent the description block by the active hop's encryption color, falling
+  // back to gold for the wrap-preview beats (which have no single hop).
+  const beatAccent =
+    def.hop === "bob"
+      ? LAYER_COLORS.bob
+      : def.hop === "charlie"
+        ? LAYER_COLORS.charlie
+        : FOCUS_GOLD;
 
   return (
     <div
@@ -324,8 +336,13 @@ export function FillerTraceDiagram() {
         <div className="overflow-x-auto">
           <div className="mx-auto" style={{ minWidth: 680, maxWidth: 840 }}>
             <HopTrack activeHop={def.hop} />
-            <IterationBanner def={def} />
             <StepContent step={step} />
+            <StepCaption
+              label={def.iterLabel}
+              title={def.title}
+              caption={def.caption}
+              accentColor={beatAccent}
+            />
           </div>
         </div>
       </div>
@@ -374,12 +391,6 @@ export function FillerTraceDiagram() {
                 );
               })}
             </div>
-          </div>
-          <div
-            className="mt-3 md:mt-0 text-sm leading-relaxed flex-1 max-w-2xl"
-            style={{ color: INK }}
-          >
-            {renderCaption(def.caption)}
           </div>
         </div>
       </div>
@@ -484,37 +495,6 @@ function HopTrack({ activeHop }: { activeHop: StepHop }) {
           </div>
         );
       })}
-    </div>
-  );
-}
-
-// ── Iteration banner ───────────────────────────────────────────────────────
-
-function IterationBanner({ def }: { def: StepDef }) {
-  const accent: string =
-    def.hop === "bob"
-      ? LAYER_COLORS.bob
-      : def.hop === "charlie"
-        ? LAYER_COLORS.charlie
-        : FOCUS_GOLD;
-  return (
-    <div className="mb-3 flex items-baseline justify-between gap-4 flex-wrap">
-      <span
-        className="text-[10px] uppercase tracking-[0.1em]"
-        style={{
-          fontFamily: MONO,
-          color: accent,
-          fontWeight: 700,
-        }}
-      >
-        {def.iterLabel}
-      </span>
-      <div
-        className="text-base font-bold"
-        style={{ color: INK, fontFamily: SANS }}
-      >
-        {renderCaption(def.title)}
-      </div>
     </div>
   );
 }

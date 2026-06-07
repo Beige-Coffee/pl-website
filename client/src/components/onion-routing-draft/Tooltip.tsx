@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 // ────────────────────────────────────────────────────────────────────────────
 // Tooltip (DRAFT)
@@ -55,26 +56,29 @@ export function Tooltip({ label, children, width = 280 }: TooltipProps) {
       >
         {children}
       </span>
-      {pos && (
-        <div
-          className="fixed z-[60] px-3 py-2 border-[1.5px] text-[11px] leading-relaxed pointer-events-none"
-          style={{
-            left: pos.x,
-            top: pos.y,
-            transform: pos.flipped
-              ? "translate(-50%, 0)"
-              : "translate(-50%, -100%)",
-            width,
-            background: "#fffdf5",
-            borderColor: INK,
-            color: INK,
-            boxShadow: "0 8px 30px rgba(0,0,0,0.25)",
-            fontFamily: "ui-sans-serif, system-ui, sans-serif",
-          }}
-        >
-          {label}
-        </div>
-      )}
+      {pos &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            className="fixed z-[9999] px-3 py-2 border-[1.5px] text-[11px] leading-relaxed pointer-events-none"
+            style={{
+              left: pos.x,
+              top: pos.y,
+              transform: pos.flipped
+                ? "translate(-50%, 0)"
+                : "translate(-50%, -100%)",
+              width,
+              background: "#fffdf5",
+              borderColor: INK,
+              color: INK,
+              boxShadow: "0 8px 30px rgba(0,0,0,0.25)",
+              fontFamily: "ui-sans-serif, system-ui, sans-serif",
+            }}
+          >
+            {label}
+          </div>,
+          document.body,
+        )}
     </>
   );
 }

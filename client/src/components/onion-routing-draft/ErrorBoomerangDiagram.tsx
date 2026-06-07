@@ -1,54 +1,102 @@
 import { useEffect, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
-import { MORPH_TRANSITION } from "./morph";
+import {
+  KeyDerivationCard,
+  KeyHoverIcon,
+  type KeyDerivationCardProps,
+} from "./KeyDerivationCard";
+import {
+  ErrorChrome,
+  ErrorPacketCard,
+  ErrorRouteTrack,
+  ReturnPathRail,
+  SUCCESS_GREEN,
+  ERROR_RED,
+  INK,
+  MONO,
+  NODE_X_PCT,
+  HOP_STROKE,
+  type HopId,
+} from "./errorOnionShared";
 
 // ────────────────────────────────────────────────────────────────────────────
-// ErrorBoomerangDiagram (rebuilt 2026-05-08)
+// ErrorBoomerangDiagram (rebuilt 2026-06-07)
 //
-// Animated trace of an error wrapping its way back from Charlie (failing
-// hop) → Bob → Alice. Each beat shows the additional ammag layer that's
-// XORed on top, with the wrapped error rendered as a stack of layered
-// strips colored by which hop's keystream applied.
+// The error onion wraps BACKWARD. Charlie fails the payment, builds a fixed
+// 292-byte error packet, and each upstream hop re-obfuscates the SAME buffer
+// with its own ammag keystream until the packet reaches the sender (Alice).
+// Path of the wrap: Charlie → Bob → Alice (Dave is dimmed -- it's off the
+// failure path but shown for route continuity).
 //
-// Visual style follows the locked onion-routing format spec.
+// The crypto invariant this visual teaches: the packet is FIXED SIZE. Every
+// ammag layer XOR-re-obfuscates the same 292 bytes in place, so the packet
+// card NEVER grows -- only the crosshatch density does (more layers = more
+// crosshatch over the identical footprint). The earlier build grew the box
+// taller per layer, which contradicted the "292 B fixed" caption; that bug
+// is the whole reason this was rebuilt.
+//
+// Per-beat key disclosure follows §7: a full KeyDerivationCard on the beat a
+// key is first introduced, then the compact KeyHoverIcon on later beats.
 // ────────────────────────────────────────────────────────────────────────────
-
-const MONO = '"JetBrains Mono", "Fira Code", monospace';
-
-type HopId = "alice" | "bob" | "charlie";
-
-const HOP_FILL: Record<HopId, string> = {
-  alice: "#fef3c7",
-  bob: "#dbeafe",
-  charlie: "#ccece8",
-};
-const HOP_STROKE: Record<HopId, string> = {
-  alice: "#b8860b",
-  bob: "#3b6aa0",
-  charlie: "#2d7a7a",
-};
-const HOP_LABEL: Record<HopId, string> = {
-  alice: "Alice",
-  bob: "Bob",
-  charlie: "Charlie",
-};
-
-const HOPS: HopId[] = ["alice", "bob", "charlie"];
-const NODE_X_PCT: Record<HopId, number> = {
-  alice: 14,
-  bob: 50,
-  charlie: 86,
-};
 
 const TOTAL_BEATS = 5;
+const STEP_MS = 2200;
 
-const STEP_CAPTIONS: Record<number, string> = {
-  0: "Charlie has decided to fail this payment with `temporary_channel_failure`. He needs to send the failure code back to Alice without leaking any information to Bob along the way.",
-  1: "Charlie builds the unencrypted error packet: a 32-byte HMAC tag (computed with his um key over the failure payload) followed by the 260-byte length-prefixed payload. 292 bytes total.",
-  2: "Charlie XORs the 292-byte packet with his ammag keystream and sends the result back upstream to Bob. Bob can't read it; he doesn't have Charlie's ammag.",
-  3: "Bob doesn't try to decode the bytes he received. He just XORs them with his own ammag keystream, adding another encryption layer, and sends the result upstream to Alice.",
-  4: "Alice receives 292 bytes that have been XORed with Bob's ammag and Charlie's ammag, in that order from outside in. She'll peel them in chapter 11's algorithm: Bob's layer first, then Charlie's, until she finds the layer whose um HMAC verifies.",
+const CAPTIONS: Record<number, string> = {
+  0: "Charlie has decided to fail this payment with `temporary_channel_failure`. He needs to get that failure back to Alice without leaking anything to Bob on the way. The error will travel backward along the route, the mirror image of the forward onion.",
+  1: "Charlie builds the unencrypted error packet: a 32-byte HMAC (computed with his `um_charlie` key over the payload) followed by the 260-byte length-prefixed payload. That's 292 bytes, and it stays 292 bytes the whole way back.",
+  2: "Charlie XORs the 292-byte packet with his `ammag_charlie` keystream and sends it upstream to Bob. Notice the packet doesn't grow: encryption is an in-place XOR, so the crosshatch appears over the same bytes.",
+  3: "Bob doesn't try to read what he received (he has no `ammag_charlie`). He just XORs the same 292 bytes with his own `ammag_bob`, adding a second layer. Two angles now crosshatch over the identical footprint, and he ships it to you (Alice).",
+  4: "You receive 292 bytes wrapped in Bob's layer (outermost) over Charlie's (innermost). The packet never changed size. Next you'll peel the layers in route order, checking each hop's HMAC until one verifies, in the trial-decrypt visual below.",
 };
+
+// Per-beat StepCaption header label + title (the short verdict the
+// IterationBanner used to carry above the visual; now in the block below it).
+const STEP_LABELS: Record<number, string> = {
+  0: "Charlie · DECIDE",
+  1: "Charlie · BUILD",
+  2: "Charlie · WRAP",
+  3: "Bob · WRAP",
+  4: "Alice · RECEIVE",
+};
+const STEP_TITLES: Record<number, string> = {
+  0: "Charlie fails the payment",
+  1: "Build the 292-byte error packet",
+  2: "Charlie wraps with `ammag_charlie`",
+  3: "Bob adds his `ammag_bob` layer",
+  4: "The error reaches you, still 292 bytes",
+};
+
+// Accent color for the StepCaption block. Color-matched to the acting hop, with
+// the return-path green (§2) on the beat the error lands back at the sender.
+// Kept consistent with ErrorUnwrapDiagram.
+function accentFor(step: number): string {
+  if (step <= 2) return HOP_STROKE.charlie;
+  if (step === 3) return HOP_STROKE.bob;
+  return SUCCESS_GREEN; // step 4: returned to Alice (return-path framing)
+}
+
+// Which hop is holding the packet on each beat (drives the horizontal slide).
+function packetHopFor(step: number): HopId {
+  if (step <= 2) return "charlie";
+  if (step === 3) return "bob";
+  return "alice";
+}
+
+// ammag layers applied to the packet on each beat (outermost-first).
+function appliedLayersFor(step: number): ("bob" | "charlie")[] {
+  if (step <= 1) return [];
+  if (step === 2) return ["charlie"];
+  return ["bob", "charlie"];
+}
+
+// Backward hop-to-hop arrow shown on the travelling beats.
+function arrowFor(step: number): { from: HopId; to: HopId } | null {
+  if (step === 2) return { from: "charlie", to: "bob" };
+  if (step === 3) return { from: "bob", to: "alice" };
+  return null;
+}
+
+const STAGE_MIN_WIDTH = 640;
 
 export function ErrorBoomerangDiagram() {
   const [step, setStep] = useState(0);
@@ -60,326 +108,311 @@ export function ErrorBoomerangDiagram() {
       setPlaying(false);
       return;
     }
-    const t = setTimeout(() => setStep((s) => s + 1), 2200);
+    const t = setTimeout(() => setStep((s) => s + 1), STEP_MS);
     return () => clearTimeout(t);
   }, [playing, step]);
 
-  const play = () => {
+  const onPlayPause = () => {
+    if (playing) {
+      setPlaying(false);
+      return;
+    }
     if (step >= TOTAL_BEATS - 1) setStep(0);
     setPlaying(true);
   };
-  const pause = () => setPlaying(false);
-  const reset = () => {
+  const onReset = () => {
     setStep(0);
     setPlaying(false);
   };
+  const onStep = (i: number) => {
+    setPlaying(false);
+    setStep(i);
+  };
 
-  // Derived state: where is the packet right now, and what layers are on it?
-  // step 0: idle (Charlie is failing, no packet yet)
-  // step 1: at Charlie, plaintext (32B HMAC + 260B payload)
-  // step 2: at Charlie, after XOR with ammag_charlie (sending to Bob)
-  // step 3: at Bob, after XOR with ammag_bob (sending to Alice)
-  // step 4: at Alice
-  const packetLocationPct =
-    step === 0 || step === 1 || step === 2
-      ? NODE_X_PCT.charlie
-      : step === 3
-        ? NODE_X_PCT.bob
-        : NODE_X_PCT.alice;
-
-  const arrowFromTo: { from: HopId; to: HopId } | null =
-    step === 2
-      ? { from: "charlie", to: "bob" }
-      : step === 3
-        ? { from: "bob", to: "alice" }
-        : null;
+  const packetHop = packetHopFor(step);
+  const appliedLayers = appliedLayersFor(step);
+  const arrow = arrowFor(step);
+  const packetVisible = step >= 1;
 
   return (
-    <div
-      className="my-8 border-[1.5px] border-foreground/40 bg-card overflow-hidden"
-      data-testid="onion-error-boomerang"
-      style={{ fontFamily: "ui-sans-serif, system-ui, sans-serif" }}
+    <ErrorChrome
+      testId="onion-error-boomerang"
+      title="Error onion wraps backward"
+      totalBeats={TOTAL_BEATS}
+      step={step}
+      playing={playing}
+      caption={CAPTIONS[step]}
+      stepLabel={STEP_LABELS[step]}
+      stepTitle={STEP_TITLES[step]}
+      accentColor={accentFor(step)}
+      onPlayPause={onPlayPause}
+      onReset={onReset}
+      onStep={onStep}
+      stageMinWidth={STAGE_MIN_WIDTH}
+      stageMinHeight={430}
     >
-      {/* Header */}
-      <div className="bg-black text-white px-4 py-2 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-1.5 h-1.5 rounded-full bg-[#b8860b]" />
-          <span className="text-sm font-bold tracking-[0.08em] uppercase">
-            Error onion wraps backward
+      {/* Persistent leftward RETURN PATH rail -- direction is unmistakable on
+          EVERY beat, not only the two with a hop-to-hop arrow. */}
+      <div className="mb-2">
+        <ReturnPathRail />
+      </div>
+
+      {/* Route track + the travelling packet share one positioned canvas so
+          the packet can slide horizontally to whichever hop holds it. */}
+      <div className="relative" style={{ minHeight: 200 }}>
+        <ErrorRouteTrack
+          activeHop={packetHop}
+          failingHop="charlie"
+          dimmed={["dave"]}
+        />
+
+        {/* Backward hop-to-hop arrow on the travelling beats. */}
+        {arrow && <BackwardArrow from={arrow.from} to={arrow.to} />}
+
+        {/* The packet. Persistent element (mounted from step 0) so it slides
+            and gains hatch in place rather than popping per beat. */}
+        <div
+          className="absolute"
+          style={{
+            top: 104,
+            left: `${NODE_X_PCT[packetHop]}%`,
+            transform: "translateX(-50%)",
+            width: 460,
+            transition: "left 700ms cubic-bezier(0.4,0,0.2,1), opacity 400ms ease-out",
+            opacity: packetVisible ? 1 : 0,
+            pointerEvents: packetVisible ? "auto" : "none",
+          }}
+        >
+          <ErrorPacketCard
+            appliedLayers={appliedLayers}
+            failingHop="charlie"
+            cornerSlot={<BoomerangCornerKeys step={step} />}
+          />
+        </div>
+      </div>
+
+      {/* Key-derivation zone below the packet. A full card on the beat a key
+          is first introduced (§7); collapses to KeyHoverIcon afterward (the
+          compact badges ride along on the packet's top-right corner). */}
+      <div className="mt-3" style={{ minHeight: 156 }}>
+        <BoomerangKeyZone step={step} />
+      </div>
+    </ErrorChrome>
+  );
+}
+
+// ── Backward arrow between two hops on the track ────────────────────────────
+
+function BackwardArrow({ from, to }: { from: HopId; to: HopId }) {
+  // Arrow drawn between the two circle centers (the track sits at top ~40px).
+  const x1 = NODE_X_PCT[from];
+  const x2 = NODE_X_PCT[to];
+  const markerId = `boomerang-arrow-${from}-${to}`;
+  return (
+    <svg
+      className="absolute pointer-events-none"
+      style={{ left: 0, top: 0, width: "100%", height: 84 }}
+    >
+      <defs>
+        <marker
+          id={markerId}
+          viewBox="0 0 10 10"
+          refX="8"
+          refY="5"
+          markerWidth="8"
+          markerHeight="8"
+          orient="auto"
+        >
+          <path d="M 0 0 L 10 5 L 0 10 z" fill={ERROR_RED} />
+        </marker>
+      </defs>
+      <line
+        x1={`calc(${x1}% - 26px)`}
+        y1={40}
+        x2={`calc(${x2}% + 26px)`}
+        y2={40}
+        stroke={ERROR_RED}
+        strokeWidth={2}
+        markerEnd={`url(#${markerId})`}
+        style={{ transition: "all 600ms ease-in-out" }}
+      />
+      <text
+        x={`${(x1 + x2) / 2}%`}
+        y={30}
+        textAnchor="middle"
+        fontSize={9}
+        fontWeight={700}
+        fill={ERROR_RED}
+        fontFamily={MONO}
+        style={{ letterSpacing: "0.04em", textTransform: "uppercase" }}
+      >
+        error
+      </text>
+    </svg>
+  );
+}
+
+// ── Compact key badges that ride on the packet's corner (later beats) ───────
+
+function BoomerangCornerKeys({ step }: { step: number }) {
+  // Beat 3: Charlie's keys have been introduced, collapse to a hover badge
+  // while Bob's full card shows below. Beat 4: both ammag keys are compact.
+  if (step === 3) {
+    return <CharlieAmmagIcon />;
+  }
+  if (step === 4) {
+    return (
+      <div className="flex gap-1.5">
+        <BobAmmagIcon />
+        <CharlieAmmagIcon />
+      </div>
+    );
+  }
+  return null;
+}
+
+// ── Key-derivation zone: full card on the introduction beat ─────────────────
+
+function BoomerangKeyZone({ step }: { step: number }) {
+  if (step === 1) {
+    // First introduction: the HMAC key Charlie used to authenticate the error.
+    return <UmCharlieCard active />;
+  }
+  if (step === 2) {
+    // First introduction: Charlie's ammag encryption key.
+    return <AmmagCharlieCard active />;
+  }
+  if (step === 3) {
+    // First introduction: Bob's ammag. Charlie's already collapsed to a badge
+    // on the packet corner above.
+    return <AmmagBobCard active />;
+  }
+  if (step === 4) {
+    return (
+      <div
+        className="mx-auto text-center"
+        style={{ maxWidth: 540 }}
+      >
+        <div
+          className="inline-flex items-center gap-2 px-3 py-2 border-[1.5px]"
+          style={{
+            borderColor: SUCCESS_GREEN,
+            background: "#fffdf5",
+            color: INK,
+            fontFamily: "ui-sans-serif, system-ui, sans-serif",
+            fontSize: 12,
+          }}
+        >
+          <span style={{ color: SUCCESS_GREEN, fontWeight: 700 }}>
+            ✓ delivered
+          </span>
+          <span style={{ color: INK }}>
+            Two ammag layers, one fixed-size packet. Hover a badge to recall
+            either key.
           </span>
         </div>
       </div>
-
-      {/* Stage */}
-      <div
-        className="relative bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-8"
-        style={{ minHeight: 360 }}
-      >
-        <div className="overflow-x-auto">
-          <div className="relative" style={{ minWidth: 600, minHeight: 280 }}>
-            {/* Backbone */}
-            <div
-              className="absolute"
-              style={{
-                top: 30,
-                left: "14%",
-                width: "72%",
-                borderTop: "1.5px dashed #475569",
-              }}
-            />
-
-            {/* Failure burst at Charlie (step 0+) */}
-            {step >= 0 && (
-              <div
-                className="absolute text-[11px] tracking-[0.04em]"
-                style={{
-                  left: `${NODE_X_PCT.charlie}%`,
-                  top: -8,
-                  transform: "translateX(-50%)",
-                  color: "#a13a3a",
-                  fontFamily: MONO,
-                  fontWeight: 700,
-                  letterSpacing: "0.04em",
-                }}
-              >
-                ✗ FAIL
-              </div>
-            )}
-
-            {/* Nodes */}
-            {HOPS.map((id) => (
-              <div
-                key={id}
-                className="absolute flex flex-col items-center"
-                style={{
-                  left: `${NODE_X_PCT[id]}%`,
-                  top: 16,
-                  transform: "translateX(-50%)",
-                }}
-              >
-                <div
-                  className="w-20 h-12 flex items-center justify-center border-[1.5px]"
-                  style={{
-                    background: HOP_FILL[id],
-                    borderColor: HOP_STROKE[id],
-                    color: "#0f172a",
-                    fontSize: 13,
-                    fontWeight: 700,
-                    letterSpacing: "0.05em",
-                  }}
-                >
-                  {HOP_LABEL[id].toUpperCase()}
-                </div>
-              </div>
-            ))}
-
-            {/* Arrow showing direction of error flow */}
-            {arrowFromTo && (
-              <svg
-                className="absolute"
-                style={{
-                  left: 0,
-                  top: 0,
-                  width: "100%",
-                  height: 80,
-                  pointerEvents: "none",
-                }}
-              >
-                <defs>
-                  <marker
-                    id="arrow-back"
-                    viewBox="0 0 10 10"
-                    refX="8"
-                    refY="5"
-                    markerWidth="10"
-                    markerHeight="10"
-                    orient="auto"
-                  >
-                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#a13a3a" />
-                  </marker>
-                </defs>
-                <path
-                  d={`M ${getXPx(NODE_X_PCT[arrowFromTo.from], 600) - 36},36 L ${getXPx(NODE_X_PCT[arrowFromTo.to], 600) + 36},36`}
-                  stroke="#a13a3a"
-                  strokeWidth={2}
-                  fill="none"
-                  markerEnd="url(#arrow-back)"
-                  style={{ transition: "all 600ms ease-in-out" }}
-                />
-              </svg>
-            )}
-
-            {/* The packet visualization. Mounted from step 0 as a persistent
-                element so it morphs (travel + contents fade-in) instead of
-                popping in at step 1. At step 0 it sits idle at Charlie with no
-                visible packet yet. */}
-            <div
-              className="absolute flex flex-col items-center transition-all"
-              style={{
-                left: `${packetLocationPct}%`,
-                top: 90,
-                transform: "translateX(-50%)",
-                transitionDuration: "700ms",
-                transitionTimingFunction: "ease-in-out",
-                opacity: step >= 1 ? 1 : 0,
-                pointerEvents: step >= 1 ? "auto" : "none",
-              }}
-            >
-              <PacketStack step={step} />
-              <div
-                className="text-[10px] mt-1.5 tracking-[0.04em] transition-opacity duration-500"
-                style={{
-                  color: "#475569",
-                  fontFamily: MONO,
-                  opacity: step >= 1 ? 1 : 0,
-                }}
-              >
-                292 B total
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Step controls */}
-      <div className="px-4 py-3 border-t-[1.5px] border-foreground/30 bg-card">
-        <div className="flex flex-col md:flex-row md:items-start md:gap-4">
-          <div className="flex gap-1.5 items-center flex-wrap shrink-0">
-            <button
-              onClick={playing ? pause : play}
-              className="px-3 py-1.5 border-[1.5px] border-black bg-black text-white font-bold text-xs tracking-[0.05em] uppercase hover:bg-[#b8860b] hover:border-[#b8860b] transition-colors"
-            >
-              {playing
-                ? "❚❚ Pause"
-                : step >= TOTAL_BEATS - 1
-                  ? "↻ Replay"
-                  : "▶ Play"}
-            </button>
-            <button
-              onClick={reset}
-              className="px-3 py-1.5 border-[1.5px] border-foreground/40 bg-card text-foreground text-xs uppercase tracking-[0.05em] hover:bg-secondary transition-colors"
-            >
-              Reset
-            </button>
-            <div className="ml-1 flex gap-1">
-              {Array.from({ length: TOTAL_BEATS }, (_, i) => (
-                <button
-                  key={i}
-                  onClick={() => setStep(i)}
-                  className="w-7 h-7 border-[1.5px] text-xs font-bold transition-colors"
-                  style={{
-                    background: step === i ? "#b8860b" : "#fffdf5",
-                    borderColor: step === i ? "#b8860b" : "rgba(15,23,42,0.4)",
-                    color: step === i ? "#fff" : "#0f172a",
-                  }}
-                >
-                  {i + 1}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="mt-3 md:mt-0 text-sm leading-relaxed flex-1 max-w-2xl">
-            {STEP_CAPTIONS[step]}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+    );
+  }
+  // Beat 0: no key activity.
+  return null;
 }
 
-function PacketStack({ step }: { step: number }) {
-  // Visualize the stacked layers on the error packet:
-  // step 1: just plaintext (white core)
-  // step 2: plaintext + Charlie's ammag layer (charlie color)
-  // step 3, 4: + Bob's ammag layer (bob color outermost)
-  const hasCharlie = step >= 2;
-  const hasBob = step >= 3;
+// ── KeyDerivationCard / KeyHoverIcon prop bundles (single source of truth) ──
+//
+// Defining the card props once and reusing them for both the full card and the
+// compact icon keeps the derivation identical across the two disclosure modes.
+
+const UM_CHARLIE_PROPS: KeyDerivationCardProps = {
+  title: "Charlie's HMAC key (authenticates the error)",
+  source: {
+    name: "ss_AC",
+    subtitle: "Alice ↔ Charlie shared secret",
+    accent: HOP_STROKE.charlie,
+  },
+  rows: [
+    {
+      formula: "HMAC('um', ss_AC)",
+      keyName: "um_C",
+      bytes: "32 bytes",
+      useTitle: "Error HMAC key",
+      useSubtitle: "tags the 260-byte payload",
+      color: HOP_STROKE.charlie,
+      active: true,
+    },
+  ],
+};
+
+const AMMAG_CHARLIE_PROPS: KeyDerivationCardProps = {
+  title: "Charlie's encryption key (wraps the error)",
+  source: {
+    name: "ss_AC",
+    subtitle: "Alice ↔ Charlie shared secret",
+    accent: HOP_STROKE.charlie,
+  },
+  rows: [
+    {
+      formula: "HMAC('ammag', ss_AC)",
+      keyName: "ammag_C",
+      bytes: "32 bytes",
+      useTitle: "Return-path cipher key",
+      useSubtitle: "XOR keystream over 292 B",
+      color: SUCCESS_GREEN,
+      active: true,
+    },
+  ],
+};
+
+const AMMAG_BOB_PROPS: KeyDerivationCardProps = {
+  title: "Bob's encryption key (wraps one more layer)",
+  source: {
+    name: "ss_AB",
+    subtitle: "Alice ↔ Bob shared secret",
+    accent: HOP_STROKE.bob,
+  },
+  rows: [
+    {
+      formula: "HMAC('ammag', ss_AB)",
+      keyName: "ammag_B",
+      bytes: "32 bytes",
+      useTitle: "Return-path cipher key",
+      useSubtitle: "XOR keystream over 292 B",
+      color: SUCCESS_GREEN,
+      active: true,
+    },
+  ],
+};
+
+function UmCharlieCard({ active }: { active: boolean }) {
   return (
-    <div
-      className="relative"
-      style={{
-        width: 160,
-        minHeight: 60,
-      }}
-    >
-      {/* Outermost: Bob's ammag (only after Bob wraps). Each ammag layer grows
-          in (opacity + scaleY from the top) so it visibly wraps on rather than
-          popping. */}
-      <AnimatePresence initial={false}>
-        {hasBob && (
-          <motion.div
-            key="ammag-bob"
-            className="border-[1.5px] flex items-center justify-center overflow-hidden"
-            initial={{ opacity: 0, scaleY: 0.55, y: -4 }}
-            animate={{ opacity: 1, scaleY: 1, y: 0 }}
-            exit={{ opacity: 0, scaleY: 0.55, y: -4 }}
-            transition={MORPH_TRANSITION}
-            style={{
-              transformOrigin: "top center",
-              background: HOP_FILL.bob,
-              borderColor: HOP_STROKE.bob,
-              padding: "5px 6px",
-              color: "#0f172a",
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: "0.02em",
-              fontFamily: MONO,
-            }}
-          >
-            ⊕ ammag_bob
-          </motion.div>
-        )}
-      </AnimatePresence>
-      {/* Charlie's ammag layer */}
-      <AnimatePresence initial={false}>
-        {hasCharlie && (
-          <motion.div
-            key="ammag-charlie"
-            className="border-[1.5px] flex items-center justify-center overflow-hidden"
-            initial={{ opacity: 0, scaleY: 0.55, y: -4 }}
-            animate={{ opacity: 1, scaleY: 1, y: 0 }}
-            exit={{ opacity: 0, scaleY: 0.55, y: -4 }}
-            transition={MORPH_TRANSITION}
-            style={{
-              transformOrigin: "top center",
-              background: HOP_FILL.charlie,
-              borderColor: HOP_STROKE.charlie,
-              padding: "5px 6px",
-              color: "#0f172a",
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: "0.02em",
-              fontFamily: MONO,
-              margin: "1.5px 6px",
-            }}
-          >
-            ⊕ ammag_charlie
-          </motion.div>
-        )}
-      </AnimatePresence>
-      {/* Inner: hmac + payload */}
-      <div
-        className="border-[1.5px] flex items-center justify-center"
-        style={{
-          background: "#fffdf5",
-          borderColor: "#a13a3a",
-          padding: "5px 6px",
-          color: "#0f172a",
-          fontSize: 10,
-          fontWeight: 700,
-          letterSpacing: "0.02em",
-          fontFamily: MONO,
-          margin: hasCharlie ? "1.5px 14px" : 0,
-        }}
-      >
-        hmac (32) || payload (260)
-      </div>
-    </div>
+    <KeyDerivationCard
+      {...UM_CHARLIE_PROPS}
+      rows={UM_CHARLIE_PROPS.rows.map((r) => ({ ...r, active }))}
+    />
+  );
+}
+function AmmagCharlieCard({ active }: { active: boolean }) {
+  return (
+    <KeyDerivationCard
+      {...AMMAG_CHARLIE_PROPS}
+      rows={AMMAG_CHARLIE_PROPS.rows.map((r) => ({ ...r, active }))}
+    />
+  );
+}
+function AmmagBobCard({ active }: { active: boolean }) {
+  return (
+    <KeyDerivationCard
+      {...AMMAG_BOB_PROPS}
+      rows={AMMAG_BOB_PROPS.rows.map((r) => ({ ...r, active }))}
+    />
   );
 }
 
-function getXPx(pct: number, viewportPx: number): number {
-  return (pct / 100) * viewportPx;
+function CharlieAmmagIcon() {
+  return <KeyHoverIcon {...AMMAG_CHARLIE_PROPS} />;
+}
+function BobAmmagIcon() {
+  return <KeyHoverIcon {...AMMAG_BOB_PROPS} />;
 }
 
 export default ErrorBoomerangDiagram;

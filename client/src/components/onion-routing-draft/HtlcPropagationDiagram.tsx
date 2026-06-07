@@ -3,6 +3,7 @@ import {
   CommitmentTxCard,
   type CommitmentOutput,
 } from "./CommitmentTxCard";
+import { StepCaption } from "./StepCaption";
 
 // ────────────────────────────────────────────────────────────────────────────
 // HtlcPropagationDiagram (DRAFT)
@@ -149,6 +150,20 @@ const CHANNELS: ChannelDef[] = [
     htlcCltv: 180,
   },
 ];
+
+// Accent color for the StepCaption below the visual: track the active step's
+// hop. Forward + settle beats center on the active channel's right (receiving)
+// party (the HTLC is offered toward them, and settlement value flows into
+// them); beat 4 is Dave holding the preimage; steady states fall back to gold.
+function stepAccentAt(beat: number): string {
+  if (beat === 4) return HOP_PALETTE.dave.stroke;
+  const ch = activeChannelAt(beat);
+  if (ch) {
+    const def = CHANNELS.find((c) => c.id === ch)!;
+    return HOP_PALETTE[def.rightId].stroke;
+  }
+  return "#b8860b";
+}
 
 // Beat → which channel is "active" (drives highlight on cards + nodes)
 function activeChannelAt(beat: number): ChannelId | null {
@@ -811,6 +826,12 @@ export function HtlcPropagationDiagram() {
             );
           })()}
         </div>
+
+        <StepCaption
+          label={`Step ${beat + 1} of ${TOTAL_BEATS}`}
+          caption={STEP_CAPTIONS[beat]}
+          accentColor={stepAccentAt(beat)}
+        />
       </div>
       </div>
 
@@ -859,44 +880,39 @@ export function HtlcPropagationDiagram() {
 
       {/* Controls */}
       <div className="px-4 py-3 border-t-[1.5px] border-foreground/30 bg-card">
-        <div className="flex flex-col md:flex-row md:items-start md:gap-4">
-          <div className="flex gap-1.5 items-center flex-wrap shrink-0">
-            <button
-              onClick={playing ? pause : play}
-              className="px-3 py-1.5 border-[1.5px] border-black bg-black text-white font-bold text-xs tracking-[0.05em] uppercase hover:bg-[#b8860b] hover:border-[#b8860b] transition-colors"
-              data-testid="htlc-propagation-play"
-            >
-              {playing ? "❚❚ Pause" : beat >= TOTAL_BEATS - 1 ? "↻ Replay" : "▶ Play"}
-            </button>
-            <button
-              onClick={reset}
-              className="px-3 py-1.5 border-[1.5px] border-foreground/40 bg-card text-foreground text-xs uppercase tracking-[0.05em] hover:bg-secondary transition-colors"
-            >
-              Reset
-            </button>
-            <div className="ml-1 flex gap-1">
-              {Array.from({ length: TOTAL_BEATS }).map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => {
-                    setPlaying(false);
-                    setBeat(i);
-                  }}
-                  className="w-7 h-7 border-[1.5px] text-[10px] font-bold transition-colors"
-                  style={{
-                    background: beat === i ? "#b8860b" : beat > i ? "#fef3c7" : "#fffdf5",
-                    borderColor: beat === i ? "#b8860b" : "#0f172a",
-                    color: beat === i ? "#fffdf5" : "#0f172a",
-                  }}
-                  data-testid={`htlc-propagation-step-${i}`}
-                >
-                  {i + 1}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="mt-3 md:mt-0 text-sm leading-relaxed flex-1 max-w-2xl">
-            {STEP_CAPTIONS[beat]}
+        <div className="flex gap-1.5 items-center flex-wrap shrink-0">
+          <button
+            onClick={playing ? pause : play}
+            className="px-3 py-1.5 border-[1.5px] border-black bg-black text-white font-bold text-xs tracking-[0.05em] uppercase hover:bg-[#b8860b] hover:border-[#b8860b] transition-colors"
+            data-testid="htlc-propagation-play"
+          >
+            {playing ? "❚❚ Pause" : beat >= TOTAL_BEATS - 1 ? "↻ Replay" : "▶ Play"}
+          </button>
+          <button
+            onClick={reset}
+            className="px-3 py-1.5 border-[1.5px] border-foreground/40 bg-card text-foreground text-xs uppercase tracking-[0.05em] hover:bg-secondary transition-colors"
+          >
+            Reset
+          </button>
+          <div className="ml-1 flex gap-1">
+            {Array.from({ length: TOTAL_BEATS }).map((_, i) => (
+              <button
+                key={i}
+                onClick={() => {
+                  setPlaying(false);
+                  setBeat(i);
+                }}
+                className="w-7 h-7 border-[1.5px] text-[10px] font-bold transition-colors"
+                style={{
+                  background: beat === i ? "#b8860b" : beat > i ? "#fef3c7" : "#fffdf5",
+                  borderColor: beat === i ? "#b8860b" : "#0f172a",
+                  color: beat === i ? "#fffdf5" : "#0f172a",
+                }}
+                data-testid={`htlc-propagation-step-${i}`}
+              >
+                {i + 1}
+              </button>
+            ))}
           </div>
         </div>
       </div>

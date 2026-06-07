@@ -241,10 +241,10 @@ function SlotBlock({
   const stroke = HOP_STROKE[hop];
   const isDave = hop === "dave";
   const nextLabel = isDave
-    ? "0x00…"
+    ? "none"
     : hop === "bob"
-      ? "→Charlie"
-      : "→Dave";
+      ? "for Charlie"
+      : "for Dave";
   const nextColor = isDave
     ? "#475569"
     : hop === "bob"
@@ -668,7 +668,7 @@ export function OnionPacketAnatomyDiagram() {
                       color: HOP_STROKE.bob,
                     }}
                   >
-                    → Bob
+                    for Bob
                   </span>
                   <span
                     style={{

@@ -2,42 +2,104 @@ import { useEffect, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { MathLine } from "./mathTokens";
 import { MorphBox } from "./morph";
+import {
+  KeyHoverIcon,
+  type KeyDerivationCardProps,
+} from "./KeyDerivationCard";
+import {
+  ErrorChrome,
+  ErrorPacketCard,
+  ErrorRouteTrack,
+  ReturnPathRail,
+  FOCUS_GOLD,
+  SUCCESS_GREEN,
+  ERROR_RED,
+  NEUTRAL_TEXT,
+  INK,
+  MONO,
+  SANS,
+  HOP_STROKE,
+  HOP_LABEL,
+  type HopId,
+} from "./errorOnionShared";
 
 // ────────────────────────────────────────────────────────────────────────────
-// ErrorUnwrapDiagram (rebuilt 2026-05-08)
+// ErrorUnwrapDiagram (rebuilt 2026-06-07)
 //
-// Walks Alice through the trial-decrypt loop on the wrapped error onion.
-// Each step shows: which hop's keys she's trying, what the peeled bytes
-// look like, whether the um HMAC verified, and what she does next.
+// The sender (Alice) trial-decrypts the returned error in ROUTE ORDER. She
+// peels one obfuscation layer per hop and checks the HMAC until one matches.
+// Because Bob wrapped last, his layer is outermost, so Alice tries Bob first
+// (i=0), then Charlie (i=1, the failing hop whose um HMAC verifies).
 //
-// Visual style follows the locked onion-routing format spec.
+// One ErrorPacketCard sits near Alice and starts FULLY crosshatched (Bob over
+// Charlie). Each beat peels one hatch via XOR -- the card loses a layer but
+// keeps its 292-byte footprint (the fixed-size invariant, same as the
+// boomerang visual). The ✓/✗ verdict lands on the node circles, not on
+// separate equal-weight rows. The dense XOR/HMAC formula shows only for the
+// ACTIVE hop (§: declutter), and keys disclose via the compact KeyHoverIcon
+// because they were introduced earlier in the chapter (§7).
+//
+// This replaces the old build's redundant LayerStack card + iteration rows
+// (two systems showing the same thing) and the formula blasted on every row.
 // ────────────────────────────────────────────────────────────────────────────
-
-const MONO = '"JetBrains Mono", "Fira Code", monospace';
-
-type HopId = "bob" | "charlie";
-
-const HOP_FILL: Record<HopId, string> = {
-  bob: "#dbeafe",
-  charlie: "#ccece8",
-};
-const HOP_STROKE: Record<HopId, string> = {
-  bob: "#3b6aa0",
-  charlie: "#2d7a7a",
-};
-const HOP_LABEL: Record<HopId, string> = {
-  bob: "Bob",
-  charlie: "Charlie",
-};
 
 const TOTAL_BEATS = 4;
+const STEP_MS = 2300;
 
-const STEP_CAPTIONS: Record<number, string> = {
-  0: "Alice has just received 292 bytes of opaque encrypted data on the return HTLC. She doesn't know which hop failed; she has to find out by trial-decrypting layer by layer.",
-  1: "Iteration i=0. Try Bob's keys first (the outermost layer). XOR with ammag_bob, then check HMAC(um_bob, peeled[32:]) against peeled[:32]. The HMAC doesn't match, Bob isn't the failing hop. Continue.",
-  2: "Iteration i=1. Try Charlie's keys. XOR with ammag_charlie, then check HMAC(um_charlie, peeled[32:]) against peeled[:32]. ✓ The HMAC verifies. Charlie is the failing hop.",
-  3: "Parse the failure message. The first 2 bytes of payload are a u16 BE giving failure_len. The next failure_len bytes are the failure message itself (e.g., temporary_channel_failure with a channel_update appended). Alice can now retry on a different route or surface the failure to her wallet.",
+const CAPTIONS: Record<number, string> = {
+  0: "You've received 292 bytes of opaque encrypted data on the return HTLC. You don't know which hop failed yet. You'll find out by trial-decrypting layer by layer, in the same order the hops wrapped on the way back.",
+  1: "Iteration `i=0`: try Bob's keys first, since his layer is outermost. XOR with `ammag_B`, then check `HMAC(um_B, peeled[32:])` against `peeled[:32]`. It doesn't match: Bob isn't the failing hop, so his `um` can't authenticate this error. Keep peeling.",
+  2: "Iteration `i=1`: try Charlie's keys. XOR with `ammag_C`, then check `HMAC(um_C, peeled[32:])`. It matches. Charlie generated this error, and the packet is now fully decrypted, still 292 bytes.",
+  3: "Parse the payload. The first two bytes are a u16 giving `failure_len`; the next `failure_len` bytes are the failure message itself. You now know which hop failed and why, so you can retry on a different route or surface the failure to your wallet.",
 };
+
+// Per-beat StepCaption header label + title (the short verdict that used to sit
+// in the footer caption; now in the block below the visual).
+const STEP_LABELS: Record<number, string> = {
+  0: "Alice · RECEIVE",
+  1: "Try i=0 · BOB",
+  2: "Try i=1 · CHARLIE",
+  3: "Decoded · PARSE",
+};
+const STEP_TITLES: Record<number, string> = {
+  0: "292 opaque bytes return to you",
+  1: "Bob's HMAC fails",
+  2: "Charlie's HMAC matches",
+  3: "Read the failure message",
+};
+
+// Accent color for the StepCaption block. Return-path green (§2) frames the
+// arrival and the decoded payoff; the trial beats take the hop being tried.
+// Kept consistent with ErrorBoomerangDiagram.
+function accentFor(step: number): string {
+  if (step === 1) return HOP_STROKE.bob;
+  if (step === 2) return HOP_STROKE.charlie;
+  return SUCCESS_GREEN; // step 0 (arrival) + step 3 (decoded) framing
+}
+
+// ammag layers still ON the packet at each beat (outermost-first). Peeling
+// removes the outermost layer each step.
+function layersFor(step: number): ("bob" | "charlie")[] {
+  if (step === 0) return ["bob", "charlie"];
+  if (step === 1) return ["charlie"]; // Bob's layer peeled
+  return []; // Charlie's layer peeled too -- plaintext
+}
+
+// Which hop Alice is currently trial-decrypting.
+function activeHopFor(step: number): HopId | null {
+  if (step === 1) return "bob";
+  if (step === 2 || step === 3) return "charlie";
+  return null;
+}
+
+// Cumulative verdicts on the node circles.
+function verdictsFor(step: number): Partial<Record<HopId, "match" | "fail">> {
+  if (step >= 2) return { bob: "fail", charlie: "match" };
+  if (step === 1) return { bob: "fail" };
+  return {};
+}
+
+const STAGE_MIN_WIDTH = 640;
 
 export function ErrorUnwrapDiagram() {
   const [step, setStep] = useState(0);
@@ -49,302 +111,279 @@ export function ErrorUnwrapDiagram() {
       setPlaying(false);
       return;
     }
-    const t = setTimeout(() => setStep((s) => s + 1), 2300);
+    const t = setTimeout(() => setStep((s) => s + 1), STEP_MS);
     return () => clearTimeout(t);
   }, [playing, step]);
 
-  const play = () => {
+  const onPlayPause = () => {
+    if (playing) {
+      setPlaying(false);
+      return;
+    }
     if (step >= TOTAL_BEATS - 1) setStep(0);
     setPlaying(true);
   };
-  const pause = () => setPlaying(false);
-  const reset = () => {
+  const onReset = () => {
     setStep(0);
     setPlaying(false);
   };
+  const onStep = (i: number) => {
+    setPlaying(false);
+    setStep(i);
+  };
+
+  const layers = layersFor(step);
+  const activeHop = activeHopFor(step);
+  const verdicts = verdictsFor(step);
 
   return (
-    <div
-      className="my-8 border-[1.5px] border-foreground/40 bg-card overflow-hidden"
-      data-testid="onion-error-unwrap"
-      style={{ fontFamily: "ui-sans-serif, system-ui, sans-serif" }}
+    <ErrorChrome
+      testId="onion-error-unwrap"
+      title="Alice peels the error"
+      totalBeats={TOTAL_BEATS}
+      step={step}
+      playing={playing}
+      caption={CAPTIONS[step]}
+      stepLabel={STEP_LABELS[step]}
+      stepTitle={STEP_TITLES[step]}
+      accentColor={accentFor(step)}
+      onPlayPause={onPlayPause}
+      onReset={onReset}
+      onStep={onStep}
+      stageMinWidth={STAGE_MIN_WIDTH}
+      stageMinHeight={420}
     >
-      {/* Header */}
-      <div className="bg-black text-white px-4 py-2 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-1.5 h-1.5 rounded-full bg-[#b8860b]" />
-          <span className="text-sm font-bold tracking-[0.08em] uppercase">
-            Alice peels the error
-          </span>
-        </div>
+      {/* The return arrived; the same leftward rail anchors this as the
+          continuation of the boomerang. */}
+      <div className="mb-2">
+        <ReturnPathRail />
       </div>
 
-      {/* Stage */}
-      <div
-        className="relative bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-6"
-        style={{ minHeight: 380 }}
-      >
-        <div className="overflow-x-auto">
-          <div style={{ minWidth: 540 }}>
-            <LayerStack step={step} />
+      {/* Route track -- the trial-decrypt loop IS a walk along the route. The
+          active hop highlights; the ✓/✗ verdicts land on the circles. */}
+      <ErrorRouteTrack activeHop={activeHop} verdicts={verdicts} />
 
-            {/* Iteration rows stay mounted from step 0 in an idle/dim state so
-                they morph in place as `result` advances, instead of popping in
-                at step >= 1. */}
-            <div className="mt-4 flex flex-col gap-2">
-              <Iteration
-                hop="bob"
-                active={step === 1}
-                attempted={step >= 1}
-                result={step >= 2 ? "fail" : step === 1 ? "checking" : "idle"}
-                index={0}
-              />
-              <Iteration
-                hop="charlie"
-                active={step === 2 || step === 3}
-                attempted={step >= 2}
-                result={step >= 2 ? "match" : "idle"}
-                index={1}
-              />
-            </div>
+      {/* One packet, peeled in place. Starts fully crosshatched; loses a layer
+          per beat; footprint never changes. The corner badge is the compact
+          KeyHoverIcon for the hop currently being tried. */}
+      <div className="mt-1">
+        <ErrorPacketCard
+          appliedLayers={layers}
+          failingHop="charlie"
+          cornerSlot={<ActiveKeyIcon step={step} />}
+          footnote={
+            step === 0
+              ? "fully wrapped: Bob's layer over Charlie's"
+              : step === 1
+                ? "Bob's layer peeled, Charlie's remains"
+                : "all layers peeled, payload is readable"
+          }
+        />
+      </div>
 
-            {/* Decoded result panel fades + grows in on step 3. */}
-            <AnimatePresence initial={false}>
-              {step === 3 && (
-                <MorphBox
-                  key="decoded"
-                  className="mt-4 border-[1.5px] p-3 overflow-hidden"
-                  initial={{ opacity: 0, height: 0, y: -4 }}
-                  animate={{ opacity: 1, height: "auto", y: 0 }}
-                  exit={{ opacity: 0, height: 0, y: -4 }}
+      {/* Active-hop operation zone: the XOR + HMAC check formula shows ONLY
+          for the hop Alice is currently trying. On the final beat this zone
+          gives way to the Decoded payoff panel. */}
+      <div className="mt-4" style={{ minHeight: 96 }}>
+        {step === 1 || step === 2 ? (
+          <ActiveCheck hop={activeHop === "bob" ? "bob" : "charlie"} />
+        ) : null}
+
+        <AnimatePresence initial={false}>
+          {step === 3 && (
+            <MorphBox
+              key="decoded"
+              className="mx-auto border-[1.5px] p-3 overflow-hidden"
+              initial={{ opacity: 0, height: 0, y: -4 }}
+              animate={{ opacity: 1, height: "auto", y: 0 }}
+              exit={{ opacity: 0, height: 0, y: -4 }}
+              style={{
+                background: "#fef3c7",
+                borderColor: FOCUS_GOLD,
+                maxWidth: 520,
+              }}
+            >
+              <div
+                className="text-sm font-bold mb-1.5 flex items-center gap-2"
+                style={{ color: INK, fontFamily: SANS }}
+              >
+                <span
                   style={{
-                    background: "#fef3c7",
-                    borderColor: "#b8860b",
+                    color: SUCCESS_GREEN,
+                    fontWeight: 900,
+                    fontSize: 15,
                   }}
                 >
-                  <div
-                    className="text-sm font-bold mb-1"
-                    style={{ color: "#0f172a", letterSpacing: "0.02em" }}
-                  >
-                    Decoded
-                  </div>
-                  <div
-                    className="text-[12px]"
-                    style={{
-                      fontFamily: MONO,
-                      color: "#0f172a",
-                      letterSpacing: "0.02em",
-                    }}
-                  >
-                    failing_hop_index = 1 (Charlie)
-                    <br />
-                    failure_code = 0x1007 (temporary_channel_failure)
-                    <br />
-                    failure_data = channel_update bytes
-                  </div>
-                </MorphBox>
-              )}
-            </AnimatePresence>
-          </div>
-        </div>
+                  ✓
+                </span>
+                Decoded
+              </div>
+              <div className="flex flex-col gap-1">
+                <MathLine
+                  text="failing_hop = i=1 (Charlie)"
+                  color={INK}
+                  fontSize={12}
+                  weight={700}
+                />
+                <MathLine
+                  text="failure_code = 0x1007 (temporary_channel_failure)"
+                  color={INK}
+                  fontSize={12}
+                  weight={700}
+                />
+                <MathLine
+                  text="failure_data = channel_update bytes"
+                  color={INK}
+                  fontSize={12}
+                  weight={700}
+                />
+              </div>
+            </MorphBox>
+          )}
+        </AnimatePresence>
       </div>
-
-      {/* Step controls */}
-      <div className="px-4 py-3 border-t-[1.5px] border-foreground/30 bg-card">
-        <div className="flex flex-col md:flex-row md:items-start md:gap-4">
-          <div className="flex gap-1.5 items-center flex-wrap shrink-0">
-            <button
-              onClick={playing ? pause : play}
-              className="px-3 py-1.5 border-[1.5px] border-black bg-black text-white font-bold text-xs tracking-[0.05em] uppercase hover:bg-[#b8860b] hover:border-[#b8860b] transition-colors"
-            >
-              {playing
-                ? "❚❚ Pause"
-                : step >= TOTAL_BEATS - 1
-                  ? "↻ Replay"
-                  : "▶ Play"}
-            </button>
-            <button
-              onClick={reset}
-              className="px-3 py-1.5 border-[1.5px] border-foreground/40 bg-card text-foreground text-xs uppercase tracking-[0.05em] hover:bg-secondary transition-colors"
-            >
-              Reset
-            </button>
-            <div className="ml-1 flex gap-1">
-              {Array.from({ length: TOTAL_BEATS }, (_, i) => (
-                <button
-                  key={i}
-                  onClick={() => setStep(i)}
-                  className="w-7 h-7 border-[1.5px] text-xs font-bold transition-colors"
-                  style={{
-                    background: step === i ? "#b8860b" : "#fffdf5",
-                    borderColor: step === i ? "#b8860b" : "rgba(15,23,42,0.4)",
-                    color: step === i ? "#fff" : "#0f172a",
-                  }}
-                >
-                  {i + 1}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="mt-3 md:mt-0 text-sm leading-relaxed flex-1 max-w-2xl">
-            {STEP_CAPTIONS[step]}
-          </div>
-        </div>
-      </div>
-    </div>
+    </ErrorChrome>
   );
 }
 
-function LayerStack({ step }: { step: number }) {
-  const bobPeeled = step >= 1;
-  const charliePeeled = step >= 2;
+// ── Active-hop check: XOR + HMAC formula, shown only for the active hop ──────
+
+function ActiveCheck({ hop }: { hop: "bob" | "charlie" }) {
+  const matched = hop === "charlie";
+  const accent = HOP_STROKE[hop];
+  const sub = hop.charAt(0); // B / C for the math subscripts
   return (
     <div
-      className="border-[1.5px] p-3"
+      className="mx-auto border-[1.5px] px-3 py-2.5"
       style={{
+        maxWidth: 520,
+        borderColor: matched ? SUCCESS_GREEN : accent,
         background: "#fffdf5",
-        borderColor: "rgba(15,23,42,0.25)",
       }}
     >
-      <div
-        className="text-[10px] uppercase tracking-[0.08em] mb-2"
-        style={{ color: "#475569" }}
-      >
-        Wrapped error onion
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <Layer
-          label="Bob's ammag wrap (outermost)"
-          fill={HOP_FILL.bob}
-          stroke={HOP_STROKE.bob}
-          peeled={bobPeeled}
-        />
-        <Layer
-          label="Charlie's ammag wrap (innermost) → contains hmac + payload"
-          fill={HOP_FILL.charlie}
-          stroke={HOP_STROKE.charlie}
-          peeled={charliePeeled}
-        />
-      </div>
-    </div>
-  );
-}
-
-function Layer({
-  label,
-  fill,
-  stroke,
-  peeled,
-}: {
-  label: string;
-  fill: string;
-  stroke: string;
-  peeled: boolean;
-}) {
-  return (
-    <div
-      className="border-[1.5px] px-3 py-2 transition-all"
-      style={{
-        background: peeled ? "#fffdf5" : fill,
-        borderColor: peeled ? "rgba(15,23,42,0.25)" : stroke,
-        borderStyle: peeled ? "dashed" : "solid",
-        color: "#0f172a",
-        fontSize: 12,
-        fontWeight: peeled ? 400 : 600,
-        letterSpacing: "0.02em",
-        textDecoration: peeled ? "line-through" : "none",
-        opacity: peeled ? 0.55 : 1,
-      }}
-    >
-      {label}
-    </div>
-  );
-}
-
-function Iteration({
-  hop,
-  active,
-  attempted,
-  result,
-  index,
-}: {
-  hop: HopId;
-  active: boolean;
-  attempted: boolean;
-  result: "idle" | "checking" | "fail" | "match";
-  index: number;
-}) {
-  // Stays mounted from step 0. When not yet attempted it renders dim/idle and
-  // morphs into its result state via `transition-all` as `result` advances.
-  const verdict =
-    result === "match"
-      ? "✓ HMAC matches"
-      : attempted
-        ? "✗ HMAC fails"
-        : "· pending";
-  return (
-    <div
-      className="border-[1.5px] px-3 py-2 transition-all"
-      style={{
-        background: result === "match" ? "#e8f5d6" : "#fffdf5",
-        borderColor:
-          result === "match"
-            ? "#5a7a2f"
-            : result === "fail"
-              ? "rgba(15,23,42,0.3)"
-              : attempted
-                ? HOP_STROKE[hop]
-                : "rgba(15,23,42,0.18)",
-        borderStyle: attempted ? "solid" : "dashed",
-        outline: active ? `2.5px solid #b8860b` : "none",
-        outlineOffset: -3,
-        opacity: attempted ? 1 : 0.5,
-      }}
-    >
-      <div
-        className="flex items-center justify-between"
-        style={{ color: "#0f172a", fontSize: 13 }}
-      >
-        <div className="flex items-center gap-2">
-          <span style={{ fontFamily: MONO, fontWeight: 700 }}>
-            i={index}: try {HOP_LABEL[hop]}'s keys
-          </span>
-        </div>
-        <div
-          className="text-[11px] px-2 py-0.5 border-[1.5px] transition-colors"
+      <div className="flex items-center justify-between mb-1.5">
+        <span
+          className="uppercase tracking-[0.08em]"
           style={{
             fontFamily: MONO,
-            background: result === "match"
-              ? "#5a7a2f"
-              : attempted
-                ? "#fde7e7"
-                : "#f1f1ee",
-            borderColor: result === "match"
-              ? "#5a7a2f"
-              : attempted
-                ? "#a13a3a"
-                : "rgba(15,23,42,0.25)",
-            color: result === "match"
-              ? "#fff"
-              : attempted
-                ? "#a13a3a"
-                : "#475569",
-            letterSpacing: "0.02em",
+            fontSize: 9.5,
+            fontWeight: 700,
+            color: accent,
           }}
         >
-          {verdict}
-        </div>
+          trying {HOP_LABEL[hop]}'s keys
+        </span>
+        <span
+          className="px-2 py-0.5 border-[1.5px] uppercase tracking-[0.04em]"
+          style={{
+            fontFamily: MONO,
+            fontSize: 10,
+            fontWeight: 700,
+            background: matched ? SUCCESS_GREEN : "#fde7e7",
+            borderColor: matched ? SUCCESS_GREEN : ERROR_RED,
+            color: matched ? "#fff" : ERROR_RED,
+          }}
+        >
+          {matched ? "✓ HMAC matches" : "✗ HMAC fails"}
+        </span>
       </div>
-      <div className="mt-1 text-[11px]" style={{ color: "#475569" }}>
+      <div className="flex flex-wrap items-center gap-x-1 gap-y-1">
         <MathLine
-          text={`XOR with ammag_${hop} → check HMAC(um_${hop}, peeled[32:]) ?= peeled[:32]`}
-          color="#475569"
-          fontSize={11}
-          weight={500}
+          text={`peeled = wrapped ⊕ ammag_${sub}`}
+          color={NEUTRAL_TEXT}
+          fontSize={11.5}
+          weight={600}
+        />
+        <span
+          style={{
+            fontFamily: MONO,
+            fontSize: 11.5,
+            color: NEUTRAL_TEXT,
+            margin: "0 4px",
+          }}
+        >
+          ·
+        </span>
+        <MathLine
+          text={`HMAC(um_${sub}, peeled[32:]) ?= peeled[:32]`}
+          color={matched ? SUCCESS_GREEN : NEUTRAL_TEXT}
+          fontSize={11.5}
+          weight={600}
         />
       </div>
     </div>
   );
 }
+
+// ── Compact key reminder for the active hop (KeyHoverIcon, §7) ───────────────
+//
+// The per-hop keys were introduced earlier in the chapter (and in the
+// boomerang visual), so here we use the compact badge -- hover to recall the
+// full derivation -- rather than a full card. Each hop's badge surfaces BOTH
+// keys Alice needs at that step: ammag (to peel) and um (to check).
+
+function ActiveKeyIcon({ step }: { step: number }) {
+  if (step === 1) return <KeyHoverIcon {...BOB_KEYS_PROPS} />;
+  if (step === 2 || step === 3) return <KeyHoverIcon {...CHARLIE_KEYS_PROPS} />;
+  return null;
+}
+
+const BOB_KEYS_PROPS: KeyDerivationCardProps = {
+  title: "Bob's return-path keys (peel + check)",
+  source: {
+    name: "ss_AB",
+    subtitle: "Alice ↔ Bob shared secret",
+    accent: HOP_STROKE.bob,
+  },
+  rows: [
+    {
+      formula: "HMAC('ammag', ss_AB)",
+      keyName: "ammag_B",
+      bytes: "32 bytes",
+      useTitle: "Peels Bob's layer",
+      useSubtitle: "XOR keystream",
+      color: SUCCESS_GREEN,
+      active: true,
+    },
+    {
+      formula: "HMAC('um', ss_AB)",
+      keyName: "um_B",
+      bytes: "32 bytes",
+      useTitle: "Checks the HMAC",
+      useSubtitle: "no match here",
+      color: HOP_STROKE.bob,
+      active: true,
+    },
+  ],
+};
+
+const CHARLIE_KEYS_PROPS: KeyDerivationCardProps = {
+  title: "Charlie's return-path keys (peel + check)",
+  source: {
+    name: "ss_AC",
+    subtitle: "Alice ↔ Charlie shared secret",
+    accent: HOP_STROKE.charlie,
+  },
+  rows: [
+    {
+      formula: "HMAC('ammag', ss_AC)",
+      keyName: "ammag_C",
+      bytes: "32 bytes",
+      useTitle: "Peels Charlie's layer",
+      useSubtitle: "XOR keystream",
+      color: SUCCESS_GREEN,
+      active: true,
+    },
+    {
+      formula: "HMAC('um', ss_AC)",
+      keyName: "um_C",
+      bytes: "32 bytes",
+      useTitle: "Checks the HMAC",
+      useSubtitle: "matches: failing hop",
+      color: HOP_STROKE.charlie,
+      active: true,
+    },
+  ],
+};
 
 export default ErrorUnwrapDiagram;

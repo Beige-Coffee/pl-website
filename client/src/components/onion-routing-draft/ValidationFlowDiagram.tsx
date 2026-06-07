@@ -1,5 +1,5 @@
 // ────────────────────────────────────────────────────────────────────────────
-// ValidationFlowDiagram (rebuilt 2026-06-03)
+// ValidationFlowDiagram (rebuilt 2026-06-07 — one-focal-element-per-beat pass)
 //
 // Animated, click-through "Forwarder Validation Loop" from Bob's view. Where
 // PeelTraceDiagram (ch 9) traces the byte-mechanics of the peel, this visual
@@ -7,31 +7,35 @@
 // gates, the incoming-HTLC context, the forward-vs-destination branch, the
 // fee/CLTV policy checks, and the three-way `process` outcome.
 //
+// Design rule (this rebuild): ONE focal element per beat. The incoming HTLC is
+// a thin persistent context strip pinned at the top of every beat; everything
+// secondary (full packet anatomy, key-derivation provenance, failure codes)
+// lives behind a hover. Default state shows only the green success verdict.
+//
 // Beats:
-//   1. RECEIVE   — update_add_htlc arrives: incoming HTLC + 1,366-byte onion
-//   2. GATE 1    — structural check: 1,366 bytes? version 0x00?
+//   1. RECEIVE   — the sealed 1,366-byte packet (HTLC carried by the strip)
+//   2. GATE 1    — structural checklist (1,366 B? version 0x00?) → STRUCTURE OK
 //   3. GATE 2    — verify HMAC(mu_B, hop_payloads ‖ AD) BEFORE decrypting
 //   4. PEEL      — only now: XOR with rho_B to expose the hop payload (compact)
 //   5. PARSE     — read the TLV: amt_to_forward, outgoing_cltv, short_channel_id
 //   6. BRANCH    — forwarder (scid) vs destination (payment_data)
-//   7. CHECK     — fees + timelocks against the incoming HTLC
+//   7. CHECK     — fees + timelocks against the incoming HTLC (strip highlights)
 //   8. OUTCOME   — ForwardInstruction / FinalDelivery / Rejection (each holds ss)
 //
 // Reuses the shared trace primitives exported from WrapTraceDiagram plus
 // KeyDerivationCard / KeyHoverIcon (key-disclosure pattern), HatchOverlay,
-// MathLine, and renderCaption. Locked onion-routing visual format spec.
+// MathLine, the viewport-clamped Tooltip, and StepCaption for the per-beat
+// explanation block below the visual (§1.5). Locked onion-routing visual
+// format spec.
 // ────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useState } from "react";
-import { renderCaption } from "./captionMarkup";
 import { HatchOverlay, type ForwarderId } from "./encryptionHatch";
-import {
-  KeyDerivationCard,
-  KeyHoverIcon,
-  type KeyDerivationRow,
-} from "./KeyDerivationCard";
+import { KeyHoverIcon, type KeyDerivationRow } from "./KeyDerivationCard";
 import { MathLine } from "./mathTokens";
 import { MorphBox, CrossfadeSwap } from "./morph";
+import { Tooltip } from "./Tooltip";
+import { StepCaption } from "./StepCaption";
 import {
   MONO,
   SANS,
@@ -41,13 +45,8 @@ import {
   HOP_STROKE,
   FULL_PACKET_BYTES,
   STEP_MS,
-  IterationBanner,
   BufferRegion,
   BufferHeader,
-  CompactBar,
-  SymbolRow,
-  ADBar,
-  HoverTooltip,
   SlotCell,
   type Beat,
   type Region,
@@ -60,6 +59,11 @@ const ERROR_RED = "#a13a3a";
 const ASSOC_DATA_COLOR = "#5a7a2f";
 
 const TOTAL_BEATS = 8;
+
+// This is a decision-flow visual, not a byte trace, so its beats run a touch
+// faster than the byte-trace ceiling (STEP_MS = 2400 in WrapTraceDiagram). See
+// onion-routing-visual-standards §10.
+const BEAT_MS = Math.min(STEP_MS, 1900);
 
 // Example values for Bob's incoming HTLC and his parsed TLV. Chosen so every
 // policy check passes with a visible cushion (see CHECK beat).
@@ -84,39 +88,39 @@ const BEATS: Beat[] = [
     step: 1,
     iterLabel: "HTLC arrives",
     subLabel: "RECEIVE",
-    title: "An `update_add_htlc` arrives with the onion",
+    title: "Nothing trusted yet",
     caption:
-      "Bob's upstream peer sends an `update_add_htlc`: an incoming HTLC plus 1,366 bytes of onion. The HTLC carries the `payment_hash` (this is the `associated_data`), the incoming amount, and the incoming `cltv_expiry`. Bob hasn't trusted a single byte yet. Earning that trust is the whole job of this chapter.",
+      "Bob's upstream peer sends an `update_add_htlc`: an incoming HTLC plus 1,366 bytes of onion. The HTLC up top carries the `payment_hash` (this is the `associated_data`), the incoming amount, and the incoming `cltv_expiry`. Bob hasn't trusted a single byte of the onion yet. Earning that trust is the whole job of this chapter.",
   },
   {
     step: 2,
     iterLabel: "Bob validates",
     subLabel: "GATE 1 · STRUCTURE",
-    title: "Cheapest check first: 1,366 bytes? version `0x00`?",
+    title: "Structure OK",
     caption:
-      "Before any crypto, the structural gate. Is the packet exactly 1,366 bytes, and is the version byte `0x00`? If either is wrong, Bob rejects immediately with `invalid_onion_version`. Cheap, defensive checks go first so malformed packets cost almost nothing.",
+      "Before any crypto, the cheapest gate. Is the packet exactly 1,366 bytes, and is the version byte `0x00`? If either is wrong, Bob rejects immediately. Cheap, defensive checks go first so malformed packets cost almost nothing. Hover *rejects?* for the failure code, or *see fields* to expand the full packet anatomy from chapter 7.",
   },
   {
     step: 3,
     iterLabel: "Bob validates",
     subLabel: "GATE 2 · INTEGRITY",
-    title: "Verify `HMAC(mu_B, hop_payloads ‖ associated_data)` (before decrypting)",
+    title: "Bytes are authentic",
     caption:
-      "The integrity gate, and it runs *before* any decryption. Bob recomputes `HMAC(mu_B, hop_payloads ‖ associated_data)` over the still-encrypted bytes and compares it to the packet's `outer_hmac`. A match means the bytes are authentic and bound to this exact HTLC. A mismatch means tampering or a re-attached onion, so Bob rejects with `invalid_onion_hmac` and never lets those bytes reach his parser.",
+      "The integrity gate, and it runs *before* any decryption. Bob recomputes `HMAC(mu_B, hop_payloads ‖ associated_data)` over the still-encrypted bytes and compares it to the packet's `outer_hmac`. A match means the bytes are authentic and bound to this exact HTLC (that `payment_hash` highlighted in the strip is the `associated_data`). A mismatch means tampering or a re-attached onion, so Bob rejects and never lets those bytes reach his parser. The `mu_B` key was derived back in chapter 9; hover *keys* for the reminder.",
   },
   {
     step: 4,
     iterLabel: "Bob validates",
     subLabel: "PEEL",
-    title: "Only now: XOR with `rho_B` to expose the hop payload",
+    title: "Layer decrypted",
     caption:
-      "Integrity confirmed, so Bob can finally decrypt. He XORs the buffer with his `rho_B` keystream to strip his layer, exposing his hop payload at the front. This is the chapter-9 peel (the 2,600-byte extend-and-XOR); we keep it compact here to stay on the decisions around it.",
+      "Integrity confirmed, so Bob can finally decrypt. He XORs the buffer with his `rho_B` keystream to strip his layer, exposing his hop payload at the front. This is the chapter-9 peel (the 2,600-byte extend-and-XOR); we keep it to a single annotation here to stay on the decisions around it. Hover *keys* for where `rho_B` comes from.",
   },
   {
     step: 5,
     iterLabel: "Bob validates",
     subLabel: "PARSE",
-    title: "Read the TLV: `amt_to_forward`, `outgoing_cltv_value`, `short_channel_id`",
+    title: "Fields parsed",
     caption:
       "Bob's hop payload is plaintext now. A provided helper, `parse_tlv_records`, walks the bigsize-prefixed TLV records and hands back `amt_to_forward`, `outgoing_cltv_value`, and `short_channel_id`. The 32 bytes right after the TLVs are `charlie_hmac`, the tag Bob will carry onto the packet he forwards.",
   },
@@ -124,23 +128,23 @@ const BEATS: Beat[] = [
     step: 6,
     iterLabel: "Bob validates",
     subLabel: "BRANCH",
-    title: "Forwarder or destination? The present TLV fields decide",
+    title: "Bob is a forwarder",
     caption:
-      "Which role is Bob playing? `short_channel_id` present means Bob is a *forwarder* and should send the onion onward. `payment_data` present with no `short_channel_id` means Bob is the *destination*. Both present, or neither, is malformed and Bob rejects it.",
+      "Which role is Bob playing? `short_channel_id` present means Bob is a *forwarder* and should send the onion onward, which is Bob's path here. `payment_data` present with no `short_channel_id` would make Bob the *destination*. Hover the branch question to see why both present, or neither, is rejected as malformed.",
   },
   {
     step: 7,
     iterLabel: "Bob validates",
     subLabel: "CHECK",
-    title: "Sanity-check fees and timelocks against the incoming HTLC",
+    title: "Fees & timelocks OK",
     caption:
-      "Bob is forwarding, so he holds the TLV's numbers up against the incoming HTLC. Does the incoming amount cover `amt_to_forward` plus his fee? Does the incoming `cltv_expiry` clear `outgoing_cltv_value` by at least his published delta? Is the outgoing CLTV still in the future? These are the very fees and timelocks Alice solved backward in chapter 2.",
+      "Bob is forwarding, so he holds the TLV's numbers up against the incoming HTLC (its amount and `cltv_expiry` are highlighted in the strip). Does the incoming amount cover `amt_to_forward` plus his fee? Does the incoming `cltv_expiry` clear `outgoing_cltv_value` by at least his published delta? Is the outgoing CLTV still in the future? These are the very fees and timelocks Alice solved backward in chapter 2. Hover *rejects?* on a row for its failure code.",
   },
   {
     step: 8,
     iterLabel: "Bob decides",
     subLabel: "OUTCOME",
-    title: "`process` returns Forward, Settle, or Reject",
+    title: "Forward it",
     caption:
       "Everything checks out, so `process` returns one of three outcomes. `ForwardInstruction` (Bob's case here): ship `next_packet` to the `short_channel_id`. `FinalDelivery`: Bob is the destination, so settle by revealing the preimage. `Rejection`: something failed, so build an error onion with `um` (chapter 11). Every outcome carries `ss`, because the error path always needs it.",
   },
@@ -193,7 +197,7 @@ export function ValidationFlowDiagram() {
       setPlaying(false);
       return;
     }
-    const t = setTimeout(() => setStep((s) => s + 1), STEP_MS);
+    const t = setTimeout(() => setStep((s) => s + 1), BEAT_MS);
     return () => clearTimeout(t);
   }, [playing, step]);
 
@@ -208,6 +212,9 @@ export function ValidationFlowDiagram() {
   };
 
   const beat = BEATS[step - 1];
+  // Bob's-view decision loop: the framing beat (RECEIVE, nothing trusted yet)
+  // stays gold; every beat where Bob acts on the packet takes his blue accent.
+  const beatAccent = step === 1 ? FOCUS_GOLD : HOP_STROKE.bob;
 
   return (
     <div
@@ -228,8 +235,14 @@ export function ValidationFlowDiagram() {
       >
         <div className="overflow-x-auto">
           <div className="mx-auto" style={{ minWidth: 700, maxWidth: 860 }}>
-            <IterationBanner beat={beat} />
             <BeatBody step={step} />
+
+            <StepCaption
+              label={`${beat.iterLabel} · ${beat.subLabel}`}
+              title={beat.title}
+              caption={beat.caption}
+              accentColor={beatAccent}
+            />
           </div>
         </div>
       </div>
@@ -274,12 +287,6 @@ export function ValidationFlowDiagram() {
               })}
             </div>
           </div>
-          <div
-            className="mt-3 md:mt-0 text-sm leading-relaxed flex-1 max-w-2xl"
-            style={{ color: INK }}
-          >
-            {renderCaption(beat.caption)}
-          </div>
         </div>
       </div>
     </div>
@@ -288,42 +295,41 @@ export function ValidationFlowDiagram() {
 
 // ── Beat body ───────────────────────────────────────────────────────────────
 //
-// Two morph mechanisms, per onion-routing-visual-standards §14:
+// Scaffolding that is present on EVERY beat (the persistent HTLC strip) renders
+// OUTSIDE the per-beat conditional so it never remounts — it just retints which
+// segment it highlights as the step changes. Below it sits exactly one focal
+// element per beat.
 //
+// Morph mechanism, per onion-routing-visual-standards §14:
 //   • The hop_payloads bar recurs across beats 3→4→5 (encrypted blob → stripped
 //     → zoomed). PayloadArcView renders ONE persistent MorphBox for those three
 //     beats (stable key="hop-payloads-bar"), so the box reconciles and morphs
 //     its height/border across the step change while its inner representation
-//     crossfades. The supporting equation around the bar crossfades too.
+//     swaps. The supporting framing around the bar crossfades.
 //   • Every other beat (1, 2, 6, 7, 8) is genuinely different content, so the
-//     panel area crossfades through CrossfadeSwap keyed on `step` rather than
-//     hard-cutting. The HtlcCard (beats 1 + 7) keeps a stable key so it
-//     reconciles on any direct 1↔7 jump.
+//     focal area crossfades through CrossfadeSwap keyed on `step` rather than
+//     hard-cutting.
 //
-// The persistent arc and the crossfade panels are mutually exclusive: only one
-// is mounted at a time, so the 2→3 and 5→6 boundaries are honest crossfades
-// between genuinely-different representations.
+// The arc view and the crossfade panel are mutually exclusive (different
+// component types by position), so the 2→3 and 5→6 boundaries are honest
+// crossfades between genuinely-different representations. The HTLC strip above
+// them is the only thing that carries across all eight.
 
 function BeatBody({ step }: { step: number }) {
   const inPayloadArc = step >= 3 && step <= 5;
-  if (inPayloadArc) return <PayloadArcView step={step} />;
-
-  // Beats 1 and 7 both lead with the incoming HTLC card. Render it as ONE
-  // persistent keyed element OUTSIDE the per-step crossfade, so a direct 1↔7
-  // jump morphs the same card (full ↔ compact) instead of cross-cutting two
-  // copies. The rest of each beat crossfades around it.
-  const showHtlcCard = step === 1 || step === 7;
 
   return (
     <div className="mt-2">
-      {showHtlcCard && (
-        <MorphBox key="htlc-card" layout className="mb-4">
-          <HtlcCard compact={step === 7} />
-        </MorphBox>
+      {/* Persistent context backdrop — same element on all 8 beats. */}
+      <HtlcStrip key="htlc-strip" step={step} />
+
+      {inPayloadArc ? (
+        <PayloadArcView step={step} />
+      ) : (
+        <CrossfadeSwap swapKey={step}>
+          <NonArcBeat step={step} />
+        </CrossfadeSwap>
       )}
-      <CrossfadeSwap swapKey={step}>
-        <NonArcBeat step={step} />
-      </CrossfadeSwap>
     </div>
   );
 }
@@ -335,6 +341,114 @@ function NonArcBeat({ step }: { step: number }) {
   if (step === 7) return <CheckView />;
   if (step === 8) return <OutcomeView />;
   return null;
+}
+
+// ── Persistent HTLC context strip (present on ALL 8 beats) ────────────────────
+//
+// A thin one-line bar pinned at the top of the stage. It is the reference
+// backdrop the validation gates check against, NOT a focal card, so it stays
+// visually quiet (small text, one line, a thin border). Two segments light up
+// contextually: the payment_hash (= associated_data) on the integrity beat, and
+// the amount + cltv on the fee/timelock beat. Reuses the same HTLC constants the
+// old HtlcCard did.
+
+type HtlcSegmentKey = "payment_hash" | "amount" | "cltv";
+
+function HtlcStrip({ step }: { step: number }) {
+  // Which segments are highlighted on this beat.
+  const highlight: Partial<Record<HtlcSegmentKey, boolean>> =
+    step === 3
+      ? { payment_hash: true }
+      : step === 7
+        ? { amount: true, cltv: true }
+        : {};
+
+  return (
+    <div
+      className="mb-4 flex items-center gap-1 overflow-x-auto border-[1.5px]"
+      style={{
+        borderColor: `${HOP_STROKE.bob}66`,
+        background: `${HOP_STROKE.bob}0c`,
+        padding: "5px 8px",
+      }}
+    >
+      <span
+        className="text-[9px] uppercase tracking-[0.08em] font-bold shrink-0"
+        style={{ fontFamily: MONO, color: HOP_STROKE.bob }}
+      >
+        ↘ inbound HTLC
+      </span>
+      <StripDot />
+      <HtlcSegment
+        label="amount"
+        value={`${fmt(AMOUNT_IN_MSAT)} msat`}
+        active={highlight.amount}
+      />
+      <StripDot />
+      <HtlcSegment label="cltv" value={`${fmt(CLTV_IN)}`} active={highlight.cltv} />
+      <StripDot />
+      <HtlcSegment
+        label="payment_hash"
+        value={PAYMENT_HASH}
+        note="= associated_data"
+        active={highlight.payment_hash}
+      />
+    </div>
+  );
+}
+
+function StripDot() {
+  return (
+    <span
+      className="shrink-0"
+      style={{ color: `${HOP_STROKE.bob}80`, fontSize: 11, padding: "0 1px" }}
+    >
+      ·
+    </span>
+  );
+}
+
+function HtlcSegment({
+  label,
+  value,
+  note,
+  active,
+}: {
+  label: string;
+  value: string;
+  note?: string;
+  active?: boolean;
+}) {
+  return (
+    <span
+      className="inline-flex items-baseline gap-1.5 shrink-0 whitespace-nowrap"
+      style={{
+        fontFamily: MONO,
+        fontSize: 11,
+        padding: active ? "1px 6px" : "1px 0",
+        background: active ? "#fef3c7" : "transparent",
+        borderRadius: active ? 2 : 0,
+        boxShadow: active ? `inset 0 0 0 1.5px ${FOCUS_GOLD}` : "none",
+        transition: "background 300ms ease-out, box-shadow 300ms ease-out",
+      }}
+    >
+      <span
+        className="text-[9px] uppercase tracking-[0.04em]"
+        style={{ color: active ? FOCUS_GOLD : NEUTRAL_TEXT, fontWeight: 700 }}
+      >
+        {label}
+      </span>
+      <span style={{ color: INK, fontWeight: 700 }}>{value}</span>
+      {note && (
+        <span
+          className="text-[9px] italic"
+          style={{ fontFamily: SANS, color: active ? FOCUS_GOLD : ASSOC_DATA_COLOR }}
+        >
+          {note}
+        </span>
+      )}
+    </span>
+  );
 }
 
 // ── Beats 3-5: the persistent hop_payloads bar ───────────────────────────────
@@ -426,33 +540,25 @@ function PayloadArcView({ step }: { step: number }) {
   );
 }
 
-// Content above the persistent bar. Each beat frames the bar's headline state:
-//   3: the key card whose mu_B drives the integrity check
-//   4: the XOR equation (before, keystream, equals) that produces the stripped bar
-//   5: a header introducing the zoomed payload
+// Content above the persistent bar. Each beat sets up the bar's headline state.
+// Per §7 (key disclosure), beats 3 + 4 only USE keys derived back in chapter 9,
+// so they show the compact KeyHoverIcon badge (top-right of the operation), not
+// the full KeyDerivationCard.
 function ArcLeadIn({ step }: { step: number }) {
-  if (step === 3) return <KeyDerivationCard {...keyDerivationProps(true)} />;
+  if (step === 3) {
+    // Integrity: the mu_B key drives this HMAC. Badge top-right, mu_B active.
+    return (
+      <div className="flex justify-end">
+        <KeyHoverIcon {...keyDerivationProps(true)} />
+      </div>
+    );
+  }
 
   if (step === 4) {
+    // Peel: the rho_B key drives the XOR. Badge top-right, rho_B active.
     return (
-      <div>
-        <KeyHoverBadge />
-        <CompactBar
-          label="hop_payloads · before XOR (encrypted)"
-          regions={encryptedBlob1300()}
-          accentColor={NEUTRAL_TEXT}
-        />
-        <SymbolRow char="⊕" />
-        <div className="flex items-center justify-center gap-2 mb-1.5">
-          <MathLine text="chacha20(rho_B, 2600)" color={KEY_RHO_COLOR} fontSize={11} />
-          <span
-            className="text-[10px] uppercase tracking-[0.06em]"
-            style={{ color: KEY_RHO_COLOR, fontFamily: MONO, fontWeight: 700 }}
-          >
-            keystream (ch 9)
-          </span>
-        </div>
-        <SymbolRow char="=" />
+      <div className="flex justify-end">
+        <KeyHoverIcon {...keyDerivationProps(false)} />
       </div>
     );
   }
@@ -463,61 +569,51 @@ function ArcLeadIn({ step }: { step: number }) {
 
 // Content below the persistent bar (what each beat does next).
 function ArcTail({ step }: { step: number }) {
+  // Beat 3 (integrity): the HMAC compare distilled to one line + a verdict
+  // stamp. associated_data is folded into the persistent HTLC strip above (its
+  // payment_hash segment is highlighted on this beat), so there's no separate
+  // AD bar or `‖` row to stack here.
   if (step === 3) {
     return (
-      <div>
-        <SymbolRow char="‖" />
-        <ADBar />
-        <SymbolRow char="↓" />
-        <div
-          className="text-center mb-1"
-          style={{
-            boxShadow: `inset 0 0 0 2.5px ${FOCUS_GOLD}, inset 0 0 0 5px rgba(184,134,11,0.22)`,
-            padding: "10px 14px",
-            background: "#fffdf5",
-          }}
-        >
+      <div className="mt-3">
+        <div className="flex items-center justify-center gap-3 flex-wrap">
           <MathLine
             text="HMAC(mu_B, hop_payloads ‖ associated_data)"
             color={KEY_MU_COLOR}
             fontSize={14}
           />
-        </div>
-        <SymbolRow char="≟" />
-        <div className="text-center">
+          <span style={{ color: NEUTRAL_TEXT, fontSize: 18, fontWeight: 700 }}>≟</span>
           <MathLine text="outer_hmac" color={NEUTRAL_TEXT} fontSize={13} />
         </div>
-        <GateBadge
-          pass
-          passLabel="match (bytes authentic, bound to this HTLC)"
+        <VerdictStamp
+          label="AUTHENTIC"
+          sub="bytes match, bound to this HTLC"
           failCode="invalid_onion_hmac"
         />
       </div>
     );
   }
 
+  // Beat 4 (peel): a single compact annotation on the morph. The byte-level XOR
+  // mechanics live in chapter 9.
   if (step === 4) {
     return (
-      <div
-        className="text-center mt-2 text-[11px] italic"
-        style={{ color: NEUTRAL_TEXT, fontFamily: SANS }}
-      >
-        Bob's 60-byte hop payload is now plaintext at the front; the rest stays
-        encrypted for Charlie. (Full byte-mechanics in chapter 9.)
+      <div className="mt-2 flex items-center justify-center gap-2">
+        <span style={{ fontSize: 15, color: KEY_RHO_COLOR, fontWeight: 700 }}>⊕</span>
+        <MathLine text="rho_B" color={KEY_RHO_COLOR} fontSize={12} />
+        <span
+          className="text-[10px] uppercase tracking-[0.06em]"
+          style={{ color: KEY_RHO_COLOR, fontFamily: MONO, fontWeight: 700 }}
+        >
+          keystream (ch 9)
+        </span>
       </div>
     );
   }
 
-  // Beat 5: byte axis + parse → TLV chips.
+  // Beat 5: parse → TLV chips. (Byte axis dropped to keep the parse beat clean.)
   return (
     <div>
-      <div
-        className="flex justify-between mt-1"
-        style={{ fontFamily: MONO, fontSize: 10, color: NEUTRAL_TEXT }}
-      >
-        <span>byte 0</span>
-        <span>byte 59</span>
-      </div>
       <div className="mt-4 flex items-center justify-center gap-2">
         <MathLine text="parse_tlv_records(payload)" color={INK} fontSize={12} />
         <span style={{ color: NEUTRAL_TEXT }}>→</span>
@@ -533,13 +629,49 @@ function ArcTail({ step }: { step: number }) {
 
 // ── Shared mini-pieces ────────────────────────────────────────────────────
 
-function GateBadge({
-  pass,
-  passLabel,
+// A small, quiet "rejects?" affordance. By default the beat shows only the green
+// success verdict; hovering this reveals the failure code that fires on the
+// no-path, via the shared viewport-clamped Tooltip. Used by VerdictStamp (gates)
+// and CheckRow (policy checks).
+function RejectsHover({ failCode }: { failCode: string }) {
+  return (
+    <Tooltip
+      width={240}
+      label={
+        <span>
+          If this check fails, Bob rejects with{" "}
+          <span style={{ fontFamily: MONO, color: ERROR_RED, fontWeight: 700 }}>
+            {failCode}
+          </span>
+          .
+        </span>
+      }
+    >
+      <span
+        className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.06em]"
+        style={{
+          fontFamily: MONO,
+          color: NEUTRAL_TEXT,
+          borderBottom: `1px dotted ${NEUTRAL_TEXT}`,
+          cursor: "help",
+          fontWeight: 700,
+        }}
+      >
+        <span style={{ color: ERROR_RED }}>✗</span> rejects?
+      </span>
+    </Tooltip>
+  );
+}
+
+// Green success stamp for a passed gate. The failure code is tucked into a
+// RejectsHover beside it (default state shows only the verdict).
+function VerdictStamp({
+  label,
+  sub,
   failCode,
 }: {
-  pass: boolean;
-  passLabel: string;
+  label: string;
+  sub: string;
   failCode: string;
 }) {
   return (
@@ -547,120 +679,58 @@ function GateBadge({
       <div
         className="inline-flex items-center gap-2 border-[1.5px] px-3 py-1.5"
         style={{
-          background: pass ? "#e7f6ee" : "#fde7e7",
-          borderColor: pass ? VERIFY_GREEN : ERROR_RED,
-          color: pass ? VERIFY_GREEN : ERROR_RED,
+          background: "#e7f6ee",
+          borderColor: VERIFY_GREEN,
+          color: VERIFY_GREEN,
         }}
       >
-        <span style={{ fontSize: 14, fontWeight: 700 }}>{pass ? "✓" : "✗"}</span>
+        <span style={{ fontSize: 14, fontWeight: 700 }}>✓</span>
         <span
           className="text-xs font-bold uppercase tracking-[0.05em]"
           style={{ fontFamily: MONO }}
         >
-          {passLabel}
+          {label}
         </span>
       </div>
-      <div
-        className="text-[11px]"
-        style={{ fontFamily: MONO, color: NEUTRAL_TEXT }}
-      >
-        on failure → <span style={{ color: ERROR_RED }}>{failCode}</span>
-      </div>
-    </div>
-  );
-}
-
-// Incoming HTLC card — the context the validation gates check against.
-function HtlcCard({ compact }: { compact?: boolean }) {
-  return (
-    <div
-      className="border-[1.5px] overflow-hidden"
-      style={{ borderColor: HOP_STROKE.bob, background: "#fffdf5" }}
-    >
-      <div
-        className="px-3 py-1.5 flex items-center gap-2"
-        style={{
-          background: `${HOP_STROKE.bob}18`,
-          borderBottom: `1.5px solid ${HOP_STROKE.bob}40`,
-        }}
-      >
-        <span style={{ fontSize: 13 }}>↘</span>
+      <div className="flex items-center gap-2 flex-wrap justify-center">
         <span
-          className="text-[10px] uppercase tracking-[0.08em] font-bold"
-          style={{ fontFamily: MONO, color: HOP_STROKE.bob }}
+          className="text-[10.5px] italic"
+          style={{ fontFamily: SANS, color: NEUTRAL_TEXT }}
         >
-          inbound HTLC (from upstream peer)
+          {sub}
         </span>
+        <RejectsHover failCode={failCode} />
       </div>
-      <div
-        className={`grid ${compact ? "grid-cols-3" : "grid-cols-3"} gap-px`}
-        style={{ background: "rgba(15,23,42,0.08)" }}
-      >
-        <HtlcField label="payment_hash" value={PAYMENT_HASH} note="= associated_data" />
-        <HtlcField label="amount" value={`${fmt(AMOUNT_IN_MSAT)} msat`} />
-        <HtlcField label="cltv_expiry" value={`${fmt(CLTV_IN)}`} note="block height" />
-      </div>
-    </div>
-  );
-}
-
-function HtlcField({
-  label,
-  value,
-  note,
-}: {
-  label: string;
-  value: string;
-  note?: string;
-}) {
-  return (
-    <div className="flex flex-col items-center text-center px-2 py-2" style={{ background: "#fffdf5" }}>
-      <span
-        className="text-[9px] uppercase tracking-[0.06em] font-bold"
-        style={{ fontFamily: MONO, color: NEUTRAL_TEXT }}
-      >
-        {label}
-      </span>
-      <span
-        className="font-bold mt-0.5"
-        style={{ fontFamily: MONO, fontSize: 12, color: INK }}
-      >
-        {value}
-      </span>
-      {note && (
-        <span
-          className="text-[8.5px] mt-0.5 italic"
-          style={{ fontFamily: SANS, color: ASSOC_DATA_COLOR }}
-        >
-          {note}
-        </span>
-      )}
     </div>
   );
 }
 
 // ── Beat 1: Receive ───────────────────────────────────────────────────────
+//
+// Focal: the single sealed 1,366-byte packet. The incoming HTLC is carried by
+// the persistent strip above, so there's no separate HTLC card and no "+" glyph
+// joining them here.
 
 function ReceiveView() {
   return (
-    <div className="space-y-4">
-      <div className="flex justify-center" style={{ color: NEUTRAL_TEXT, fontSize: 18 }}>
-        +
-      </div>
+    <div className="space-y-4 mt-1">
       <div>
         <BufferHeader
           leftLabel="onion_routing_packet"
           rightLabel={
-            <HoverTooltip
-              content={
+            <Tooltip
+              width={280}
+              label={
                 <span>
                   Fixed 1,366-byte Sphinx wire format. Same size at every hop, so
                   an observer can't tell where Bob sits in the route.
                 </span>
               }
             >
-              {fmt(FULL_PACKET_BYTES)} bytes
-            </HoverTooltip>
+              <span style={{ borderBottom: "1px dotted #94a3b8", cursor: "help" }}>
+                {fmt(FULL_PACKET_BYTES)} bytes
+              </span>
+            </Tooltip>
           }
           accentColor={FOCUS_GOLD}
         />
@@ -691,114 +761,149 @@ function ReceiveView() {
 }
 
 // ── Beat 2: Structure gate ────────────────────────────────────────────────
+//
+// Focal: a compact 2-item checklist → a green STRUCTURE OK stamp. The full
+// four-field packet anatomy (a chapter-7 re-teach) is tucked behind a "see
+// fields" hover, and the failure code lives in the stamp's "rejects?" hover.
 
 function StructureGateView() {
   return (
-    <div className="mt-2">
-      <BufferHeader
-        leftLabel="parse the four fixed-size fields"
-        rightLabel={`${fmt(FULL_PACKET_BYTES)} bytes total`}
-        accentColor={FOCUS_GOLD}
-      />
-      <div
-        className="border-[1.5px] flex relative overflow-hidden"
-        style={{ background: "#fffdf5", borderColor: INK, height: 84 }}
-      >
-        <StructField basis={120} label="version" value="0x00" note="1 B" check />
-        <StructField basis={150} label="ephemeral pubkey" value="E_AB" note="33 B" accent={HOP_STROKE.bob} />
-        <StructFieldGrow label="hop_payloads" value="encrypted" note="1,300 B" />
-        <StructField basis={120} label="outer_hmac" value="hmac" note="32 B" />
+    <div className="mt-1">
+      <div className="flex items-center justify-between mb-2">
+        <span
+          className="text-[10px] uppercase tracking-[0.08em] font-bold"
+          style={{ fontFamily: MONO, color: FOCUS_GOLD }}
+        >
+          two cheap checks, before any crypto
+        </span>
+        <SeeFieldsHover />
       </div>
-      <div
-        className="flex justify-between mt-1"
-        style={{ fontFamily: MONO, fontSize: 10, color: NEUTRAL_TEXT }}
-      >
-        <span>byte 0</span>
-        <span>byte {fmt(FULL_PACKET_BYTES - 1)}</span>
+      <div className="mx-auto" style={{ maxWidth: 360 }}>
+        <ChecklistRow
+          label="length"
+          value={`${fmt(FULL_PACKET_BYTES)} B`}
+          detail="exactly 1,366 bytes"
+        />
+        <ChecklistRow
+          label="version"
+          value="0x00"
+          detail="known onion version"
+        />
       </div>
-      <GateBadge
-        pass
-        passLabel="1,366 bytes · version 0x00"
+      <VerdictStamp
+        label="STRUCTURE OK"
+        sub="shape is well-formed"
         failCode="invalid_onion_version"
       />
     </div>
   );
 }
 
-function StructField({
-  basis,
+function ChecklistRow({
   label,
   value,
-  note,
-  accent,
-  check,
+  detail,
 }: {
-  basis: number;
   label: string;
   value: string;
-  note: string;
-  accent?: string;
-  check?: boolean;
+  detail: string;
 }) {
   return (
     <div
-      className="flex flex-col items-center justify-center text-center border-r-[1.5px] last:border-r-0 relative"
-      style={{
-        flexBasis: basis,
-        flexShrink: 0,
-        borderColor: INK,
-        padding: "6px 6px",
-        background: accent ? `${accent}14` : "#fffdf5",
-      }}
+      className="flex items-center gap-2 border-[1.5px] px-3 py-1.5 mb-1.5"
+      style={{ borderColor: VERIFY_GREEN, background: "#fffdf5" }}
     >
       <span
-        className="text-[9px] uppercase tracking-[0.06em] font-bold"
-        style={{ fontFamily: MONO, color: NEUTRAL_TEXT }}
+        className="shrink-0"
+        style={{ color: VERIFY_GREEN, fontSize: 14, fontWeight: 700 }}
+      >
+        ☑
+      </span>
+      <span
+        className="text-[10px] uppercase tracking-[0.06em] font-bold"
+        style={{ fontFamily: MONO, color: NEUTRAL_TEXT, minWidth: 56 }}
       >
         {label}
       </span>
+      <span style={{ fontFamily: MONO, fontSize: 13, fontWeight: 700, color: INK }}>
+        = {value}
+      </span>
       <span
-        className="font-bold mt-0.5"
-        style={{ fontFamily: MONO, fontSize: 13, color: accent ?? INK }}
+        className="text-[10px] italic ml-auto"
+        style={{ fontFamily: SANS, color: NEUTRAL_TEXT }}
       >
-        {value}
+        {detail}
       </span>
-      <span className="text-[9px] mt-0.5 italic" style={{ fontFamily: SANS, color: NEUTRAL_TEXT }}>
-        {note}
-      </span>
-      {check && (
-        <span
-          className="absolute top-1 right-1 text-[11px] font-bold"
-          style={{ color: VERIFY_GREEN }}
-        >
-          ✓
-        </span>
-      )}
     </div>
   );
 }
 
-function StructFieldGrow({ label, value, note }: { label: string; value: string; note: string }) {
+// "See fields" affordance — reveals the four fixed-size fields (the ch-7 packet
+// anatomy) on hover, so the structural beat itself stays a 2-line checklist.
+function SeeFieldsHover() {
   return (
-    <div
-      className="flex-1 flex flex-col items-center justify-center text-center relative overflow-hidden"
-      style={{ minWidth: 0, padding: "6px 6px" }}
+    <Tooltip
+      width={320}
+      label={
+        <div>
+          <div
+            className="text-[9px] uppercase tracking-[0.06em] mb-1.5 font-bold"
+            style={{ fontFamily: MONO, color: NEUTRAL_TEXT }}
+          >
+            the 1,366 bytes, four fixed-size fields
+          </div>
+          <AnatomyLine name="version" bytes="1 B" value="0x00" />
+          <AnatomyLine
+            name="ephemeral pubkey"
+            bytes="33 B"
+            value="E_AB"
+            accent={HOP_STROKE.bob}
+          />
+          <AnatomyLine name="hop_payloads" bytes="1,300 B" value="encrypted" />
+          <AnatomyLine name="outer_hmac" bytes="32 B" value="hmac" />
+        </div>
+      }
     >
-      <HatchOverlay hops={OPAQUE_HATCH} zIndex={1} stripeOpacity={0.14} />
       <span
-        className="text-[9px] uppercase tracking-[0.06em] font-bold relative"
-        style={{ fontFamily: MONO, color: NEUTRAL_TEXT, zIndex: 2 }}
+        className="text-[10px] uppercase tracking-[0.06em]"
+        style={{
+          fontFamily: MONO,
+          color: NEUTRAL_TEXT,
+          borderBottom: `1px dotted ${NEUTRAL_TEXT}`,
+          cursor: "help",
+          fontWeight: 700,
+        }}
       >
-        {label}
+        see fields
       </span>
+    </Tooltip>
+  );
+}
+
+function AnatomyLine({
+  name,
+  bytes,
+  value,
+  accent,
+}: {
+  name: string;
+  bytes: string;
+  value: string;
+  accent?: string;
+}) {
+  return (
+    <div className="flex items-baseline gap-2 py-0.5" style={{ fontFamily: MONO }}>
       <span
-        className="font-bold mt-0.5 relative"
-        style={{ fontFamily: MONO, fontSize: 12, color: INK, zIndex: 2, background: "rgba(255,253,245,0.85)", padding: "0 4px" }}
+        className="text-[10px] font-bold"
+        style={{ color: accent ?? INK, minWidth: 110 }}
       >
+        {name}
+      </span>
+      <span className="text-[10px]" style={{ color: NEUTRAL_TEXT }}>
+        {bytes}
+      </span>
+      <span className="text-[10px] ml-auto" style={{ color: accent ?? INK }}>
         {value}
-      </span>
-      <span className="text-[9px] mt-0.5 italic relative" style={{ fontFamily: SANS, color: NEUTRAL_TEXT, zIndex: 2 }}>
-        {note}
       </span>
     </div>
   );
@@ -842,72 +947,74 @@ function FieldChip({
 }
 
 // ── Beat 6: Forward vs destination branch ─────────────────────────────────
+//
+// Focal: the fork resolved, with only the FORWARDER card lit. The destination
+// arm shrinks to a single quiet line, and the malformed-case rule moves to a
+// hover on the branch question.
 
 function BranchView() {
   return (
-    <div className="my-2">
-      <div className="text-center mb-3">
-        <MathLine
-          text="short_channel_id present?"
-          color={INK}
-          fontSize={14}
-        />
+    <div className="my-2 mt-1">
+      <div className="flex items-center justify-center gap-2 mb-3 flex-wrap">
+        <MathLine text="short_channel_id present?" color={INK} fontSize={14} />
+        <Tooltip
+          width={260}
+          label={
+            <span>
+              Exactly one of{" "}
+              <span style={{ fontFamily: MONO }}>short_channel_id</span> or{" "}
+              <span style={{ fontFamily: MONO }}>payment_data</span> must be
+              present. Both, or neither, is malformed and Bob rejects it.
+            </span>
+          }
+        >
+          <span
+            className="text-[10px] uppercase tracking-[0.06em]"
+            style={{
+              fontFamily: MONO,
+              color: NEUTRAL_TEXT,
+              borderBottom: `1px dotted ${NEUTRAL_TEXT}`,
+              cursor: "help",
+              fontWeight: 700,
+            }}
+          >
+            both or neither?
+          </span>
+        </Tooltip>
       </div>
-      <div className="grid grid-cols-2 gap-4">
-        <BranchCard
-          active
-          title="FORWARDER"
-          condition="short_channel_id present"
-          accent={HOP_STROKE.bob}
-          lines={[
-            "Bob is an intermediate hop.",
-            "Send the rebuilt onion onward",
-            `to channel ${SCID}.`,
-          ]}
-        />
-        <BranchCard
-          title="DESTINATION"
-          condition="payment_data present, no short_channel_id"
-          accent={HOP_STROKE.dave}
-          lines={[
-            "Bob would be the final hop.",
-            "Check payment_secret + total,",
-            "then claim the HTLC.",
-          ]}
-        />
-      </div>
+
+      {/* The lit forwarder arm — Bob's path. */}
+      <ForwarderArm />
+
+      {/* The other arm, reduced to one quiet line. */}
       <div
         className="text-center mt-3 text-[11px] italic"
         style={{ color: NEUTRAL_TEXT, fontFamily: SANS }}
       >
-        Both fields present, or neither, is malformed → reject. Here Bob has a
-        `short_channel_id`, so he takes the forwarder path.
+        Not Bob's case:{" "}
+        <span style={{ fontFamily: MONO, fontStyle: "normal" }}>
+          payment_data
+        </span>{" "}
+        present with no{" "}
+        <span style={{ fontFamily: MONO, fontStyle: "normal" }}>
+          short_channel_id
+        </span>{" "}
+        would make him the destination.
       </div>
     </div>
   );
 }
 
-function BranchCard({
-  active,
-  title,
-  condition,
-  accent,
-  lines,
-}: {
-  active?: boolean;
-  title: string;
-  condition: string;
-  accent: string;
-  lines: string[];
-}) {
+function ForwarderArm() {
+  const accent = HOP_STROKE.bob;
   return (
     <div
-      className="border-[1.5px] overflow-hidden"
+      className="border-[1.5px] overflow-hidden mx-auto"
       style={{
-        borderColor: active ? FOCUS_GOLD : "rgba(15,23,42,0.3)",
-        background: active ? "#fffdf5" : "#fbfbf8",
-        boxShadow: active ? `0 0 0 2px rgba(184,134,11,0.2)` : "none",
-        opacity: active ? 1 : 0.7,
+        borderColor: FOCUS_GOLD,
+        background: "#fffdf5",
+        boxShadow: `0 0 0 2px rgba(184,134,11,0.2)`,
+        maxWidth: 420,
       }}
     >
       <div
@@ -918,30 +1025,23 @@ function BranchCard({
           className="text-[11px] uppercase tracking-[0.08em] font-bold"
           style={{ fontFamily: MONO, color: accent }}
         >
-          {title}
+          FORWARDER
         </span>
-        {active && (
-          <span className="text-[11px] font-bold" style={{ color: FOCUS_GOLD }}>
-            ◄ Bob
-          </span>
-        )}
+        <span className="text-[11px] font-bold" style={{ color: FOCUS_GOLD }}>
+          ◄ Bob
+        </span>
       </div>
       <div className="px-3 py-2">
         <div
           className="text-[10px] mb-1.5 inline-block px-1.5 py-0.5"
           style={{ fontFamily: MONO, color: accent, background: `${accent}12` }}
         >
-          if {condition}
+          short_channel_id present
         </div>
-        {lines.map((l, i) => (
-          <div
-            key={i}
-            className="text-xs leading-snug"
-            style={{ color: INK, fontFamily: SANS }}
-          >
-            {l}
-          </div>
-        ))}
+        <div className="text-xs leading-snug" style={{ color: INK, fontFamily: SANS }}>
+          Bob is an intermediate hop. Send the rebuilt onion onward to channel{" "}
+          <span style={{ fontFamily: MONO }}>{SCID}</span>.
+        </div>
       </div>
     </div>
   );
@@ -979,6 +1079,9 @@ function CheckView() {
   );
 }
 
+// Each policy check is three parts: the green check mark, the label + formula +
+// note, and a quiet "rejects?" hover carrying the failure code. Moving the code
+// to hover keeps the row from wrapping and shows only the passing verdict.
 function CheckRow({
   pass,
   label,
@@ -1014,11 +1117,8 @@ function CheckRow({
           {note}
         </div>
       </div>
-      <div
-        className="flex items-center px-2 text-[9.5px] text-right"
-        style={{ fontFamily: MONO, color: NEUTRAL_TEXT, maxWidth: 120 }}
-      >
-        else → <span style={{ color: ERROR_RED, marginLeft: 4 }}>{failCode}</span>
+      <div className="flex items-center px-3 shrink-0">
+        <RejectsHover failCode={failCode} />
       </div>
     </div>
   );
@@ -1057,10 +1157,13 @@ function OutcomeView() {
       </div>
       <div
         className="text-center mt-3 text-[11px] italic"
-        style={{ color: ASSOC_DATA_COLOR, fontFamily: SANS }}
+        style={{ color: NEUTRAL_TEXT, fontFamily: SANS }}
       >
-        Every outcome carries `ss`. The error path always needs the shared
-        secret, whether to wrap an error here or relay one from downstream.
+        Every outcome carries the shared secret{" "}
+        <span style={{ fontFamily: MONO, fontStyle: "normal", color: ASSOC_DATA_COLOR }}>
+          ss
+        </span>{" "}
+        (hover it for why).
       </div>
     </div>
   );
@@ -1109,20 +1212,48 @@ function OutcomeCard({
       </div>
       <div className="px-3 py-2 flex-1">
         <div className="flex flex-wrap gap-1">
-          {fields.map((f) => (
-            <span
-              key={f}
-              className="text-[10px] px-1.5 py-0.5 border"
-              style={{
-                fontFamily: MONO,
-                color: f === "ss" ? ASSOC_DATA_COLOR : INK,
-                borderColor: f === "ss" ? ASSOC_DATA_COLOR : "rgba(15,23,42,0.2)",
-                background: f === "ss" ? `${ASSOC_DATA_COLOR}10` : "#fff",
-              }}
-            >
-              {f}
-            </span>
-          ))}
+          {fields.map((f) =>
+            f === "ss" ? (
+              <Tooltip
+                key={f}
+                width={250}
+                label={
+                  <span>
+                    The shared secret. The error path always needs it, whether to
+                    wrap a fresh error here or relay one from downstream (chapter
+                    11).
+                  </span>
+                }
+              >
+                <span
+                  className="text-[10px] px-1.5 py-0.5 border"
+                  style={{
+                    fontFamily: MONO,
+                    color: ASSOC_DATA_COLOR,
+                    borderColor: ASSOC_DATA_COLOR,
+                    background: `${ASSOC_DATA_COLOR}10`,
+                    borderBottom: `1px dotted ${ASSOC_DATA_COLOR}`,
+                    cursor: "help",
+                  }}
+                >
+                  {f}
+                </span>
+              </Tooltip>
+            ) : (
+              <span
+                key={f}
+                className="text-[10px] px-1.5 py-0.5 border"
+                style={{
+                  fontFamily: MONO,
+                  color: INK,
+                  borderColor: "rgba(15,23,42,0.2)",
+                  background: "#fff",
+                }}
+              >
+                {f}
+              </span>
+            )
+          )}
         </div>
       </div>
       <div
@@ -1153,7 +1284,7 @@ function keyDerivationProps(muActive: boolean) {
       keyName: "rho_B",
       bytes: "32 bytes",
       useTitle: "Stream cipher key",
-      useSubtitle: "peels the layer (next step)",
+      useSubtitle: "peels the layer (the XOR)",
       color: KEY_RHO_COLOR,
       active: !muActive,
     },
@@ -1173,14 +1304,6 @@ function keyDerivationProps(muActive: boolean) {
       formulaOverride: "SHA256(bob_privkey · E_AB)",
     },
   };
-}
-
-function KeyHoverBadge() {
-  return (
-    <div className="flex justify-end mb-1">
-      <KeyHoverIcon {...keyDerivationProps(false)} />
-    </div>
-  );
 }
 
 export default ValidationFlowDiagram;

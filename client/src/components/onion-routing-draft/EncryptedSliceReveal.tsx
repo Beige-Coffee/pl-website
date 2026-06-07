@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Tooltip } from "./Tooltip";
 import { LAYER_ANGLES } from "./encryptionHatch";
+import { StepCaption } from "./StepCaption";
 
 // ────────────────────────────────────────────────────────────────────────────
 // EncryptedSliceReveal (DRAFT)
@@ -461,45 +462,50 @@ export function EncryptedSliceReveal() {
             </div>
           </div>
         </div>
+
+        {/* Spacer reserving the absolutely-positioned message's vertical
+            footprint so the StepCaption below flows clear of it. */}
+        <div aria-hidden style={{ height: 300 }} />
+
+        <StepCaption
+          label={`Step ${step + 1} of ${TOTAL_STEPS}`}
+          caption={STEP_CAPTIONS[step]}
+          accentColor={HOP_COLORS[active].stroke}
+        />
       </div>
 
       {/* Controls */}
       <div className="px-4 py-3 border-t-[1.5px] border-foreground/30 bg-card">
-        <div className="flex flex-col md:flex-row md:items-start md:gap-4">
-          <div className="flex gap-1.5 items-center flex-wrap shrink-0">
-            <button
-              onClick={playing ? pause : play}
-              className="px-3 py-1.5 border-[1.5px] border-black bg-black text-white font-bold text-xs tracking-[0.05em] uppercase hover:bg-[#b8860b] hover:border-[#b8860b] transition-colors"
-              data-testid="encrypted-slice-reveal-play"
-            >
-              {playing ? "❚❚ Pause" : step >= TOTAL_STEPS - 1 ? "↻ Replay" : "▶ Play"}
-            </button>
-            <button
-              onClick={reset}
-              className="px-3 py-1.5 border-[1.5px] border-foreground/40 bg-card text-foreground text-xs uppercase tracking-[0.05em] hover:bg-secondary transition-colors"
-            >
-              Reset
-            </button>
-            <div className="ml-1 flex gap-1">
-              {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => { setPlaying(false); setStep(i); }}
-                  className="w-7 h-7 border-[1.5px] text-[10px] font-bold transition-colors"
-                  style={{
-                    background: step === i ? "#b8860b" : step > i ? "#fef3c7" : "#fffdf5",
-                    borderColor: step === i ? "#b8860b" : "#0f172a",
-                    color: step === i ? "#fffdf5" : "#0f172a",
-                  }}
-                  data-testid={`encrypted-slice-reveal-step-${i}`}
-                >
-                  {i + 1}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="mt-3 md:mt-0 text-sm leading-relaxed flex-1 max-w-2xl">
-            {STEP_CAPTIONS[step]}
+        <div className="flex gap-1.5 items-center flex-wrap shrink-0">
+          <button
+            onClick={playing ? pause : play}
+            className="px-3 py-1.5 border-[1.5px] border-black bg-black text-white font-bold text-xs tracking-[0.05em] uppercase hover:bg-[#b8860b] hover:border-[#b8860b] transition-colors"
+            data-testid="encrypted-slice-reveal-play"
+          >
+            {playing ? "❚❚ Pause" : step >= TOTAL_STEPS - 1 ? "↻ Replay" : "▶ Play"}
+          </button>
+          <button
+            onClick={reset}
+            className="px-3 py-1.5 border-[1.5px] border-foreground/40 bg-card text-foreground text-xs uppercase tracking-[0.05em] hover:bg-secondary transition-colors"
+          >
+            Reset
+          </button>
+          <div className="ml-1 flex gap-1">
+            {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
+              <button
+                key={i}
+                onClick={() => { setPlaying(false); setStep(i); }}
+                className="w-7 h-7 border-[1.5px] text-[10px] font-bold transition-colors"
+                style={{
+                  background: step === i ? "#b8860b" : step > i ? "#fef3c7" : "#fffdf5",
+                  borderColor: step === i ? "#b8860b" : "#0f172a",
+                  color: step === i ? "#fffdf5" : "#0f172a",
+                }}
+                data-testid={`encrypted-slice-reveal-step-${i}`}
+              >
+                {i + 1}
+              </button>
+            ))}
           </div>
         </div>
       </div>

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { StepCaption } from "./StepCaption";
 
 // ────────────────────────────────────────────────────────────────────────────
 // HmacChainDiagram  ("How the per-hop HMACs hold it together", ch.5)
@@ -43,17 +44,17 @@ const TOPS = [56, 212, 368];
 
 interface GhostSeg { label: string; hop: HopId | null; w: number }
 interface PacketSpec {
-  hop: HopId; viewer: string; ephemeral: string; lenHex: string; tlvLabel: string;
+  hop: HopId; viewer: string; ephemeral: string; lenHex: string; payloadName: string; payloadBytes: string;
   innerHmac: string; innerHmacHop: HopId | null; outerHmac: string; ghost: GhostSeg[];
 }
 const PACKETS: PacketSpec[] = [
-  { hop: "bob", viewer: "What Bob receives", ephemeral: "E_AB", lenHex: "0x40", tlvLabel: "Bob TLV",
+  { hop: "bob", viewer: "What Bob receives", ephemeral: "E_AB", lenHex: "0x40", payloadName: "Bob", payloadBytes: "60 B",
     innerHmac: "charlie_hmac", innerHmacHop: "charlie", outerHmac: "bob_hmac",
     ghost: [{ label: "Charlie payload", hop: "charlie", w: 24 }, { label: "Dave payload", hop: "dave", w: 28 }, { label: "padding", hop: null, w: 48 }] },
-  { hop: "charlie", viewer: "What Charlie receives", ephemeral: "E_AC", lenHex: "0x40", tlvLabel: "Charlie TLV",
+  { hop: "charlie", viewer: "What Charlie receives", ephemeral: "E_AC", lenHex: "0x40", payloadName: "Charlie", payloadBytes: "80 B",
     innerHmac: "dave_hmac", innerHmacHop: "dave", outerHmac: "charlie_hmac",
     ghost: [{ label: "Dave payload", hop: "dave", w: 32 }, { label: "padding", hop: null, w: 44 }, { label: "filler", hop: null, w: 24 }] },
-  { hop: "dave", viewer: "What Dave receives", ephemeral: "E_AD", lenHex: "0x63", tlvLabel: "Dave TLV",
+  { hop: "dave", viewer: "What Dave receives", ephemeral: "E_AD", lenHex: "0x63", payloadName: "Dave", payloadBytes: "100 B",
     innerHmac: "0x00…", innerHmacHop: null, outerHmac: "dave_hmac",
     ghost: [{ label: "padding", hop: null, w: 68 }, { label: "filler", hop: null, w: 32 }] },
 ];
@@ -73,6 +74,26 @@ export function HmacChainDiagram() {
   const recomputed = illustrativeTag(cells);
   const matches = recomputed === EXPECTED_TAG;
 
+  // Per-mode explanation, surfaced in the StepCaption below the visual.
+  // Nesting view: gold (no single active hop, the whole chain is in view).
+  // Tamper view: Charlie's color, since the editable bytes are Charlie's.
+  const captionAccent = tamper ? HOP_STROKE.charlie : "#b8860b";
+  const captionLabel = tamper
+    ? matches
+      ? "TAMPER · CHARLIE'S BYTES"
+      : "TAMPER · MISMATCH"
+    : "HMAC NESTING";
+  const captionTitle = tamper
+    ? matches
+      ? "These are the committed bytes"
+      : "Charlie drops the packet"
+    : "Each HMAC commits to the layer beneath it";
+  const captionBody = tamper
+    ? matches
+      ? "These are the bytes charlie_hmac was computed over. Edit any one and watch the tag Charlie recomputes drift away from the one Alice baked in."
+      : "You changed a committed byte, so Charlie's recomputed tag no longer matches charlie_hmac. He drops the packet. This is why a forwarder can't quietly alter what's beneath its own hop payload."
+    : "Each outer HMAC brackets the exact bytes it commits to, and the tag inside one packet is wired to the next packet's outer HMAC, because they're the same value. Edit Charlie's bytes to see why that keeps a malicious hop in check.";
+
   return (
     <div className="my-8 border-[1.5px] border-foreground/40 bg-card overflow-hidden" data-testid="onion-hmac-chain" style={{ fontFamily: SANS }}>
       <div className="bg-black text-white px-4 py-2 flex items-center gap-2">
@@ -86,10 +107,11 @@ export function HmacChainDiagram() {
         {tamper ? (
           <div className="overflow-x-auto"><div className="mx-auto" style={{ minWidth: 620, maxWidth: 820 }}>
             <ByteEditor cells={cells} setCell={(i, v) => setCells((p) => p.map((c, j) => (j === i ? v : c)))} recomputed={recomputed} matches={matches} />
+            <StepCaption label={captionLabel} title={captionTitle} caption={captionBody} accentColor={captionAccent} />
           </div></div>
         ) : (
-          <div className="overflow-x-auto">
-            <svg viewBox={`0 0 ${VB_W} ${VB_H}`} width="100%" style={{ minWidth: 720, maxWidth: 900, display: "block", margin: "0 auto" }} fontFamily={MONO}>
+          <div className="overflow-x-auto"><div className="mx-auto" style={{ minWidth: 720, maxWidth: 900 }}>
+            <svg viewBox={`0 0 ${VB_W} ${VB_H}`} width="100%" style={{ display: "block" }} fontFamily={MONO}>
               <defs>
                 <pattern id="hmacEnc" width="8" height="8" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
                   <line x1="0" y1="0" x2="0" y2="8" stroke="#64748b" strokeWidth="1.4" opacity="0.5" />
@@ -103,25 +125,17 @@ export function HmacChainDiagram() {
               ))}
             </svg>
             <div className="text-center text-[11px] italic mt-1" style={{ color: SLATE }}>Hover a packet to isolate its HMAC relationships.</div>
-          </div>
+            <StepCaption label={captionLabel} title={captionTitle} caption={captionBody} accentColor={captionAccent} />
+          </div></div>
         )}
       </div>
 
       <div className="px-4 py-3 border-t-[1.5px] border-foreground/30 bg-card">
-        <div className="flex flex-col md:flex-row md:items-start md:gap-4">
-          <button onClick={() => { if (tamper) { setTamper(false); setCells(INITIAL_CELLS); } else setTamper(true); }}
-            className="px-3 py-1.5 border-[1.5px] font-bold text-xs tracking-[0.05em] uppercase transition-colors shrink-0"
-            style={{ borderColor: tamper ? ERR : INK, background: tamper ? ERR : INK, color: "#fff" }}>
-            {tamper ? "↺ Back to the nesting view" : "⚠ Edit Charlie's bytes"}
-          </button>
-          <div className="mt-3 md:mt-0 text-sm leading-relaxed flex-1 max-w-2xl" style={{ color: tamper && !matches ? ERR : INK }}>
-            {tamper
-              ? matches
-                ? "These are the bytes charlie_hmac was computed over. Edit any one and watch the tag Charlie recomputes drift away from the one Alice baked in."
-                : "You changed a committed byte, so Charlie's recomputed tag no longer matches charlie_hmac. He drops the packet. This is why a forwarder can't quietly alter what's beneath its own hop payload."
-              : "Each outer HMAC brackets the exact bytes it commits to, and the tag inside one packet is wired to the next packet's outer HMAC, because they're the same value. Edit Charlie's bytes to see why that keeps a malicious hop in check."}
-          </div>
-        </div>
+        <button onClick={() => { if (tamper) { setTamper(false); setCells(INITIAL_CELLS); } else setTamper(true); }}
+          className="px-3 py-1.5 border-[1.5px] font-bold text-xs tracking-[0.05em] uppercase transition-colors shrink-0"
+          style={{ borderColor: tamper ? ERR : INK, background: tamper ? ERR : INK, color: "#fff" }}>
+          {tamper ? "↺ Back to the nesting view" : "⚠ Edit Charlie's bytes"}
+        </button>
       </div>
     </div>
   );
@@ -161,8 +175,8 @@ function PacketGroup({ spec, top, idx, focus, onFocus }: { spec: PacketSpec; top
           <text x={(HEADER_R + C.lenR) / 2} y={cy - 3} fontSize="7" fontWeight="700" fill={SLATE} textAnchor="middle">LEN</text>
           <text x={(HEADER_R + C.lenR) / 2} y={cy + 9} fontSize="8.5" fontWeight="700" fill={stroke} textAnchor="middle">{spec.lenHex}</text>
           <rect x={C.lenR} y={top} width={C.tlvR - C.lenR} height={PKT_H} fill={fill} stroke={`${stroke}80`} strokeWidth="1" />
-          <text x={(C.lenR + C.tlvR) / 2} y={cy - 2} fontSize="10" fontWeight="700" fill={stroke} textAnchor="middle">{spec.tlvLabel}</text>
-          <text x={(C.lenR + C.tlvR) / 2} y={cy + 11} fontSize="7.5" fontStyle="italic" fill={SLATE} textAnchor="middle">payload</text>
+          <text x={(C.lenR + C.tlvR) / 2} y={cy - 2} fontSize="10" fontWeight="700" fill={stroke} textAnchor="middle">{spec.payloadName}</text>
+          <text x={(C.lenR + C.tlvR) / 2} y={cy + 11} fontSize="8" fontStyle="italic" fill={SLATE} textAnchor="middle">{spec.payloadBytes}</text>
         </g>
 
         {/* INNER HMAC (the arrow source) */}

@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { HatchOverlay, LAYER_COLORS, type ForwarderId } from "./encryptionHatch";
-import { renderCaption } from "./captionMarkup";
 import { KeyDerivationCard } from "./KeyDerivationCard";
+import { StepCaption } from "./StepCaption";
 
 // ────────────────────────────────────────────────────────────────────────────
 // ForwarderPeelDiagram (rebuilt 2026-05-10 for BOLT 4 accuracy)
@@ -537,6 +537,11 @@ export function ForwarderPeelDiagram() {
   const hopState = hopTrackStateFor(step);
   const packetState = packetStateFor(step);
   const focus = focusFor(step);
+  // The whole diagram is "what Bob does," so Bob's blue accents steps 1-6.
+  // On step 7 the packet moves to Charlie (envelope + HMAC turn teal), so the
+  // accent follows it to Charlie.
+  const stepAccent =
+    step === 7 ? HOP_STROKE_COLOR.charlie : HOP_STROKE_COLOR.bob;
 
   return (
     <div
@@ -558,11 +563,16 @@ export function ForwarderPeelDiagram() {
         <div className="overflow-x-auto">
           <div className="mx-auto" style={{ minWidth: 680, maxWidth: 860 }}>
             <HopTrack state={hopState} />
-            <StepBanner def={def} />
             <MainPacket state={packetState} step={step} focus={focus} />
             <KeyDerivationCallout step={step} />
             <SidePanel step={step} />
             <DecryptedSlotCallout step={step} />
+            <StepCaption
+              label={`Step ${def.step} of ${TOTAL_STEPS}`}
+              title={def.title}
+              caption={def.caption}
+              accentColor={stepAccent}
+            />
           </div>
         </div>
       </div>
@@ -612,38 +622,7 @@ export function ForwarderPeelDiagram() {
               })}
             </div>
           </div>
-          <div
-            className="mt-3 md:mt-0 text-sm leading-relaxed flex-1 max-w-2xl"
-            style={{ color: INK }}
-          >
-            {renderCaption(def.caption)}
-          </div>
         </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Step banner ──────────────────────────────────────────────────────────
-
-function StepBanner({ def }: { def: StepDef }) {
-  return (
-    <div className="mb-3 flex items-baseline justify-between gap-4 flex-wrap">
-      <span
-        className="text-[10px] uppercase tracking-[0.1em]"
-        style={{
-          fontFamily: MONO,
-          color: HOP_STROKE_COLOR.bob,
-          fontWeight: 700,
-        }}
-      >
-        Step {def.step} of {TOTAL_STEPS}
-      </span>
-      <div
-        className="text-base font-bold"
-        style={{ color: INK, fontFamily: SANS }}
-      >
-        {renderCaption(def.title)}
       </div>
     </div>
   );
@@ -910,16 +889,16 @@ function DecryptedSlotCallout({ step }: { step: number }) {
             subValue="64 bytes"
           />
           <DecryptedSubCell
-            title="TLV"
+            title="ROUTING"
             flex
-            value="forward → Charlie"
+            value="forward to Charlie"
             subValue="ch_id: 0x123abc · amt: 100,000 msat · cltv: 720"
           />
           <DecryptedSubCell
             title="HMAC"
             width={140}
             value="charlie_hmac"
-            subValue="32 bytes · → Charlie"
+            subValue="32 bytes"
             accentColor={HOP_STROKE_COLOR.charlie}
           />
         </div>

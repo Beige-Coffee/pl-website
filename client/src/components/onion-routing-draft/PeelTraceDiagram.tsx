@@ -19,13 +19,15 @@
 //   9.  Advance  — bf_AB = SHA256(E_AB ‖ ss_AB); E_AC = bf_AB · E_AB
 //   10. Ship     — assemble + send 1,366-byte packet to Charlie
 //
-// Reuses primitives exported from WrapTraceDiagram (HopTrack, IterationBanner,
-// BufferRegion, SlotCell, BufferHeader, SymbolRow, ADBar, KeystreamBar,
-// CompactBar, HoverTooltip) plus KeyDerivationCard for the key panels.
+// Reuses primitives exported from WrapTraceDiagram (BufferRegion, SlotCell,
+// BufferHeader, SymbolRow, ADBar) plus the shared viewport-clamped Tooltip,
+// KeyDerivationCard for the key panels, and StepCaption for the per-beat
+// explanation block rendered below the visual (§1.5).
 // ────────────────────────────────────────────────────────────────────────────
 
-import { useEffect, useState } from "react";
-import { renderCaption } from "./captionMarkup";
+import { useEffect, useState, type ReactNode } from "react";
+import { Tooltip } from "./Tooltip";
+import { StepCaption } from "./StepCaption";
 import { MorphBox, CrossfadeSwap } from "./morph";
 import { HatchOverlay, type ForwarderId } from "./encryptionHatch";
 import {
@@ -56,12 +58,10 @@ import {
   DISPLAY_DAVE_PCT,
   STEP_MS,
   // components
-  IterationBanner,
   BufferRegion,
   BufferHeader,
   SymbolRow,
   ADBar,
-  HoverTooltip,
   // types
   type Beat,
   type Region,
@@ -73,6 +73,27 @@ const ASSOC_DATA_COLOR = "#5a7a2f";
 const VERIFY_GREEN = "#1f7a4a";
 
 const TOTAL_BEATS = 10;
+
+// Wraps the shared viewport-clamped Tooltip (Tooltip.tsx, §8) and keeps the
+// dotted-underline / help-cursor affordance the old WrapTrace HoverTooltip
+// carried, so the byte-count triggers still read as hoverable.
+function TipText({
+  label,
+  width,
+  children,
+}: {
+  label: ReactNode;
+  width?: number;
+  children: ReactNode;
+}) {
+  return (
+    <Tooltip label={label} width={width}>
+      <span style={{ borderBottom: "1px dotted #94a3b8", cursor: "help" }}>
+        {children}
+      </span>
+    </Tooltip>
+  );
+}
 
 // Bob's view: display widths for the 2,600-byte extended buffer.
 // Bob's hop payload is exaggerated for readability; the rest of the
@@ -198,25 +219,6 @@ function receiveRegions1300(focus = false): Region[] {
   ];
 }
 
-function strippedRegions1300(focusBob = false): Region[] {
-  return [
-    {
-      key: "bob-hop-payload",
-      widthPct: DISPLAY_BOB_PCT,
-      kind: "slot",
-      hop: "bob",
-      layers: [],
-      isFocus: focusBob,
-    },
-    {
-      key: "opaque-rest",
-      widthPct: 100 - DISPLAY_BOB_PCT,
-      kind: "padding-enc",
-      layers: OPAQUE_HATCH,
-    },
-  ];
-}
-
 // Regions for the 2,600-byte extended view. Left 50% is the incoming
 // buffer (Bob's hop payload + opaque rest); right 50% is the extension
 // (zeros at beat 5, keystream output at beat 6+). We exaggerate Bob's
@@ -276,6 +278,13 @@ export function PeelTraceDiagram() {
   };
 
   const beat = BEATS[step - 1];
+  const beatAccent = beat.iterLabel.includes("Dave")
+    ? HOP_STROKE.dave
+    : beat.iterLabel.includes("Charlie")
+      ? HOP_STROKE.charlie
+      : beat.iterLabel.includes("Bob")
+        ? HOP_STROKE.bob
+        : FOCUS_GOLD;
 
   return (
     <div
@@ -298,9 +307,14 @@ export function PeelTraceDiagram() {
           <div className="mx-auto" style={{ minWidth: 700, maxWidth: 840 }}>
             {/* No HopTrack: Bob's view doesn't include knowledge of who's
                 upstream or downstream in the route. */}
-            <IterationBanner beat={beat} />
-
             <BeatBody step={step} />
+
+            <StepCaption
+              label={`${beat.iterLabel} · ${beat.subLabel}`}
+              title={beat.title}
+              caption={beat.caption}
+              accentColor={beatAccent}
+            />
           </div>
         </div>
       </div>
@@ -344,12 +358,6 @@ export function PeelTraceDiagram() {
                 );
               })}
             </div>
-          </div>
-          <div
-            className="mt-3 md:mt-0 text-sm leading-relaxed flex-1 max-w-2xl"
-            style={{ color: INK }}
-          >
-            {renderCaption(beat.caption)}
           </div>
         </div>
       </div>
@@ -409,15 +417,9 @@ function ReceiveView() {
       <BufferHeader
         leftLabel="onion_routing_packet"
         rightLabel={
-          <HoverTooltip
-            content={
-              <span>
-                Fixed 1,366-byte Sphinx wire format. Same size at every hop.
-              </span>
-            }
-          >
+          <TipText label="Fixed 1,366-byte Sphinx wire format. Same size at every hop.">
             {FULL_PACKET_BYTES.toLocaleString()} bytes
-          </HoverTooltip>
+          </TipText>
         }
         accentColor={FOCUS_GOLD}
       />
@@ -518,16 +520,9 @@ function PacketCard({
       <BufferHeader
         leftLabel={title}
         rightLabel={
-          <HoverTooltip
-            content={
-              <span>
-                The fixed 1,366-byte Sphinx wire format. Same size at every
-                hop, so an observer can't infer route length from the wire.
-              </span>
-            }
-          >
+          <TipText label="The fixed 1,366-byte Sphinx wire format. Same size at every hop, so an observer can't infer route length from the wire.">
             {FULL_PACKET_BYTES.toLocaleString()} bytes total
-          </HoverTooltip>
+          </TipText>
         }
         accentColor={FOCUS_GOLD}
       />
@@ -640,13 +635,6 @@ function PacketCard({
           </span>
         </div>
       </div>
-      <div
-        className="flex justify-between mt-1"
-        style={{ fontFamily: MONO, fontSize: 10, color: NEUTRAL_TEXT }}
-      >
-        <span>byte 0</span>
-        <span>byte {(FULL_PACKET_BYTES - 1).toLocaleString()}</span>
-      </div>
       {sublabel && (
         <div
           className="text-center mt-2 text-[11px] italic"
@@ -692,16 +680,9 @@ function ParseVerifyMorphView({ step }: { step: number }) {
           <BufferHeader
             leftLabel="incoming packet"
             rightLabel={
-              <HoverTooltip
-                content={
-                  <span>
-                    The fixed 1,366-byte Sphinx wire format. Same size at every
-                    hop, so an observer can't infer route length from the wire.
-                  </span>
-                }
-              >
+              <TipText label="The fixed 1,366-byte Sphinx wire format. Same size at every hop, so an observer can't infer route length from the wire.">
                 {FULL_PACKET_BYTES.toLocaleString()} bytes total
-              </HoverTooltip>
+              </TipText>
             }
             accentColor={FOCUS_GOLD}
           />
@@ -857,15 +838,7 @@ function ParseVerifyMorphView({ step }: { step: number }) {
               <MathLine text="outer_hmac" color={NEUTRAL_TEXT} fontSize={13} />
             </div>
           </MorphBox>
-        ) : (
-          <div
-            className="flex justify-between mt-1"
-            style={{ fontFamily: MONO, fontSize: 10, color: NEUTRAL_TEXT }}
-          >
-            <span>byte 0</span>
-            <span>byte {(FULL_PACKET_BYTES - 1).toLocaleString()}</span>
-          </div>
-        )}
+        ) : null}
       </div>
     </div>
   );
@@ -1001,20 +974,14 @@ function ExtendedMorphView({ step }: { step: number }) {
       <div key="label">
         {step === 5 ? (
           <BufferHeader
-            leftLabel="extended buffer · 2,600 B (incoming half + 1,300 zero bytes)"
+            leftLabel="extended buffer · 2,600 B"
             rightLabel={
-              <HoverTooltip
-                content={
-                  <span>
-                    The extension is what lets Bob's keystream produce the
-                    matching `filler` bytes Alice baked into Charlie's view. Bob
-                    keeps the extended buffer in scratch memory; it never leaves
-                    his node.
-                  </span>
-                }
+              <TipText
+                width={320}
+                label="The extension is what lets Bob's keystream produce the matching filler bytes Alice baked into Charlie's view. Bob keeps the extended buffer in scratch memory; it never leaves his node."
               >
                 2× wire size
-              </HoverTooltip>
+              </TipText>
             }
             accentColor={FOCUS_GOLD}
           />
@@ -1024,8 +991,8 @@ function ExtendedMorphView({ step }: { step: number }) {
             style={{ color: NEUTRAL_TEXT, fontFamily: MONO, fontWeight: 500 }}
           >
             {isXor
-              ? "extended buffer · before XOR (from step 5)"
-              : "extended buffer · 2,600 B (from step 6)"}
+              ? "extended buffer · before XOR"
+              : "extended buffer · 2,600 B"}
           </div>
         )}
       </div>
@@ -1074,27 +1041,17 @@ function ExtendedMorphView({ step }: { step: number }) {
           (lift). The non-standalone blocks slide in beneath the bar. */}
       <div key="extra">
         {step === 5 && (
-          <>
-            <div
-              className="flex mt-1"
-              style={{ fontFamily: MONO, fontSize: 10, color: NEUTRAL_TEXT }}
-            >
-              <span style={{ flex: 1 }}>byte 0</span>
-              <span>byte 1,300</span>
-              <span style={{ flex: 1, textAlign: "right" }}>byte 2,599</span>
-            </div>
-            <div
-              className="flex mt-1"
-              style={{ fontFamily: MONO, fontSize: 9.5, color: NEUTRAL_TEXT }}
-            >
-              <span style={{ flex: 1, textAlign: "center" }}>
-                ← incoming hop_payloads (still encrypted) →
-              </span>
-              <span style={{ flex: 1, textAlign: "center" }}>
-                ← 1,300 zero bytes (fresh extension) →
-              </span>
-            </div>
-          </>
+          <div
+            className="flex mt-1"
+            style={{ fontFamily: MONO, fontSize: 9.5, color: NEUTRAL_TEXT }}
+          >
+            <span style={{ flex: 1, textAlign: "center" }}>
+              incoming · still encrypted
+            </span>
+            <span style={{ flex: 1, textAlign: "center" }}>
+              1,300 zero bytes
+            </span>
+          </div>
         )}
 
         {isXor && (
@@ -1103,11 +1060,10 @@ function ExtendedMorphView({ step }: { step: number }) {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.18 }}
           >
-            <SymbolRow char="⊕" />
-            <ExtendedKeystreamBar />
+            <XorOperandLabel />
             <SymbolRow char="=" />
             <CompactExtendedBar
-              label="extended buffer · after XOR (Bob layer stripped; tail = filler match) → step 7"
+              label="extended buffer · after XOR"
               regions={extendedRegionsAfterXor()}
               accentColor={HOP_STROKE.bob}
               emphasis
@@ -1135,62 +1091,20 @@ function ExtendedMorphView({ step }: { step: number }) {
   );
 }
 
-function ExtendedKeystreamBar() {
+// The XOR operand, demoted from a full bordered keystream buffer to one
+// inline operator row: `⊕ chacha20(rho_B, 2600)`. rho_B's identity already
+// rides in the compact KEYS badge at the top of the beat, so the keystream
+// doesn't get its own bar or a restated key island.
+function XorOperandLabel() {
   const stroke = HOP_STROKE.bob;
   return (
-    <div>
-      <div className="mb-1 flex items-baseline gap-2">
-        <MathLine text="chacha20(rho_B, 2600)" color={stroke} fontSize={11} />
-        <span
-          className="text-[10px] uppercase tracking-[0.06em]"
-          style={{ color: stroke, fontFamily: MONO, fontWeight: 700 }}
-        >
-          keystream
-        </span>
-      </div>
-      <div
-        className="border-[1.5px] flex relative overflow-hidden"
-        style={{
-          background: "#fffdf5",
-          borderColor: stroke,
-          height: 42,
-        }}
+    <div className="flex items-center justify-center gap-2 my-1.5">
+      <span
+        style={{ fontFamily: MONO, fontSize: 16, color: NEUTRAL_TEXT, lineHeight: 1 }}
       >
-        <HatchOverlay hops={["bob"]} zIndex={1} stripeOpacity={0.5} />
-        <div
-          className="absolute inset-0 flex items-center justify-center pointer-events-none"
-          style={{ zIndex: 2 }}
-        >
-          <span
-            style={{
-              background: "rgba(255,253,245,0.9)",
-              padding: "0 8px",
-            }}
-          >
-            <MathLine text="rho_B" color={stroke} fontSize={11} />
-            <span
-              style={{
-                fontFamily: MONO,
-                fontSize: 10,
-                color: stroke,
-                fontWeight: 700,
-                letterSpacing: "0.04em",
-              }}
-            >
-              {" · 2,600 bytes (extended)"}
-            </span>
-          </span>
-        </div>
-        <div
-          className="absolute top-0 bottom-0 pointer-events-none"
-          style={{
-            left: "50%",
-            width: 0,
-            borderLeft: `1.5px dashed ${stroke}`,
-            opacity: 0.5,
-          }}
-        />
-      </div>
+        ⊕
+      </span>
+      <MathLine text="chacha20(rho_B, 2600)" color={stroke} fontSize={13} />
     </div>
   );
 }
@@ -1292,15 +1206,10 @@ function CompactBufferBar({
 // ── Beat 7: Read Bob's hop payload at the front ──────────────────────────
 
 function ReadFrontView() {
-  const regions = strippedRegions1300(true);
+  // Beat 6 already showed the whole buffer with Bob's layer stripped, so we
+  // skip a redundant stripped bar here and go straight to the 60-byte zoom.
   return (
     <div className="my-2">
-      <CompactBufferBar
-        label="hop_payloads · after XOR (Bob layer stripped)"
-        regions={regions}
-        accentColor={HOP_STROKE.bob}
-        emphasis
-      />
       <FrontSlotZoom />
     </div>
   );
@@ -1310,10 +1219,10 @@ function FrontSlotZoom() {
   // Zoomed-in view of Bob's 60-byte hop payload as 3 subcells:
   // bigsize LEN (1 B) | TLV records (27 B) | charlie_hmac (32 B)
   return (
-    <div className="mt-3">
+    <div className="mt-2">
       <BufferHeader
-        leftLabel="bob's hop payload · 60 bytes (now plaintext)"
-        rightLabel="zoomed view"
+        leftLabel="Bob's hop payload, now plaintext"
+        rightLabel="60 bytes"
         accentColor={FOCUS_GOLD}
       />
       <div
@@ -1343,7 +1252,7 @@ function FrontSlotZoom() {
           flexBasis="200px"
           label="next_hmac"
           value="charlie_hmac"
-          sublabel="32 bytes (goes in outer HMAC field of outgoing packet)"
+          sublabel="32 B → outer HMAC"
           accent={FOCUS_GOLD}
           emphasis
         />
@@ -1454,6 +1363,13 @@ function SliceArrowRow() {
 
 // ── Beat 9: Ephemeral pubkey advance ─────────────────────────────────────
 
+// This beat is a genuine new derivation, so a card is correct (§7). But it's a
+// two-stage EC pipeline — E_AB → bf_AB (blinding factor) → E_AC (point × scalar)
+// — not the "shared secret → HMAC → keys" shape the shared KeyDerivationCard
+// models. Its `upstream` panel also hardcodes "shared secret" / "ECDH" labels
+// that would misdescribe this step. So we keep a hand-rolled card, but match
+// KeyDerivationCard's chrome (accent-tinted header, round accent dot, MONO key
+// chips) and keep the labels terse.
 function EphemeralAdvanceView() {
   return (
     <div className="my-2">
@@ -1485,33 +1401,20 @@ function EphemeralAdvanceView() {
           </span>
         </div>
 
-        <div className="px-3 py-4 flex items-center justify-around flex-wrap gap-3">
-          {/* E_AB box */}
-          <KeyChip
-            label="E_AB"
-            sublabel="33 B · pubkey Alice put on the wire"
-            accent={HOP_STROKE.bob}
-          />
-
-          <FormulaChip
-            text="bf_AB = SHA256(E_AB ‖ ss_AB)"
-            sublabel="blinding factor · 32 B scalar"
+        {/* Pipeline: E_AB → (blinding factor) → E_AC. Chips match
+            KeyDerivationCard's key chips; the formulas ride the arrows. */}
+        <div className="px-4 py-5 flex items-center justify-center flex-wrap gap-x-3 gap-y-4">
+          <PipelineChip name="E_AB" note="33 B point" accent={HOP_STROKE.bob} />
+          <PipelineArrow formula="SHA256(E_AB ‖ ss_AB)" accent={FOCUS_GOLD} />
+          <PipelineChip
+            name="bf_AB"
+            note="32 B scalar"
             accent={FOCUS_GOLD}
           />
-
-          <ArrowGlyph />
-
-          <FormulaChip
-            text="E_AC = bf_AB · E_AB"
-            sublabel="EC scalar multiplication"
-            accent={HOP_STROKE.charlie}
-          />
-
-          <ArrowGlyph />
-
-          <KeyChip
-            label="E_AC"
-            sublabel={`33 B · what Charlie sees on the wire`}
+          <PipelineArrow formula="× E_AB" accent={HOP_STROKE.charlie} />
+          <PipelineChip
+            name="E_AC"
+            note="33 B point"
             accent={HOP_STROKE.charlie}
             emphasis
           />
@@ -1521,14 +1424,16 @@ function EphemeralAdvanceView() {
   );
 }
 
-function KeyChip({
-  label,
-  sublabel,
+// A MONO key chip mirroring KeyDerivationCard's chip styling: accent-tinted
+// fill, accent border, the name in MathLine, a terse byte note beneath.
+function PipelineChip({
+  name,
+  note,
   accent,
   emphasis,
 }: {
-  label: string;
-  sublabel: string;
+  name: string;
+  note: string;
   accent: string;
   emphasis?: boolean;
 }) {
@@ -1536,76 +1441,43 @@ function KeyChip({
     <div
       className="border-[1.5px] flex flex-col items-center"
       style={{
-        background: emphasis ? "#fef3c7" : "#fffdf5",
+        background: emphasis ? "#fef3c7" : `${accent}1f`,
         borderColor: emphasis ? FOCUS_GOLD : accent,
         boxShadow: emphasis ? `0 0 0 3px rgba(184,134,11,0.18)` : "none",
-        padding: "8px 16px",
-        minWidth: 110,
+        padding: "8px 18px",
+        minWidth: 104,
       }}
     >
-      <MathLine text={label} color={accent} fontSize={16} />
+      <MathLine text={name} color={accent} fontSize={16} />
       <span
-        className="text-[9.5px] mt-1 italic"
-        style={{
-          fontFamily: SANS,
-          color: NEUTRAL_TEXT,
-          textAlign: "center",
-          lineHeight: 1.2,
-        }}
+        className="text-[9px] mt-1 uppercase tracking-[0.04em]"
+        style={{ fontFamily: MONO, color: NEUTRAL_TEXT }}
       >
-        {sublabel}
+        {note}
       </span>
     </div>
   );
 }
 
-function FormulaChip({
-  text,
-  sublabel,
+// An arrow carrying the transform that produces the next chip. The formula sits
+// above the arrow shaft so it reads as the operation, not a separate box.
+function PipelineArrow({
+  formula,
   accent,
 }: {
-  text: string;
-  sublabel: string;
+  formula: string;
   accent: string;
 }) {
   return (
-    <div
-      className="border-[1.5px] flex flex-col items-center"
-      style={{
-        background: "#fffdf5",
-        borderColor: accent,
-        padding: "6px 12px",
-        minWidth: 180,
-      }}
-    >
-      <MathLine text={text} color={accent} fontSize={12} />
+    <div className="flex flex-col items-center" style={{ minWidth: 150 }}>
+      <MathLine text={formula} color={accent} fontSize={11} />
       <span
-        className="text-[9.5px] mt-0.5 italic"
-        style={{
-          fontFamily: SANS,
-          color: NEUTRAL_TEXT,
-          textAlign: "center",
-          lineHeight: 1.2,
-        }}
+        className="mt-0.5"
+        style={{ fontFamily: MONO, fontSize: 18, color: accent, lineHeight: 1 }}
       >
-        {sublabel}
+        →
       </span>
     </div>
-  );
-}
-
-function ArrowGlyph() {
-  return (
-    <span
-      style={{
-        fontFamily: MONO,
-        fontSize: 22,
-        color: NEUTRAL_TEXT,
-        lineHeight: 1,
-      }}
-    >
-      →
-    </span>
   );
 }
 

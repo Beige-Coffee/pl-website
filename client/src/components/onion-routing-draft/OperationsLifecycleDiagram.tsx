@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Tok } from "./mathTokens";
 import { SlotSubCell } from "./SlotSubCell";
 import { MorphBox, CrossfadeSwap } from "./morph";
+import { StepCaption } from "./StepCaption";
 
 // ────────────────────────────────────────────────────────────────────────────
 // OperationsLifecycleDiagram (DRAFT)
@@ -73,9 +74,15 @@ const LAYER_COLORS: Record<ForwarderId, string> = {
 // Per-spec hop payload internals: each hop's hop payload ends with a 32-byte HMAC pointing
 // to the *next* hop's view of hop_payloads.
 const NEXT_HOP_LABEL: Record<ForwarderId, string> = {
-  bob: "→ Charlie",
-  charlie: "→ Dave",
-  dave: "0x00…",
+  bob: "for Charlie",
+  charlie: "for Dave",
+  dave: "none",
+};
+// Per-hop payload size (bytes) shown on the payload cell. Canonical 60/80/100.
+const HOP_PAYLOAD_BYTES: Record<ForwarderId, number> = {
+  bob: 60,
+  charlie: 80,
+  dave: 100,
 };
 const NEXT_HOP_COLOR: Record<ForwarderId, string> = {
   bob: LAYER_COLORS.charlie,
@@ -970,10 +977,10 @@ function ForwardPayloadContents({
                   len
                 </SlotSubCell>
 
-                {/* TLV payload sub-cell */}
+                {/* Payload sub-cell */}
                 <SlotSubCell
                   section="tlv"
-                  className="flex-1 flex flex-col items-center justify-center"
+                  className="flex-1 flex flex-col items-center justify-center text-center"
                   style={{
                     background: fill,
                     minWidth: 0,
@@ -983,13 +990,13 @@ function ForwardPayloadContents({
                     className="text-[9px] font-bold uppercase tracking-[0.05em]"
                     style={{ color: c, fontFamily: MONO }}
                   >
-                    {label}'s payload
+                    {label}
                   </div>
                   <div
                     className="text-[8px] mt-0.5 opacity-70"
                     style={{ color: "#475569", fontFamily: MONO }}
                   >
-                    TLV
+                    {HOP_PAYLOAD_BYTES[hop]} B
                   </div>
                 </SlotSubCell>
 
@@ -1711,44 +1718,33 @@ export function OperationsLifecycleDiagram({
           >
             <HopTrack state={current} step={step} />
 
-            {/* Step action panel: bordered card with operation-colored left
-                edge, header bar with the operation label (and optional key
-                chip), body with the caption rendered through
-                renderCaptionWithCode so backtick-quoted identifiers pick up
-                the same inline-code styling as PeelPrimer. */}
-            <div
-              className="border-[1.5px] mb-4"
-              style={{
-                background: "#fffdf5",
-                borderColor: "rgba(15,23,42,0.25)",
-                borderLeft: `3px solid ${accentColor}`,
-                transition: "border-color 400ms ease-out",
-              }}
-            >
-              <div
-                className="px-3 py-1.5 border-b-[1.5px] flex items-center gap-3 flex-wrap"
-                style={{
-                  borderColor: "rgba(15,23,42,0.15)",
-                  background: `${accentColor}14`,
-                  transition: "background 400ms ease-out",
-                }}
-              >
-                <span
-                  className="text-[10px] uppercase tracking-[0.08em] font-bold"
-                  style={{ fontFamily: MONO, color: "#475569" }}
-                >
-                  Step {step + 1} of {TOTAL_STEPS}
-                </span>
-                <span
-                  className="text-sm font-bold flex-1"
-                  style={{
-                    color: accentColor,
-                    transition: "color 400ms ease-out",
-                  }}
-                >
-                  {current.badgeLabel}
-                </span>
-                {showKeys && (
+            {/* Packet visual: ONE persistent step-switching container across
+                all five steps (§14 morph). The forward→error transition (step
+                3→4) morphs in place: the HEADER region collapses to 0 width,
+                the frame/title morph black→red, and the PAYLOAD-AREA contents
+                crossfade. No remount, so the shared HEADER | PAYLOAD | HMAC
+                regions tween instead of jump-cutting. The mini-onion flyer and
+                exclamation badge on the hop track above still play
+                independently to pace the moment Bob crafts the error. */}
+            <PacketContainer
+              state={current}
+              accentColor={accentColor}
+              step={step}
+            />
+
+            {/* Per-step explanation (shared StepCaption, below the visual).
+                The caption is routed through renderCaptionWithCode so
+                backtick-quoted identifiers keep their inline-code styling, and
+                the key chip (when showKeys) keeps its hover-tooltip handlers. */}
+            <StepCaption
+              label={`STEP ${step + 1} OF ${TOTAL_STEPS}`}
+              title={current.badgeLabel}
+              caption={renderCaptionWithCode(
+                showKeys ? current.keyedCaption : current.caption,
+              )}
+              accentColor={accentColor}
+              chip={
+                showKeys ? (
                   <span
                     ref={chipRef}
                     className="text-sm font-bold inline-flex"
@@ -1767,36 +1763,8 @@ export function OperationsLifecycleDiagram({
                   >
                     <Tok token={current.keyToken} color={current.keyColor} />
                   </span>
-                )}
-              </div>
-              <div
-                className="px-3 py-2.5"
-                style={{
-                  fontFamily: "ui-sans-serif, system-ui, sans-serif",
-                  fontSize: 12.5,
-                  lineHeight: 1.7,
-                  color: "#0f172a",
-                  minHeight: 60,
-                }}
-              >
-                {renderCaptionWithCode(
-                  showKeys ? current.keyedCaption : current.caption,
-                )}
-              </div>
-            </div>
-
-            {/* Packet visual: ONE persistent step-switching container across
-                all five steps (§14 morph). The forward→error transition (step
-                3→4) morphs in place: the HEADER region collapses to 0 width,
-                the frame/title morph black→red, and the PAYLOAD-AREA contents
-                crossfade. No remount, so the shared HEADER | PAYLOAD | HMAC
-                regions tween instead of jump-cutting. The mini-onion flyer and
-                exclamation badge on the hop track above still play
-                independently to pace the moment Bob crafts the error. */}
-            <PacketContainer
-              state={current}
-              accentColor={accentColor}
-              step={step}
+                ) : undefined
+              }
             />
           </div>
         </div>

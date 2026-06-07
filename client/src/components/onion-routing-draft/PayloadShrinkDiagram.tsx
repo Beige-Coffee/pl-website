@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Tok } from "./mathTokens";
 import { SlotSubCell } from "./SlotSubCell";
 import { HatchOverlay, LAYER_ANGLES, LAYER_COLORS } from "./encryptionHatch";
-import { renderCaption } from "./captionMarkup";
+import { StepCaption } from "./StepCaption";
 import { CrossfadeSwap } from "./morph";
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -194,14 +194,6 @@ export function PayloadShrinkDiagram() {
             {/* Hop track */}
             <HopTrack state={state} />
 
-            {/* Caption */}
-            <div
-              className="text-center text-[12px] mb-4 italic px-4 leading-relaxed"
-              style={{ color: "#475569", minHeight: 40 }}
-            >
-              {renderCaption(STEP_CAPTIONS[step])}
-            </div>
-
             {/* The shrinking onion packet */}
             <ShrinkingOnionContainer state={state} />
 
@@ -231,10 +223,16 @@ export function PayloadShrinkDiagram() {
                   {state.decrypted ? "status:" : "hop payloads remaining:"}
                 </span>
                 <span style={{ fontWeight: 700, color: state.decrypted ? "#1f7a4a" : "#0f172a", fontSize: state.decrypted ? 12 : 14 }}>
-                  {state.decrypted ? "✓ decrypted & claimed by Dave" : state.hopPayloads.length}
+                  {state.decrypted ? "✓ decrypted" : state.hopPayloads.length}
                 </span>
               </div>
             </div>
+
+            <StepCaption
+              label={`Step ${step + 1} of ${TOTAL_BEATS}`}
+              caption={STEP_CAPTIONS[step]}
+              accentColor={HOP_STROKE[state.holder]}
+            />
           </div>
         </div>
       </div>
@@ -275,9 +273,6 @@ export function PayloadShrinkDiagram() {
                 </button>
               ))}
             </div>
-          </div>
-          <div className="mt-3 md:mt-0 text-sm leading-relaxed flex-1 max-w-2xl">
-            {renderCaption(STEP_CAPTIONS[step])}
           </div>
         </div>
       </div>
@@ -629,7 +624,7 @@ function ShrinkingOnionContainer({ state }: { state: State }) {
               className="text-[10px] font-bold leading-tight mt-0.5"
               style={{ fontFamily: MONO, color: outerColor }}
             >
-              → {HOP_LABEL[state.outerKey]}
+              for {HOP_LABEL[state.outerKey]}
             </span>
             <span
               className="text-[8.5px] font-normal opacity-60 leading-tight mt-0.5"
@@ -647,9 +642,9 @@ function ShrinkingOnionContainer({ state }: { state: State }) {
 // Per-spec hop payload internals: each hop payload is [bigsize length | TLV payload |
 // 32-byte HMAC pointing to the next hop].
 const NEXT_HOP_LABEL: Record<ForwarderId, string> = {
-  bob: "→ Charlie",
-  charlie: "→ Dave",
-  dave: "0x00…",
+  bob: "for Charlie",
+  charlie: "for Dave",
+  dave: "none",
 };
 const NEXT_HOP_COLOR: Record<ForwarderId, string> = {
   bob: HOP_STROKE.charlie,
@@ -715,17 +710,14 @@ function DecryptedPayloadInner() {
   return (
     <div
       className="relative border-[1.5px] flex"
-      style={{ background: HOP_FILL.dave, borderColor: HOP_STROKE.dave, height: 64 }}
+      style={{ background: "#fffdf5", borderColor: "rgba(15,23,42,0.25)", height: 64 }}
     >
       <div className="flex-1 flex flex-col items-center justify-center text-center" style={{ padding: "0 8px" }}>
-        <div style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700, color: HOP_STROKE.dave, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+        <div style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
           Dave's payload · 100 B
         </div>
-        <div style={{ fontFamily: MONO, fontSize: 8.5, color: "#475569", marginTop: 3 }}>
-          payment_data · final amount
-        </div>
-        <div style={{ fontFamily: MONO, fontSize: 9.5, fontWeight: 700, color: "#1f7a4a", marginTop: 5 }}>
-          ✓ decrypted &amp; claimed, nothing to forward
+        <div style={{ fontFamily: MONO, fontSize: 9, color: "#0f172a", marginTop: 4 }}>
+          payment_data
         </div>
       </div>
     </div>
@@ -808,16 +800,16 @@ function BufferPayloadInner({ state }: { state: State }) {
                     }}
                   >
                     <div
-                      className="relative text-[10px] font-bold uppercase tracking-[0.05em]"
+                      className="relative text-[10px] font-bold uppercase tracking-[0.05em] text-center"
                       style={{ color, fontFamily: MONO }}
                     >
                       {HOP_LABEL[forwarder]}'s payload
                     </div>
                     <div
-                      className="relative text-[9px] mt-0.5 opacity-70"
+                      className="relative text-[9px] mt-0.5 opacity-70 text-center"
                       style={{ color: "#475569", fontFamily: MONO }}
                     >
-                      TLV · {SLOT_BYTES[forwarder]} B
+                      {SLOT_BYTES[forwarder]} B
                     </div>
                   </SlotSubCell>
 

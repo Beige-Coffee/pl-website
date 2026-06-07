@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { HatchOverlay, LAYER_COLORS, type ForwarderId } from "./encryptionHatch";
 import { SlotSubCell } from "./SlotSubCell";
 import { renderCaption } from "./captionMarkup";
+import { StepCaption } from "./StepCaption";
+import { createPortal } from "react-dom";
 import { MathLine } from "./mathTokens";
 import { MorphBox } from "./morph";
 
@@ -62,9 +64,9 @@ export const HOP_LABEL: Record<ForwarderId, string> = {
   dave: "Dave",
 };
 const NEXT_LABEL: Record<ForwarderId, string> = {
-  bob: "→Charlie",
-  charlie: "→Dave",
-  dave: "0x00…",
+  bob: "for Charlie",
+  charlie: "for Dave",
+  dave: "none",
 };
 const NEXT_COLOR: Record<ForwarderId, string> = {
   bob: HOP_STROKE.charlie,
@@ -559,30 +561,33 @@ export function HoverTooltip({
       >
         {children}
       </span>
-      {show && (
-        <div
-          style={{
-            position: "fixed",
-            left: pos.x,
-            top: pos.y - 8,
-            transform: "translate(-50%, -100%)",
-            background: "#fffdf5",
-            color: INK,
-            fontFamily: SANS,
-            fontSize: 14,
-            lineHeight: 1.5,
-            padding: "12px 14px",
-            border: "1.5px solid #0f172a",
-            borderRadius: 4,
-            maxWidth: 360,
-            boxShadow: "0 8px 30px rgba(0,0,0,0.25)",
-            zIndex: 50,
-            pointerEvents: "none",
-          }}
-        >
-          {content}
-        </div>
-      )}
+      {show &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            style={{
+              position: "fixed",
+              left: pos.x,
+              top: pos.y - 8,
+              transform: "translate(-50%, -100%)",
+              background: "#fffdf5",
+              color: INK,
+              fontFamily: SANS,
+              fontSize: 14,
+              lineHeight: 1.5,
+              padding: "12px 14px",
+              border: "1.5px solid #0f172a",
+              borderRadius: 4,
+              maxWidth: 360,
+              boxShadow: "0 8px 30px rgba(0,0,0,0.25)",
+              zIndex: 9999,
+              pointerEvents: "none",
+            }}
+          >
+            {content}
+          </div>,
+          document.body,
+        )}
     </>
   );
 }
@@ -616,6 +621,13 @@ export function WrapTraceDiagram() {
   const beat = BEATS[step - 1];
   const regions = regionsForBeat(step, beat.focus);
   const showEnvelope = step === 13;
+  const beatAccent = beat.iterLabel.includes("Dave")
+    ? HOP_STROKE.dave
+    : beat.iterLabel.includes("Charlie")
+      ? HOP_STROKE.charlie
+      : beat.iterLabel.includes("Bob")
+        ? HOP_STROKE.bob
+        : FOCUS_GOLD;
 
   return (
     <div
@@ -638,8 +650,6 @@ export function WrapTraceDiagram() {
           <div className="mx-auto" style={{ minWidth: 700, maxWidth: 840 }}>
             <HopTrack currentHop={beat.iterLabel} />
 
-            <IterationBanner beat={beat} />
-
             {showEnvelope ? (
               <EnvelopeView />
             ) : step === 3 || step === 4 ? (
@@ -657,6 +667,13 @@ export function WrapTraceDiagram() {
             )}
 
             {!showEnvelope && <KeysAffordance step={step} />}
+
+            <StepCaption
+              label={`${beat.iterLabel} · ${beat.subLabel}`}
+              title={beat.title}
+              caption={beat.caption}
+              accentColor={beatAccent}
+            />
           </div>
         </div>
       </div>
@@ -700,12 +717,6 @@ export function WrapTraceDiagram() {
                 );
               })}
             </div>
-          </div>
-          <div
-            className="mt-3 md:mt-0 text-sm leading-relaxed flex-1 max-w-2xl"
-            style={{ color: INK }}
-          >
-            {renderCaption(beat.caption)}
           </div>
         </div>
       </div>
@@ -823,45 +834,6 @@ export function HopTrack({
   );
 }
 
-// ── Iteration banner (above the buffer) ──────────────────────────────────
-
-export function IterationBanner({ beat }: { beat: Beat }) {
-  // Choose accent color from the active forwarder, falling back to gold for
-  // init / envelope beats.
-  let accent: string = FOCUS_GOLD;
-  if (beat.iterLabel.includes("Dave")) accent = HOP_STROKE.dave;
-  else if (beat.iterLabel.includes("Charlie")) accent = HOP_STROKE.charlie;
-  else if (beat.iterLabel.includes("Bob")) accent = HOP_STROKE.bob;
-
-  return (
-    <div className="mb-3 flex items-baseline justify-between gap-4 flex-wrap">
-      <div className="flex items-baseline gap-2 flex-wrap">
-        <span
-          className="text-[10px] uppercase tracking-[0.1em]"
-          style={{
-            fontFamily: MONO,
-            color: accent,
-            fontWeight: 700,
-          }}
-        >
-          {beat.iterLabel}
-        </span>
-        <span
-          className="text-[10px] uppercase tracking-[0.08em]"
-          style={{
-            fontFamily: MONO,
-            color: NEUTRAL_TEXT,
-          }}
-        >
-          · {beat.subLabel}
-        </span>
-      </div>
-      <div className="text-base font-bold" style={{ color: INK }}>
-        {renderCaption(beat.title)}
-      </div>
-    </div>
-  );
-}
 
 // ── Buffer view ──────────────────────────────────────────────────────────
 
@@ -1261,7 +1233,7 @@ export function SlotCell({ hop }: { hop: ForwarderId }) {
               fontStyle: "italic",
             }}
           >
-            TLV ({tlvBytes} B)
+            {slotSize} B
           </div>
         </div>
       </SlotSubCell>

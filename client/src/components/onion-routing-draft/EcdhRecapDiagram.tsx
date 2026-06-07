@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { StepCaption } from "./StepCaption";
 
 // ────────────────────────────────────────────────────────────────────────────
 // EcdhRecapDiagram (DRAFT)
@@ -311,6 +312,18 @@ const STEP_CAPTIONS: Record<number, string> = {
   2: "Watch as each public key flies into the opposite party's calculation. Alice combines her private key with B; Bob combines his with A. Both arrive at the same shared point because scalar multiplication commutes. The hash of that point becomes a 32-byte symmetric key.",
 };
 
+const STEP_TITLES: Record<number, string> = {
+  0: "Generate keypairs",
+  1: "Exchange public keys",
+  2: "Compute the shared point",
+};
+
+const STEP_LABELS: Record<number, string> = {
+  0: "Step 1 of 3 · Setup",
+  1: "Step 2 of 3 · Exchange",
+  2: "Step 3 of 3 · Compute",
+};
+
 // ── Main component ──────────────────────────────────────────────────────────
 
 export function EcdhRecapDiagram() {
@@ -552,6 +565,13 @@ export function EcdhRecapDiagram() {
               showCompute={showCompute}
             />
           </div>
+
+          <StepCaption
+            label={STEP_LABELS[step]}
+            title={STEP_TITLES[step]}
+            caption={`${STEP_CAPTIONS[step]} Hover any value above for a refresher.`}
+            accentColor={SHARED}
+          />
         </div>
       </div>
 
@@ -584,9 +604,6 @@ export function EcdhRecapDiagram() {
                 </button>
               ))}
             </div>
-          </div>
-          <div className="mt-3 md:mt-0 text-sm leading-relaxed flex-1 max-w-2xl">
-            {STEP_CAPTIONS[step]} Hover any value above for a refresher.
           </div>
         </div>
       </div>

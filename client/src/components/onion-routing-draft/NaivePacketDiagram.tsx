@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Tok, MathLine } from "./mathTokens";
 import { HatchOverlay, singleHatchBackground } from "./encryptionHatch";
 import { MorphBox } from "./morph";
+import { StepCaption } from "./StepCaption";
 
 // ────────────────────────────────────────────────────────────────────────────
 // NaivePacketDiagram (DRAFT)
@@ -83,6 +84,24 @@ const STEP_CAPTIONS: Record<number, string> = {
   3: "Charlie does the same with his hop payload: ECDH between his node private key and E_Charlie produces ss_AC, and Charlie decrypts his slice.",
   4: "Charlie's hop payload is processed. The packet keeps moving with E_Dave still in it.",
   5: "Dave finishes the route. ECDH between his node private key and E_Dave produces ss_AD and he decrypts his slice. The math worked, but every packet carried three pubkeys, and Alice had to manage three keypairs the whole time.",
+};
+
+const STEP_TITLES: Record<number, string> = {
+  0: "Alice packs one pubkey per hop",
+  1: "Bob derives ss_AB and decrypts",
+  2: "Bob forwards to Charlie",
+  3: "Charlie derives ss_AC and decrypts",
+  4: "Charlie forwards to Dave",
+  5: "Dave derives ss_AD and decrypts",
+};
+
+const STEP_LABELS: Record<number, string> = {
+  0: "Step 1 of 6 · Alice · Build",
+  1: "Step 2 of 6 · Bob · Decrypt",
+  2: "Step 3 of 6 · Bob · Forward",
+  3: "Step 4 of 6 · Charlie · Decrypt",
+  4: "Step 5 of 6 · Charlie · Forward",
+  5: "Step 6 of 6 · Dave · Decrypt",
 };
 
 function activeHopAt(step: number): HopId {
@@ -741,6 +760,15 @@ export function NaivePacketDiagram() {
             <span className="font-bold">one</span>.
           </div>
         </div>
+
+        <div className="mx-auto" style={{ maxWidth: 660 }}>
+          <StepCaption
+            label={STEP_LABELS[step]}
+            title={STEP_TITLES[step]}
+            caption={STEP_CAPTIONS[step]}
+            accentColor={HOP_COLORS[active].stroke}
+          />
+        </div>
       </div>
 
       {/* Step controls */}
@@ -785,9 +813,6 @@ export function NaivePacketDiagram() {
                 </button>
               ))}
             </div>
-          </div>
-          <div className="mt-3 md:mt-0 text-sm leading-relaxed flex-1 max-w-2xl">
-            {STEP_CAPTIONS[step]}
           </div>
         </div>
       </div>

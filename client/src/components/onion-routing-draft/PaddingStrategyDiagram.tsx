@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Tok } from "./mathTokens";
 import { SlotSubCell } from "./SlotSubCell";
 import { HatchOverlay, LAYER_ANGLES, LAYER_COLORS } from "./encryptionHatch";
-import { renderCaption } from "./captionMarkup";
+import { StepCaption } from "./StepCaption";
 import { MorphBox, MORPH_TRANSITION } from "./morph";
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -70,7 +70,9 @@ const NODE_X_PCT: Record<HopId, number> = { alice: 12, bob: 38, charlie: 62, dav
 const SUCCESS_GREEN = "#5a7a2f";
 const ERROR_RED = "#a13a3a";
 
-const NEXT_HOP_LABEL: Record<ForwarderId, string> = { bob: "→ Charlie", charlie: "→ Dave", dave: "0x00…" };
+const NEXT_HOP_LABEL: Record<ForwarderId, string> = { bob: "for Charlie", charlie: "for Dave", dave: "none" };
+// Per-hop payload size (bytes) shown on the payload cell. Canonical 60/80/100.
+const HOP_PAYLOAD_BYTES: Record<ForwarderId, number> = { bob: 60, charlie: 80, dave: 100 };
 const NEXT_HOP_COLOR: Record<ForwarderId, string> = { bob: HOP_KEY_COLORS.charlie, charlie: HOP_KEY_COLORS.dave, dave: SLATE };
 
 // ── State per step ──────────────────────────────────────────────────────────
@@ -201,10 +203,12 @@ export function PaddingStrategyDiagram() {
         <div className="overflow-x-auto">
           <div className="mx-auto" style={{ minWidth: 620, maxWidth: 760 }}>
             <HopTrack state={state} />
-            <div className="text-center text-[12px] mb-4 italic px-4 leading-relaxed" style={{ color: SLATE, minHeight: 56 }}>
-              {renderCaption(caption)}
-            </div>
             <DetailedOnionPacket state={state} comparing={comparing} setComparing={setComparing} />
+            <StepCaption
+              label={`Step ${step + 1} of ${TOTAL_BEATS}`}
+              caption={caption}
+              accentColor={HOP_STROKE[state.holder]}
+            />
           </div>
         </div>
       </div>
@@ -227,7 +231,6 @@ export function PaddingStrategyDiagram() {
               ))}
             </div>
           </div>
-          <div className="mt-3 md:mt-0 text-sm leading-relaxed flex-1 max-w-2xl">{renderCaption(caption)}</div>
         </div>
       </div>
     </div>
@@ -385,9 +388,9 @@ function HopPayloadCell({ forwarder, layers, dim }: { forwarder: ForwarderId; la
   return (
     <div className="relative flex" style={{ flexGrow: 2.4, flexBasis: 0, minWidth: 98, borderRight: `1.5px solid ${color}`, opacity: dim ? 0.3 : 1, transition: "opacity 300ms, flex-grow 450ms ease-in-out, flex-basis 450ms ease-in-out" }}>
       <SlotSubCell section="len" style={{ width: 24, flexShrink: 0, background: fill, borderRight: `1px dashed ${color}90`, fontSize: 8.5, fontFamily: MONO, color: SLATE, display: "flex", alignItems: "center", justifyContent: "center", letterSpacing: "0.05em", textTransform: "uppercase", fontWeight: 700 }}>len</SlotSubCell>
-      <SlotSubCell section="tlv" className="flex-1 relative flex flex-col items-center justify-center" style={{ background: fill, minWidth: 0 }}>
-        <div className="relative text-[9.5px] font-bold uppercase tracking-[0.04em]" style={{ color, fontFamily: MONO }}>{HOP_LABEL[forwarder]}'s payload</div>
-        <div className="relative text-[8.5px] mt-0.5 opacity-70" style={{ color: SLATE, fontFamily: MONO }}>TLV</div>
+      <SlotSubCell section="tlv" className="flex-1 relative flex flex-col items-center justify-center text-center" style={{ background: fill, minWidth: 0 }}>
+        <div className="relative text-[9.5px] font-bold uppercase tracking-[0.04em]" style={{ color, fontFamily: MONO }}>{HOP_LABEL[forwarder]}</div>
+        <div className="relative text-[8.5px] mt-0.5 opacity-70" style={{ color: SLATE, fontFamily: MONO }}>{HOP_PAYLOAD_BYTES[forwarder]} B</div>
       </SlotSubCell>
       <SlotSubCell section="hmac" style={{ width: 46, flexShrink: 0, background: fill, borderLeft: `1px dashed ${color}90`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
         <div className="text-[7.5px] uppercase tracking-[0.04em]" style={{ color: SLATE, fontFamily: MONO }}>HMAC</div>
