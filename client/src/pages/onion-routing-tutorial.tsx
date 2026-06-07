@@ -20,6 +20,8 @@ import { Tooltip, TooltipTrigger, TooltipContent } from "../components/ui/toolti
 import { ONION_ROUTING_EXERCISES_DRAFT as ONION_ROUTING_EXERCISES } from "../data/onion-routing-exercises-draft";
 import { getOnionRoutingDraftExerciseGroupContext as getOnionRoutingExerciseGroupContext } from "../lib/onion-routing-exercise-groups-draft";
 import { Tok as MathTok } from "../components/onion-routing-draft/mathTokens";
+import { GlossaryTerm } from "../components/onion-routing-draft/GlossaryTerm";
+import { resolveGlossary } from "../components/onion-routing-draft/glossary";
 import { NetworkTopologyDiagram } from "../components/onion-routing-draft/NetworkTopologyDiagram";
 import { KdfPipelineDiagram } from "../components/onion-routing-draft/KdfPipelineDiagram";
 import { FillerTraceDiagram } from "../components/onion-routing-draft/FillerTraceDiagram";
@@ -823,14 +825,25 @@ function ChapterContent({
               data-testid="link-markdown"
             />
           ),
-          code: ({ className, children, ...props }: any) => (
-            <code
-              className={`${className ?? ""} rounded px-1 py-0.5 ${theme === "dark" ? "bg-white/10" : "bg-black/[0.03]"}`}
-              {...props}
-            >
-              {children}
-            </code>
-          ),
+          code: ({ className, children, ...props }: any) => {
+            const codeEl = (
+              <code
+                className={`${className ?? ""} rounded px-1 py-0.5 ${theme === "dark" ? "bg-white/10" : "bg-black/[0.03]"}`}
+                {...props}
+              >
+                {children}
+              </code>
+            );
+            // Auto-link backticked glossary terms (pad_key, rho_i, ss_AX, ...).
+            const text = String(
+              Array.isArray(children) ? children.join("") : children ?? ""
+            );
+            return resolveGlossary(text) ? (
+              <GlossaryTerm term={text}>{codeEl}</GlossaryTerm>
+            ) : (
+              codeEl
+            );
+          },
           // Inline math token: <m>e_AB</m> renders e<sub>AB</sub> with proper
           // math typography (italic single-letter base + true subscripts).
           // Multi-letter bases (ss, bf) stay upright per math convention.
@@ -839,13 +852,28 @@ function ChapterContent({
             const tok = String(
               Array.isArray(children) ? children.join("") : children ?? ""
             );
-            return <MathTok token={tok} />;
+            const mathEl = <MathTok token={tok} />;
+            // Make subscripted math symbols glossary-aware too (ss_AB, E_AC, rho_B).
+            return resolveGlossary(tok) ? (
+              <GlossaryTerm term={tok}>{mathEl}</GlossaryTerm>
+            ) : (
+              mathEl
+            );
           },
           // Inline term that cross-highlights the onion-packet-anatomy diagram
           // on hover: <anatomy-term region="header|payload|hmac">…</anatomy-term>
           "anatomy-term": ({ region, children }: any) => (
             <AnatomyTerm region={region}>{children}</AnatomyTerm>
           ),
+          // Inline glossary term for prose words that aren't backticked:
+          // <g>filler</g>, <g>HMAC</g>, <g>session key</g>. Hover shows the
+          // definition; non-glossary text renders untouched.
+          g: ({ children }: any) => {
+            const text = String(
+              Array.isArray(children) ? children.join("") : children ?? ""
+            );
+            return <GlossaryTerm term={text}>{children}</GlossaryTerm>;
+          },
           // Handle <checkpoint id="..." /> tags in markdown (custom HTML element)
           checkpoint: ({ id }: any) => {
             const cpId = String(id || "");

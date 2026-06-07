@@ -199,7 +199,7 @@ export function PaddingStrategyDiagram() {
       </div>
 
       {/* Stage */}
-      <div className="relative bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-6" style={{ minHeight: 480 }}>
+      <div className="relative bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-6" style={{ minHeight: 340 }}>
         <div className="overflow-x-auto">
           <div className="mx-auto" style={{ minWidth: 620, maxWidth: 760 }}>
             <HopTrack state={state} />

@@ -432,7 +432,7 @@ export function PeelPrimerDiagram() {
 
       <div
         className="relative bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-6"
-        style={{ minHeight: 760 }}
+        style={{ minHeight: 360 }}
       >
         <div className="overflow-x-auto">
           <div className="mx-auto" style={{ minWidth: 740, maxWidth: 880 }}>

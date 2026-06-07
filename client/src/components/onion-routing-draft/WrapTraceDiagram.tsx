@@ -6,6 +6,8 @@ import { StepCaption } from "./StepCaption";
 import { createPortal } from "react-dom";
 import { MathLine } from "./mathTokens";
 import { MorphBox } from "./morph";
+import { Tooltip } from "./Tooltip";
+import { KeyHoverIcon, type KeyDerivationCardProps, type KeyDerivationRow } from "./KeyDerivationCard";
 
 // ────────────────────────────────────────────────────────────────────────────
 // WrapTraceDiagram (chapter 8, "Wrapping Layer by Layer")
@@ -644,7 +646,7 @@ export function WrapTraceDiagram() {
 
       <div
         className="relative bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-6"
-        style={{ minHeight: 460 }}
+        style={{ minHeight: 320 }}
       >
         <div className="overflow-x-auto">
           <div className="mx-auto" style={{ minWidth: 700, maxWidth: 840 }}>
@@ -666,7 +668,9 @@ export function WrapTraceDiagram() {
               />
             )}
 
-            {!showEnvelope && <KeysAffordance step={step} />}
+            {/* HMAC beats render their own compact KeyHoverIcon inside
+                HmacView; everything else uses the global keys affordance. */}
+            {!showEnvelope && !isHmacStep(step) && <KeysAffordance step={step} />}
 
             <StepCaption
               label={`${beat.iterLabel} · ${beat.subLabel}`}
@@ -1011,22 +1015,38 @@ export function BufferRegion({
         }}
       >
         <HatchOverlay hops={region.layers} zIndex={1} stripeOpacity={0.16} />
-        <span
-          style={{
-            fontFamily: MONO,
-            fontSize: 9,
-            color: FOCUS_GOLD,
-            background: "rgba(255,253,245,0.9)",
-            padding: "0 4px",
-            letterSpacing: "0.06em",
-            fontWeight: 700,
-            textTransform: "uppercase",
-            zIndex: 2,
-            position: "relative",
-          }}
+        {/* "what's filler?" affordance. The trailing filler explanation lives
+            in a portaled, viewport-clamped Tooltip so step 5 (FILLER OVERLAY)
+            can teach what these bytes are without crowding the buffer. */}
+        <Tooltip
+          width={320}
+          label={
+            <span>
+              {renderCaption(
+                "These are the `filler` bytes Alice precomputed back in chapter 7. After each forwarder XORs away its layer and shifts the buffer, these trailing bytes land *exactly* on the positions every downstream HMAC was computed over, so every forwarder's integrity check still passes.",
+              )}
+            </span>
+          }
         >
-          filler
-        </span>
+          <span
+            style={{
+              fontFamily: MONO,
+              fontSize: 9,
+              color: FOCUS_GOLD,
+              background: "rgba(255,253,245,0.9)",
+              padding: "0 4px",
+              letterSpacing: "0.06em",
+              fontWeight: 700,
+              textTransform: "uppercase",
+              zIndex: 2,
+              position: "relative",
+              borderBottom: `1px dotted ${FOCUS_GOLD}`,
+              cursor: "help",
+            }}
+          >
+            filler ?
+          </span>
+        </Tooltip>
       </div>
     );
   }
@@ -1136,7 +1156,18 @@ export function SlotCell({ hop }: { hop: ForwarderId }) {
   const tlvBytes = slotSize - 1 - 32; // bigsize byte + 32 HMAC
 
   return (
-    <div className="flex h-full" style={{ position: "relative" }}>
+    // Owner-colored body so a freshly-written (or shifted) hop payload reads as
+    // "this hop's payload" rather than a blank cell. The LEN/TLV/HMAC label
+    // islands sit on cream on top; this fill + stroke is the owner-color frame
+    // that surrounds them and shows through the gaps between sub-cells.
+    <div
+      className="flex h-full"
+      style={{
+        position: "relative",
+        background: fill,
+        border: `1.5px solid ${color}`,
+      }}
+    >
       <SlotSubCell
         section="len"
         className="flex items-center justify-center"
@@ -1789,19 +1820,61 @@ export function SymbolRow({ char }: { char: string }) {
 
 // ── HMAC operation view (beats 6, 9, 12) ─────────────────────────────────
 //
-// On HMAC sub-steps, we show the same buffer that came out of the prior
-// beat (the running state, gold-bordered for continuity), PLUS the
-// associated_data input that gets concatenated with it before hashing.
-// Layout:
+// Distilled to ONE focal line, matching ValidationFlowDiagram's integrity
+// beat. We keep the running buffer bar on top (context), then a single
+// formula line, then the result chip:
 //
 //   [hop_payloads buffer · 1,300 bytes]   ← gold border (running state)
-//                  ‖
-//   [associated_data · 32 B · payment_hash]
-//                  ↓ HMAC(mu_i, buffer || associated_data)
+//        HMAC(mu_i, buffer ‖ AD) = hop_hmac
 //   [hop_hmac · 32 B]                     ← gold-emphasized output chip
 //
-// This makes the two HMAC inputs (buffer, AD) visible side-by-side instead
-// of having AD appear cold in step 5's prose.
+// The associated_data explanation (= payment_hash, binds the onion to one
+// HTLC) moves into a hover on the `AD` token via the shared portaled
+// Tooltip, so the beat reads as one operation instead of a 7-element stack.
+// The key recedes to a compact KeyHoverIcon (mu_i active) top-right, per §7.
+
+// KeyHoverIcon props for an HMAC beat: the hop's mu/rho pair from ss_Ai, with
+// mu active (this beat computes the HMAC). Mirrors the shared card shape used
+// across the course so the popover reads identically to other diagrams.
+function hmacKeyProps(hop: ForwarderId): KeyDerivationCardProps {
+  const initial = hop === "dave" ? "D" : hop === "charlie" ? "C" : "B";
+  const ss = `ss_A${initial}`;
+  const hopName = HOP_LABEL[hop];
+  const rows: KeyDerivationRow[] = [
+    {
+      formula: `HMAC('mu', ${ss})`,
+      keyName: `mu_${initial}`,
+      bytes: "32 bytes",
+      useTitle: "HMAC key",
+      useSubtitle: "authenticates this iteration's buffer",
+      color: KEY_MU_COLOR,
+      active: true,
+    },
+    {
+      formula: `HMAC('rho', ${ss})`,
+      keyName: `rho_${initial}`,
+      bytes: "32 bytes",
+      useTitle: "Stream cipher key",
+      useSubtitle: "encrypted the buffer (the XOR pass)",
+      color: KEY_RHO_COLOR,
+      active: false,
+    },
+  ];
+  return {
+    title: `${hopName}'s iteration keys`,
+    source: {
+      name: ss,
+      subtitle: "ECDH shared secret",
+      accent: HOP_STROKE[hop],
+    },
+    rows,
+    upstream: {
+      inputA: { name: `e_A${initial}`, subtitle: "Alice's ephemeral scalar" },
+      inputB: { name: `${hop}_pubkey`, subtitle: `${hopName}'s static node pubkey` },
+      formulaOverride: `SHA256(e_A${initial} · ${hop}_pubkey)`,
+    },
+  };
+}
 
 function HmacView({ step }: { step: number }) {
   const hop: ForwarderId =
@@ -1819,6 +1892,11 @@ function HmacView({ step }: { step: number }) {
 
   return (
     <>
+      {/* Compact key reminder, top-right of the operation (§7). */}
+      <div className="flex justify-end mb-1">
+        <KeyHoverIcon {...hmacKeyProps(hop)} />
+      </div>
+
       <Buffer
         regions={regions}
         focusKind={undefined}
@@ -1826,17 +1904,42 @@ function HmacView({ step }: { step: number }) {
         compact
       />
 
-      <SymbolRow char="‖" />
-
-      <ADBar />
-
-      <SymbolRow char="↓" />
-      <div className="text-center mb-1">
+      {/* ONE focal line: HMAC(mu_i, buffer ‖ AD) = hop_hmac. The AD token
+          carries the associated_data explanation on hover. */}
+      <div className="flex items-center justify-center gap-2.5 flex-wrap mt-3 mb-3">
         <MathLine
-          text={`HMAC(mu_${initial}, buffer ‖ associated_data)`}
+          text={`HMAC(mu_${initial}, buffer ‖`}
           color={HOP_STROKE[hop]}
-          fontSize={12}
+          fontSize={13}
         />
+        <Tooltip
+          width={300}
+          label={
+            <span>
+              {renderCaption(
+                "`AD` is the `associated_data`: the 32-byte `payment_hash`. Folding it into the HMAC binds this onion to one specific HTLC, so a packet can't be replayed against a different payment.",
+              )}
+            </span>
+          }
+        >
+          <span
+            style={{
+              fontFamily: MONO,
+              fontSize: 13,
+              fontWeight: 700,
+              color: "#5a7a2f",
+              borderBottom: "1px dotted #5a7a2f",
+              cursor: "help",
+            }}
+          >
+            AD
+          </span>
+        </Tooltip>
+        <MathLine text=")" color={HOP_STROKE[hop]} fontSize={13} />
+        <span style={{ fontFamily: MONO, fontSize: 14, fontWeight: 700, color: NEUTRAL_TEXT }}>
+          =
+        </span>
+        <MathLine text={hmacName} color={FOCUS_GOLD} fontSize={13} />
       </div>
 
       <HmacOutputChip hmacName={hmacName} hop={hop} isOuter={isOuter} />
@@ -1844,6 +1947,9 @@ function HmacView({ step }: { step: number }) {
   );
 }
 
+// Standalone associated_data input bar. No longer used by WrapTraceDiagram's
+// HMAC beats (the AD explanation moved into the formula-line hover), but kept
+// exported because PeelTraceDiagram renders it on its own HMAC-verify beat.
 export function ADBar() {
   const adAccent = "#5a7a2f"; // muted green, distinct from any hop hatch
   return (

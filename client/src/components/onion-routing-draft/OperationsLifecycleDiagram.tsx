@@ -1709,7 +1709,7 @@ export function OperationsLifecycleDiagram({
 
       <div
         className="relative bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-6"
-        style={{ minHeight: 540 }}
+        style={{ minHeight: 340 }}
       >
         <div className="overflow-x-auto" style={{ paddingTop: 6 }}>
           <div

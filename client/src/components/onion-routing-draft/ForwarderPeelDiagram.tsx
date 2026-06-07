@@ -558,7 +558,7 @@ export function ForwarderPeelDiagram() {
 
       <div
         className="relative bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-6"
-        style={{ minHeight: 600 }}
+        style={{ minHeight: 320 }}
       >
         <div className="overflow-x-auto">
           <div className="mx-auto" style={{ minWidth: 680, maxWidth: 860 }}>
@@ -1451,8 +1451,7 @@ function SidePanel({ step }: { step: number }) {
   // visible as a three-row equation: extended buffer ⊕ keystream = result.
   // Step 6 (slice + Charlie's view) and step 7 (envelope swap) don't need
   // a side panel; the main packet card carries the visual.
-  if (step !== 4 && step !== 5)
-    return <div style={{ minHeight: 220, marginTop: 16 }} />;
+  if (step !== 4 && step !== 5) return null;
 
   return (
     <div

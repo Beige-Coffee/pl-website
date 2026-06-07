@@ -301,7 +301,7 @@ export function PeelTraceDiagram() {
 
       <div
         className="relative bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-6"
-        style={{ minHeight: 460 }}
+        style={{ minHeight: 320 }}
       >
         <div className="overflow-x-auto">
           <div className="mx-auto" style={{ minWidth: 700, maxWidth: 840 }}>
@@ -1060,7 +1060,8 @@ function ExtendedMorphView({ step }: { step: number }) {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.18 }}
           >
-            <XorOperandLabel />
+            <SymbolRow char="⊕" />
+            <KeystreamBar />
             <SymbolRow char="=" />
             <CompactExtendedBar
               label="extended buffer · after XOR"
@@ -1091,20 +1092,30 @@ function ExtendedMorphView({ step }: { step: number }) {
   );
 }
 
-// The XOR operand, demoted from a full bordered keystream buffer to one
-// inline operator row: `⊕ chacha20(rho_B, 2600)`. rho_B's identity already
-// rides in the compact KEYS badge at the top of the beat, so the keystream
-// doesn't get its own bar or a restated key island.
-function XorOperandLabel() {
-  const stroke = HOP_STROKE.bob;
+// The XOR keystream operand, rendered as a full hatched bar so the peel reads
+// as the canonical three-bar XOR (before ⊕ keystream = after), matching
+// FillerTraceDiagram. Standards §15.
+function KeystreamBar() {
   return (
-    <div className="flex items-center justify-center gap-2 my-1.5">
-      <span
-        style={{ fontFamily: MONO, fontSize: 16, color: NEUTRAL_TEXT, lineHeight: 1 }}
+    <div className="my-1">
+      <div
+        className="text-[10px] uppercase tracking-[0.06em] mb-1 text-center"
+        style={{ color: HOP_STROKE.bob, fontFamily: MONO, fontWeight: 500 }}
       >
-        ⊕
-      </span>
-      <MathLine text="chacha20(rho_B, 2600)" color={stroke} fontSize={13} />
+        keystream · 2,600 B
+      </div>
+      <div
+        className="border-[1.5px] relative overflow-hidden flex items-center justify-center"
+        style={{ background: "#fffdf5", borderColor: HOP_STROKE.bob, height: 42 }}
+      >
+        <HatchOverlay hops={["bob"]} zIndex={0} stripeOpacity={0.5} />
+        <span
+          className="relative"
+          style={{ zIndex: 2, background: "#fffdf5", padding: "1px 8px" }}
+        >
+          <MathLine text="chacha20(rho_B, 2600)" color={HOP_STROKE.bob} fontSize={12} />
+        </span>
+      </div>
     </div>
   );
 }

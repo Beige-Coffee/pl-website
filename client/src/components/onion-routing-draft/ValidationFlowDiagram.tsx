@@ -231,7 +231,7 @@ export function ValidationFlowDiagram() {
 
       <div
         className="relative bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-6"
-        style={{ minHeight: 500 }}
+        style={{ minHeight: 340 }}
       >
         <div className="overflow-x-auto">
           <div className="mx-auto" style={{ minWidth: 700, maxWidth: 860 }}>

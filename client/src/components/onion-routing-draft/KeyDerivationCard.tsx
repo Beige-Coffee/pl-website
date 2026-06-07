@@ -2,27 +2,43 @@
 // KeyDerivationCard
 //
 // Shared visual for "this source secret derives these keys via HMAC."
-// Used by ForwarderPeelDiagram (Bob derives mu_B + rho_B at peel time) and
-// WrapTraceDiagram (Alice derives pad_key at init, and rho_i + mu_i per
-// iteration during the wrap). One component, two callsites — the look stays
+// Used by ForwarderPeelDiagram, WrapTraceDiagram, PeelTraceDiagram,
+// ValidationFlowDiagram, the error pair (ErrorBoomerang / ErrorUnwrap), and
+// OperationsLifecycle. One component, many callsites — the look stays
 // consistent course-wide.
 //
-// Layout (SVG-based, mirroring the original ForwarderPeelDiagram pattern):
-//   [source box] ──curved──▶ [formula box] ──arrow──▶ [key chip]
-//                ╲────────▶ [formula box] ──arrow──▶ [key chip]
-// One row for pad_key, two rows for per-hop keys. Active rows pick up a
-// gold glow + tinted key-chip background; inactive rows hold their natural
-// color but read as secondary.
+// Layout (vertical pipeline, reads top-to-bottom as the actual derivation):
+//
+//      ┌ header bar (accent-tinted) ──────────────────────────────┐
+//
+//          [ e_AD ]          [ dave_pubkey ]      ← two input chips
+//              \                  /
+//               ── ECDH (SHA256) ──               ← op label on the join
+//                       │
+//                       ▼
+//                  [  ss_AD  ]  shared secret     ← the source chip
+//                   /         \
+//            HMAC('rho')   HMAC('mu')             ← op label on each fork
+//                ▼             ▼
+//            [ rho_D ]     [ mu_D ]               ← key chips
+//            stream cipher  packet HMAC           ← role, small, under each key
+//
+// The convergence (two inputs → one secret) and the fork (one secret → 1-2
+// keys) are the lesson, so both branchings are drawn explicitly with light
+// SVG connector lines. When there is no `upstream`, the inputs row + converge
+// are skipped and the pipeline simply starts at the source chip and forks
+// down. Active rows pick up a gold ring + tinted key-chip background.
 // ────────────────────────────────────────────────────────────────────────────
 
 import { useRef, useState, type ReactNode } from "react";
-import { mathLineToSvgTspans } from "./mathTokens";
+import { MathLine } from "./mathTokens";
 
 const MONO = '"JetBrains Mono", "Fira Code", monospace';
 const SANS = "ui-sans-serif, system-ui, sans-serif";
 const INK = "#0f172a";
 const NEUTRAL_TEXT = "#475569";
 const FOCUS_GOLD = "#b8860b";
+const CREAM = "#fffdf5";
 
 export interface KeyDerivationRow {
   /** The HMAC formula, e.g. `HMAC('rho', ss_AB)`. */
@@ -35,7 +51,7 @@ export interface KeyDerivationRow {
   useTitle: string;
   /** Optional secondary line under the role, e.g. `used in step 5 (XOR pass)`. */
   useSubtitle?: string;
-  /** Accent color for this row (formula border, key chip border + text). */
+  /** Accent color for this row (formula label + key chip border + text). */
   color: string;
   /** Highlight this row as the currently-active key (gold ring on the chip). */
   active?: boolean;
@@ -62,41 +78,13 @@ export interface KeyDerivationCardProps {
   };
   /** 1–2 derivation rows. */
   rows: KeyDerivationRow[];
-  /** When provided, renders an ECDH derivation panel above the main rows
+  /** When provided, renders an ECDH convergence above the source chip
    * showing how the source secret itself is derived (e.g. for Bob's peel:
    * `bob_privkey · E_AB` → `ss_AB`). */
   upstream?: EcdhUpstream;
 }
 
-// ── Geometry ──────────────────────────────────────────────────────────────
-
-const VIEW_W = 680;
-
-const SRC_X = 20;
-const SRC_W = 140;
-const SRC_H = 66;
-
-const FORMULA_X = 210;
-const FORMULA_W = 200;
-const FORMULA_H = 42;
-
-const KEY_X = 450;
-const KEY_W = 210;
-const KEY_H = 60;
-
-// Row centerlines. One row → centered; two rows → spaced 62px apart.
-function rowCY(i: number, count: number): number {
-  if (count === 1) return 50;
-  return i === 0 ? 44 : 106;
-}
-
-function svgHeight(count: number): number {
-  return count === 1 ? 100 : 150;
-}
-
-function srcCY(count: number): number {
-  return count === 1 ? 50 : 75;
-}
+// ── Helpers ─────────────────────────────────────────────────────────────────
 
 function hexToRgba(hex: string, alpha: number): string {
   const h = hex.replace("#", "");
@@ -104,6 +92,25 @@ function hexToRgba(hex: string, alpha: number): string {
   const g = parseInt(h.slice(2, 4), 16);
   const b = parseInt(h.slice(4, 6), 16);
   return `rgba(${r},${g},${b},${alpha})`;
+}
+
+// A short vertical down-arrow drawn in SVG so it reads as a real arrowhead.
+function DownArrow({ color, height = 16 }: { color: string; height?: number }) {
+  return (
+    <svg
+      width={14}
+      height={height}
+      viewBox={`0 0 14 ${height}`}
+      style={{ display: "block" }}
+      aria-hidden
+    >
+      <line x1={7} y1={0} x2={7} y2={height - 6} stroke={color} strokeWidth={1.5} />
+      <polygon
+        points={`7,${height} 3,${height - 7} 11,${height - 7}`}
+        fill={color}
+      />
+    </svg>
+  );
 }
 
 // ── Component ─────────────────────────────────────────────────────────────
@@ -114,19 +121,17 @@ export function KeyDerivationCard({
   rows,
   upstream,
 }: KeyDerivationCardProps) {
-  const count = rows.length;
-  const height = svgHeight(count);
-
   return (
     <div
       className="my-4 mx-auto border-[1.5px] overflow-hidden"
       style={{
         borderColor: source.accent,
-        background: "#fffdf5",
-        maxWidth: 720,
+        background: CREAM,
+        maxWidth: 460,
         fontFamily: SANS,
       }}
     >
+      {/* Header bar — accent-tinted (correct for the sub-card, §7). */}
       <div
         className="px-3 py-1.5 flex items-center gap-2"
         style={{
@@ -146,443 +151,305 @@ export function KeyDerivationCard({
         </span>
       </div>
 
-      {upstream && (
-        <div
-          className="px-3 pt-3"
-          style={{
-            borderBottom: `1px dashed ${source.accent}40`,
-            paddingBottom: 10,
-          }}
-        >
-          <UpstreamEcdh
-            upstream={upstream}
-            sourceName={source.name}
-            accent={source.accent}
-          />
-        </div>
-      )}
+      {/* Vertical pipeline. */}
+      <div className="px-4 pt-3 pb-4 flex flex-col items-center">
+        {upstream && (
+          <Converge upstream={upstream} accent={source.accent} />
+        )}
 
-      <div className="px-3 py-3">
-        <svg
-          viewBox={`0 0 ${VIEW_W} ${height}`}
-          className="w-full"
-          style={{ fontFamily: SANS }}
-        >
-          {/* Source box */}
-          <Source source={source} count={count} />
+        <SourceChip source={source} />
 
-          {/* One connector + formula + arrow + chip per row */}
-          {rows.map((row, i) => (
-            <Row
-              key={row.keyName}
-              row={row}
-              i={i}
-              count={count}
-              sourceAccent={source.accent}
-            />
-          ))}
-        </svg>
+        <Fork rows={rows} sourceAccent={source.accent} />
       </div>
     </div>
   );
 }
 
-// ── Upstream ECDH panel (optional, sits above the main rows) ──────────────
+// ── Inputs row + convergence (only when `upstream` is set) ───────────────────
 //
-// Renders a small "two inputs → ECDH → source" SVG. Used to show *how*
-// the source secret got derived in the first place:
-//   - Bob's peel:  bob_privkey · E_AB  → SHA256(·) → ss_AB
-//   - Alice wrap:  e_AX · X_node_pubkey → SHA256(·) → ss_AX
-// Same component handles both directions of ECDH because the math is
-// symmetric.
+// Two input chips side by side. Light SVG lines drop from each chip's bottom
+// edge and meet at a center point; the ECDH operation rides that join, and a
+// short down-arrow carries the merged result into the source chip below.
 
-const UPSTREAM_VIEW_W = 680;
-const UPSTREAM_HEIGHT = 110;
-
-const UP_IN_X = 20;
-const UP_IN_W = 150;
-const UP_IN_H = 36;
-
-const UP_FORMULA_X = 230;
-const UP_FORMULA_W = 220;
-const UP_FORMULA_H = 46;
-
-const UP_OUT_X = 500;
-const UP_OUT_W = 160;
-const UP_OUT_H = 50;
-
-function UpstreamEcdh({
+function Converge({
   upstream,
-  sourceName,
   accent,
 }: {
   upstream: EcdhUpstream;
-  sourceName: string;
   accent: string;
 }) {
-  const cyA = 30;           // top input centerline
-  const cyB = UPSTREAM_HEIGHT - 30; // bottom input centerline
-  const cyFormula = UPSTREAM_HEIGHT / 2;
-  const cyOut = UPSTREAM_HEIGHT / 2;
   const formula =
     upstream.formulaOverride ??
     `SHA256(${upstream.inputA.name} · ${upstream.inputB.name})`;
 
+  // The connector SVG spans the full pipeline width; the two lines start under
+  // each chip (~25% / ~75%) and converge to the center (50%).
+  const CONNECT_W = 300;
+  const CONNECT_H = 26;
+  const leftX = CONNECT_W * 0.25;
+  const rightX = CONNECT_W * 0.75;
+  const midX = CONNECT_W / 2;
+
   return (
-    <svg
-      viewBox={`0 0 ${UPSTREAM_VIEW_W} ${UPSTREAM_HEIGHT}`}
-      className="w-full"
-      style={{ fontFamily: SANS }}
-    >
-      {/* Input A (top) */}
-      <UpstreamInputBox
-        x={UP_IN_X}
-        cy={cyA}
-        name={upstream.inputA.name}
-        subtitle={upstream.inputA.subtitle}
-        accent={accent}
-      />
-      {/* Input B (bottom) */}
-      <UpstreamInputBox
-        x={UP_IN_X}
-        cy={cyB}
-        name={upstream.inputB.name}
-        subtitle={upstream.inputB.subtitle}
-        accent={accent}
-      />
+    <div className="flex flex-col items-center w-full">
+      {/* Two input chips. */}
+      <div className="flex items-stretch justify-center gap-3 w-full">
+        <InputChip
+          name={upstream.inputA.name}
+          subtitle={upstream.inputA.subtitle}
+          accent={accent}
+        />
+        <InputChip
+          name={upstream.inputB.name}
+          subtitle={upstream.inputB.subtitle}
+          accent={accent}
+        />
+      </div>
 
-      {/* Two curved connectors converging on the formula box */}
-      <path
-        d={`M${UP_IN_X + UP_IN_W},${cyA} C${UP_FORMULA_X - 30},${cyA} ${UP_FORMULA_X - 30},${cyFormula} ${UP_FORMULA_X},${cyFormula}`}
-        fill="none"
-        stroke={accent}
-        strokeWidth={1.5}
-        opacity={0.85}
-      />
-      <path
-        d={`M${UP_IN_X + UP_IN_W},${cyB} C${UP_FORMULA_X - 30},${cyB} ${UP_FORMULA_X - 30},${cyFormula} ${UP_FORMULA_X},${cyFormula}`}
-        fill="none"
-        stroke={accent}
-        strokeWidth={1.5}
-        opacity={0.85}
-      />
+      {/* Converging connector lines. */}
+      <svg
+        width="100%"
+        viewBox={`0 0 ${CONNECT_W} ${CONNECT_H}`}
+        preserveAspectRatio="none"
+        height={CONNECT_H}
+        style={{ display: "block", maxWidth: CONNECT_W }}
+        aria-hidden
+      >
+        <line
+          x1={leftX}
+          y1={0}
+          x2={midX}
+          y2={CONNECT_H}
+          stroke={accent}
+          strokeWidth={1.5}
+          opacity={0.8}
+        />
+        <line
+          x1={rightX}
+          y1={0}
+          x2={midX}
+          y2={CONNECT_H}
+          stroke={accent}
+          strokeWidth={1.5}
+          opacity={0.8}
+        />
+      </svg>
 
-      {/* ECDH formula box */}
-      <rect
-        x={UP_FORMULA_X}
-        y={cyFormula - UP_FORMULA_H / 2}
-        width={UP_FORMULA_W}
-        height={UP_FORMULA_H}
-        rx={2}
-        fill="#fffdf5"
-        stroke={accent}
-        strokeWidth={1.5}
-      />
-      <text
-        x={UP_FORMULA_X + UP_FORMULA_W / 2}
-        y={cyFormula - 4}
-        textAnchor="middle"
-        fontSize={12}
-        fontWeight={700}
-        fill={accent}
-        style={{ fontFamily: MONO }}
-      >
-        {mathLineToSvgTspans(formula)}
-      </text>
-      <text
-        x={UP_FORMULA_X + UP_FORMULA_W / 2}
-        y={cyFormula + 14}
-        textAnchor="middle"
-        fontSize={10}
-        fill={NEUTRAL_TEXT}
-        style={{ fontStyle: "italic" }}
-      >
-        ECDH (commutative scalar mul)
-      </text>
+      {/* ECDH operation label, riding the join. */}
+      <div className="flex items-center gap-1.5" style={{ marginTop: 1 }}>
+        <span
+          className="text-[10px] uppercase tracking-[0.06em] font-bold"
+          style={{ fontFamily: SANS, color: accent }}
+        >
+          ECDH
+        </span>
+        <MathLine
+          text={formula}
+          color={NEUTRAL_TEXT}
+          weight={600}
+          fontSize={11}
+        />
+      </div>
 
-      {/* Arrow from formula → output */}
-      <line
-        x1={UP_FORMULA_X + UP_FORMULA_W}
-        y1={cyOut}
-        x2={UP_OUT_X - 10}
-        y2={cyOut}
-        stroke={accent}
-        strokeWidth={1.5}
-      />
-      <polygon
-        points={`${UP_OUT_X - 4},${cyOut} ${UP_OUT_X - 12},${cyOut - 4} ${UP_OUT_X - 12},${cyOut + 4}`}
-        fill={accent}
-      />
-
-      {/* Output (source) box */}
-      <rect
-        x={UP_OUT_X}
-        y={cyOut - UP_OUT_H / 2}
-        width={UP_OUT_W}
-        height={UP_OUT_H}
-        rx={2}
-        fill="#fffdf5"
-        stroke={accent}
-        strokeWidth={1.5}
-      />
-      <text
-        x={UP_OUT_X + UP_OUT_W / 2}
-        y={cyOut - 2}
-        textAnchor="middle"
-        fontSize={14}
-        fontWeight={700}
-        fill={INK}
-        style={{ fontFamily: MONO }}
-      >
-        {mathLineToSvgTspans(sourceName)}
-      </text>
-      <text
-        x={UP_OUT_X + UP_OUT_W / 2}
-        y={cyOut + 14}
-        textAnchor="middle"
-        fontSize={10}
-        fill={NEUTRAL_TEXT}
-        style={{ fontStyle: "italic" }}
-      >
-        32-byte shared secret
-      </text>
-    </svg>
+      {/* Down-arrow into the source chip. */}
+      <DownArrow color={accent} height={16} />
+    </div>
   );
 }
 
-function UpstreamInputBox({
-  x,
-  cy,
+function InputChip({
   name,
   subtitle,
   accent,
 }: {
-  x: number;
-  cy: number;
   name: string;
   subtitle: string;
   accent: string;
 }) {
   return (
-    <g>
-      <rect
-        x={x}
-        y={cy - UP_IN_H / 2}
-        width={UP_IN_W}
-        height={UP_IN_H}
-        rx={2}
-        fill="#fffdf5"
-        stroke={accent}
-        strokeWidth={1.5}
-        opacity={0.85}
-      />
-      <text
-        x={x + UP_IN_W / 2}
-        y={cy - 1}
-        textAnchor="middle"
-        fontSize={12}
-        fontWeight={700}
-        fill={INK}
-        style={{ fontFamily: MONO }}
-      >
-        {mathLineToSvgTspans(name)}
-      </text>
-      <text
-        x={x + UP_IN_W / 2}
-        y={cy + 12}
-        textAnchor="middle"
-        fontSize={9}
-        fill={NEUTRAL_TEXT}
-        style={{ fontStyle: "italic" }}
+    <div
+      className="px-3 py-1.5 rounded-md flex flex-col items-center justify-center text-center"
+      style={{
+        border: `1.5px solid ${accent}`,
+        background: CREAM,
+        opacity: 0.92,
+        minWidth: 110,
+        maxWidth: 150,
+      }}
+    >
+      <MathLine text={name} color={INK} weight={700} fontSize={13} />
+      <span
+        className="text-[9px] leading-tight mt-0.5"
+        style={{ fontFamily: SANS, color: NEUTRAL_TEXT, fontStyle: "italic" }}
       >
         {subtitle}
-      </text>
-    </g>
+      </span>
+    </div>
   );
 }
 
-function Source({
+// ── Source chip (the shared secret) ─────────────────────────────────────────
+
+function SourceChip({
   source,
-  count,
 }: {
   source: KeyDerivationCardProps["source"];
-  count: number;
 }) {
-  const cy = srcCY(count);
   return (
-    <g>
-      <rect
-        x={SRC_X}
-        y={cy - SRC_H / 2}
-        width={SRC_W}
-        height={SRC_H}
-        rx={2}
-        fill="#fffdf5"
-        stroke={source.accent}
-        strokeWidth={1.5}
-      />
-      <text
-        x={SRC_X + SRC_W / 2}
-        y={cy - 4}
-        textAnchor="middle"
-        fontSize={14}
-        fontWeight={700}
-        fill={INK}
-        style={{ fontFamily: MONO }}
-      >
-        {mathLineToSvgTspans(source.name)}
-      </text>
-      <text
-        x={SRC_X + SRC_W / 2}
-        y={cy + 14}
-        textAnchor="middle"
-        fontSize={10}
-        fill={NEUTRAL_TEXT}
-        style={{ fontStyle: "italic" }}
+    <div
+      className="px-4 py-2 rounded-md flex flex-col items-center justify-center text-center"
+      style={{
+        border: `1.5px solid ${source.accent}`,
+        background: CREAM,
+        minWidth: 140,
+      }}
+    >
+      <MathLine text={source.name} color={INK} weight={700} fontSize={16} />
+      <span
+        className="text-[10px] leading-tight mt-0.5"
+        style={{ fontFamily: SANS, color: NEUTRAL_TEXT, fontStyle: "italic" }}
       >
         {source.subtitle}
-      </text>
-    </g>
+      </span>
+    </div>
   );
 }
 
-function Row({
-  row,
-  i,
-  count,
+// ── Fork (source → 1-2 key chips) ────────────────────────────────────────────
+//
+// Light SVG lines fan from the source chip's bottom-center out to each key
+// column. The HMAC formula rides each fork (as the arrow's label, not a box);
+// a short down-arrow drops into the key chip.
+
+function Fork({
+  rows,
   sourceAccent,
 }: {
-  row: KeyDerivationRow;
-  i: number;
-  count: number;
+  rows: KeyDerivationRow[];
   sourceAccent: string;
 }) {
-  const cy = rowCY(i, count);
-  const srcCy = srcCY(count);
-  const cx1 = SRC_X + SRC_W + 22;
-  const cx2 = FORMULA_X - 22;
-  const arrowEnd = KEY_X - 4;
-  const chipY = cy - KEY_H / 2;
-  const chipFill = row.active ? hexToRgba(row.color, 0.22) : hexToRgba(row.color, 0.12);
+  const count = rows.length;
+
+  // Connector SVG: lines start at the source's bottom-center (top-middle of
+  // this SVG) and fan out to each column's center.
+  const CONNECT_W = 300;
+  const CONNECT_H = 24;
+  const midX = CONNECT_W / 2;
+  // Column centers: one → centered; two → ~25% / ~75%.
+  const colX = (i: number): number =>
+    count === 1 ? midX : i === 0 ? CONNECT_W * 0.25 : CONNECT_W * 0.75;
 
   return (
-    <g key={row.keyName} opacity={row.active === false ? 0.55 : 1}>
-      {/* Connector from source → formula box (curved) */}
-      <path
-        d={`M${SRC_X + SRC_W},${srcCy} C${cx1},${srcCy} ${cx2},${cy} ${FORMULA_X},${cy}`}
-        fill="none"
-        stroke={row.color}
-        strokeWidth={1.5}
-        opacity={0.85}
-      />
-
-      {/* Formula box */}
-      <rect
-        x={FORMULA_X}
-        y={cy - FORMULA_H / 2}
-        width={FORMULA_W}
-        height={FORMULA_H}
-        rx={2}
-        fill="#fffdf5"
-        stroke={row.color}
-        strokeWidth={1.5}
-      />
-      <text
-        x={FORMULA_X + FORMULA_W / 2}
-        y={cy + 5}
-        textAnchor="middle"
-        fontSize={13}
-        fontWeight={700}
-        fill={row.color}
-        style={{ fontFamily: MONO }}
+    <div className="flex flex-col items-center w-full">
+      {/* Fork connector lines. */}
+      <svg
+        width="100%"
+        viewBox={`0 0 ${CONNECT_W} ${CONNECT_H}`}
+        preserveAspectRatio="none"
+        height={CONNECT_H}
+        style={{ display: "block", maxWidth: CONNECT_W }}
+        aria-hidden
       >
-        {mathLineToSvgTspans(row.formula)}
-      </text>
+        {rows.map((row, i) => (
+          <line
+            key={row.keyName}
+            x1={midX}
+            y1={0}
+            x2={colX(i)}
+            y2={CONNECT_H}
+            stroke={row.color}
+            strokeWidth={1.5}
+            opacity={row.active === false ? 0.4 : 0.8}
+          />
+        ))}
+      </svg>
 
-      {/* Arrow from formula → chip */}
-      <line
-        x1={FORMULA_X + FORMULA_W}
-        y1={cy}
-        x2={arrowEnd - 6}
-        y2={cy}
-        stroke={row.color}
-        strokeWidth={1.5}
-      />
-      <polygon
-        points={`${arrowEnd},${cy} ${arrowEnd - 8},${cy - 4} ${arrowEnd - 8},${cy + 4}`}
-        fill={row.color}
-      />
-
-      {/* Key chip */}
-      <rect
-        x={KEY_X}
-        y={chipY}
-        width={KEY_W}
-        height={KEY_H}
-        rx={3}
-        fill={chipFill}
-        stroke={row.active ? FOCUS_GOLD : row.color}
-        strokeWidth={row.active ? 2 : 1.5}
-      />
-      {row.active && (
-        <rect
-          x={KEY_X - 3}
-          y={chipY - 3}
-          width={KEY_W + 6}
-          height={KEY_H + 6}
-          rx={5}
-          fill="none"
-          stroke={FOCUS_GOLD}
-          strokeWidth={1}
-          opacity={0.35}
-        />
-      )}
-      <text
-        x={KEY_X + 14}
-        y={chipY + 25}
-        fontSize={18}
-        fontWeight={700}
-        fill={row.color}
-        style={{ fontFamily: MONO }}
+      {/* One column per key: formula label, down-arrow, key chip, role. */}
+      <div
+        className={
+          count === 1
+            ? "flex justify-center w-full"
+            : "grid w-full"
+        }
+        style={
+          count === 1
+            ? undefined
+            : { gridTemplateColumns: "1fr 1fr", gap: 12, alignItems: "start" }
+        }
       >
-        {mathLineToSvgTspans(row.keyName)}
-      </text>
-      <text
-        x={KEY_X + 14}
-        y={chipY + 44}
-        fontSize={10}
-        fill={row.color}
+        {rows.map((row) => (
+          <ForkColumn key={row.keyName} row={row} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ForkColumn({ row }: { row: KeyDerivationRow }) {
+  const dim = row.active === false;
+  const chipFill = row.active
+    ? hexToRgba(row.color, 0.22)
+    : hexToRgba(row.color, 0.1);
+
+  return (
+    <div
+      className="flex flex-col items-center text-center"
+      style={{ opacity: dim ? 0.55 : 1, maxWidth: 200, marginInline: "auto" }}
+    >
+      {/* HMAC formula — the operation label on the fork arrow. */}
+      <MathLine
+        text={row.formula}
+        color={row.color}
+        weight={700}
+        fontSize={11}
+      />
+
+      <DownArrow color={row.color} height={14} />
+
+      {/* Key chip (gold ring + tinted fill when active). */}
+      <div
+        className="px-3 py-1.5 rounded-md flex items-baseline justify-center gap-1.5"
         style={{
-          fontFamily: MONO,
-          fontStyle: "italic",
-          opacity: 0.75,
+          border: `${row.active ? 2 : 1.5}px solid ${
+            row.active ? FOCUS_GOLD : row.color
+          }`,
+          background: chipFill,
+          boxShadow: row.active
+            ? `0 0 0 3px ${hexToRgba(FOCUS_GOLD, 0.22)}`
+            : "none",
+          minWidth: 96,
         }}
       >
-        {row.bytes}
-      </text>
-      <text
-        x={KEY_X + KEY_W - 12}
-        y={chipY + 25}
-        textAnchor="end"
-        fontSize={11}
-        fontWeight={700}
-        fill={INK}
+        <MathLine text={row.keyName} color={row.color} weight={700} fontSize={16} />
+        <span
+          className="text-[9px]"
+          style={{
+            fontFamily: MONO,
+            color: row.color,
+            opacity: 0.75,
+            fontStyle: "italic",
+          }}
+        >
+          {row.bytes}
+        </span>
+      </div>
+
+      {/* Role, small, under the key. */}
+      <span
+        className="text-[10px] leading-tight font-bold mt-1"
+        style={{ fontFamily: SANS, color: INK }}
       >
         {row.useTitle}
-      </text>
+      </span>
       {row.useSubtitle && (
-        <text
-          x={KEY_X + KEY_W - 12}
-          y={chipY + 44}
-          textAnchor="end"
-          fontSize={10}
-          fill={NEUTRAL_TEXT}
-          style={{ fontStyle: "italic" }}
+        <span
+          className="text-[9px] leading-tight"
+          style={{ fontFamily: SANS, color: NEUTRAL_TEXT, fontStyle: "italic" }}
         >
           {row.useSubtitle}
-        </text>
+        </span>
       )}
-    </g>
+    </div>
   );
 }
 
@@ -594,10 +461,10 @@ function Row({
 // are simply *used* — render this small icon instead. Hovering the icon
 // expands the full card as a popover.
 //
-// Visual: a 22×22 gold-bordered key glyph in a tinted background. Hover
-// produces a viewport-clamped popover showing the same card content the
-// caller would have rendered inline. Click also pins/unpins the popover so
-// touch devices have a way in (no hover on mobile).
+// Visual: a small gold-bordered key glyph + "keys" label. Hover produces a
+// viewport-clamped popover showing the same card content the caller would
+// have rendered inline. Click also pins/unpins the popover so touch devices
+// have a way in (no hover on mobile).
 //
 // Place this icon top-right of the operation view it belongs to, so the
 // reader's eye lands there *after* reading the operation.
@@ -608,7 +475,9 @@ export function KeyHoverIcon(props: KeyDerivationCardProps & { className?: strin
   const [pos, setPos] = useState({ left: 0, top: 0, above: false });
   const triggerRef = useRef<HTMLButtonElement>(null);
 
-  const POPOVER_W = 720;
+  // The pipeline card is narrower than the old SVG card; size the popover to
+  // match its max width plus a little breathing room.
+  const POPOVER_W = 480;
 
   function updatePos() {
     const el = triggerRef.current;
@@ -658,7 +527,7 @@ export function KeyHoverIcon(props: KeyDerivationCardProps & { className?: strin
           gap: 6,
           padding: "4px 10px",
           border: `1.5px solid ${FOCUS_GOLD}`,
-          background: pinned ? "#fef3c7" : "#fffdf5",
+          background: pinned ? "#fef3c7" : CREAM,
           color: FOCUS_GOLD,
           cursor: "help",
           fontFamily: MONO,
