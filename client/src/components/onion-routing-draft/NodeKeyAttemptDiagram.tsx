@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { Tok, MathLine } from "./mathTokens";
+import { MorphBox } from "./morph";
 
 // ────────────────────────────────────────────────────────────────────────────
 // NodeKeyAttemptDiagram (DRAFT)
@@ -259,14 +261,20 @@ export function NodeKeyAttemptDiagram() {
                   >
                     {label.charAt(0)}
                   </span>
-                  {learnedSender && !isActive && (
-                    <span
-                      className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-[#a13a3a] text-white text-[11px] font-bold flex items-center justify-center border-[1.5px] border-[#fffdf5]"
-                      title="Identified Alice as the sender"
-                    >
-                      !
-                    </span>
-                  )}
+                  <AnimatePresence>
+                    {learnedSender && !isActive && (
+                      <motion.span
+                        className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-[#a13a3a] text-white text-[11px] font-bold flex items-center justify-center border-[1.5px] border-[#fffdf5]"
+                        title="Identified Alice as the sender"
+                        initial={{ opacity: 0, scale: 0.4 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.4 }}
+                        transition={{ duration: 0.3, ease: "easeOut" }}
+                      >
+                        !
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
                 </div>
                 <div
                   className="mt-1 text-[11px] font-semibold tracking-[0.05em]"
@@ -401,9 +409,18 @@ export function NodeKeyAttemptDiagram() {
           </div>
 
           {/* ECDH calculation panel. Appears beside the packet at active
-              forwarder steps. */}
-          {isForwarder && ecdh && (
-            <div style={{ width: 280 }}>
+              forwarder steps. It mounts/unmounts between Alice's setup beat and
+              the forwarder beats, so it fades in/out (and crossfades between
+              forwarders, keyed on the active hop) instead of popping. */}
+          <AnimatePresence mode="wait">
+            {isForwarder && ecdh && (
+              <MorphBox
+                key={active}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                style={{ width: 280 }}
+              >
               <div
                 className="bg-black text-white px-3 py-1.5 border-[1.5px] border-black flex items-center gap-2"
                 style={{ fontFamily: '"JetBrains Mono", "Fira Code", monospace' }}
@@ -519,8 +536,9 @@ export function NodeKeyAttemptDiagram() {
                   </div>
                 </div>
               </div>
-            </div>
-          )}
+              </MorphBox>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 

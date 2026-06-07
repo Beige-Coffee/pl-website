@@ -26,6 +26,7 @@
 
 import { useEffect, useState } from "react";
 import { renderCaption } from "./captionMarkup";
+import { MorphBox, CrossfadeSwap } from "./morph";
 import { HatchOverlay, type ForwarderId } from "./encryptionHatch";
 import {
   KeyDerivationCard,
@@ -360,7 +361,13 @@ export function PeelTraceDiagram() {
 
 function BeatBody({ step }: { step: number }) {
   if (step === 1) return <ReceiveView />;
-  if (step === 2) return <EnvelopeView mode="incoming" />;
+  // Beats 2 (PARSE) and 4 (VERIFY) share the 1,300-byte hop_payloads bar.
+  // Both render from ParseVerifyMorphView so that bar is the SAME React
+  // element across the step change (reconciled by key) and morphs its own
+  // height / border instead of jump-cutting. Beat 3 (DERIVE, the full
+  // key-derivation card) sits between them as a genuinely distinct view.
+  // See onion-routing-visual-standards §14 and WrapMorphView.
+  if (step === 2) return <ParseVerifyMorphView step={step} />;
   // Full key-derivation card on the DERIVE beat (first introduction).
   if (step === 3) return <KeyDerivationPanel step={step} />;
   // On subsequent beats that USE the derived keys, show only the compact
@@ -370,19 +377,25 @@ function BeatBody({ step }: { step: number }) {
     return (
       <>
         <KeyHoverBadge step={step} />
-        <HmacVerifyView />
+        <ParseVerifyMorphView step={step} />
       </>
     );
-  if (step === 5) return <ExtendedBufferView phase="zeros" />;
+  // Beats 5 (EXTEND), 6 (XOR), and 8 (LIFT) share the 2,600-byte extended
+  // buffer. Its role changes (standalone bar → XOR-equation operand → slice
+  // source) and its tail content changes (zeros → keystream), so all three
+  // render from ExtendedMorphView with ONE persistent keyed MorphBox; the
+  // inner content crossfades while the box morphs. Beat 7 (READ) is a
+  // distinct front-zoom view that sits between 6 and 8. See §14.
+  if (step === 5) return <ExtendedMorphView step={step} />;
   if (step === 6)
     return (
       <>
         <KeyHoverBadge step={step} />
-        <PeelXorView />
+        <ExtendedMorphView step={step} />
       </>
     );
   if (step === 7) return <ReadFrontView />;
-  if (step === 8) return <LiftSliceView />;
+  if (step === 8) return <ExtendedMorphView step={step} />;
   if (step === 9) return <EphemeralAdvanceView />;
   if (step === 10) return <EnvelopeView mode="outgoing" />;
   return null;
@@ -646,6 +659,218 @@ function PacketCard({
   );
 }
 
+// ── Beats 2 & 4: Parse ⟷ Verify morph (shared 1,300-byte bar) ─────────────
+//
+// Both beats render THIS one component, so the 1,300-byte hop_payloads bar is
+// the *same* React element across the step change (reconciled by key="payload-
+// bar") and animates its own height / border instead of crossfading two
+// separate views. Beat 2 (PARSE) frames the bar inside the envelope (HEADER +
+// payload + HMAC); beat 4 (VERIFY) collapses the HEADER/HMAC flanks, compacts
+// the bar, and slides the HMAC-comparison scaffolding in beneath it. The bar's
+// content is identical in both beats (one opaque encrypted blob), so the
+// regions render directly (no CrossfadeSwap needed here). Mirrors WrapMorphView
+// in WrapTraceDiagram; see onion-routing-visual-standards §14.
+
+const PARSE_ACCENT = HOP_STROKE.bob;
+
+function ParseVerifyMorphView({ step }: { step: number }) {
+  const isVerify = step === 4;
+  const regions = receiveRegions1300();
+
+  return (
+    <div className="mt-2">
+      {/* Label block (swaps per beat). */}
+      <div key="label">
+        {isVerify ? (
+          <div
+            className="text-[10px] uppercase tracking-[0.06em] mb-1"
+            style={{ color: NEUTRAL_TEXT, fontFamily: MONO, fontWeight: 500 }}
+          >
+            hop_payloads · 1,300 B
+          </div>
+        ) : (
+          <BufferHeader
+            leftLabel="incoming packet"
+            rightLabel={
+              <HoverTooltip
+                content={
+                  <span>
+                    The fixed 1,366-byte Sphinx wire format. Same size at every
+                    hop, so an observer can't infer route length from the wire.
+                  </span>
+                }
+              >
+                {FULL_PACKET_BYTES.toLocaleString()} bytes total
+              </HoverTooltip>
+            }
+            accentColor={FOCUS_GOLD}
+          />
+        )}
+      </div>
+
+      {/* The envelope row. The INK border lives here so it reads as the
+          envelope frame on beat 2 (wrapping HEADER + payload + HMAC) and as
+          the compact bar's own border on beat 4 (flanks collapsed away). */}
+      <div
+        key="row"
+        className="border-[1.5px] flex items-stretch relative overflow-hidden"
+        style={{ background: "#fffdf5", borderColor: INK }}
+      >
+        {/* HEADER flank (collapses on beat 4). */}
+        <MorphBox
+          key="header-flank"
+          initial={{ flexBasis: 130, opacity: 1 }}
+          animate={{ flexBasis: isVerify ? 0 : 130, opacity: isVerify ? 0 : 1 }}
+          className="flex flex-col items-center justify-center text-center border-r-[1.5px] relative"
+          style={{
+            flexShrink: 0,
+            borderColor: INK,
+            padding: "8px 6px",
+            background: `${PARSE_ACCENT}1a`,
+            overflow: "hidden",
+          }}
+        >
+          <span
+            className="text-[10px] font-bold uppercase tracking-[0.08em] leading-tight"
+            style={{ fontFamily: MONO, color: INK, whiteSpace: "nowrap" }}
+          >
+            HEADER
+          </span>
+          <div
+            style={{
+              width: "60%",
+              height: 1,
+              background: "#0f172a30",
+              marginTop: 5,
+              marginBottom: 6,
+            }}
+          />
+          <span
+            className="text-[9px] uppercase tracking-[0.05em] opacity-70 leading-tight"
+            style={{ fontFamily: MONO, color: INK, whiteSpace: "nowrap" }}
+          >
+            version
+          </span>
+          <span
+            className="text-[11px] font-bold leading-tight mt-0.5"
+            style={{ fontFamily: MONO, color: INK }}
+          >
+            0x00
+          </span>
+          <span
+            className="text-[9px] uppercase tracking-[0.05em] opacity-70 leading-tight mt-1.5"
+            style={{ fontFamily: MONO, color: INK, whiteSpace: "nowrap" }}
+          >
+            ephemeral pubkey
+          </span>
+          <span
+            className="font-bold leading-tight mt-0.5"
+            style={{ fontFamily: MONO, color: PARSE_ACCENT, fontSize: 15 }}
+          >
+            E_AB
+          </span>
+        </MorphBox>
+
+        {/* The persistent 1,300-byte hop_payloads bar. Same element on both
+            beats; height + gold inset morph. */}
+        <MorphBox
+          key="payload-bar"
+          initial={{ height: 96 }}
+          animate={{
+            height: isVerify ? 42 : 96,
+            boxShadow: isVerify ? "none" : `inset 0 0 0 2px ${FOCUS_GOLD}`,
+          }}
+          className="flex relative"
+          style={{ flex: 1, minWidth: 0 }}
+        >
+          {regions.map((r) => (
+            <BufferRegion key={r.key} region={r} dimNonFocus={false} />
+          ))}
+        </MorphBox>
+
+        {/* OUTER HMAC flank (collapses on beat 4). */}
+        <MorphBox
+          key="hmac-flank"
+          initial={{ flexBasis: 96, opacity: 1 }}
+          animate={{ flexBasis: isVerify ? 0 : 96, opacity: isVerify ? 0 : 1 }}
+          className="flex flex-col items-center justify-center text-center border-l-[1.5px]"
+          style={{
+            flexShrink: 0,
+            borderColor: INK,
+            padding: "8px 4px",
+            background: `${PARSE_ACCENT}1a`,
+            overflow: "hidden",
+          }}
+        >
+          <span
+            className="text-[10px] font-bold uppercase tracking-[0.06em] leading-tight"
+            style={{ fontFamily: MONO, color: INK }}
+          >
+            HMAC
+          </span>
+          <span
+            className="text-[10px] font-bold leading-tight mt-1"
+            style={{ fontFamily: MONO, color: PARSE_ACCENT, whiteSpace: "nowrap" }}
+          >
+            outer_hmac
+          </span>
+          <span
+            className="text-[9px] font-normal opacity-60 leading-tight mt-0.5"
+            style={{ fontFamily: MONO, color: INK }}
+          >
+            32 B
+          </span>
+        </MorphBox>
+      </div>
+
+      {/* Bottom block (swaps per beat): byte axis (parse) vs the HMAC
+          comparison scaffolding (verify). */}
+      <div key="extra">
+        {isVerify ? (
+          <MorphBox
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.18 }}
+          >
+            <SymbolRow char="‖" />
+
+            <ADBar />
+
+            <SymbolRow char="↓" />
+            <div
+              className="text-center mb-1"
+              style={{
+                boxShadow: `inset 0 0 0 2.5px ${FOCUS_GOLD}, inset 0 0 0 5px rgba(184,134,11,0.22)`,
+                padding: "10px 14px",
+                background: "#fffdf5",
+              }}
+            >
+              <MathLine
+                text="HMAC(mu_B, hop_payloads ‖ associated_data)"
+                color={KEY_MU_COLOR}
+                fontSize={14}
+              />
+            </div>
+
+            <SymbolRow char="≟" />
+            <div className="text-center">
+              <MathLine text="outer_hmac" color={NEUTRAL_TEXT} fontSize={13} />
+            </div>
+          </MorphBox>
+        ) : (
+          <div
+            className="flex justify-between mt-1"
+            style={{ fontFamily: MONO, fontSize: 10, color: NEUTRAL_TEXT }}
+          >
+            <span>byte 0</span>
+            <span>byte {(FULL_PACKET_BYTES - 1).toLocaleString()}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Beat 3: Key derivation panel ─────────────────────────────────────────
 
 // Shared per-step key-derivation props. Beat 3 (DERIVE) renders the full
@@ -714,126 +939,6 @@ function KeyHoverBadge({ step }: { step: number }) {
   );
 }
 
-// ── Beat 4: HMAC verify view ─────────────────────────────────────────────
-
-function HmacVerifyView() {
-  const regions = receiveRegions1300();
-  return (
-    <div className="my-2">
-      <CompactBufferBar
-        label="hop_payloads · 1,300 B"
-        regions={regions}
-        accentColor={NEUTRAL_TEXT}
-      />
-
-      <SymbolRow char="‖" />
-
-      <ADBar />
-
-      <SymbolRow char="↓" />
-      <div
-        className="text-center mb-1"
-        style={{
-          boxShadow: `inset 0 0 0 2.5px ${FOCUS_GOLD}, inset 0 0 0 5px rgba(184,134,11,0.22)`,
-          padding: "10px 14px",
-          background: "#fffdf5",
-        }}
-      >
-        <MathLine
-          text="HMAC(mu_B, hop_payloads ‖ associated_data)"
-          color={KEY_MU_COLOR}
-          fontSize={14}
-        />
-      </div>
-
-      <SymbolRow char="≟" />
-      <div className="text-center">
-        <MathLine text="outer_hmac" color={NEUTRAL_TEXT} fontSize={13} />
-      </div>
-    </div>
-  );
-}
-
-// ── Beat 5: Extended buffer (zeros tail) ─────────────────────────────────
-
-function ExtendedBufferView({ phase }: { phase: "zeros" | "keystream" }) {
-  const isKeystream = phase === "keystream";
-  return (
-    <div className="my-3">
-      <BufferHeader
-        leftLabel={
-          isKeystream
-            ? "extended buffer · 2,600 B (Bob's layer stripped, tail = filler match)"
-            : "extended buffer · 2,600 B (incoming half + 1,300 zero bytes)"
-        }
-        rightLabel={
-          <HoverTooltip
-            content={
-              <span>
-                The extension is what lets Bob's keystream produce the matching
-                `filler` bytes Alice baked into Charlie's view. Bob keeps the
-                extended buffer in scratch memory; it never leaves his node.
-              </span>
-            }
-          >
-            2× wire size
-          </HoverTooltip>
-        }
-        accentColor={FOCUS_GOLD}
-      />
-      <div
-        className="border-[1.5px] flex relative overflow-hidden"
-        style={{
-          background: "#fffdf5",
-          borderColor: FOCUS_GOLD,
-          boxShadow: `0 0 0 2px rgba(184,134,11,0.20)`,
-          height: 46,
-        }}
-      >
-        {isKeystream
-          ? extendedRegionsAfterXor().map((r) => (
-              <BufferRegion key={r.key} region={r} dimNonFocus={false} />
-            ))
-          : extendedRegionsZeroTail().map((r) => (
-              <BufferRegion key={r.key} region={r} dimNonFocus={true} />
-            ))}
-
-        {/* Midpoint divider line at 50% */}
-        <div
-          className="absolute top-0 bottom-0 pointer-events-none"
-          style={{
-            left: "50%",
-            width: 0,
-            borderLeft: `1.5px dashed ${FOCUS_GOLD}`,
-            opacity: 0.6,
-          }}
-        />
-      </div>
-      <div
-        className="flex mt-1"
-        style={{ fontFamily: MONO, fontSize: 10, color: NEUTRAL_TEXT }}
-      >
-        <span style={{ flex: 1 }}>byte 0</span>
-        <span>byte 1,300</span>
-        <span style={{ flex: 1, textAlign: "right" }}>byte 2,599</span>
-      </div>
-      <div
-        className="flex mt-1"
-        style={{ fontFamily: MONO, fontSize: 9.5, color: NEUTRAL_TEXT }}
-      >
-        <span style={{ flex: 1, textAlign: "center" }}>
-          ← incoming hop_payloads (still encrypted) →
-        </span>
-        <span style={{ flex: 1, textAlign: "center" }}>
-          {isKeystream
-            ? "← keystream extension (filler match) →"
-            : "← 1,300 zero bytes (fresh extension) →"}
-        </span>
-      </div>
-    </div>
-  );
-}
-
 function extendedRegionsZeroTail(focusZeros = true): Region[] {
   return [
     // Incoming 1,300 bytes from Bob's view: one opaque encrypted blob.
@@ -854,25 +959,178 @@ function extendedRegionsZeroTail(focusZeros = true): Region[] {
   ];
 }
 
-// ── Beat 6: 2,600-byte XOR view ──────────────────────────────────────────
+// ── Beats 5, 6 & 8: extended-buffer morph (shared 2,600-byte bar) ─────────
+//
+// Beats 5 (EXTEND), 6 (XOR), and 8 (LIFT) all render THIS one component, so
+// the 2,600-byte extended buffer is the *same* React element across the step
+// change (reconciled by key="ext-bar") and morphs its own height / border
+// instead of jump-cutting between three separate views. The bar's ROLE
+// changes per beat (standalone bar at 5, then "before XOR" operand at the top
+// of the XOR equation at 6, then slice source at 8) and its tail content
+// changes from zeros (5, 6) to the keystream/after-XOR bytes (8), so the inner
+// content is wrapped in a CrossfadeSwap that crossfades on the zeros-to-
+// keystream boundary
+// while the box morphs. Beat 7 (READ, a front-zoom of Bob's 60-byte hop
+// payload) is a genuinely distinct view that sits between 6 and 8. Mirrors
+// WrapMorphView; see onion-routing-visual-standards §14.
 
-function PeelXorView() {
+function ExtendedMorphView({ step }: { step: number }) {
+  const isXor = step === 6;
+  const isLift = step === 8;
+
+  // The persistent bar's content: zeros tail on beats 5 & 6, keystream/after
+  // tail on beat 8. swapKey drives the CrossfadeSwap at that boundary.
+  const phase = isLift ? "keystream" : "zeros";
+  const barRegions = isLift
+    ? extendedRegionsAfterXor(true)
+    : extendedRegionsZeroTail();
+  // Beat 5 dims the still-encrypted incoming half (focus is the zero tail);
+  // beat 8 dims everything outside the slice; beat 6's "before" bar dims
+  // nothing. Opacity transitions smoothly across same-phase steps (5 → 6).
+  const dimNonFocus = step === 5 || isLift;
+
+  // Box chrome morphs: beat 5 is the gold standalone bar; beats 6 & 8 are the
+  // compact INK-bordered operand/source bars.
+  const barHeight = step === 5 ? 46 : 42;
+  const barBorder = step === 5 ? FOCUS_GOLD : INK;
+  const barShadow = step === 5 ? "0 0 0 2px rgba(184,134,11,0.20)" : "none";
+
   return (
     <div className="my-2">
-      <CompactExtendedBar
-        label="extended buffer · before XOR (from step 5)"
-        regions={extendedRegionsZeroTail()}
-        accentColor={NEUTRAL_TEXT}
-      />
-      <SymbolRow char="⊕" />
-      <ExtendedKeystreamBar />
-      <SymbolRow char="=" />
-      <CompactExtendedBar
-        label="extended buffer · after XOR (Bob layer stripped; tail = filler match) → step 7"
-        regions={extendedRegionsAfterXor()}
-        accentColor={HOP_STROKE.bob}
-        emphasis
-      />
+      {/* Label block (swaps per beat). */}
+      <div key="label">
+        {step === 5 ? (
+          <BufferHeader
+            leftLabel="extended buffer · 2,600 B (incoming half + 1,300 zero bytes)"
+            rightLabel={
+              <HoverTooltip
+                content={
+                  <span>
+                    The extension is what lets Bob's keystream produce the
+                    matching `filler` bytes Alice baked into Charlie's view. Bob
+                    keeps the extended buffer in scratch memory; it never leaves
+                    his node.
+                  </span>
+                }
+              >
+                2× wire size
+              </HoverTooltip>
+            }
+            accentColor={FOCUS_GOLD}
+          />
+        ) : (
+          <div
+            className="text-[10px] uppercase tracking-[0.06em] mb-1"
+            style={{ color: NEUTRAL_TEXT, fontFamily: MONO, fontWeight: 500 }}
+          >
+            {isXor
+              ? "extended buffer · before XOR (from step 5)"
+              : "extended buffer · 2,600 B (from step 6)"}
+          </div>
+        )}
+      </div>
+
+      {/* The single persistent 2,600-byte bar. Border / shadow animate via
+          Framer; the height transitions via CSS on the inner content (it drags
+          the box, which is overflow-hidden). The inner region row crossfades
+          when the tail content swaps zeros ↔ keystream. */}
+      <MorphBox
+        key="ext-bar"
+        initial={{ borderColor: barBorder }}
+        animate={{ borderColor: barBorder, boxShadow: barShadow }}
+        className="border-[1.5px] flex relative overflow-hidden"
+        style={{ background: "#fffdf5" }}
+      >
+        <CrossfadeSwap swapKey={phase} className="block" style={{ width: "100%" }}>
+          <div
+            className="flex"
+            style={{
+              width: "100%",
+              height: barHeight,
+              transition: "height 450ms cubic-bezier(0.4,0,0.2,1)",
+            }}
+          >
+            {barRegions.map((r) => (
+              <BufferRegion key={r.key} region={r} dimNonFocus={dimNonFocus} />
+            ))}
+          </div>
+        </CrossfadeSwap>
+
+        {/* Midpoint divider at byte 1,300 (persists across all three beats). */}
+        <div
+          className="absolute top-0 bottom-0 pointer-events-none"
+          style={{
+            left: "50%",
+            width: 0,
+            borderLeft: `1.5px dashed ${step === 5 ? FOCUS_GOLD : NEUTRAL_TEXT}`,
+            opacity: step === 5 ? 0.6 : 0.4,
+            zIndex: 3,
+          }}
+        />
+      </MorphBox>
+
+      {/* Bottom block (swaps per beat): byte axis + sublabels (extend), the
+          rest of the XOR equation (XOR), or the slice bracket + result bar
+          (lift). The non-standalone blocks slide in beneath the bar. */}
+      <div key="extra">
+        {step === 5 && (
+          <>
+            <div
+              className="flex mt-1"
+              style={{ fontFamily: MONO, fontSize: 10, color: NEUTRAL_TEXT }}
+            >
+              <span style={{ flex: 1 }}>byte 0</span>
+              <span>byte 1,300</span>
+              <span style={{ flex: 1, textAlign: "right" }}>byte 2,599</span>
+            </div>
+            <div
+              className="flex mt-1"
+              style={{ fontFamily: MONO, fontSize: 9.5, color: NEUTRAL_TEXT }}
+            >
+              <span style={{ flex: 1, textAlign: "center" }}>
+                ← incoming hop_payloads (still encrypted) →
+              </span>
+              <span style={{ flex: 1, textAlign: "center" }}>
+                ← 1,300 zero bytes (fresh extension) →
+              </span>
+            </div>
+          </>
+        )}
+
+        {isXor && (
+          <MorphBox
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.18 }}
+          >
+            <SymbolRow char="⊕" />
+            <ExtendedKeystreamBar />
+            <SymbolRow char="=" />
+            <CompactExtendedBar
+              label="extended buffer · after XOR (Bob layer stripped; tail = filler match) → step 7"
+              regions={extendedRegionsAfterXor()}
+              accentColor={HOP_STROKE.bob}
+              emphasis
+            />
+          </MorphBox>
+        )}
+
+        {isLift && (
+          <MorphBox
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.18 }}
+          >
+            <SliceArrowRow />
+            <CompactBufferBar
+              label="next hop_payloads · 1,300 B (slice [60 : 1,360])"
+              regions={outgoingRegions1300()}
+              accentColor={FOCUS_GOLD}
+              emphasis
+            />
+          </MorphBox>
+        )}
+      </div>
     </div>
   );
 }
@@ -1153,28 +1411,9 @@ function SubCell({
 }
 
 // ── Beat 8: Lift slice (bytes 60..1,360) as Charlie's hop_payloads ───────
-
-function LiftSliceView() {
-  return (
-    <div className="my-2">
-      <CompactExtendedBar
-        label="extended buffer · 2,600 B (from step 6)"
-        regions={extendedRegionsAfterXor(true)}
-        accentColor={NEUTRAL_TEXT}
-        dimNonFocus
-      />
-
-      <SliceArrowRow />
-
-      <CompactBufferBar
-        label="next hop_payloads · 1,300 B (slice [60 : 1,360])"
-        regions={outgoingRegions1300()}
-        accentColor={FOCUS_GOLD}
-        emphasis
-      />
-    </div>
-  );
-}
+// The 2,600-byte slice-source bar is the persistent MorphBox in
+// ExtendedMorphView (shared with beats 5 & 6); the slice bracket + result bar
+// below are this beat's own scaffolding.
 
 function SliceArrowRow() {
   // Bracket above the bytes-60-to-1360 slice (= 1,300 bytes = 50% width

@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { MORPH_TRANSITION } from "./morph";
 
 // ────────────────────────────────────────────────────────────────────────────
 // ErrorBoomerangDiagram (rebuilt 2026-05-08)
@@ -207,27 +209,34 @@ export function ErrorBoomerangDiagram() {
               </svg>
             )}
 
-            {/* The packet visualization */}
-            {step >= 1 && (
+            {/* The packet visualization. Mounted from step 0 as a persistent
+                element so it morphs (travel + contents fade-in) instead of
+                popping in at step 1. At step 0 it sits idle at Charlie with no
+                visible packet yet. */}
+            <div
+              className="absolute flex flex-col items-center transition-all"
+              style={{
+                left: `${packetLocationPct}%`,
+                top: 90,
+                transform: "translateX(-50%)",
+                transitionDuration: "700ms",
+                transitionTimingFunction: "ease-in-out",
+                opacity: step >= 1 ? 1 : 0,
+                pointerEvents: step >= 1 ? "auto" : "none",
+              }}
+            >
+              <PacketStack step={step} />
               <div
-                className="absolute flex flex-col items-center transition-all"
+                className="text-[10px] mt-1.5 tracking-[0.04em] transition-opacity duration-500"
                 style={{
-                  left: `${packetLocationPct}%`,
-                  top: 90,
-                  transform: "translateX(-50%)",
-                  transitionDuration: "700ms",
-                  transitionTimingFunction: "ease-in-out",
+                  color: "#475569",
+                  fontFamily: MONO,
+                  opacity: step >= 1 ? 1 : 0,
                 }}
               >
-                <PacketStack step={step} />
-                <div
-                  className="text-[10px] mt-1.5 tracking-[0.04em]"
-                  style={{ color: "#475569", fontFamily: MONO }}
-                >
-                  292 B total
-                </div>
+                292 B total
               </div>
-            )}
+            </div>
           </div>
         </div>
       </div>
@@ -293,43 +302,61 @@ function PacketStack({ step }: { step: number }) {
         minHeight: 60,
       }}
     >
-      {/* Outermost: Bob's ammag (only after Bob wraps) */}
-      {hasBob && (
-        <div
-          className="border-[1.5px] flex items-center justify-center"
-          style={{
-            background: HOP_FILL.bob,
-            borderColor: HOP_STROKE.bob,
-            padding: "5px 6px",
-            color: "#0f172a",
-            fontSize: 10,
-            fontWeight: 700,
-            letterSpacing: "0.02em",
-            fontFamily: MONO,
-          }}
-        >
-          ⊕ ammag_bob
-        </div>
-      )}
+      {/* Outermost: Bob's ammag (only after Bob wraps). Each ammag layer grows
+          in (opacity + scaleY from the top) so it visibly wraps on rather than
+          popping. */}
+      <AnimatePresence initial={false}>
+        {hasBob && (
+          <motion.div
+            key="ammag-bob"
+            className="border-[1.5px] flex items-center justify-center overflow-hidden"
+            initial={{ opacity: 0, scaleY: 0.55, y: -4 }}
+            animate={{ opacity: 1, scaleY: 1, y: 0 }}
+            exit={{ opacity: 0, scaleY: 0.55, y: -4 }}
+            transition={MORPH_TRANSITION}
+            style={{
+              transformOrigin: "top center",
+              background: HOP_FILL.bob,
+              borderColor: HOP_STROKE.bob,
+              padding: "5px 6px",
+              color: "#0f172a",
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: "0.02em",
+              fontFamily: MONO,
+            }}
+          >
+            ⊕ ammag_bob
+          </motion.div>
+        )}
+      </AnimatePresence>
       {/* Charlie's ammag layer */}
-      {hasCharlie && (
-        <div
-          className="border-[1.5px] flex items-center justify-center"
-          style={{
-            background: HOP_FILL.charlie,
-            borderColor: HOP_STROKE.charlie,
-            padding: "5px 6px",
-            color: "#0f172a",
-            fontSize: 10,
-            fontWeight: 700,
-            letterSpacing: "0.02em",
-            fontFamily: MONO,
-            margin: "1.5px 6px",
-          }}
-        >
-          ⊕ ammag_charlie
-        </div>
-      )}
+      <AnimatePresence initial={false}>
+        {hasCharlie && (
+          <motion.div
+            key="ammag-charlie"
+            className="border-[1.5px] flex items-center justify-center overflow-hidden"
+            initial={{ opacity: 0, scaleY: 0.55, y: -4 }}
+            animate={{ opacity: 1, scaleY: 1, y: 0 }}
+            exit={{ opacity: 0, scaleY: 0.55, y: -4 }}
+            transition={MORPH_TRANSITION}
+            style={{
+              transformOrigin: "top center",
+              background: HOP_FILL.charlie,
+              borderColor: HOP_STROKE.charlie,
+              padding: "5px 6px",
+              color: "#0f172a",
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: "0.02em",
+              fontFamily: MONO,
+              margin: "1.5px 6px",
+            }}
+          >
+            ⊕ ammag_charlie
+          </motion.div>
+        )}
+      </AnimatePresence>
       {/* Inner: hmac + payload */}
       <div
         className="border-[1.5px] flex items-center justify-center"

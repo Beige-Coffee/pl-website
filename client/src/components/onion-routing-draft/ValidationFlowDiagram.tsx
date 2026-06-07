@@ -31,6 +31,7 @@ import {
   type KeyDerivationRow,
 } from "./KeyDerivationCard";
 import { MathLine } from "./mathTokens";
+import { MorphBox, CrossfadeSwap } from "./morph";
 import {
   MONO,
   SANS,
@@ -43,6 +44,7 @@ import {
   IterationBanner,
   BufferRegion,
   BufferHeader,
+  CompactBar,
   SymbolRow,
   ADBar,
   HoverTooltip,
@@ -284,24 +286,249 @@ export function ValidationFlowDiagram() {
   );
 }
 
-// ── Beat body switch ──────────────────────────────────────────────────────
+// ── Beat body ───────────────────────────────────────────────────────────────
+//
+// Two morph mechanisms, per onion-routing-visual-standards §14:
+//
+//   • The hop_payloads bar recurs across beats 3→4→5 (encrypted blob → stripped
+//     → zoomed). PayloadArcView renders ONE persistent MorphBox for those three
+//     beats (stable key="hop-payloads-bar"), so the box reconciles and morphs
+//     its height/border across the step change while its inner representation
+//     crossfades. The supporting equation around the bar crossfades too.
+//   • Every other beat (1, 2, 6, 7, 8) is genuinely different content, so the
+//     panel area crossfades through CrossfadeSwap keyed on `step` rather than
+//     hard-cutting. The HtlcCard (beats 1 + 7) keeps a stable key so it
+//     reconciles on any direct 1↔7 jump.
+//
+// The persistent arc and the crossfade panels are mutually exclusive: only one
+// is mounted at a time, so the 2→3 and 5→6 boundaries are honest crossfades
+// between genuinely-different representations.
 
 function BeatBody({ step }: { step: number }) {
+  const inPayloadArc = step >= 3 && step <= 5;
+  if (inPayloadArc) return <PayloadArcView step={step} />;
+
+  // Beats 1 and 7 both lead with the incoming HTLC card. Render it as ONE
+  // persistent keyed element OUTSIDE the per-step crossfade, so a direct 1↔7
+  // jump morphs the same card (full ↔ compact) instead of cross-cutting two
+  // copies. The rest of each beat crossfades around it.
+  const showHtlcCard = step === 1 || step === 7;
+
+  return (
+    <div className="mt-2">
+      {showHtlcCard && (
+        <MorphBox key="htlc-card" layout className="mb-4">
+          <HtlcCard compact={step === 7} />
+        </MorphBox>
+      )}
+      <CrossfadeSwap swapKey={step}>
+        <NonArcBeat step={step} />
+      </CrossfadeSwap>
+    </div>
+  );
+}
+
+function NonArcBeat({ step }: { step: number }) {
   if (step === 1) return <ReceiveView />;
   if (step === 2) return <StructureGateView />;
-  if (step === 3) return <VerifyView />;
-  if (step === 4)
-    return (
-      <>
-        <KeyHoverBadge />
-        <PeelView />
-      </>
-    );
-  if (step === 5) return <ParseView />;
   if (step === 6) return <BranchView />;
   if (step === 7) return <CheckView />;
   if (step === 8) return <OutcomeView />;
   return null;
+}
+
+// ── Beats 3-5: the persistent hop_payloads bar ───────────────────────────────
+//
+// The bar's headline state per beat:
+//   3 (VERIFY): fully-encrypted 1,300-byte blob (the HMAC input)
+//   4 (PEEL):   Bob's layer stripped (the XOR result; the equation that
+//               produced it crossfades in above)
+//   5 (PARSE):  zoomed into Bob's 60-byte hop payload (LEN | TLV | HMAC)
+//
+// All three render THIS component, so the MorphBox is the same React element
+// across the step change and animates its own box (height + border). Its region
+// children swap directly (same direct-children pattern as WrapMorphView's bar),
+// while the framing above and below the bar crossfades via CrossfadeSwap.
+
+function PayloadArcView({ step }: { step: number }) {
+  const isVerify = step === 3;
+  const isPeel = step === 4;
+  const isParse = step === 5;
+
+  // The persistent bar grows when we zoom into the 60-byte payload at beat 5.
+  const barHeight = isParse ? 72 : 46;
+  const barBorder = isParse ? FOCUS_GOLD : isPeel ? HOP_STROKE.bob : NEUTRAL_TEXT;
+  const barShadow = isParse
+    ? `0 0 0 2px rgba(184,134,11,0.22)`
+    : isPeel
+      ? `0 0 0 2px rgba(184,134,11,0.18)`
+      : "none";
+
+  // Caption directly above the persistent bar (its label changes per beat).
+  const barLabel = isVerify
+    ? "hop_payloads · 1,300 B (still encrypted)"
+    : isPeel
+      ? "hop_payloads · after XOR (Bob's layer stripped)"
+      : "bob's hop payload · 60 bytes (now plaintext)";
+
+  return (
+    <div className="mt-2">
+      {/* Lead-in above the bar, crossfades per beat. */}
+      <CrossfadeSwap swapKey={`arc-lead-${step}`}>
+        <ArcLeadIn step={step} />
+      </CrossfadeSwap>
+
+      {/* Persistent label for the bar. */}
+      <div
+        className="text-[10px] uppercase tracking-[0.06em] mb-1 mt-1"
+        style={{
+          color: isParse ? FOCUS_GOLD : isPeel ? HOP_STROKE.bob : NEUTRAL_TEXT,
+          fontFamily: MONO,
+          fontWeight: isVerify ? 500 : 700,
+        }}
+      >
+        {isParse ? (
+          <div className="flex items-center justify-between">
+            <span>{barLabel}</span>
+            <span style={{ fontWeight: 500 }}>zoomed view</span>
+          </div>
+        ) : (
+          barLabel
+        )}
+      </div>
+
+      {/* THE persistent bar: same element in beats 3, 4, 5; the box (height +
+          border) morphs while its region children swap. Same direct-children
+          pattern as WrapMorphView's persistent bar. */}
+      <MorphBox
+        key="hop-payloads-bar"
+        initial={{ height: barHeight, borderColor: barBorder }}
+        animate={{ height: barHeight, borderColor: barBorder }}
+        className="border-[1.5px] flex relative overflow-hidden"
+        style={{ background: "#fffdf5", boxShadow: barShadow }}
+      >
+        {isParse ? (
+          <div style={{ flex: 1, position: "relative", minWidth: 0 }}>
+            <SlotCell hop="bob" />
+          </div>
+        ) : (
+          (isPeel ? strippedRegions1300() : encryptedBlob1300()).map((r) => (
+            <BufferRegion key={r.key} region={r} dimNonFocus={false} />
+          ))
+        )}
+      </MorphBox>
+
+      {/* Trailing content below the bar, crossfades per beat. */}
+      <CrossfadeSwap swapKey={`arc-tail-${step}`}>
+        <ArcTail step={step} />
+      </CrossfadeSwap>
+    </div>
+  );
+}
+
+// Content above the persistent bar. Each beat frames the bar's headline state:
+//   3: the key card whose mu_B drives the integrity check
+//   4: the XOR equation (before, keystream, equals) that produces the stripped bar
+//   5: a header introducing the zoomed payload
+function ArcLeadIn({ step }: { step: number }) {
+  if (step === 3) return <KeyDerivationCard {...keyDerivationProps(true)} />;
+
+  if (step === 4) {
+    return (
+      <div>
+        <KeyHoverBadge />
+        <CompactBar
+          label="hop_payloads · before XOR (encrypted)"
+          regions={encryptedBlob1300()}
+          accentColor={NEUTRAL_TEXT}
+        />
+        <SymbolRow char="⊕" />
+        <div className="flex items-center justify-center gap-2 mb-1.5">
+          <MathLine text="chacha20(rho_B, 2600)" color={KEY_RHO_COLOR} fontSize={11} />
+          <span
+            className="text-[10px] uppercase tracking-[0.06em]"
+            style={{ color: KEY_RHO_COLOR, fontFamily: MONO, fontWeight: 700 }}
+          >
+            keystream (ch 9)
+          </span>
+        </div>
+        <SymbolRow char="=" />
+      </div>
+    );
+  }
+
+  // Beat 5: no lead-in; the persistent bar's own label carries the framing.
+  return null;
+}
+
+// Content below the persistent bar (what each beat does next).
+function ArcTail({ step }: { step: number }) {
+  if (step === 3) {
+    return (
+      <div>
+        <SymbolRow char="‖" />
+        <ADBar />
+        <SymbolRow char="↓" />
+        <div
+          className="text-center mb-1"
+          style={{
+            boxShadow: `inset 0 0 0 2.5px ${FOCUS_GOLD}, inset 0 0 0 5px rgba(184,134,11,0.22)`,
+            padding: "10px 14px",
+            background: "#fffdf5",
+          }}
+        >
+          <MathLine
+            text="HMAC(mu_B, hop_payloads ‖ associated_data)"
+            color={KEY_MU_COLOR}
+            fontSize={14}
+          />
+        </div>
+        <SymbolRow char="≟" />
+        <div className="text-center">
+          <MathLine text="outer_hmac" color={NEUTRAL_TEXT} fontSize={13} />
+        </div>
+        <GateBadge
+          pass
+          passLabel="match — bytes authentic, bound to this HTLC"
+          failCode="invalid_onion_hmac"
+        />
+      </div>
+    );
+  }
+
+  if (step === 4) {
+    return (
+      <div
+        className="text-center mt-2 text-[11px] italic"
+        style={{ color: NEUTRAL_TEXT, fontFamily: SANS }}
+      >
+        Bob's 60-byte hop payload is now plaintext at the front; the rest stays
+        encrypted for Charlie. (Full byte-mechanics in chapter 9.)
+      </div>
+    );
+  }
+
+  // Beat 5: byte axis + parse → TLV chips.
+  return (
+    <div>
+      <div
+        className="flex justify-between mt-1"
+        style={{ fontFamily: MONO, fontSize: 10, color: NEUTRAL_TEXT }}
+      >
+        <span>byte 0</span>
+        <span>byte 59</span>
+      </div>
+      <div className="mt-4 flex items-center justify-center gap-2">
+        <MathLine text="parse_tlv_records(payload)" color={INK} fontSize={12} />
+        <span style={{ color: NEUTRAL_TEXT }}>→</span>
+      </div>
+      <div className="mt-2 grid grid-cols-3 gap-2">
+        <FieldChip type="2" name="amt_to_forward" value={`${fmt(AMT_FORWARD_MSAT)} msat`} />
+        <FieldChip type="4" name="outgoing_cltv_value" value={`${fmt(OUTGOING_CLTV)}`} />
+        <FieldChip type="6" name="short_channel_id" value={SCID} accent={HOP_STROKE.charlie} />
+      </div>
+    </div>
+  );
 }
 
 // ── Shared mini-pieces ────────────────────────────────────────────────────
@@ -416,8 +643,7 @@ function HtlcField({
 
 function ReceiveView() {
   return (
-    <div className="mt-2 space-y-4">
-      <HtlcCard />
+    <div className="space-y-4">
       <div className="flex justify-center" style={{ color: NEUTRAL_TEXT, fontSize: 18 }}>
         +
       </div>
@@ -578,130 +804,7 @@ function StructFieldGrow({ label, value, note }: { label: string; value: string;
   );
 }
 
-// ── Beat 3: HMAC verify gate ──────────────────────────────────────────────
-
-function VerifyView() {
-  return (
-    <div className="mt-2">
-      <KeyDerivationCard {...keyDerivationProps(true)} />
-      <div className="mt-3">
-        <CompactBar
-          label="hop_payloads · 1,300 B (still encrypted)"
-          regions={encryptedBlob1300()}
-          accentColor={NEUTRAL_TEXT}
-        />
-        <SymbolRow char="‖" />
-        <ADBar />
-        <SymbolRow char="↓" />
-        <div
-          className="text-center mb-1"
-          style={{
-            boxShadow: `inset 0 0 0 2.5px ${FOCUS_GOLD}, inset 0 0 0 5px rgba(184,134,11,0.22)`,
-            padding: "10px 14px",
-            background: "#fffdf5",
-          }}
-        >
-          <MathLine
-            text="HMAC(mu_B, hop_payloads ‖ associated_data)"
-            color={KEY_MU_COLOR}
-            fontSize={14}
-          />
-        </div>
-        <SymbolRow char="≟" />
-        <div className="text-center">
-          <MathLine text="outer_hmac" color={NEUTRAL_TEXT} fontSize={13} />
-        </div>
-        <GateBadge
-          pass
-          passLabel="match — bytes authentic, bound to this HTLC"
-          failCode="invalid_onion_hmac"
-        />
-      </div>
-    </div>
-  );
-}
-
-// ── Beat 4: Peel (compact) ────────────────────────────────────────────────
-
-function PeelView() {
-  return (
-    <div className="my-2">
-      <CompactBar
-        label="hop_payloads · before XOR (encrypted)"
-        regions={encryptedBlob1300()}
-        accentColor={NEUTRAL_TEXT}
-      />
-      <div className="flex items-center justify-center gap-2 my-1.5">
-        <SymbolRow char="⊕" />
-      </div>
-      <div className="mb-1 flex items-center justify-center gap-2">
-        <MathLine text="chacha20(rho_B, 2600)" color={KEY_RHO_COLOR} fontSize={11} />
-        <span
-          className="text-[10px] uppercase tracking-[0.06em]"
-          style={{ color: KEY_RHO_COLOR, fontFamily: MONO, fontWeight: 700 }}
-        >
-          keystream (ch 9)
-        </span>
-      </div>
-      <SymbolRow char="=" />
-      <CompactBar
-        label="hop_payloads · after XOR (Bob's layer stripped)"
-        regions={strippedRegions1300()}
-        accentColor={HOP_STROKE.bob}
-        emphasis
-      />
-      <div
-        className="text-center mt-2 text-[11px] italic"
-        style={{ color: NEUTRAL_TEXT, fontFamily: SANS }}
-      >
-        Bob's 60-byte hop payload is now plaintext at the front; the rest stays
-        encrypted for Charlie. (Full byte-mechanics in chapter 9.)
-      </div>
-    </div>
-  );
-}
-
-// ── Beat 5: Parse the TLV ─────────────────────────────────────────────────
-
-function ParseView() {
-  return (
-    <div className="my-2">
-      <BufferHeader
-        leftLabel="bob's hop payload · 60 bytes (now plaintext)"
-        rightLabel="zoomed view"
-        accentColor={FOCUS_GOLD}
-      />
-      <div
-        className="border-[1.5px] relative overflow-hidden"
-        style={{
-          background: "#fffdf5",
-          borderColor: FOCUS_GOLD,
-          boxShadow: `0 0 0 2px rgba(184,134,11,0.22)`,
-          height: 72,
-        }}
-      >
-        <SlotCell hop="bob" />
-      </div>
-      <div
-        className="flex justify-between mt-1"
-        style={{ fontFamily: MONO, fontSize: 10, color: NEUTRAL_TEXT }}
-      >
-        <span>byte 0</span>
-        <span>byte 59</span>
-      </div>
-
-      <div className="mt-4 flex items-center justify-center gap-2">
-        <MathLine text="parse_tlv_records(payload)" color={INK} fontSize={12} />
-        <span style={{ color: NEUTRAL_TEXT }}>→</span>
-      </div>
-      <div className="mt-2 grid grid-cols-3 gap-2">
-        <FieldChip type="2" name="amt_to_forward" value={`${fmt(AMT_FORWARD_MSAT)} msat`} />
-        <FieldChip type="4" name="outgoing_cltv_value" value={`${fmt(OUTGOING_CLTV)}`} />
-        <FieldChip type="6" name="short_channel_id" value={SCID} accent={HOP_STROKE.charlie} />
-      </div>
-    </div>
-  );
-}
+// ── Beats 3-5 TLV chips (used by the PayloadArcView parse tail) ────────────
 
 function FieldChip({
   type,
@@ -848,8 +951,7 @@ function BranchCard({
 
 function CheckView() {
   return (
-    <div className="my-2 space-y-3">
-      <HtlcCard compact />
+    <div className="space-y-3">
       <div className="space-y-2">
         <CheckRow
           pass
@@ -1028,44 +1130,6 @@ function OutcomeCard({
         style={{ color: NEUTRAL_TEXT, fontFamily: SANS, borderTop: "1px solid rgba(15,23,42,0.1)" }}
       >
         {foot}
-      </div>
-    </div>
-  );
-}
-
-// ── Compact buffer bar (1,300-byte, no midpoint divider) ──────────────────
-
-function CompactBar({
-  label,
-  regions,
-  accentColor,
-  emphasis,
-}: {
-  label: string;
-  regions: Region[];
-  accentColor: string;
-  emphasis?: boolean;
-}) {
-  return (
-    <div>
-      <div
-        className="text-[10px] uppercase tracking-[0.06em] mb-1"
-        style={{ color: accentColor, fontFamily: MONO, fontWeight: emphasis ? 700 : 500 }}
-      >
-        {label}
-      </div>
-      <div
-        className="border-[1.5px] flex relative overflow-hidden"
-        style={{
-          background: "#fffdf5",
-          borderColor: emphasis ? FOCUS_GOLD : INK,
-          height: 46,
-          boxShadow: emphasis ? `0 0 0 2px rgba(184,134,11,0.18)` : "none",
-        }}
-      >
-        {regions.map((r) => (
-          <BufferRegion key={r.key} region={r} dimNonFocus={false} />
-        ))}
       </div>
     </div>
   );

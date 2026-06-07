@@ -1516,11 +1516,13 @@ function UnifiedXorPanel({ step }: { step: number }) {
       <ExtendedBufferRow
         label="extended buffer (hop_payloads + 60 zero bytes)"
         layout="pre-xor"
+        dim={showResult}
       />
       <BigSym>⊕</BigSym>
       <ExtendedBufferRow
         label="Bob's rho_B keystream (1,360 bytes)"
         layout="keystream"
+        dim={showResult}
       />
       {showResult && (
         <>
@@ -1529,7 +1531,18 @@ function UnifiedXorPanel({ step }: { step: number }) {
             label="result · Bob's hop payload is plaintext, last 60 B are new"
             layout="post-xor"
             emphasize
+            spotlightEnds
           />
+          <div
+            className="text-[10.5px] text-center mt-2 px-3 leading-snug"
+            style={{ fontFamily: SANS, color: INK }}
+          >
+            One pass, two ends: Bob's hop payload{" "}
+            <strong style={{ color: SUCCESS_GREEN }}>decrypts at the front</strong>{" "}
+            while{" "}
+            <strong style={{ color: FOCUS_GOLD }}>60 brand-new encrypted padding bytes</strong>{" "}
+            are created at the back, from the same XOR.
+          </div>
         </>
       )}
     </div>
@@ -1547,11 +1560,16 @@ function ExtendedBufferRow({
   label,
   layout,
   emphasize = false,
+  dim = false,
+  spotlightEnds = false,
 }: {
   label: string;
   layout: "pre-xor" | "keystream" | "post-xor";
   emphasize?: boolean;
+  dim?: boolean;
+  spotlightEnds?: boolean;
 }) {
+  const midOp = spotlightEnds ? 0.22 : 1;
   // Proportions match the main packet card's PayloadArea when it has 3
   // slots + trailing extension: slot region 50%, padding 37.5%, trailing
   // 12.5%. Slot widths within the slot region follow the byte ratios
@@ -1564,7 +1582,7 @@ function ExtendedBufferRow({
   const daveW = SLOT_PCT - bobW - charlieW;
 
   return (
-    <div>
+    <div style={{ opacity: dim ? 0.4 : 1, transition: "opacity 300ms ease-out" }}>
       <div
         className="text-[9px] uppercase tracking-[0.06em] mb-1"
         style={{
@@ -1602,6 +1620,7 @@ function ExtendedBufferRow({
               }
               labelText={layout === "post-xor" ? "BOB · plain" : "BOB"}
               decrypted={layout === "post-xor"}
+              emphasize={spotlightEnds}
             />
             {/* Charlie's slot */}
             <BarSegment
@@ -1611,6 +1630,7 @@ function ExtendedBufferRow({
                 layout === "pre-xor" ? ["bob", "charlie"] : ["charlie"]
               }
               labelText="C"
+              opacity={midOp}
             />
             {/* Dave's slot */}
             <BarSegment
@@ -1622,6 +1642,7 @@ function ExtendedBufferRow({
                   : ["charlie", "dave"]
               }
               labelText="D"
+              opacity={midOp}
             />
             {/* Padding */}
             <div
@@ -1630,6 +1651,8 @@ function ExtendedBufferRow({
                 width: `${PADDING_PCT}%`,
                 background: "#fffdf5",
                 borderLeft: `1px dashed ${HOP_STROKE_COLOR.dave}60`,
+                opacity: midOp,
+                transition: "opacity 300ms ease-out",
               }}
             >
               <HatchOverlay
@@ -1664,6 +1687,8 @@ function ExtendedBufferRow({
                 borderLeft: `1.5px solid ${
                   layout === "pre-xor" ? ZERO_STROKE : INK
                 }`,
+                boxShadow: spotlightEnds ? `inset 0 0 0 2px ${FOCUS_GOLD}` : undefined,
+                zIndex: spotlightEnds ? 3 : undefined,
               }}
             >
               {layout === "post-xor" && (
@@ -1699,13 +1724,18 @@ function BarSegment({
   layers,
   labelText,
   decrypted = false,
+  opacity = 1,
+  emphasize = false,
 }: {
   widthPct: number;
   hop: ForwarderId;
   layers: ForwarderId[];
   labelText: string;
   decrypted?: boolean;
+  opacity?: number;
+  emphasize?: boolean;
 }) {
+  const ring = decrypted ? SUCCESS_GREEN : HOP_STROKE_COLOR[hop];
   return (
     <div
       className="relative flex items-center justify-center"
@@ -1713,6 +1743,10 @@ function BarSegment({
         width: `${widthPct}%`,
         background: HOP_LIGHT[hop],
         borderRight: `1.5px solid ${HOP_STROKE_COLOR[hop]}80`,
+        opacity,
+        boxShadow: emphasize ? `inset 0 0 0 2px ${ring}` : undefined,
+        zIndex: emphasize ? 3 : undefined,
+        transition: "opacity 300ms ease-out",
       }}
     >
       {layers.length > 0 && (

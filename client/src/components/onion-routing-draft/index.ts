@@ -29,12 +29,10 @@ export {
   type RouteInvoice,
 } from "./ComputedRouteDiagram";
 export { NaiveVsOnionDiagram } from "./NaiveVsOnionDiagram";
-export { EcdhChainDiagram } from "./EcdhChainDiagram";
 export { KdfPipelineDiagram } from "./KdfPipelineDiagram";
 export { PayloadShrinkDiagram } from "./PayloadShrinkDiagram";
 export { FillerTraceDiagram } from "./FillerTraceDiagram";
 export { HmacChainDiagram } from "./HmacChainDiagram";
-export { OnionPeelDiagram } from "./OnionPeelDiagram";
 export { ValidationFlowDiagram } from "./ValidationFlowDiagram";
 export { ErrorBoomerangDiagram } from "./ErrorBoomerangDiagram";
 export { ErrorUnwrapDiagram } from "./ErrorUnwrapDiagram";
@@ -45,9 +43,7 @@ export { EncryptedSliceReveal } from "./EncryptedSliceReveal";
 export { HtlcPropagationDiagram } from "./HtlcPropagationDiagram";
 export { EcdhRecapDiagram } from "./EcdhRecapDiagram";
 export { BlindingFactorDiagram } from "./BlindingFactorDiagram";
-export { SharedSecretSymmetryDiagram } from "./SharedSecretSymmetryDiagram";
 export { HmacRecapDiagram } from "./HmacRecapDiagram";
-export { FiveKeysJobsDiagram } from "./FiveKeysJobsDiagram";
 export { PerHopKeyMatrixDiagram } from "./PerHopKeyMatrixDiagram";
 export { RouteCalcExercise } from "./RouteCalcExercise";
 export {

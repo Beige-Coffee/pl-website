@@ -321,7 +321,7 @@ export function PlaintextMessageTear() {
                     borderColor: isActive ? "#b8860b" : "#475569",
                     background: isActive ? "#fef3c7" : "#fffdf5",
                     fontFamily: '"JetBrains Mono", "Fira Code", monospace',
-                    transition: "max-height 700ms ease-in-out, opacity 700ms ease-in-out, padding 700ms ease-in-out, border-width 700ms ease-in-out, margin 700ms ease-in-out",
+                    transition: "max-height 700ms ease-in-out, opacity 700ms ease-in-out, padding 700ms ease-in-out, border-width 700ms ease-in-out, margin 700ms ease-in-out, border-color 450ms ease-in-out, background-color 450ms ease-in-out",
                     maxHeight: removed ? 0 : 240,
                     opacity: removed ? 0 : 1,
                     paddingTop: removed ? 0 : undefined,

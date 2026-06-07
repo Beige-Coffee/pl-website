@@ -3,7 +3,7 @@ import { HatchOverlay, LAYER_COLORS, type ForwarderId } from "./encryptionHatch"
 import { SlotSubCell } from "./SlotSubCell";
 import { renderCaption } from "./captionMarkup";
 import { MathLine } from "./mathTokens";
-import { KeyDerivationCard, type KeyDerivationRow } from "./KeyDerivationCard";
+import { MorphBox } from "./morph";
 
 // ────────────────────────────────────────────────────────────────────────────
 // WrapTraceDiagram (chapter 8, "Wrapping Layer by Layer")
@@ -642,26 +642,21 @@ export function WrapTraceDiagram() {
 
             {showEnvelope ? (
               <EnvelopeView />
+            ) : step === 3 || step === 4 ? (
+              <WrapMorphView step={step} />
             ) : isXorStep(step) ? (
-              <>
-                <XorView step={step} />
-                <KeyDerivationPanel step={step} />
-              </>
+              <XorView step={step} />
             ) : isHmacStep(step) ? (
-              <>
-                <HmacView step={step} />
-                <KeyDerivationPanel step={step} />
-              </>
+              <HmacView step={step} />
             ) : (
-              <>
-                <Buffer
-                  regions={regions}
-                  focusKind={beat.focus}
-                  carryFrom={carryForwardLabel(step)}
-                />
-                <KeyDerivationPanel step={step} />
-              </>
+              <Buffer
+                regions={regions}
+                focusKind={beat.focus}
+                carryFrom={carryForwardLabel(step)}
+              />
             )}
+
+            {!showEnvelope && <KeysAffordance step={step} />}
           </div>
         </div>
       </div>
@@ -769,6 +764,7 @@ export function HopTrack({
           left: "12%",
           width: "76%",
           borderTop: "1.5px dashed #475569",
+          zIndex: 0,
         }}
       />
       {HOPS.map((id) => {
@@ -783,29 +779,35 @@ export function HopTrack({
               top: 0,
               left: `${NODE_X_PCT[id]}%`,
               transform: "translateX(-50%)",
+              zIndex: 1,
             }}
           >
             <div className="flex flex-col items-center">
-              <div
-                className="rounded-full flex items-center justify-center transition-all"
-                style={{
-                  width: size,
-                  height: size,
-                  background: HOP_FILL_COLOR[id],
-                  border: `2px solid ${HOP_STROKE_COLOR[id]}`,
-                  boxShadow:
-                    isActor || isHighlight
-                      ? `0 0 0 4px rgba(184,134,11,0.30)`
-                      : "none",
-                  opacity: isActor || isHighlight ? 1 : 0.55,
-                }}
-              >
-                <span
-                  className="font-bold"
-                  style={{ fontSize: size * 0.42, color: INK }}
+              <div className="relative" style={{ width: size, height: size }}>
+                {/* opaque underlay so the dashed backbone stays behind the node */}
+                <div
+                  className="absolute inset-0 rounded-full"
+                  style={{ background: "#fefdfb" }}
+                />
+                <div
+                  className="absolute inset-0 rounded-full flex items-center justify-center transition-all"
+                  style={{
+                    background: HOP_FILL_COLOR[id],
+                    border: `2px solid ${HOP_STROKE_COLOR[id]}`,
+                    boxShadow:
+                      isActor || isHighlight
+                        ? `0 0 0 4px rgba(184,134,11,0.30)`
+                        : "none",
+                    opacity: isActor || isHighlight ? 1 : 0.55,
+                  }}
                 >
-                  {ALL_HOP_LABEL[id].charAt(0)}
-                </span>
+                  <span
+                    className="font-bold"
+                    style={{ fontSize: size * 0.42, color: INK }}
+                  >
+                    {ALL_HOP_LABEL[id].charAt(0)}
+                  </span>
+                </div>
               </div>
               <div
                 className="text-[10px] font-bold mt-1 uppercase tracking-[0.06em]"
@@ -867,6 +869,7 @@ export function Buffer({
   regions,
   focusKind,
   carryFrom,
+  compact = false,
 }: {
   regions: Region[];
   focusKind?: FocusKind;
@@ -874,6 +877,8 @@ export function Buffer({
    * Signals visual continuity between beats — the gold-bordered buffer here
    * is the same running state shown in the prior beat. */
   carryFrom?: string;
+  /** Render hop payloads as block+hatch (no byte cells) — used on HMAC beats. */
+  compact?: boolean;
 }) {
   return (
     <div className="mb-4">
@@ -918,7 +923,7 @@ export function Buffer({
         }}
       >
         {regions.map((r) => (
-          <BufferRegion key={r.key} region={r} dimNonFocus={!!focusKind} />
+          <BufferRegion key={r.key} region={r} dimNonFocus={!!focusKind} compact={compact} />
         ))}
         {focusKind === "buffer" && (
           <div
@@ -943,9 +948,11 @@ export function Buffer({
 export function BufferRegion({
   region,
   dimNonFocus,
+  compact = false,
 }: {
   region: Region;
   dimNonFocus: boolean;
+  compact?: boolean;
 }) {
   const dim = dimNonFocus && !region.isFocus;
   const opacity = dim ? DIM_OPACITY : 1;
@@ -1085,6 +1092,45 @@ export function BufferRegion({
   }
 
   if (region.kind === "slot" && region.hop) {
+    // Compact mode (XOR / HMAC bars): a labeled block + hatch, no LEN/TLV/HMAC
+    // byte cells. The byte breakdown is taught on the write-slot steps; on the
+    // operation steps the point is the encryption layers (the hatch).
+    if (compact) {
+      const stroke = HOP_STROKE[region.hop];
+      return (
+        <div
+          className="relative flex items-center justify-center"
+          style={{
+            width: `${region.widthPct}%`,
+            background: HOP_LIGHT[region.hop],
+            opacity,
+            transition: "width 600ms cubic-bezier(0.4,0,0.2,1), opacity 400ms ease-out",
+            borderRight: `1.5px solid ${stroke}80`,
+            boxShadow: region.isFocus
+              ? `inset 0 0 0 2.5px ${FOCUS_GOLD}, inset 0 0 0 5px rgba(184,134,11,0.22)`
+              : undefined,
+          }}
+        >
+          <HatchOverlay hops={region.layers} zIndex={1} stripeOpacity={0.16} />
+          <span
+            style={{
+              fontFamily: MONO,
+              fontSize: 10,
+              color: stroke,
+              fontWeight: 700,
+              letterSpacing: "0.04em",
+              textTransform: "uppercase",
+              background: "rgba(255,253,245,0.85)",
+              padding: "0 4px",
+              zIndex: 2,
+              position: "relative",
+            }}
+          >
+            {HOP_LABEL[region.hop]}
+          </span>
+        </div>
+      );
+    }
     return (
       <div
         className="relative"
@@ -1274,113 +1320,9 @@ export function SlotCell({ hop }: { hop: ForwarderId }) {
   );
 }
 
-// ── Key derivation panel (wraps the shared KeyDerivationCard) ────────────
-//
-//   Beat 1:      session_key → pad_key                       (pad-init)
-//   Beats 2-6:   ss_AD       → rho_D + mu_D                   (Dave)
-//   Beats 7-9:   ss_AC       → rho_C + mu_C                   (Charlie)
-//   Beats 10-12: ss_AB       → rho_B + mu_B                   (Bob)
-//   Beat 13:     hidden (envelope assembly uses only public bytes)
-
+// ── Per-hop key colors (used by the KeysAffordance hover popover below) ────
 const KEY_RHO_COLOR = "#b8860b";  // gold (matches ForwarderPeelDiagram convention)
 const KEY_MU_COLOR = "#3b6aa0";   // blue
-
-function KeyDerivationPanel({ step }: { step: number }) {
-  // Beat 1: pad-init.
-  if (step === 1) {
-    return (
-      <KeyDerivationCard
-        title="Key in use · pad init"
-        source={{
-          name: "session_key",
-          subtitle: "per-payment private",
-          accent: FOCUS_GOLD,
-        }}
-        rows={[
-          {
-            formula: "HMAC('pad', session_key)",
-            keyName: "pad_key",
-            bytes: "32 bytes",
-            useTitle: "Buffer-init key",
-            useSubtitle: "used in step 1",
-            color: FOCUS_GOLD,
-            active: true,
-          },
-        ]}
-      />
-    );
-  }
-
-  // Determine the active hop's iteration from step number.
-  let hop: ForwarderId | null = null;
-  if (step >= 2 && step <= 6) hop = "dave";
-  else if (step >= 7 && step <= 9) hop = "charlie";
-  else if (step >= 10 && step <= 12) hop = "bob";
-
-  if (!hop) return null; // beat 13: hidden
-
-  const initial = hop === "dave" ? "D" : hop === "charlie" ? "C" : "B";
-  const ss = `ss_A${initial}`;
-  const hopName = HOP_LABEL[hop];
-
-  // rho is active during the XOR sub-step (beats 4, 8, 11). mu is active
-  // during the HMAC sub-step (beats 6, 9, 12). Filler overlay (beat 5) uses
-  // no key from this iteration — the filler was precomputed in chapter 7.
-  const rhoActive = step === 4 || step === 8 || step === 11;
-  const muActive = step === 6 || step === 9 || step === 12;
-
-  const rhoRow: KeyDerivationRow = {
-    formula: `HMAC('rho', ${ss})`,
-    keyName: `rho_${initial}`,
-    bytes: "32 bytes",
-    useTitle: "Stream cipher key",
-    useSubtitle: rhoActive ? "in use now (XOR pass)" : undefined,
-    color: KEY_RHO_COLOR,
-    active: rhoActive,
-  };
-  const muRow: KeyDerivationRow = {
-    formula: `HMAC('mu', ${ss})`,
-    keyName: `mu_${initial}`,
-    bytes: "32 bytes",
-    useTitle: "Packet HMAC key",
-    useSubtitle: muActive ? "in use now (HMAC)" : undefined,
-    color: KEY_MU_COLOR,
-    active: muActive,
-  };
-
-  // Show the upstream ECDH on the SHIFT step of each iteration (beats 2,
-  // 7, 10) where Alice first reaches for this hop's secret. Hiding it on
-  // the rest of the iteration keeps the visual clean once we've already
-  // grounded where ss_AX came from.
-  const isIterationStart = step === 2 || step === 7 || step === 10;
-
-  return (
-    <KeyDerivationCard
-      title={`Keys in use · ${hopName}'s iteration`}
-      source={{
-        name: ss,
-        subtitle: "ECDH shared secret",
-        accent: HOP_STROKE[hop],
-      }}
-      rows={[rhoRow, muRow]}
-      upstream={
-        isIterationStart
-          ? {
-              inputA: {
-                name: `e_A${initial}`,
-                subtitle: "Alice's ephemeral privkey (blinding chain)",
-              },
-              inputB: {
-                name: `${hopName.toLowerCase()}_pubkey`,
-                subtitle: `${hopName}'s node pubkey`,
-              },
-              formulaOverride: `SHA256(e_A${initial} · ${hopName.toLowerCase()}_pubkey)`,
-            }
-          : undefined
-      }
-    />
-  );
-}
 
 // ── XOR operation view (beats 4, 8, 11) ─────────────────────────────────
 //
@@ -1395,6 +1337,211 @@ function KeyDerivationPanel({ step }: { step: number }) {
 // Same regions as the "before" beat (step - 1) and the "after" beat (step),
 // rendered in a compact ~42px tall bar. Drops the byte-axis labels since the
 // X-axis is the same across all three rows.
+
+// ── Keys affordance: compact chip + hover popover ───────────────────────────
+// Replaces the always-on key-derivation panel. The keys recede into a hover
+// popover so each step shows only the operation, and the derivation (ECDH →
+// ss → rho/mu) is one hover away, clamped inside the component.
+
+interface KeyEntry {
+  name: string;
+  formula: string;
+  role: string;
+  color: string;
+  active: boolean;
+}
+interface KeysInfo {
+  title: string;
+  ecdh: { inputs: string } | null;
+  ss: { name: string; sub: string; color: string };
+  keys: KeyEntry[];
+}
+
+function keysInfoForStep(step: number): KeysInfo | null {
+  if (step === 1) {
+    return {
+      title: "Key in use · pad init",
+      ecdh: null,
+      ss: { name: "session_key", sub: "per-payment private key", color: FOCUS_GOLD },
+      keys: [
+        {
+          name: "pad_key",
+          formula: "HMAC('pad', session_key)",
+          role: "buffer-init key",
+          color: FOCUS_GOLD,
+          active: true,
+        },
+      ],
+    };
+  }
+  const hop: ForwarderId | null =
+    step >= 2 && step <= 6
+      ? "dave"
+      : step >= 7 && step <= 9
+        ? "charlie"
+        : step >= 10 && step <= 12
+          ? "bob"
+          : null;
+  if (!hop) return null; // step 13: envelope assembly uses only public bytes
+  const initial = hop === "dave" ? "D" : hop === "charlie" ? "C" : "B";
+  const ss = `ss_A${initial}`;
+  const hopName = HOP_LABEL[hop];
+  const rhoActive = step === 4 || step === 8 || step === 11;
+  const muActive = step === 6 || step === 9 || step === 12;
+  return {
+    title: `${hopName}'s iteration keys`,
+    ecdh: { inputs: `e_A${initial} · ${hopName.toLowerCase()}_pubkey` },
+    ss: { name: ss, sub: "ECDH shared secret", color: HOP_STROKE[hop] },
+    keys: [
+      {
+        name: `rho_${initial}`,
+        formula: `HMAC('rho', ${ss})`,
+        role: "stream cipher",
+        color: KEY_RHO_COLOR,
+        active: rhoActive,
+      },
+      {
+        name: `mu_${initial}`,
+        formula: `HMAC('mu', ${ss})`,
+        role: "packet HMAC",
+        color: KEY_MU_COLOR,
+        active: muActive,
+      },
+    ],
+  };
+}
+
+function KeysAffordance({ step }: { step: number }) {
+  const [hover, setHover] = useState(false);
+  const [pinned, setPinned] = useState(false);
+  useEffect(() => {
+    setHover(false);
+    setPinned(false);
+  }, [step]);
+  const info = keysInfoForStep(step);
+  if (!info) return <div style={{ height: 8 }} />;
+  const open = hover || pinned;
+  const activeKey = info.keys.find((k) => k.active);
+  const chipColor = activeKey?.color ?? info.ss.color;
+  return (
+    <div className="relative flex justify-center mt-5">
+      <button
+        type="button"
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        onFocus={() => setHover(true)}
+        onBlur={() => setHover(false)}
+        onClick={() => setPinned((p) => !p)}
+        className="inline-flex items-center gap-2 border-[1.5px] px-3 py-1.5"
+        style={{
+          borderColor: chipColor,
+          background: open ? `${chipColor}26` : `${chipColor}14`,
+          cursor: "pointer",
+          fontFamily: MONO,
+        }}
+        aria-label="Show key derivation"
+      >
+        {activeKey ? (
+          <>
+            <span
+              style={{
+                fontSize: 10,
+                color: NEUTRAL_TEXT,
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
+              }}
+            >
+              key in use
+            </span>
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: activeKey.color }}>
+              {activeKey.name}
+            </span>
+          </>
+        ) : (
+          <span style={{ fontSize: 11, fontWeight: 700, color: chipColor }}>
+            {info.title}
+          </span>
+        )}
+        <span style={{ fontSize: 10, color: NEUTRAL_TEXT }}>· hover or click for derivation ▴</span>
+      </button>
+      {open && <KeysPopover info={info} />}
+    </div>
+  );
+}
+
+function KeysPopover({ info }: { info: KeysInfo }) {
+  return (
+    <div
+      className="absolute"
+      style={{
+        bottom: "calc(100% + 8px)",
+        left: "50%",
+        transform: "translateX(-50%)",
+        width: "min(400px, calc(100% - 24px))",
+        zIndex: 50,
+        background: "#fffdf5",
+        border: `1.5px solid ${INK}`,
+        boxShadow: "0 8px 30px rgba(0,0,0,0.25)",
+        padding: 14,
+        fontFamily: MONO,
+        textAlign: "left",
+      }}
+    >
+      <div
+        className="text-[10px] uppercase tracking-[0.08em] mb-2.5"
+        style={{ color: INK, fontWeight: 700 }}
+      >
+        {info.title}
+      </div>
+      {info.ecdh && (
+        <div className="mb-2 text-center">
+          <div className="text-[11px]" style={{ color: INK, fontWeight: 700 }}>
+            {info.ecdh.inputs}
+          </div>
+          <div className="text-[10px]" style={{ color: NEUTRAL_TEXT }}>↓ SHA256 (ECDH)</div>
+        </div>
+      )}
+      <div className="text-center mb-2.5">
+        <span
+          className="inline-block px-2.5 py-1 border-[1.5px]"
+          style={{ borderColor: info.ss.color, background: `${info.ss.color}14` }}
+        >
+          <span style={{ fontSize: 12.5, fontWeight: 700, color: info.ss.color }}>
+            {info.ss.name}
+          </span>
+          <span style={{ fontSize: 9, color: NEUTRAL_TEXT, marginLeft: 6 }}>{info.ss.sub}</span>
+        </span>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        {info.keys.map((k) => (
+          <div
+            key={k.name}
+            className="flex items-center justify-between gap-2 border-[1.5px] px-2 py-1"
+            style={{
+              borderColor: k.active ? k.color : "rgba(15,23,42,0.18)",
+              background: k.active ? `${k.color}10` : "transparent",
+              opacity: k.active ? 1 : 0.7,
+            }}
+          >
+            <span className="text-[9.5px]" style={{ color: NEUTRAL_TEXT }}>{k.formula}</span>
+            <span className="flex items-center gap-1.5 shrink-0">
+              <span style={{ fontSize: 12, fontWeight: 700, color: k.color }}>{k.name}</span>
+              <span className="text-[8.5px]" style={{ color: NEUTRAL_TEXT }}>{k.role}</span>
+              {k.active && (
+                <span
+                  className="text-[8px] font-bold px-1.5 py-0.5"
+                  style={{ background: k.color, color: "#fff", whiteSpace: "nowrap" }}
+                >
+                  in use
+                </span>
+              )}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function isXorStep(step: number): boolean {
   return step === 4 || step === 8 || step === 11;
@@ -1412,6 +1559,88 @@ function carryForwardLabel(step: number): string | undefined {
   // XOR steps label their own bars internally.
   if (step === 1 || step === 13 || isXorStep(step)) return undefined;
   return `running state · carried from step ${step - 1}`;
+}
+
+// ── Morph pilot (steps 3 & 4) ───────────────────────────────────────────────
+// Both steps render THIS one component, so the bar is the *same* React element
+// across the step change (reconciled by key) and animates its own height /
+// opacity, rather than crossfading two separate components. Step 3 = the full
+// write-state buffer; step 4 = that same bar, compacted + faded, with the rest
+// of the XOR equation sliding in beneath it.
+function WrapMorphView({ step }: { step: number }) {
+  const isXor = step === 4;
+  const beforeRegions = regionsForBeat(3, undefined).map((r) => ({ ...r, isFocus: false }));
+  const afterRegions = regionsForBeat(4, undefined).map((r) => ({ ...r, isFocus: false }));
+
+  return (
+    <div>
+      <div key="label">
+        {isXor ? (
+          <div
+            className="text-[10px] uppercase tracking-[0.06em] mb-1"
+            style={{ color: NEUTRAL_TEXT, fontFamily: MONO, fontWeight: 500 }}
+          >
+            hop_payloads · before Dave's XOR (from step 3)
+          </div>
+        ) : (
+          <>
+            <div
+              className="text-[9.5px] mb-1"
+              style={{ color: FOCUS_GOLD, fontFamily: MONO, letterSpacing: "0.04em", fontStyle: "italic" }}
+            >
+              ← running state · carried from step 2
+            </div>
+            <BufferHeader leftLabel="hop_payloads buffer" rightLabel="1,300 bytes" accentColor={FOCUS_GOLD} />
+          </>
+        )}
+      </div>
+
+      {/* The single persistent bar — same element in both steps, height animates. */}
+      <MorphBox
+        key="bar"
+        initial={{ height: isXor ? 42 : 78, opacity: isXor ? 0.55 : 1, borderColor: isXor ? INK : FOCUS_GOLD }}
+        animate={{ height: isXor ? 42 : 78, opacity: isXor ? 0.55 : 1, borderColor: isXor ? INK : FOCUS_GOLD }}
+        className="border-[1.5px] flex relative overflow-hidden"
+        style={{
+          background: "#fffdf5",
+          boxShadow: isXor ? "none" : `0 0 0 1.5px rgba(184,134,11,0.12)`,
+        }}
+      >
+        {beforeRegions.map((r) => (
+          <BufferRegion key={r.key} region={r} dimNonFocus={false} compact={isXor} />
+        ))}
+      </MorphBox>
+
+      <div key="extra">
+        {isXor ? (
+          <MorphBox
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.18 }}
+          >
+            <SymbolRow char="⊕" />
+            <KeystreamBar hop="dave" initial="D" />
+            <SymbolRow char="=" />
+            <CompactBar
+              label="hop_payloads · after XOR (+Dave's layer everywhere) → step 5"
+              regions={afterRegions}
+              accentColor={HOP_STROKE.dave}
+              emphasis
+              compact
+            />
+          </MorphBox>
+        ) : (
+          <div
+            className="flex justify-between mt-1"
+            style={{ fontFamily: MONO, fontSize: 10, color: NEUTRAL_TEXT }}
+          >
+            <span>byte 0</span>
+            <span>byte 1,299</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function XorView({ step }: { step: number }) {
@@ -1437,6 +1666,8 @@ function XorView({ step }: { step: number }) {
         label={`hop_payloads · before ${hopName}'s XOR (from step ${step - 1})`}
         regions={beforeRegions}
         accentColor={NEUTRAL_TEXT}
+        compact
+        dim
       />
       <SymbolRow char="⊕" />
       <KeystreamBar hop={hop} initial={initial} />
@@ -1446,6 +1677,7 @@ function XorView({ step }: { step: number }) {
         regions={afterRegions}
         accentColor={HOP_STROKE[hop]}
         emphasis
+        compact
       />
     </div>
   );
@@ -1456,14 +1688,18 @@ export function CompactBar({
   regions,
   accentColor,
   emphasis,
+  compact = false,
+  dim = false,
 }: {
   label: string;
   regions: Region[];
   accentColor: string;
   emphasis?: boolean;
+  compact?: boolean;
+  dim?: boolean;
 }) {
   return (
-    <div>
+    <div style={{ opacity: dim ? 0.5 : 1, transition: "opacity 300ms ease-out" }}>
       <div
         className="text-[10px] uppercase tracking-[0.06em] mb-1"
         style={{
@@ -1486,7 +1722,7 @@ export function CompactBar({
         }}
       >
         {regions.map((r) => (
-          <BufferRegion key={r.key} region={r} dimNonFocus={false} />
+          <BufferRegion key={r.key} region={r} dimNonFocus={false} compact={compact} />
         ))}
       </div>
     </div>
@@ -1615,6 +1851,7 @@ function HmacView({ step }: { step: number }) {
         regions={regions}
         focusKind={undefined}
         carryFrom={carryForwardLabel(step)}
+        compact
       />
 
       <SymbolRow char="‖" />

@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
+import { AnimatePresence } from "framer-motion";
 import { MathLine } from "./mathTokens";
+import { MorphBox } from "./morph";
 
 // ────────────────────────────────────────────────────────────────────────────
 // ErrorUnwrapDiagram (rebuilt 2026-05-08)
@@ -86,55 +88,63 @@ export function ErrorUnwrapDiagram() {
           <div style={{ minWidth: 540 }}>
             <LayerStack step={step} />
 
-            {step >= 1 && (
-              <div className="mt-4 flex flex-col gap-2">
-                <Iteration
-                  hop="bob"
-                  active={step === 1}
-                  attempted={step >= 1}
-                  result={step >= 2 ? "fail" : step === 1 ? "checking" : "idle"}
-                  index={0}
-                />
-                <Iteration
-                  hop="charlie"
-                  active={step === 2 || step === 3}
-                  attempted={step >= 2}
-                  result={step >= 2 ? "match" : "idle"}
-                  index={1}
-                />
-              </div>
-            )}
+            {/* Iteration rows stay mounted from step 0 in an idle/dim state so
+                they morph in place as `result` advances, instead of popping in
+                at step >= 1. */}
+            <div className="mt-4 flex flex-col gap-2">
+              <Iteration
+                hop="bob"
+                active={step === 1}
+                attempted={step >= 1}
+                result={step >= 2 ? "fail" : step === 1 ? "checking" : "idle"}
+                index={0}
+              />
+              <Iteration
+                hop="charlie"
+                active={step === 2 || step === 3}
+                attempted={step >= 2}
+                result={step >= 2 ? "match" : "idle"}
+                index={1}
+              />
+            </div>
 
-            {step === 3 && (
-              <div
-                className="mt-4 border-[1.5px] p-3"
-                style={{
-                  background: "#fef3c7",
-                  borderColor: "#b8860b",
-                }}
-              >
-                <div
-                  className="text-sm font-bold mb-1"
-                  style={{ color: "#0f172a", letterSpacing: "0.02em" }}
-                >
-                  Decoded
-                </div>
-                <div
-                  className="text-[12px]"
+            {/* Decoded result panel fades + grows in on step 3. */}
+            <AnimatePresence initial={false}>
+              {step === 3 && (
+                <MorphBox
+                  key="decoded"
+                  className="mt-4 border-[1.5px] p-3 overflow-hidden"
+                  initial={{ opacity: 0, height: 0, y: -4 }}
+                  animate={{ opacity: 1, height: "auto", y: 0 }}
+                  exit={{ opacity: 0, height: 0, y: -4 }}
                   style={{
-                    fontFamily: MONO,
-                    color: "#0f172a",
-                    letterSpacing: "0.02em",
+                    background: "#fef3c7",
+                    borderColor: "#b8860b",
                   }}
                 >
-                  failing_hop_index = 1 (Charlie)
-                  <br />
-                  failure_code = 0x1007 (temporary_channel_failure)
-                  <br />
-                  failure_data = channel_update bytes
-                </div>
-              </div>
-            )}
+                  <div
+                    className="text-sm font-bold mb-1"
+                    style={{ color: "#0f172a", letterSpacing: "0.02em" }}
+                  >
+                    Decoded
+                  </div>
+                  <div
+                    className="text-[12px]"
+                    style={{
+                      fontFamily: MONO,
+                      color: "#0f172a",
+                      letterSpacing: "0.02em",
+                    }}
+                  >
+                    failing_hop_index = 1 (Charlie)
+                    <br />
+                    failure_code = 0x1007 (temporary_channel_failure)
+                    <br />
+                    failure_data = channel_update bytes
+                  </div>
+                </MorphBox>
+              )}
+            </AnimatePresence>
           </div>
         </div>
       </div>
@@ -264,7 +274,14 @@ function Iteration({
   result: "idle" | "checking" | "fail" | "match";
   index: number;
 }) {
-  if (!attempted) return null;
+  // Stays mounted from step 0. When not yet attempted it renders dim/idle and
+  // morphs into its result state via `transition-all` as `result` advances.
+  const verdict =
+    result === "match"
+      ? "✓ HMAC matches"
+      : attempted
+        ? "✗ HMAC fails"
+        : "· pending";
   return (
     <div
       className="border-[1.5px] px-3 py-2 transition-all"
@@ -275,9 +292,13 @@ function Iteration({
             ? "#5a7a2f"
             : result === "fail"
               ? "rgba(15,23,42,0.3)"
-              : HOP_STROKE[hop],
+              : attempted
+                ? HOP_STROKE[hop]
+                : "rgba(15,23,42,0.18)",
+        borderStyle: attempted ? "solid" : "dashed",
         outline: active ? `2.5px solid #b8860b` : "none",
         outlineOffset: -3,
+        opacity: attempted ? 1 : 0.5,
       }}
     >
       <div
@@ -290,16 +311,28 @@ function Iteration({
           </span>
         </div>
         <div
-          className="text-[11px] px-2 py-0.5 border-[1.5px]"
+          className="text-[11px] px-2 py-0.5 border-[1.5px] transition-colors"
           style={{
             fontFamily: MONO,
-            background: result === "match" ? "#5a7a2f" : "#fde7e7",
-            borderColor: result === "match" ? "#5a7a2f" : "#a13a3a",
-            color: result === "match" ? "#fff" : "#a13a3a",
+            background: result === "match"
+              ? "#5a7a2f"
+              : attempted
+                ? "#fde7e7"
+                : "#f1f1ee",
+            borderColor: result === "match"
+              ? "#5a7a2f"
+              : attempted
+                ? "#a13a3a"
+                : "rgba(15,23,42,0.25)",
+            color: result === "match"
+              ? "#fff"
+              : attempted
+                ? "#a13a3a"
+                : "#475569",
             letterSpacing: "0.02em",
           }}
         >
-          {result === "match" ? "✓ HMAC matches" : "✗ HMAC fails"}
+          {verdict}
         </div>
       </div>
       <div className="mt-1 text-[11px]" style={{ color: "#475569" }}>

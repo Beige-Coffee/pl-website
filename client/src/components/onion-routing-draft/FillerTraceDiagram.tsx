@@ -6,6 +6,7 @@ import {
 } from "react";
 import { HatchOverlay, LAYER_COLORS, type ForwarderId } from "./encryptionHatch";
 import { renderCaption } from "./captionMarkup";
+import { MorphBox, CrossfadeSwap } from "./morph";
 
 // ────────────────────────────────────────────────────────────────────────────
 // FillerTraceDiagram (rebuilt 2026-05-10)
@@ -538,12 +539,13 @@ function StepContent({ step }: { step: number }) {
       </div>
     );
   }
-  // Wrap journey
+  // Wrap journey. Beat 10 (pad-key init) is its own representation. Beats
+  // 11-14 all render through ONE step-switching component (WrapPreviewView)
+  // so the wrap-preview bar is the SAME React element across 11→12→13→14 and
+  // morphs (region widths + encryption layers) instead of jump-cutting.
+  // (onion-routing-visual-standards §14)
   if (step === 10) return <PadKeyInitView />;
-  if (step === 11) return <DaveWrapView />;
-  if (step === 12) return <CharlieWrapView />;
-  if (step === 13) return <BobWrapView />;
-  return <FinalPacketView />;
+  return <WrapPreviewView step={step} />;
 }
 
 // ── Filler buffer ──────────────────────────────────────────────────────────
@@ -1036,19 +1038,73 @@ function PadKeyInitView() {
   );
 }
 
-// Step 11: Dave's wrap + filler splice.
-function DaveWrapView() {
-  // Hypothetical layout proportions for the 1,300-byte buffer.
-  const davePct = (DAVE_PAYLOAD / ROUTING_INFO_SIZE) * 100;            // ~7.7%
-  const fillerPct = (FINAL_FILLER_LEN / ROUTING_INFO_SIZE) * 100;       // ~10.8%
-  const middlePct = 100 - davePct - fillerPct;                         // ~81.5%
-  const bobFillerSubPct =
-    (BOB_PAYLOAD / FINAL_FILLER_LEN) * 100;                            // 60/140
-  const charlieFillerSubPct =
-    (CHARLIE_PAYLOAD / FINAL_FILLER_LEN) * 100;                        // 80/140
+// ── Wrap preview (beats 11-14) — single persistent morphing bar ─────────────
+//
+// Beats 11-14 used to be four unrelated components (DaveWrapView /
+// CharlieWrapView / BobWrapView / FinalPacketView), so advancing 11→12→13→14
+// hard-jumped. They now all render through WrapPreviewView, which keeps ONE
+// persistent keyed bar (the bordered hop_payloads buffer) so React reconciles
+// it across the step change and its regions morph (widths + encryption layers)
+// instead of remounting. (onion-routing-visual-standards §14)
+//
+// Two representations share that one bar:
+//   • phase "splice" (beat 11): Dave's hop payload at the FRONT, the
+//     Dave-encrypted middle, and the freshly spliced filler at the trailing
+//     positions. Dave sits at the front here, so this layout cannot width-morph
+//     into the shifted layout — we crossfade it (CrossfadeSwap) into:
+//   • phase "shifted" (beats 12, 13, 14): the post-shift layout
+//     [Bob | Charlie | Dave | tail]. Beats 12→13→14 are the SAME elements, so
+//     their region widths + hatch layers tween smoothly. Bob's hop payload
+//     grows in from width 0 on beat 13; on beat 14 the regions expand to the
+//     packet's payload-area proportions while the envelope chrome fades in
+//     around the same bar.
+//
+// Note: the per-hop region renderer is WrappedPayloadCell (it was WrappedSlot;
+// renamed only to satisfy the terminology lint, behaviour is unchanged).
+
+type WrapPhase = "splice" | "shifted";
+
+function wrapPhase(step: number): WrapPhase {
+  return step === 11 ? "splice" : "shifted";
+}
+
+function WrapPreviewView({ step }: { step: number }) {
+  const phase = wrapPhase(step);
+  const isPacket = step === 14;
 
   return (
     <div className="space-y-3 mt-2">
+      {/* Header crossfades its label as the beat changes; it sits outside the
+          morphing bar so it never remounts the bar. */}
+      <CrossfadeSwap swapKey={`${phase}-${isPacket}`}>
+        <WrapPreviewHeader step={step} />
+      </CrossfadeSwap>
+
+      {/* The one persistent bar. The SAME MorphBox element renders on beats
+          11-14; envelope chrome (beat 14) wraps it via fading siblings rather
+          than re-parenting it, so it stays a single reconciled element. */}
+      <WrapPreviewBar step={step} />
+
+      {/* Byte-axis labels / closing note, crossfaded per phase. */}
+      <CrossfadeSwap swapKey={isPacket ? "packet" : phase}>
+        <WrapPreviewFooter step={step} />
+      </CrossfadeSwap>
+    </div>
+  );
+}
+
+function WrapPreviewHeader({ step }: { step: number }) {
+  if (step === 14) {
+    return (
+      <BufferHeader
+        leftLabel="onion_routing_packet (Alice → Bob)"
+        rightLabel={`${FULL_PACKET_BYTES.toLocaleString()} bytes total`}
+        accentColor={FOCUS_GOLD}
+      />
+    );
+  }
+  if (step === 11) {
+    return (
       <BufferHeader
         leftLabel="1,300-byte hop_payloads buffer · after Dave's wrap"
         rightLabel={
@@ -1065,126 +1121,10 @@ function DaveWrapView() {
           </HoverTooltip>
         }
       />
-      <div
-        className="border-[1.5px] flex relative overflow-hidden"
-        style={{
-          background: "#fffdf5",
-          borderColor: INK,
-          height: 56,
-        }}
-      >
-        {/* Dave's slot */}
-        <div
-          className="relative flex items-center justify-center"
-          style={{ width: `${davePct}%`, background: HOP_LIGHT.dave }}
-        >
-          <HatchOverlay hops={["dave"]} zIndex={1} stripeOpacity={0.18} />
-          <span
-            className="relative"
-            style={{
-              fontFamily: MONO,
-              fontSize: 9,
-              fontWeight: 700,
-              color: HOP_STROKE_COLOR.dave,
-              zIndex: 2,
-              background: "rgba(255,253,245,0.85)",
-              padding: "0 4px",
-            }}
-          >
-            DAVE
-          </span>
-        </div>
-        {/* Dave-encrypted middle */}
-        <div
-          className="relative"
-          style={{
-            width: `${middlePct}%`,
-            background: "#fffdf5",
-            borderLeft: `1.5px solid ${HOP_STROKE_COLOR.dave}80`,
-          }}
-        >
-          <HatchOverlay hops={["dave"]} zIndex={1} stripeOpacity={0.18} />
-          <div
-            className="relative h-full flex items-center justify-center"
-            style={{ zIndex: 2 }}
-          >
-            <span
-              style={{
-                fontFamily: MONO,
-                fontSize: 10,
-                color: NEUTRAL_TEXT,
-                letterSpacing: "0.04em",
-                background: "rgba(255,253,245,0.85)",
-                padding: "0 6px",
-              }}
-            >
-              pad-noise XOR Dave's rho
-            </span>
-          </div>
-        </div>
-        {/* Filler region (spliced in, trailing) */}
-        <div
-          className="relative flex"
-          style={{
-            width: `${fillerPct}%`,
-            borderLeft: `1.5px solid ${FOCUS_GOLD}`,
-            background: "#fffdf5",
-          }}
-        >
-          <div
-            className="relative"
-            style={{ width: `${bobFillerSubPct}%`, overflow: "hidden" }}
-          >
-            <HatchOverlay hops={["bob", "charlie"]} zIndex={1} />
-          </div>
-          <div
-            className="relative"
-            style={{ width: `${charlieFillerSubPct}%`, overflow: "hidden" }}
-          >
-            <HatchOverlay hops={["charlie"]} zIndex={1} />
-          </div>
-          <div
-            className="absolute inset-0 flex items-center justify-center pointer-events-none"
-            style={{ zIndex: 2 }}
-          >
-            <span
-              style={{
-                fontFamily: MONO,
-                fontSize: 9,
-                fontWeight: 700,
-                color: FOCUS_GOLD,
-                background: "rgba(255,253,245,0.85)",
-                padding: "0 4px",
-              }}
-            >
-              FILLER
-            </span>
-          </div>
-        </div>
-      </div>
-      <div
-        className="flex justify-between"
-        style={{ fontFamily: MONO, fontSize: 10, color: NEUTRAL_TEXT }}
-      >
-        <span>byte 0</span>
-        <span style={{ color: FOCUS_GOLD, fontWeight: 700 }}>
-          ← byte 1,299
-        </span>
-      </div>
-    </div>
-  );
-}
-
-// Step 12: After Charlie's wrap (before Bob's). Charlie's slot is at the
-// front with 1 layer (Charlie). Dave's slot has 2 layers (Charlie + Dave).
-// The trailing region carries Charlie + Dave hatches.
-function CharlieWrapView() {
-  const charliePct = (CHARLIE_PAYLOAD / ROUTING_INFO_SIZE) * 100; // ~6.2%
-  const davePct = (DAVE_PAYLOAD / ROUTING_INFO_SIZE) * 100;       // ~7.7%
-  const tailPct = 100 - charliePct - davePct;                     // ~86.2%
-
-  return (
-    <div className="space-y-3 mt-2">
+    );
+  }
+  if (step === 12) {
+    return (
       <BufferHeader
         leftLabel="1,300-byte hop_payloads buffer · after Charlie's wrap"
         rightLabel={
@@ -1202,134 +1142,182 @@ function CharlieWrapView() {
           </HoverTooltip>
         }
       />
-      <div
-        className="border-[1.5px] flex overflow-hidden"
-        style={{
-          background: "#fffdf5",
-          borderColor: INK,
-          height: 56,
-        }}
-      >
-        <WrappedSlot
-          hopId="charlie"
-          widthPct={charliePct}
-          layers={["charlie"]}
-          label="CHARLIE"
-        />
-        <WrappedSlot
-          hopId="dave"
-          widthPct={davePct}
-          layers={["charlie", "dave"]}
-          label="DAVE"
-        />
-        <div
-          className="relative flex items-center justify-center"
-          style={{
-            width: `${tailPct}%`,
-            background: "#fffdf5",
-            borderLeft: `1.5px solid #94a3b8`,
-          }}
+    );
+  }
+  // step 13
+  return (
+    <BufferHeader
+      leftLabel="1,300-byte hop_payloads buffer · all 3 wraps applied"
+      rightLabel={
+        <HoverTooltip
+          content={
+            <span>
+              Each wrap shifts right by that hop's payload size and XORs with its
+              <code style={{ fontFamily: MONO }}> rho</code>. After Bob's outermost wrap, the
+              hop payloads carry 1, 2, and 3 layers; the trailing pad-noise carries all 3.
+            </span>
+          }
         >
-          <HatchOverlay
-            hops={["charlie", "dave"]}
-            zIndex={1}
-            stripeOpacity={0.14}
-          />
-          <span
-            className="relative"
-            style={{
-              fontFamily: MONO,
-              fontSize: 10,
-              color: NEUTRAL_TEXT,
-              letterSpacing: "0.04em",
-              background: "rgba(255,253,245,0.85)",
-              padding: "0 6px",
-              zIndex: 2,
-            }}
-          >
-            wrapped middle + filler residue
-          </span>
+          Bob (1 layer) · Charlie (2) · Dave (3) · noise (3)
+        </HoverTooltip>
+      }
+    />
+  );
+}
+
+function WrapPreviewFooter({ step }: { step: number }) {
+  if (step === 14) {
+    return (
+      <>
+        <div
+          className="flex justify-between"
+          style={{ fontFamily: MONO, fontSize: 10, color: NEUTRAL_TEXT }}
+        >
+          <span>byte 0</span>
+          <span>byte {(FULL_PACKET_BYTES - 1).toLocaleString()}</span>
         </div>
-      </div>
+        <div
+          className="mt-3 text-[11px]"
+          style={{ color: NEUTRAL_TEXT, fontStyle: "italic" }}
+        >
+          Alice sends this 1,366-byte packet to Bob. The chapter ahead will
+          walk through Bob's peel and forward, and the filler bytes we just
+          built will land at exactly the trailing positions Charlie's HMAC
+          verification expects.
+        </div>
+      </>
+    );
+  }
+  if (step === 11) {
+    return (
       <div
         className="flex justify-between"
         style={{ fontFamily: MONO, fontSize: 10, color: NEUTRAL_TEXT }}
       >
         <span>byte 0</span>
-        <span>byte 1,299</span>
+        <span style={{ color: FOCUS_GOLD, fontWeight: 700 }}>← byte 1,299</span>
       </div>
+    );
+  }
+  return (
+    <div
+      className="flex justify-between"
+      style={{ fontFamily: MONO, fontSize: 10, color: NEUTRAL_TEXT }}
+    >
+      <span>byte 0</span>
+      <span>byte 1,299</span>
     </div>
   );
 }
 
-// Step 13: After Bob's wrap (the outermost). The buffer is fully wrapped:
-// Bob's slot has 1 layer, Charlie's has 2, Dave's has 3, the tail carries
-// all three.
-function BobWrapView() {
-  const bobPct = (BOB_PAYLOAD / ROUTING_INFO_SIZE) * 100;             // ~4.6%
-  const charliePct = (CHARLIE_PAYLOAD / ROUTING_INFO_SIZE) * 100;     // ~6.2%
-  const davePct = (DAVE_PAYLOAD / ROUTING_INFO_SIZE) * 100;           // ~7.7%
-  const tailPct = 100 - bobPct - charliePct - davePct;                 // ~81.5%
+// The persistent bar. In the shifted phase it is a bare bordered buffer; on
+// beat 14 the same bar gains the packet chrome (title bar + HEADER + HMAC),
+// which fades in as siblings/overlays around the unchanged inner region row.
+function WrapPreviewBar({ step }: { step: number }) {
+  const phase = wrapPhase(step);
+  const isPacket = step === 14;
 
   return (
-    <div className="space-y-3 mt-2">
-      <BufferHeader
-        leftLabel="1,300-byte hop_payloads buffer · all 3 wraps applied"
-        rightLabel={
-          <HoverTooltip
-            content={
-              <span>
-                Each wrap shifts right by that hop's payload size and XORs with its
-                <code style={{ fontFamily: MONO }}> rho</code>. After Bob's outermost wrap, the
-                hop payloads carry 1, 2, and 3 layers; the trailing pad-noise carries all 3.
-              </span>
-            }
-          >
-            Bob (1 layer) · Charlie (2) · Dave (3) · noise (3)
-          </HoverTooltip>
-        }
-      />
+    <MorphBox
+      key="wrap-preview-bar"
+      initial={false}
+      animate={{}}
+      className="relative"
+      style={{ position: "relative" }}
+    >
+      {/* Envelope chrome (beat 14 only): title bar + HEADER + HMAC fade in and
+          reserve their space via margins on the inner bar so it lands inside
+          the packet's PAYLOAD AREA. They overlay/flank the bar rather than
+          re-parenting it, keeping the bar one reconciled element. */}
+      <PacketChrome visible={isPacket} />
+
+      {/* The inner region row — the actual hop_payloads bar. Same element on
+          every beat 11-14. The splice <-> shifted change crossfades its content;
+          within the shifted phase widths + hatch layers tween. */}
       <div
-        className="border-[1.5px] flex overflow-hidden"
+        className="border-[1.5px] relative overflow-hidden"
         style={{
           background: "#fffdf5",
           borderColor: INK,
           height: 56,
+          margin: isPacket ? "0 96px 0 138px" : 0,
+          boxShadow: isPacket ? `inset 0 0 0 2px ${FOCUS_GOLD}` : "none",
+          transition:
+            "margin 450ms ease-in-out, box-shadow 450ms ease-in-out",
         }}
       >
-        <WrappedSlot
-          hopId="bob"
-          widthPct={bobPct}
-          layers={["bob"]}
-          label="BOB"
-        />
-        <WrappedSlot
-          hopId="charlie"
-          widthPct={charliePct}
-          layers={["bob", "charlie"]}
-          label="CHARLIE"
-        />
-        <WrappedSlot
-          hopId="dave"
-          widthPct={davePct}
-          layers={["bob", "charlie", "dave"]}
-          label="DAVE"
-        />
-        <div
-          className="relative flex items-center justify-center"
+        <CrossfadeSwap swapKey={phase} style={{ height: "100%" }}>
+          {phase === "splice" ? (
+            <SpliceRegionRow />
+          ) : (
+            <ShiftedRegionRow step={step} />
+          )}
+        </CrossfadeSwap>
+      </div>
+
+      {isPacket && (
+        <div className="text-center mt-1.5">
+          <span
+            className="text-[9px]"
+            style={{ fontFamily: MONO, color: NEUTRAL_TEXT, fontStyle: "italic" }}
+          >
+            hop_payloads · 1,300 bytes
+          </span>
+        </div>
+      )}
+    </MorphBox>
+  );
+}
+
+// Beat 11's representation: Dave's hop payload at the front, Dave-encrypted
+// middle, spliced filler trailing.
+function SpliceRegionRow() {
+  const davePct = (DAVE_PAYLOAD / ROUTING_INFO_SIZE) * 100; // ~7.7%
+  const fillerPct = (FINAL_FILLER_LEN / ROUTING_INFO_SIZE) * 100; // ~10.8%
+  const middlePct = 100 - davePct - fillerPct; // ~81.5%
+  const bobFillerSubPct = (BOB_PAYLOAD / FINAL_FILLER_LEN) * 100; // 60/140
+  const charlieFillerSubPct = (CHARLIE_PAYLOAD / FINAL_FILLER_LEN) * 100; // 80/140
+
+  // Fill the bar absolutely so the splice <-> shifted crossfade overlaps two
+  // full-bleed layers cleanly (CrossfadeSwap's inner wrapper is zero-height).
+  return (
+    <div className="flex absolute inset-0">
+      {/* Dave's hop payload */}
+      <div
+        className="relative flex items-center justify-center"
+        style={{ width: `${davePct}%`, background: HOP_LIGHT.dave }}
+      >
+        <HatchOverlay hops={["dave"]} zIndex={1} stripeOpacity={0.18} />
+        <span
+          className="relative"
           style={{
-            width: `${tailPct}%`,
-            background: "#fffdf5",
-            borderLeft: `1.5px solid #94a3b8`,
+            fontFamily: MONO,
+            fontSize: 9,
+            fontWeight: 700,
+            color: HOP_STROKE_COLOR.dave,
+            zIndex: 2,
+            background: "rgba(255,253,245,0.85)",
+            padding: "0 4px",
           }}
         >
-          <HatchOverlay
-            hops={["bob", "charlie", "dave"]}
-            zIndex={1}
-            stripeOpacity={0.14}
-          />
+          DAVE
+        </span>
+      </div>
+      {/* Dave-encrypted middle */}
+      <div
+        className="relative"
+        style={{
+          width: `${middlePct}%`,
+          background: "#fffdf5",
+          borderLeft: `1.5px solid ${HOP_STROKE_COLOR.dave}80`,
+        }}
+      >
+        <HatchOverlay hops={["dave"]} zIndex={1} stripeOpacity={0.18} />
+        <div
+          className="relative h-full flex items-center justify-center"
+          style={{ zIndex: 2 }}
+        >
           <span
-            className="relative"
             style={{
               fontFamily: MONO,
               fontSize: 10,
@@ -1337,25 +1325,297 @@ function BobWrapView() {
               letterSpacing: "0.04em",
               background: "rgba(255,253,245,0.85)",
               padding: "0 6px",
-              zIndex: 2,
             }}
           >
-            wrapped pad-noise + filler residue
+            pad-noise XOR Dave's rho
           </span>
         </div>
       </div>
+      {/* Filler region (spliced in, trailing) */}
       <div
-        className="flex justify-between"
-        style={{ fontFamily: MONO, fontSize: 10, color: NEUTRAL_TEXT }}
+        className="relative flex"
+        style={{
+          width: `${fillerPct}%`,
+          borderLeft: `1.5px solid ${FOCUS_GOLD}`,
+          background: "#fffdf5",
+        }}
       >
-        <span>byte 0</span>
-        <span>byte 1,299</span>
+        <div
+          className="relative"
+          style={{ width: `${bobFillerSubPct}%`, overflow: "hidden" }}
+        >
+          <HatchOverlay hops={["bob", "charlie"]} zIndex={1} />
+        </div>
+        <div
+          className="relative"
+          style={{ width: `${charlieFillerSubPct}%`, overflow: "hidden" }}
+        >
+          <HatchOverlay hops={["charlie"]} zIndex={1} />
+        </div>
+        <div
+          className="absolute inset-0 flex items-center justify-center pointer-events-none"
+          style={{ zIndex: 2 }}
+        >
+          <span
+            style={{
+              fontFamily: MONO,
+              fontSize: 9,
+              fontWeight: 700,
+              color: FOCUS_GOLD,
+              background: "rgba(255,253,245,0.85)",
+              padding: "0 4px",
+            }}
+          >
+            FILLER
+          </span>
+        </div>
       </div>
     </div>
   );
 }
 
-function WrappedSlot({
+// The post-shift representation shared by beats 12, 13, 14. Because every beat
+// in this phase renders the SAME keyed cells + tail in the same order, React
+// reconciles them and their widths + hatch layers tween between beats.
+//   • beat 12: Bob absent (width 0), Charlie 1 layer, Dave 2 layers.
+//   • beat 13: Bob grows in (1 layer), Charlie 2, Dave 3 — buffer fully wrapped.
+//   • beat 14: same layers as 13; widths expand to the packet payload-area
+//     proportions (region 50%, padding 50%) as the envelope fades in.
+function ShiftedRegionRow({ step }: { step: number }) {
+  const widths = shiftedWidths(step);
+  const isPacket = step === 14;
+
+  // Layer sets. Beat 12 has no Bob layer yet; beats 13 and 14 are fully wrapped.
+  const bobLayers: ForwarderId[] = ["bob"];
+  const charlieLayers: ForwarderId[] =
+    step === 12 ? ["charlie"] : ["bob", "charlie"];
+  const daveLayers: ForwarderId[] =
+    step === 12 ? ["charlie", "dave"] : ["bob", "charlie", "dave"];
+  const tailLayers: ForwarderId[] = daveLayers;
+
+  // Fill the bar absolutely (see SpliceRegionRow) so beats 12-14 share a
+  // full-height row and the crossfade against the splice layer overlaps cleanly.
+  return (
+    <div className="flex absolute inset-0">
+      <WrappedPayloadCell
+        key="bob-slot"
+        hopId="bob"
+        widthPct={widths.bob}
+        layers={bobLayers}
+        label="BOB"
+      />
+      <WrappedPayloadCell
+        key="charlie-slot"
+        hopId="charlie"
+        widthPct={widths.charlie}
+        layers={charlieLayers}
+        label="CHARLIE"
+      />
+      <WrappedPayloadCell
+        key="dave-slot"
+        hopId="dave"
+        widthPct={widths.dave}
+        layers={daveLayers}
+        label="DAVE"
+      />
+      {/* Tail / padding region — persists across 12-14; its label crossfades
+          ("residue" while wrapping, "padding" once it reads as the packet). */}
+      <div
+        key="tail"
+        className="relative flex items-center justify-center"
+        style={{
+          width: `${widths.tail}%`,
+          background: "#fffdf5",
+          borderLeft: isPacket
+            ? `1px dashed ${HOP_STROKE_COLOR.dave}80`
+            : `1.5px solid #94a3b8`,
+          transition: "width 450ms ease-in-out, border-color 450ms ease-in-out",
+        }}
+      >
+        <HatchOverlay
+          hops={tailLayers}
+          zIndex={1}
+          stripeOpacity={isPacket ? 0.1 : 0.14}
+        />
+        <CrossfadeSwap
+          swapKey={tailLabel(step)}
+          className="relative"
+          style={{ zIndex: 2 }}
+        >
+          <span
+            style={{
+              fontFamily: MONO,
+              fontSize: isPacket ? 9 : 10,
+              fontWeight: isPacket ? 700 : 400,
+              letterSpacing: isPacket ? "0.06em" : "0.04em",
+              textTransform: isPacket ? "uppercase" : "none",
+              color: NEUTRAL_TEXT,
+              background: "rgba(255,253,245,0.85)",
+              padding: isPacket ? "0 4px" : "0 6px",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {tailLabel(step)}
+          </span>
+        </CrossfadeSwap>
+      </div>
+    </div>
+  );
+}
+
+interface ShiftedWidths {
+  bob: number;
+  charlie: number;
+  dave: number;
+  tail: number;
+}
+
+function shiftedWidths(step: number): ShiftedWidths {
+  if (step === 14) {
+    // Packet payload-area proportions: region 50% (bytes 60:80:100 →
+    // 25/33.3/41.7 within it) + padding 50%. Mirrors PayloadArea in
+    // ForwarderPeelDiagram so the bar reads as the same artifact.
+    return {
+      bob: 50 * (60 / 240),
+      charlie: 50 * (80 / 240),
+      dave: 50 * (100 / 240),
+      tail: 50,
+    };
+  }
+  // Beats 12-13: real byte proportions of the 1,300-byte buffer. Bob is absent
+  // (width 0) on beat 12 so it can grow in on beat 13.
+  const bobPct = step === 12 ? 0 : (BOB_PAYLOAD / ROUTING_INFO_SIZE) * 100;
+  const charliePct = (CHARLIE_PAYLOAD / ROUTING_INFO_SIZE) * 100;
+  const davePct = (DAVE_PAYLOAD / ROUTING_INFO_SIZE) * 100;
+  return {
+    bob: bobPct,
+    charlie: charliePct,
+    dave: davePct,
+    tail: 100 - bobPct - charliePct - davePct,
+  };
+}
+
+function tailLabel(step: number): string {
+  if (step === 14) return "padding";
+  if (step === 12) return "wrapped middle + filler residue";
+  return "wrapped pad-noise + filler residue";
+}
+
+// Packet envelope chrome for beat 14: the black title bar plus the dimmed
+// HEADER and HMAC blocks. Rendered as fading overlays around the persistent
+// inner bar so the bar itself is never re-parented (and keeps morphing).
+function PacketChrome({ visible }: { visible: boolean }) {
+  const DIMMED = 0.3;
+  const bobColor = HOP_STROKE_COLOR.bob;
+  return (
+    <div
+      className="pointer-events-none"
+      aria-hidden={!visible}
+      style={{
+        opacity: visible ? 1 : 0,
+        transition: "opacity 450ms ease-in-out",
+      }}
+    >
+      {/* Black title bar above the bar */}
+      <div
+        className="bg-black text-white px-3 py-1.5 flex items-center gap-2"
+        style={{ fontFamily: MONO }}
+      >
+        <span
+          style={{
+            width: 8,
+            height: 8,
+            background: FOCUS_GOLD,
+            display: "inline-block",
+            flexShrink: 0,
+          }}
+        />
+        <span className="text-[10px] uppercase tracking-[0.1em] font-bold">
+          ONION_PACKET (Alice → Bob)
+        </span>
+      </div>
+
+      {/* HEADER (left flank) */}
+      <div
+        className="absolute flex flex-col items-center justify-center text-center border-r-[1.5px]"
+        style={{
+          left: 0,
+          width: 138,
+          top: 33,
+          bottom: 0,
+          borderColor: INK,
+          color: INK,
+          padding: "8px 6px",
+          background: `${bobColor}24`,
+          opacity: DIMMED,
+          fontFamily: MONO,
+        }}
+      >
+        <span className="text-[10px] font-bold uppercase tracking-[0.08em] leading-tight">
+          HEADER
+        </span>
+        <div
+          style={{
+            width: "60%",
+            height: 1,
+            background: "#0f172a30",
+            marginTop: 5,
+            marginBottom: 6,
+          }}
+        />
+        <span className="text-[9px] uppercase tracking-[0.05em] opacity-70 leading-tight">
+          version
+        </span>
+        <span
+          className="text-[11px] font-bold leading-tight mt-0.5"
+          style={{ color: INK }}
+        >
+          0x00
+        </span>
+        <span className="text-[9px] uppercase tracking-[0.05em] opacity-70 leading-tight mt-1.5">
+          ephemeral pubkey
+        </span>
+        <span
+          className="font-bold leading-tight mt-0.5"
+          style={{ color: bobColor, fontSize: 16 }}
+        >
+          E<span style={{ fontSize: 9, verticalAlign: "sub" }}>AB</span>
+        </span>
+      </div>
+
+      {/* HMAC (right flank) */}
+      <div
+        className="absolute flex flex-col items-center justify-center text-center"
+        style={{
+          right: 0,
+          width: 96,
+          top: 33,
+          bottom: 0,
+          color: INK,
+          padding: "8px 4px",
+          background: `${bobColor}24`,
+          opacity: DIMMED,
+          fontFamily: MONO,
+        }}
+      >
+        <span className="text-[10px] font-bold uppercase tracking-[0.06em] leading-tight">
+          HMAC
+        </span>
+        <span
+          className="text-[9px] font-bold leading-tight mt-1"
+          style={{ color: bobColor }}
+        >
+          bob_hmac
+        </span>
+        <span className="text-[8.5px] font-normal opacity-60 leading-tight mt-0.5">
+          32 B
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function WrappedPayloadCell({
   hopId,
   widthPct,
   layers,
@@ -1368,17 +1628,23 @@ function WrappedSlot({
   label: string;
   showLabel?: boolean;
 }) {
+  // When this hop payload is absent (width 0, e.g. Bob before his wrap on
+  // beat 12) drop the border so it doesn't show as a sliver, and let the
+  // region grow in via the width transition.
+  const hidden = widthPct <= 0;
   return (
     <div
       className="relative flex items-center justify-center"
       style={{
         width: `${widthPct}%`,
         background: HOP_LIGHT[hopId],
-        borderRight: `1.5px solid ${HOP_STROKE_COLOR[hopId]}80`,
+        borderRight: hidden ? "none" : `1.5px solid ${HOP_STROKE_COLOR[hopId]}80`,
+        overflow: "hidden",
+        transition: "width 450ms ease-in-out",
       }}
     >
       <HatchOverlay hops={layers} zIndex={1} stripeOpacity={0.16} />
-      {showLabel && (
+      {showLabel && !hidden && (
         <span
           className="relative"
           style={{
@@ -1389,285 +1655,12 @@ function WrappedSlot({
             background: "rgba(255,253,245,0.85)",
             padding: "0 4px",
             zIndex: 2,
+            whiteSpace: "nowrap",
           }}
         >
           {label}
         </span>
       )}
-    </div>
-  );
-}
-
-// Step 14: full 1,366-byte packet, rendered in the canonical MainPacket
-// style used across the course (black title bar + HEADER / PAYLOAD AREA /
-// HMAC boxes). The HEADER and HMAC are dimmed so attention rests on the
-// 1,300-byte hop_payloads field — the thing this whole filler construction
-// produced.
-function FinalPacketView() {
-  const DIMMED = 0.3;
-  const bobColor = HOP_STROKE_COLOR.bob;
-
-  // Slot widths within the payload area: slot region 50%, padding region
-  // 50%. Inside the slot region, byte ratios 60:80:100 → 25%/33.3%/41.7%.
-  // Mirrors PayloadArea in ForwarderPeelDiagram so the packet reads as the
-  // same artifact across visuals.
-  const slotRegionPct = 50;
-  const paddingPct = 50;
-  const bobSlotW = (60 / 240) * 100;
-  const charlieSlotW = (80 / 240) * 100;
-  const daveSlotW = (100 / 240) * 100;
-
-  return (
-    <div className="space-y-3 mt-2">
-      <BufferHeader
-        leftLabel="onion_routing_packet (Alice → Bob)"
-        rightLabel={`${FULL_PACKET_BYTES.toLocaleString()} bytes total`}
-        accentColor={FOCUS_GOLD}
-      />
-
-      <div
-        className="border-[1.5px]"
-        style={{
-          background: "#fffdf5",
-          borderColor: INK,
-          overflow: "visible",
-        }}
-      >
-        {/* Black title bar */}
-        <div
-          className="bg-black text-white px-3 py-1.5 flex items-center gap-2"
-          style={{ fontFamily: MONO }}
-        >
-          <span
-            style={{
-              width: 8,
-              height: 8,
-              background: FOCUS_GOLD,
-              display: "inline-block",
-              flexShrink: 0,
-            }}
-          />
-          <span className="text-[10px] uppercase tracking-[0.1em] font-bold">
-            ONION_PACKET (Alice → Bob)
-          </span>
-        </div>
-
-        <div className="p-3">
-          <div
-            className="border-[1.5px] flex"
-            style={{
-              background: "#fffdf5",
-              borderColor: INK,
-              minHeight: 110,
-            }}
-          >
-            {/* HEADER (dimmed) */}
-            <div
-              className="flex flex-col items-center justify-center text-center border-r-[1.5px] relative"
-              style={{
-                flexBasis: 130,
-                flexShrink: 0,
-                borderColor: INK,
-                color: INK,
-                padding: "8px 6px",
-                background: `${bobColor}24`,
-                opacity: DIMMED,
-              }}
-            >
-              <span
-                className="text-[10px] font-bold uppercase tracking-[0.08em] leading-tight"
-                style={{ fontFamily: MONO }}
-              >
-                HEADER
-              </span>
-              <div
-                style={{
-                  width: "60%",
-                  height: 1,
-                  background: "#0f172a30",
-                  marginTop: 5,
-                  marginBottom: 6,
-                }}
-              />
-              <span
-                className="text-[9px] uppercase tracking-[0.05em] opacity-70 leading-tight"
-                style={{ fontFamily: MONO }}
-              >
-                version
-              </span>
-              <span
-                className="text-[11px] font-bold leading-tight mt-0.5"
-                style={{ fontFamily: MONO, color: INK }}
-              >
-                0x00
-              </span>
-              <span
-                className="text-[9px] uppercase tracking-[0.05em] opacity-70 leading-tight mt-1.5"
-                style={{ fontFamily: MONO }}
-              >
-                ephemeral pubkey
-              </span>
-              <span
-                className="font-bold leading-tight mt-0.5"
-                style={{ fontFamily: MONO, color: bobColor, fontSize: 16 }}
-              >
-                E
-                <span style={{ fontSize: 9, verticalAlign: "sub" }}>AB</span>
-              </span>
-            </div>
-
-            {/* PAYLOAD AREA (highlighted) */}
-            <div
-              className="flex flex-col relative"
-              style={{
-                flex: 1,
-                padding: "8px 8px",
-                minWidth: 0,
-                borderRight: `1.5px solid ${INK}`,
-                boxShadow: `inset 0 0 0 2px ${FOCUS_GOLD}`,
-              }}
-            >
-              <div className="text-center mb-1.5">
-                <span
-                  className="text-[10px] font-bold uppercase tracking-[0.08em] leading-tight"
-                  style={{ fontFamily: MONO }}
-                >
-                  PAYLOAD AREA
-                </span>
-              </div>
-
-              <div
-                className="border-[1.5px] flex relative"
-                style={{
-                  background: "#fffdf5",
-                  borderColor: INK,
-                  height: 64,
-                  overflow: "hidden",
-                }}
-              >
-                {/* Slot region (50% of the bar): Bob / Charlie / Dave */}
-                <div
-                  className="flex"
-                  style={{ width: `${slotRegionPct}%` }}
-                >
-                  <WrappedSlot
-                    hopId="bob"
-                    widthPct={bobSlotW}
-                    layers={["bob"]}
-                    label="BOB"
-                  />
-                  <WrappedSlot
-                    hopId="charlie"
-                    widthPct={charlieSlotW}
-                    layers={["bob", "charlie"]}
-                    label="CHARLIE"
-                  />
-                  <WrappedSlot
-                    hopId="dave"
-                    widthPct={daveSlotW}
-                    layers={["bob", "charlie", "dave"]}
-                    label="DAVE"
-                  />
-                </div>
-
-                {/* Padding region (50% of the bar) */}
-                <div
-                  className="relative flex items-center justify-center"
-                  style={{
-                    width: `${paddingPct}%`,
-                    background: "#fffdf5",
-                    borderLeft: `1px dashed ${HOP_STROKE_COLOR.dave}80`,
-                  }}
-                >
-                  <HatchOverlay
-                    hops={["bob", "charlie", "dave"]}
-                    zIndex={1}
-                    stripeOpacity={0.1}
-                  />
-                  <span
-                    className="relative"
-                    style={{
-                      fontFamily: MONO,
-                      fontSize: 9,
-                      fontWeight: 700,
-                      letterSpacing: "0.06em",
-                      textTransform: "uppercase",
-                      color: NEUTRAL_TEXT,
-                      background: "rgba(255,253,245,0.85)",
-                      padding: "0 4px",
-                      zIndex: 2,
-                    }}
-                  >
-                    padding
-                  </span>
-                </div>
-              </div>
-
-              <div className="text-center mt-1.5">
-                <span
-                  className="text-[9px]"
-                  style={{
-                    fontFamily: MONO,
-                    color: NEUTRAL_TEXT,
-                    fontStyle: "italic",
-                  }}
-                >
-                  hop_payloads · 1,300 bytes
-                </span>
-              </div>
-            </div>
-
-            {/* HMAC (dimmed) */}
-            <div
-              className="flex flex-col items-center justify-center text-center"
-              style={{
-                flexBasis: 88,
-                flexShrink: 0,
-                color: INK,
-                padding: "8px 4px",
-                background: `${bobColor}24`,
-                opacity: DIMMED,
-              }}
-            >
-              <span
-                className="text-[10px] font-bold uppercase tracking-[0.06em] leading-tight"
-                style={{ fontFamily: MONO }}
-              >
-                HMAC
-              </span>
-              <span
-                className="text-[9px] font-bold leading-tight mt-1"
-                style={{ fontFamily: MONO, color: bobColor }}
-              >
-                bob_hmac
-              </span>
-              <span
-                className="text-[8.5px] font-normal opacity-60 leading-tight mt-0.5"
-                style={{ fontFamily: MONO }}
-              >
-                32 B
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div
-        className="flex justify-between"
-        style={{ fontFamily: MONO, fontSize: 10, color: NEUTRAL_TEXT }}
-      >
-        <span>byte 0</span>
-        <span>byte {(FULL_PACKET_BYTES - 1).toLocaleString()}</span>
-      </div>
-      <div
-        className="mt-3 text-[11px]"
-        style={{ color: NEUTRAL_TEXT, fontStyle: "italic" }}
-      >
-        Alice sends this 1,366-byte packet to Bob. The chapter ahead will
-        walk through Bob's peel and forward, and the filler bytes we just
-        built will land at exactly the trailing positions Charlie's HMAC
-        verification expects.
-      </div>
     </div>
   );
 }

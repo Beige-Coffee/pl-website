@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Tok } from "./mathTokens";
 import { SlotSubCell } from "./SlotSubCell";
+import { MorphBox, CrossfadeSwap } from "./morph";
 
 // ────────────────────────────────────────────────────────────────────────────
 // OperationsLifecycleDiagram (DRAFT)
@@ -472,7 +473,7 @@ const FOCUS_RING_INSET =
   "inset 0 0 0 2px rgba(184,134,11,0.55), inset 0 0 18px rgba(184,134,11,0.35)";
 
 const TOTAL_STEPS = STEPS.length;
-const STEP_MS = 2800;
+const STEP_MS = 2400;
 // Step 4 has a multi-stage animation (mini-onion ships, exclamation pops up,
 // error packet fades in). Give it more time before auto-advancing.
 const STEP_4_MS = 4200;
@@ -865,7 +866,402 @@ function HopTrack({ state, step }: { state: StepState; step: number }) {
   );
 }
 
-function ForwardPacketContainer({
+// ── Forward-mode payload contents (bytes + plaintext flash + hatches) ───────
+// Rendered inside the persistent PAYLOAD-AREA box's CrossfadeSwap. Filling
+// layer (absolute inset-0) so all of its absolutely-positioned children
+// resolve against this box.
+function ForwardPayloadContents({
+  state,
+  step,
+}: {
+  state: StepState;
+  step: number;
+}) {
+  return (
+    <div className="absolute inset-0">
+      {/* Random bytes layer. At step 0 (Init), animates in left-to-right
+          via the bytes-fill keyframe to convey the buffer being filled
+          with pad keystream. After step 0, just stays visible. */}
+      <div
+        key={`bytes-${step}`}
+        className="absolute inset-0 flex flex-wrap content-start"
+        style={{
+          padding: "8px 6px",
+          gap: 3,
+          opacity: state.bytesVisible ? 1 : 0,
+          animation:
+            step === 0
+              ? `bytes-fill ${stepDurationMs(step)}ms ease-out forwards`
+              : undefined,
+          transition: step === 0 ? undefined : "opacity 700ms ease-out",
+        }}
+      >
+        {Array.from({ length: 50 }).map((_, i) => (
+          <span
+            key={i}
+            className="text-[8px] leading-none"
+            style={{
+              fontFamily: MONO,
+              color: "#0f172a",
+              opacity: 0.55,
+            }}
+          >
+            {((i * 37 + 9) % 256).toString(16).padStart(2, "0")}
+          </span>
+        ))}
+      </div>
+
+      {/* Plaintext payment instructions. Only renders at step 1
+          (Encrypt forward). Flashes in early to show Alice inserting
+          the per-hop slices into the buffer, then fades out as the
+          encryption hatches sweep over. */}
+      {step === 1 && (
+        <div
+          key={`plaintext-${step}`}
+          className="absolute inset-0 flex items-center"
+          style={{
+            padding: "0 8px",
+            gap: 6,
+            pointerEvents: "none",
+            opacity: 0,
+            animation: `plaintext-flash ${stepDurationMs(step)}ms ease-out forwards`,
+          }}
+        >
+          {(["bob", "charlie", "dave"] as ForwarderId[]).map((hop, i) => {
+            const c = LAYER_COLORS[hop];
+            const fill = HOP_FILL[hop];
+            const nextColor = NEXT_HOP_COLOR[hop];
+            const label =
+              hop === "bob"
+                ? "Bob"
+                : hop === "charlie"
+                ? "Charlie"
+                : "Dave";
+            const isLast = i === 2;
+            return (
+              <div
+                key={hop}
+                className="flex-1 flex border-[1.5px]"
+                style={{
+                  borderColor: c,
+                  minWidth: 0,
+                  height: "100%",
+                }}
+              >
+                {/* len sub-cell */}
+                <SlotSubCell
+                  section="len"
+                  style={{
+                    width: 22,
+                    flexShrink: 0,
+                    background: fill,
+                    borderRight: `1px dashed ${c}90`,
+                    fontSize: 8,
+                    fontFamily: MONO,
+                    color: "#475569",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    letterSpacing: "0.06em",
+                    textTransform: "uppercase",
+                    fontWeight: 700,
+                  }}
+                >
+                  len
+                </SlotSubCell>
+
+                {/* TLV payload sub-cell */}
+                <SlotSubCell
+                  section="tlv"
+                  className="flex-1 flex flex-col items-center justify-center"
+                  style={{
+                    background: fill,
+                    minWidth: 0,
+                  }}
+                >
+                  <div
+                    className="text-[9px] font-bold uppercase tracking-[0.05em]"
+                    style={{ color: c, fontFamily: MONO }}
+                  >
+                    {label}'s payload
+                  </div>
+                  <div
+                    className="text-[8px] mt-0.5 opacity-70"
+                    style={{ color: "#475569", fontFamily: MONO }}
+                  >
+                    TLV
+                  </div>
+                </SlotSubCell>
+
+                {/* HMAC sub-cell */}
+                <SlotSubCell
+                  section="hmac"
+                  style={{
+                    width: 42,
+                    flexShrink: 0,
+                    background: `${nextColor}24`,
+                    borderLeft: `1px dashed ${c}90`,
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <div
+                    className="text-[8px] uppercase tracking-[0.05em]"
+                    style={{ color: "#475569", fontFamily: MONO }}
+                  >
+                    HMAC
+                  </div>
+                  <div
+                    className="text-[8px] font-bold leading-tight text-center"
+                    style={{
+                      color: nextColor,
+                      fontFamily: MONO,
+                      letterSpacing: "0.02em",
+                    }}
+                  >
+                    {NEXT_HOP_LABEL[hop]}
+                  </div>
+                </SlotSubCell>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Three encryption layers, each progressively offset from the
+          left so the nested wrapping is visible: Bob's hatch covers
+          the entire payload area, Charlie's covers from Charlie's
+          hop payload to the end, Dave's covers only Dave's hop payload region. At
+          step 1 they sweep in via encryption-sweep keyframe;
+          otherwise use the standard opacity transition. */}
+      {(["dave", "charlie", "bob"] as ForwarderId[]).map((hop, _idx) => {
+        const c = LAYER_COLORS[hop];
+        const angle = LAYER_ANGLES[hop];
+        // Order is dave, charlie, bob (innermost first). For the
+        // offset, the position in the original Bob/Charlie/Dave
+        // sequence is what matters: Bob = 0, Charlie = 33%,
+        // Dave = 66%.
+        const leftPct = hop === "bob" ? 0 : hop === "charlie" ? 33.33 : 66.67;
+        const sweep =
+          step === 1 && state.forwardLayersVisible
+            ? `encryption-sweep ${stepDurationMs(step)}ms ease-out forwards`
+            : undefined;
+        const baseTransition = step === 1 ? undefined : "opacity 700ms ease-out";
+        return (
+          <div
+            key={`hatch-${hop}-${step}`}
+            className="absolute pointer-events-none"
+            style={{
+              top: 0,
+              bottom: 0,
+              left: `${leftPct}%`,
+              right: 0,
+              opacity: state.forwardLayersVisible ? 1 : 0,
+              animation: sweep,
+              transition: baseTransition,
+            }}
+          >
+            {/* Locked-spec encryption hatch: 8% solid wash + 60%
+                stripes at 2.5px on an 11px period (matches
+                WrapPrimer / PeelPrimer / shared HatchOverlay). */}
+            <div
+              className="absolute inset-0"
+              style={{ background: c, opacity: 0.08 }}
+            />
+            <div
+              className="absolute inset-0"
+              style={{
+                backgroundImage: `repeating-linear-gradient(${angle}deg, ${c} 0px, ${c} 2.5px, transparent 2.5px, transparent 11px)`,
+                opacity: 0.6,
+              }}
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Error-mode payload contents (FAIL record + padding + error hatch) ───────
+// Error payload mirroring BOLT 4 error_packet: a FAIL record at the front
+// (LEN bigsize + TLV with the failure code/name, no HMAC subcell since the
+// error packet's HMAC is the outer region) followed by a padding region that
+// fills the rest of the 256-byte buffer. Encryption hatch sweeps over
+// everything when errorLayerVisible. Filling layer (absolute inset-0) so all
+// of its absolutely-positioned children resolve against the PAYLOAD-AREA box.
+function ErrorPayloadContents({ state }: { state: StepState }) {
+  return (
+    <div className="absolute inset-0">
+      {/* FAIL record */}
+      <div
+        className="absolute flex"
+        style={{
+          top: 8,
+          bottom: 8,
+          left: 8,
+          width: "40%",
+          background: "#fde0e0",
+          border: `1.5px solid ${ERROR_COLOR}`,
+          overflow: "hidden",
+          zIndex: 3,
+        }}
+      >
+        <SlotSubCell
+          section="len"
+          className="flex flex-col items-center justify-center"
+          style={{
+            width: 28,
+            flexShrink: 0,
+            background: "#fde0e0",
+            borderRight: `1px dashed ${ERROR_COLOR}80`,
+            padding: "0 2px",
+          }}
+        >
+          <div
+            style={{
+              fontFamily: MONO,
+              fontSize: 7.5,
+              color: "#475569",
+              letterSpacing: "0.08em",
+              fontWeight: 700,
+              textTransform: "uppercase",
+              lineHeight: 1,
+            }}
+          >
+            LEN
+          </div>
+          <div
+            style={{
+              fontFamily: MONO,
+              fontSize: 9.5,
+              color: ERROR_COLOR,
+              fontWeight: 700,
+              marginTop: 2,
+              lineHeight: 1,
+            }}
+          >
+            0x02
+          </div>
+        </SlotSubCell>
+        <SlotSubCell
+          section="tlv"
+          className="flex-1 flex flex-col items-center justify-center"
+          style={{
+            background: "#fde0e0",
+            padding: "0 4px",
+            minWidth: 0,
+          }}
+        >
+          <div
+            style={{
+              fontFamily: MONO,
+              fontSize: 11,
+              fontWeight: 700,
+              color: ERROR_COLOR,
+              letterSpacing: "0.05em",
+              textTransform: "uppercase",
+              lineHeight: 1,
+            }}
+          >
+            FAIL
+          </div>
+          <div
+            style={{
+              fontFamily: MONO,
+              fontSize: 8,
+              color: ERROR_COLOR,
+              fontWeight: 700,
+              marginTop: 2,
+              lineHeight: 1.15,
+              textAlign: "center",
+              whiteSpace: "nowrap",
+            }}
+          >
+            temporary_channel_failure
+          </div>
+          <div
+            style={{
+              fontFamily: MONO,
+              fontSize: 8,
+              color: "#475569",
+              marginTop: 1.5,
+              lineHeight: 1,
+            }}
+          >
+            0x1007
+          </div>
+        </SlotSubCell>
+      </div>
+
+      {/* Padding region */}
+      <div
+        className="absolute"
+        style={{
+          top: 8,
+          bottom: 8,
+          left: "calc(40% + 14px)",
+          right: 8,
+          background: "#e2e8f0",
+          border: "1px dashed rgba(15,23,42,0.18)",
+          overflow: "hidden",
+          zIndex: 2,
+        }}
+      >
+        <div
+          className="absolute inset-0 flex flex-col items-center justify-center"
+          style={{
+            fontFamily: MONO,
+            color: "#475569",
+            gap: 2,
+          }}
+        >
+          <div style={{ fontSize: 10, fontWeight: 700 }}>padding</div>
+          <div style={{ fontSize: 9 }}>~192 bytes</div>
+        </div>
+      </div>
+
+      {/* Encryption layer (light wash + diagonal hatch) sweeps over
+          the whole buffer when errorLayerVisible. */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: ERROR_COLOR,
+          opacity: state.errorLayerVisible ? 0.08 : 0,
+          transition: "opacity 700ms ease-out",
+          zIndex: 4,
+        }}
+      />
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          backgroundImage: `repeating-linear-gradient(135deg, ${ERROR_COLOR} 0px, ${ERROR_COLOR} 2.5px, transparent 2.5px, transparent 11px)`,
+          opacity: state.errorLayerVisible ? 0.6 : 0,
+          transition: "opacity 700ms ease-out",
+          zIndex: 4,
+        }}
+      />
+    </div>
+  );
+}
+
+// ── Unified packet container (forward + error in one element) ───────────────
+//
+// §14 morph: forward steps (0-2) and error steps (3-4) share the
+// HEADER | PAYLOAD | HMAC grammar, so they render from THIS one
+// step-switching component. Every region is a persistent keyed element that
+// reconciles across the 3→4 step change instead of unmounting/remounting:
+//   • outer card + title bar → MorphBox key="packet-card" (border/background
+//     morph black→red; title text crossfades forward↔error)
+//   • HEADER region → MorphBox key="header-region"; in error mode its width
+//     collapses to 0 (flexBasis + padding animate) rather than unmounting
+//   • PAYLOAD AREA box → MorphBox key="payload-box"; its inner contents swap
+//     representation via CrossfadeSwap keyed on packetType (forward bytes/
+//     hatches ↔ error FAIL-record/padding), inner box height morphs 96↔88
+//   • HMAC region → MorphBox key="hmac-region"; grows from 0 width when
+//     hasTag, color/value crossfade, verified ✓ preserved.
+function PacketContainer({
   state,
   accentColor,
   step,
@@ -874,61 +1270,107 @@ function ForwardPacketContainer({
   accentColor: string;
   step: number;
 }) {
-  const headerLabel =
-    state.position === "alice"
-      ? "(at Alice, preparing)"
-      : "(Alice → Bob)";
+  const isError = state.packetType === "error";
+
+  // Frame colors: forward uses ink (#0f172a) + a black title bar; error uses
+  // ERROR_COLOR throughout. These morph across the 3→4 transition.
+  const frameColor = isError ? ERROR_COLOR : "#0f172a";
+  const titleBarBg = isError ? ERROR_COLOR : "#000000";
+
+  // Title-bar text per mode/position (matches the originals).
+  const titleText = isError
+    ? state.position === "bob"
+      ? "error_packet (at Bob, preparing)"
+      : "error_packet (Bob → Alice)"
+    : state.position === "alice"
+    ? "onion_routing_packet (at Alice, preparing)"
+    : "onion_routing_packet (Alice → Bob)";
+
+  // Inner PAYLOAD-AREA box height differs by mode; morph between them.
+  const payloadBoxHeight = isError ? 88 : 96;
+  // HMAC region target width differs slightly by mode (16% forward / 18%
+  // error); collapses to 0 until the tag is attached.
+  const hmacBasis = state.hasTag ? (isError ? "18%" : "16%") : "0%";
+  const hmacColor = isError ? ERROR_COLOR : LAYER_COLORS.bob;
+  const hmacValue = isError ? "0x9b a3…4d" : "0x4f c2…7a";
+  const hmacDimBg = isError ? `${ERROR_COLOR}14` : `${LAYER_COLORS.bob}14`;
 
   return (
-    <div
+    <MorphBox
+      key="packet-card"
       className="border-[1.5px]"
-      style={{ background: "#fffdf5", borderColor: "#0f172a" }}
+      initial={false}
+      animate={{ borderColor: frameColor }}
+      style={{ background: "#fffdf5" }}
     >
-      {/* Black header */}
-      <div
-        className="bg-black text-white px-3 py-1.5 flex items-center gap-2"
-        style={{ fontFamily: MONO }}
+      {/* Title bar: background morphs black↔red; the dot and the label text
+          crossfade between the forward and error representations. */}
+      <MorphBox
+        key="packet-titlebar"
+        className="px-3 py-1.5 flex items-center gap-2"
+        initial={false}
+        animate={{ background: titleBarBg }}
+        style={{ color: "#fffdf5", fontFamily: MONO }}
       >
         <span
           style={{
             width: 8,
             height: 8,
-            background: "#b8860b",
+            background: isError ? "#fffdf5" : "#b8860b",
             display: "inline-block",
+            transition: "background 450ms ease-in-out",
           }}
         />
-        <span className="text-[10px] uppercase tracking-[0.1em] font-bold">
-          onion_routing_packet {headerLabel}
-        </span>
-      </div>
+        <CrossfadeSwap
+          swapKey={isError ? "title-error" : "title-forward"}
+          className="text-[10px] uppercase tracking-[0.1em] font-bold"
+        >
+          {titleText}
+        </CrossfadeSwap>
+      </MorphBox>
 
       <div className="p-3">
-        <div
+        <MorphBox
+          key="packet-row"
           className="border-[1.5px] flex"
-          style={{ background: "#fffdf5", borderColor: "#0f172a" }}
+          initial={false}
+          animate={{ borderColor: frameColor }}
+          style={{ background: "#fffdf5" }}
         >
-          {/* HEADER region */}
-          <div
+          {/* HEADER region (persistent). Present in forward mode (16% basis);
+              in error mode its width + padding collapse to 0 (the error
+              packet has no HEADER), so it morphs away instead of unmounting. */}
+          <MorphBox
+            key="header-region"
             className="flex flex-col items-center justify-center text-center border-r-[1.5px]"
+            initial={false}
+            animate={{
+              flexBasis: isError ? "0%" : "16%",
+              paddingLeft: isError ? 0 : 6,
+              paddingRight: isError ? 0 : 6,
+              paddingTop: isError ? 0 : 8,
+              paddingBottom: isError ? 0 : 8,
+              opacity: isError ? 0 : state.focus === "header" ? 1 : DIM_OPACITY,
+            }}
             style={{
-              flexBasis: "16%",
               borderColor: "#0f172a",
+              borderRightWidth: isError ? 0 : undefined,
               color: "#0f172a",
-              padding: "8px 6px",
               minWidth: 0,
+              overflow: "hidden",
               background:
                 state.focus === "header"
                   ? `${accentColor}1F`
                   : `${LAYER_COLORS.bob}24`,
-              opacity: state.focus === "header" ? 1 : DIM_OPACITY,
               boxShadow:
-                state.focus === "header" ? FOCUS_RING_INSET : "none",
-              transition: DIM_TRANSITION,
+                !isError && state.focus === "header" ? FOCUS_RING_INSET : "none",
+              transition:
+                DIM_TRANSITION + ", border-color 450ms ease-in-out",
             }}
           >
             <span
               className="text-[11px] font-bold uppercase tracking-[0.08em] leading-tight"
-              style={{ fontFamily: MONO }}
+              style={{ fontFamily: MONO, whiteSpace: "nowrap" }}
             >
               HEADER
             </span>
@@ -943,7 +1385,7 @@ function ForwardPacketContainer({
             />
             <span
               className="text-[10px] uppercase tracking-[0.05em] opacity-70 leading-tight"
-              style={{ fontFamily: MONO }}
+              style={{ fontFamily: MONO, whiteSpace: "nowrap" }}
             >
               version
             </span>
@@ -955,7 +1397,7 @@ function ForwardPacketContainer({
             </span>
             <span
               className="text-[10px] uppercase tracking-[0.05em] opacity-70 leading-tight mt-2"
-              style={{ fontFamily: MONO }}
+              style={{ fontFamily: MONO, whiteSpace: "nowrap" }}
             >
               ephemeral pubkey
             </span>
@@ -969,278 +1411,100 @@ function ForwardPacketContainer({
             >
               <Tok token="E_AB" color={LAYER_COLORS.bob} />
             </span>
-          </div>
+          </MorphBox>
 
-          {/* PAYLOAD AREA */}
-          <div
+          {/* PAYLOAD AREA (persistent). The outer region morphs its focus
+              background/ring; the inner bordered box morphs its height and
+              border color; its CONTENTS crossfade between forward and error
+              representations via CrossfadeSwap. */}
+          <MorphBox
+            key="payload-region"
             className="flex flex-col border-r-[1.5px]"
+            initial={false}
+            animate={{ borderColor: frameColor }}
             style={{
               flex: 1,
-              borderColor: "#0f172a",
               padding: "8px 8px",
               minWidth: 0,
               background:
                 state.focus === "payload" ? `${accentColor}1F` : "transparent",
               opacity: state.focus === "payload" ? 1 : DIM_OPACITY,
-              boxShadow:
-                state.focus === "payload" ? FOCUS_RING_INSET : "none",
-              transition: DIM_TRANSITION,
+              boxShadow: state.focus === "payload" ? FOCUS_RING_INSET : "none",
+              transition: DIM_TRANSITION + ", border-color 450ms ease-in-out",
             }}
           >
             <div className="text-center mb-1.5">
-              <span
-                className="text-[11px] font-bold uppercase tracking-[0.08em] leading-tight"
-                style={{ fontFamily: MONO, color: "#0f172a" }}
+              <CrossfadeSwap
+                swapKey={isError ? "label-error" : "label-forward"}
+                className="text-[11px] font-bold uppercase tracking-[0.08em] leading-tight inline-block"
+                style={{ display: "block" }}
               >
-                PAYLOAD AREA
-              </span>
+                <span style={{ fontFamily: MONO, color: isError ? ERROR_COLOR : "#0f172a" }}>
+                  {isError ? "ERROR PAYLOAD" : "PAYLOAD AREA"}
+                </span>
+              </CrossfadeSwap>
             </div>
-            <div
+            <MorphBox
+              key="payload-box"
               className="relative border-[1.5px]"
+              initial={false}
+              animate={{
+                height: payloadBoxHeight,
+                borderColor: isError
+                  ? ERROR_COLOR
+                  : state.focus === "payload"
+                  ? "#b8860b"
+                  : "#0f172a",
+              }}
               style={{
                 background: "#fffdf5",
-                borderColor: state.focus === "payload" ? "#b8860b" : "#0f172a",
-                height: 96,
                 overflow: "hidden",
-                transition: "border-color 400ms ease-out",
               }}
             >
-              {/* Random bytes layer. At step 0 (Init), animates in left-to-right
-                  via the bytes-fill keyframe to convey the buffer being filled
-                  with pad keystream. After step 0, just stays visible. */}
-              <div
-                key={`bytes-${step}`}
-                className="absolute inset-0 flex flex-wrap content-start"
-                style={{
-                  padding: "8px 6px",
-                  gap: 3,
-                  opacity: state.bytesVisible ? 1 : 0,
-                  animation:
-                    step === 0
-                      ? `bytes-fill ${stepDurationMs(step)}ms ease-out forwards`
-                      : undefined,
-                  transition:
-                    step === 0 ? undefined : "opacity 700ms ease-out",
-                }}
+              <CrossfadeSwap
+                swapKey={isError ? "payload-error" : "payload-forward"}
+                style={{ position: "absolute", inset: 0 }}
               >
-                {Array.from({ length: 50 }).map((_, i) => (
-                  <span
-                    key={i}
-                    className="text-[8px] leading-none"
-                    style={{
-                      fontFamily: MONO,
-                      color: "#0f172a",
-                      opacity: 0.55,
-                    }}
-                  >
-                    {((i * 37 + 9) % 256).toString(16).padStart(2, "0")}
-                  </span>
-                ))}
-              </div>
+                {isError ? (
+                  <ErrorPayloadContents state={state} />
+                ) : (
+                  <ForwardPayloadContents state={state} step={step} />
+                )}
+              </CrossfadeSwap>
+            </MorphBox>
+          </MorphBox>
 
-              {/* Plaintext payment instructions. Only renders at step 1
-                  (Encrypt forward). Flashes in early to show Alice inserting
-                  the per-hop slices into the buffer, then fades out as the
-                  encryption hatches sweep over. */}
-              {step === 1 && (
-                <div
-                  key={`plaintext-${step}`}
-                  className="absolute inset-0 flex items-center"
-                  style={{
-                    padding: "0 8px",
-                    gap: 6,
-                    pointerEvents: "none",
-                    opacity: 0,
-                    animation: `plaintext-flash ${stepDurationMs(step)}ms ease-out forwards`,
-                  }}
-                >
-                  {(["bob", "charlie", "dave"] as ForwarderId[]).map((hop, i) => {
-                    const c = LAYER_COLORS[hop];
-                    const fill = HOP_FILL[hop];
-                    const nextColor = NEXT_HOP_COLOR[hop];
-                    const label =
-                      hop === "bob"
-                        ? "Bob"
-                        : hop === "charlie"
-                        ? "Charlie"
-                        : "Dave";
-                    const isLast = i === 2;
-                    return (
-                      <div
-                        key={hop}
-                        className="flex-1 flex border-[1.5px]"
-                        style={{
-                          borderColor: c,
-                          minWidth: 0,
-                          height: "100%",
-                        }}
-                      >
-                        {/* len sub-cell */}
-                        <SlotSubCell
-                          section="len"
-                          style={{
-                            width: 22,
-                            flexShrink: 0,
-                            background: fill,
-                            borderRight: `1px dashed ${c}90`,
-                            fontSize: 8,
-                            fontFamily: MONO,
-                            color: "#475569",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            letterSpacing: "0.06em",
-                            textTransform: "uppercase",
-                            fontWeight: 700,
-                          }}
-                        >
-                          len
-                        </SlotSubCell>
-
-                        {/* TLV payload sub-cell */}
-                        <SlotSubCell
-                          section="tlv"
-                          className="flex-1 flex flex-col items-center justify-center"
-                          style={{
-                            background: fill,
-                            minWidth: 0,
-                          }}
-                        >
-                          <div
-                            className="text-[9px] font-bold uppercase tracking-[0.05em]"
-                            style={{ color: c, fontFamily: MONO }}
-                          >
-                            {label}'s payload
-                          </div>
-                          <div
-                            className="text-[8px] mt-0.5 opacity-70"
-                            style={{ color: "#475569", fontFamily: MONO }}
-                          >
-                            TLV
-                          </div>
-                        </SlotSubCell>
-
-                        {/* HMAC sub-cell */}
-                        <SlotSubCell
-                          section="hmac"
-                          style={{
-                            width: 42,
-                            flexShrink: 0,
-                            background: `${nextColor}24`,
-                            borderLeft: `1px dashed ${c}90`,
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                        >
-                          <div
-                            className="text-[8px] uppercase tracking-[0.05em]"
-                            style={{ color: "#475569", fontFamily: MONO }}
-                          >
-                            HMAC
-                          </div>
-                          <div
-                            className="text-[8px] font-bold leading-tight text-center"
-                            style={{
-                              color: nextColor,
-                              fontFamily: MONO,
-                              letterSpacing: "0.02em",
-                            }}
-                          >
-                            {NEXT_HOP_LABEL[hop]}
-                          </div>
-                        </SlotSubCell>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* Three encryption layers, each progressively offset from the
-                  left so the nested wrapping is visible: Bob's hatch covers
-                  the entire payload area, Charlie's covers from Charlie's
-                  hop payload to the end, Dave's covers only Dave's hop payload region. At
-                  step 1 they sweep in via encryption-sweep keyframe;
-                  otherwise use the standard opacity transition. */}
-              {(["dave", "charlie", "bob"] as ForwarderId[]).map((hop, _idx) => {
-                const c = LAYER_COLORS[hop];
-                const angle = LAYER_ANGLES[hop];
-                // Order is dave, charlie, bob (innermost first). For the
-                // offset, the position in the original Bob/Charlie/Dave
-                // sequence is what matters: Bob = 0, Charlie = 33%,
-                // Dave = 66%.
-                const leftPct = hop === "bob" ? 0 : hop === "charlie" ? 33.33 : 66.67;
-                const sweep =
-                  step === 1 && state.forwardLayersVisible
-                    ? `encryption-sweep ${stepDurationMs(step)}ms ease-out forwards`
-                    : undefined;
-                const baseTransition =
-                  step === 1 ? undefined : "opacity 700ms ease-out";
-                return (
-                  <div
-                    key={`hatch-${hop}-${step}`}
-                    className="absolute pointer-events-none"
-                    style={{
-                      top: 0,
-                      bottom: 0,
-                      left: `${leftPct}%`,
-                      right: 0,
-                      opacity: state.forwardLayersVisible ? 1 : 0,
-                      animation: sweep,
-                      transition: baseTransition,
-                    }}
-                  >
-                    {/* Locked-spec encryption hatch: 8% solid wash + 60%
-                        stripes at 2.5px on an 11px period (matches
-                        WrapPrimer / PeelPrimer / shared HatchOverlay). */}
-                    <div
-                      className="absolute inset-0"
-                      style={{ background: c, opacity: 0.08 }}
-                    />
-                    <div
-                      className="absolute inset-0"
-                      style={{
-                        backgroundImage: `repeating-linear-gradient(${angle}deg, ${c} 0px, ${c} 2.5px, transparent 2.5px, transparent 11px)`,
-                        opacity: 0.6,
-                      }}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* HMAC region. Hidden until the tag is attached; then animates
-              in by expanding from 0 width and fading up from opacity 0. */}
-          <div
+          {/* HMAC region (persistent), shared by both modes. Hidden until
+              the tag is attached; then expands from 0 width and fades up.
+              Tag color/value crossfade between forward and error. */}
+          <MorphBox
+            key="hmac-region"
             className="flex flex-col items-center justify-center text-center"
+            initial={false}
+            animate={{
+              flexBasis: hmacBasis,
+              paddingLeft: state.hasTag ? 4 : 0,
+              paddingRight: state.hasTag ? 4 : 0,
+              paddingTop: state.hasTag ? 8 : 0,
+              paddingBottom: state.hasTag ? 8 : 0,
+              opacity: !state.hasTag ? 0 : state.focus === "hmac" ? 1 : DIM_OPACITY,
+            }}
             style={{
-              flexBasis: state.hasTag ? "16%" : "0%",
               color: "#0f172a",
-              padding: state.hasTag ? "8px 4px" : "0",
               minWidth: 0,
               overflow: "hidden",
               background: !state.hasTag
                 ? "transparent"
                 : state.focus === "hmac"
                 ? `${accentColor}1F`
-                : `${LAYER_COLORS.bob}14`,
-              opacity: !state.hasTag
-                ? 0
-                : state.focus === "hmac"
-                ? 1
-                : DIM_OPACITY,
-              boxShadow:
-                state.focus === "hmac" ? FOCUS_RING_INSET : "none",
-              transition:
-                "flex-basis 600ms ease-out, padding 600ms ease-out, " +
-                DIM_TRANSITION,
+                : hmacDimBg,
+              boxShadow: state.focus === "hmac" ? FOCUS_RING_INSET : "none",
+              transition: DIM_TRANSITION,
             }}
           >
             <span
               className="text-[11px] font-bold uppercase tracking-[0.06em] leading-tight"
-              style={{ fontFamily: MONO, whiteSpace: "nowrap" }}
+              style={{ fontFamily: MONO, whiteSpace: "nowrap", color: isError ? ERROR_COLOR : "#0f172a" }}
             >
               HMAC
             </span>
@@ -1250,317 +1514,21 @@ function ForwardPacketContainer({
             >
               32-byte tag
             </span>
-            <div
+            <CrossfadeSwap
+              swapKey={hmacValue}
               className="mt-2 text-[11px] font-bold leading-tight"
-              style={{
-                fontFamily: MONO,
-                color: LAYER_COLORS.bob,
-                whiteSpace: "nowrap",
-              }}
+              style={{ display: "block" }}
             >
-              0x4f c2…7a
-            </div>
-            <div
-              className="mt-1 leading-none"
-              style={{
-                fontSize: 18,
-                fontWeight: 900,
-                color: "#16a34a",
-                opacity: state.verified ? 1 : 0,
-                transform: state.verified ? "scale(1)" : "scale(0.5)",
-                transition:
-                  "opacity 400ms ease-out, transform 400ms ease-out",
-              }}
-            >
-              ✓
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ErrorPacketContainer({
-  state,
-  accentColor,
-}: {
-  state: StepState;
-  accentColor: string;
-}) {
-  const headerLabel =
-    state.position === "bob" ? "(at Bob, preparing)" : "(Bob → Alice)";
-
-  return (
-    <div
-      className="border-[1.5px]"
-      style={{ background: "#fffdf5", borderColor: ERROR_COLOR }}
-    >
-      <div
-        className="px-3 py-1.5 flex items-center gap-2"
-        style={{
-          background: ERROR_COLOR,
-          color: "#fffdf5",
-          fontFamily: MONO,
-        }}
-      >
-        <span
-          style={{
-            width: 8,
-            height: 8,
-            background: "#fffdf5",
-            display: "inline-block",
-          }}
-        />
-        <span className="text-[10px] uppercase tracking-[0.1em] font-bold">
-          error_packet {headerLabel}
-        </span>
-      </div>
-
-      <div className="p-3">
-        <div
-          className="border-[1.5px] flex"
-          style={{ background: "#fffdf5", borderColor: ERROR_COLOR }}
-        >
-          {/* PAYLOAD AREA */}
-          <div
-            className="flex flex-col"
-            style={{
-              flex: 1,
-              color: "#0f172a",
-              padding: "8px 8px",
-              minWidth: 0,
-              borderRight: `1.5px solid ${ERROR_COLOR}`,
-              background:
-                state.focus === "payload" ? `${accentColor}1F` : "transparent",
-              opacity: state.focus === "payload" ? 1 : DIM_OPACITY,
-              boxShadow:
-                state.focus === "payload" ? FOCUS_RING_INSET : "none",
-              transition: DIM_TRANSITION,
-            }}
-          >
-            <div className="text-center mb-1.5">
               <span
-                className="text-[11px] font-bold uppercase tracking-[0.08em] leading-tight"
-                style={{ fontFamily: MONO, color: ERROR_COLOR }}
+                style={{
+                  fontFamily: MONO,
+                  color: hmacColor,
+                  whiteSpace: "nowrap",
+                }}
               >
-                ERROR PAYLOAD
+                {hmacValue}
               </span>
-            </div>
-            {/* Slot-format error payload mirroring BOLT 4 error_packet:
-                FAIL slot at the front (LEN bigsize + TLV with the failure
-                code/name, no HMAC subcell since the error packet's HMAC is
-                the outer region) followed by a padding region that fills the
-                rest of the 256-byte buffer. Encryption hatch sweeps over
-                everything when errorLayerVisible. */}
-            <div
-              className="relative border-[1.5px]"
-              style={{
-                background: "#fffdf5",
-                borderColor: ERROR_COLOR,
-                height: 88,
-                overflow: "hidden",
-              }}
-            >
-              {/* FAIL slot */}
-              <div
-                className="absolute flex"
-                style={{
-                  top: 8,
-                  bottom: 8,
-                  left: 8,
-                  width: "40%",
-                  background: "#fde0e0",
-                  border: `1.5px solid ${ERROR_COLOR}`,
-                  overflow: "hidden",
-                  zIndex: 3,
-                }}
-              >
-                <SlotSubCell
-                  section="len"
-                  className="flex flex-col items-center justify-center"
-                  style={{
-                    width: 28,
-                    flexShrink: 0,
-                    background: "#fde0e0",
-                    borderRight: `1px dashed ${ERROR_COLOR}80`,
-                    padding: "0 2px",
-                  }}
-                >
-                  <div
-                    style={{
-                      fontFamily: MONO,
-                      fontSize: 7.5,
-                      color: "#475569",
-                      letterSpacing: "0.08em",
-                      fontWeight: 700,
-                      textTransform: "uppercase",
-                      lineHeight: 1,
-                    }}
-                  >
-                    LEN
-                  </div>
-                  <div
-                    style={{
-                      fontFamily: MONO,
-                      fontSize: 9.5,
-                      color: ERROR_COLOR,
-                      fontWeight: 700,
-                      marginTop: 2,
-                      lineHeight: 1,
-                    }}
-                  >
-                    0x02
-                  </div>
-                </SlotSubCell>
-                <SlotSubCell
-                  section="tlv"
-                  className="flex-1 flex flex-col items-center justify-center"
-                  style={{
-                    background: "#fde0e0",
-                    padding: "0 4px",
-                    minWidth: 0,
-                  }}
-                >
-                  <div
-                    style={{
-                      fontFamily: MONO,
-                      fontSize: 11,
-                      fontWeight: 700,
-                      color: ERROR_COLOR,
-                      letterSpacing: "0.05em",
-                      textTransform: "uppercase",
-                      lineHeight: 1,
-                    }}
-                  >
-                    FAIL
-                  </div>
-                  <div
-                    style={{
-                      fontFamily: MONO,
-                      fontSize: 8,
-                      color: ERROR_COLOR,
-                      fontWeight: 700,
-                      marginTop: 2,
-                      lineHeight: 1.15,
-                      textAlign: "center",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    temporary_channel_failure
-                  </div>
-                  <div
-                    style={{
-                      fontFamily: MONO,
-                      fontSize: 8,
-                      color: "#475569",
-                      marginTop: 1.5,
-                      lineHeight: 1,
-                    }}
-                  >
-                    0x1007
-                  </div>
-                </SlotSubCell>
-              </div>
-
-              {/* Padding region */}
-              <div
-                className="absolute"
-                style={{
-                  top: 8,
-                  bottom: 8,
-                  left: "calc(40% + 14px)",
-                  right: 8,
-                  background: "#e2e8f0",
-                  border: "1px dashed rgba(15,23,42,0.18)",
-                  overflow: "hidden",
-                  zIndex: 2,
-                }}
-              >
-                <div
-                  className="absolute inset-0 flex flex-col items-center justify-center"
-                  style={{
-                    fontFamily: MONO,
-                    color: "#475569",
-                    gap: 2,
-                  }}
-                >
-                  <div style={{ fontSize: 10, fontWeight: 700 }}>padding</div>
-                  <div style={{ fontSize: 9 }}>~192 bytes</div>
-                </div>
-              </div>
-
-              {/* Encryption layer (light wash + diagonal hatch) sweeps over
-                  the whole buffer when errorLayerVisible. */}
-              <div
-                className="absolute inset-0 pointer-events-none"
-                style={{
-                  background: ERROR_COLOR,
-                  opacity: state.errorLayerVisible ? 0.08 : 0,
-                  transition: "opacity 700ms ease-out",
-                  zIndex: 4,
-                }}
-              />
-              <div
-                className="absolute inset-0 pointer-events-none"
-                style={{
-                  backgroundImage: `repeating-linear-gradient(135deg, ${ERROR_COLOR} 0px, ${ERROR_COLOR} 2.5px, transparent 2.5px, transparent 11px)`,
-                  opacity: state.errorLayerVisible ? 0.6 : 0,
-                  transition: "opacity 700ms ease-out",
-                  zIndex: 4,
-                }}
-              />
-            </div>
-          </div>
-
-          {/* HMAC region. Hidden until the tag is attached. */}
-          <div
-            className="flex flex-col items-center justify-center text-center"
-            style={{
-              flexBasis: state.hasTag ? "18%" : "0%",
-              color: "#0f172a",
-              padding: state.hasTag ? "8px 4px" : "0",
-              minWidth: 0,
-              overflow: "hidden",
-              background: !state.hasTag
-                ? "transparent"
-                : state.focus === "hmac"
-                ? `${accentColor}1F`
-                : `${ERROR_COLOR}14`,
-              opacity: !state.hasTag
-                ? 0
-                : state.focus === "hmac"
-                ? 1
-                : DIM_OPACITY,
-              boxShadow:
-                state.focus === "hmac" ? FOCUS_RING_INSET : "none",
-              transition:
-                "flex-basis 600ms ease-out, padding 600ms ease-out, " +
-                DIM_TRANSITION,
-            }}
-          >
-            <span
-              className="text-[11px] font-bold uppercase tracking-[0.06em] leading-tight"
-              style={{ fontFamily: MONO, color: ERROR_COLOR }}
-            >
-              HMAC
-            </span>
-            <span
-              className="text-[8px] font-normal opacity-60 leading-tight mt-0.5"
-              style={{ fontFamily: MONO }}
-            >
-              32-byte tag
-            </span>
-            <div
-              className="mt-2 text-[11px] font-bold leading-tight"
-              style={{
-                fontFamily: MONO,
-                color: ERROR_COLOR,
-                whiteSpace: "nowrap",
-              }}
-            >
-              0x9b a3…4d
-            </div>
+            </CrossfadeSwap>
             <div
               className="mt-1 leading-none"
               style={{
@@ -1569,16 +1537,15 @@ function ErrorPacketContainer({
                 color: "#16a34a",
                 opacity: state.verified ? 1 : 0,
                 transform: state.verified ? "scale(1)" : "scale(0.5)",
-                transition:
-                  "opacity 400ms ease-out, transform 400ms ease-out",
+                transition: "opacity 400ms ease-out, transform 400ms ease-out",
               }}
             >
               ✓
             </div>
-          </div>
-        </div>
+          </MorphBox>
+        </MorphBox>
       </div>
-    </div>
+    </MorphBox>
   );
 }
 
@@ -1651,8 +1618,8 @@ export function OperationsLifecycleDiagram({
           - onion-flyer: mini onion packet flies Alice → Bob (~0-1.4s)
           - failure-exclamation: red ! pops up at Bob (~1.6s), then slides
             up to Bob's top-right corner as a persistent badge (~2.4s)
-          - error-packet-reveal: error packet fades in (~2.8s) once the
-            failure marker has settled */}
+          The error packet itself no longer fades in via a keyframe; the
+          persistent PacketContainer morphs forward to error in place (§14). */}
       <style>{`
         @keyframes onion-flyer {
           0% { left: ${HOP_X_PCT.alice}%; opacity: 0; }
@@ -1699,11 +1666,6 @@ export function OperationsLifecycleDiagram({
             transform: translateX(20px) scale(0.85);
             opacity: 1;
           }
-        }
-        @keyframes error-packet-reveal {
-          0%, 65% { opacity: 0; transform: translateY(8px); }
-          80% { opacity: 1; transform: translateY(0); }
-          100% { opacity: 1; transform: translateY(0); }
         }
         /* Step 1 (Init): empty buffer fills with random pad bytes left to right */
         @keyframes bytes-fill {
@@ -1823,32 +1785,19 @@ export function OperationsLifecycleDiagram({
               </div>
             </div>
 
-            {/* Packet visual: forward or error depending on step. At step 4
-                (the moment Bob crafts the error), the error packet fades in
-                AFTER the mini-onion has flown over and the exclamation badge
-                has settled at Bob's corner. */}
-            {current.packetType === "forward" ? (
-              <ForwardPacketContainer
-                state={current}
-                accentColor={accentColor}
-                step={step}
-              />
-            ) : step === 3 ? (
-              <div
-                key={`error-reveal-${step}`}
-                style={{
-                  animation: `error-packet-reveal ${STEP_4_MS}ms ease-out forwards`,
-                  opacity: 0,
-                }}
-              >
-                <ErrorPacketContainer
-                  state={current}
-                  accentColor={accentColor}
-                />
-              </div>
-            ) : (
-              <ErrorPacketContainer state={current} accentColor={accentColor} />
-            )}
+            {/* Packet visual: ONE persistent step-switching container across
+                all five steps (§14 morph). The forward→error transition (step
+                3→4) morphs in place: the HEADER region collapses to 0 width,
+                the frame/title morph black→red, and the PAYLOAD-AREA contents
+                crossfade. No remount, so the shared HEADER | PAYLOAD | HMAC
+                regions tween instead of jump-cutting. The mini-onion flyer and
+                exclamation badge on the hop track above still play
+                independently to pace the moment Bob crafts the error. */}
+            <PacketContainer
+              state={current}
+              accentColor={accentColor}
+              step={step}
+            />
           </div>
         </div>
       </div>

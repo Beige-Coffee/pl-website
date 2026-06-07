@@ -22,14 +22,12 @@ import { getOnionRoutingDraftExerciseGroupContext as getOnionRoutingExerciseGrou
 import { Tok as MathTok } from "../components/onion-routing-draft/mathTokens";
 import { NetworkTopologyDiagram } from "../components/onion-routing-draft/NetworkTopologyDiagram";
 import { NaiveVsOnionDiagram } from "../components/onion-routing-draft/NaiveVsOnionDiagram";
-import { EcdhChainDiagram } from "../components/onion-routing-draft/EcdhChainDiagram";
 import { KdfPipelineDiagram } from "../components/onion-routing-draft/KdfPipelineDiagram";
 import { FillerTraceDiagram } from "../components/onion-routing-draft/FillerTraceDiagram";
 import { ForwarderPeelDiagram } from "../components/onion-routing-draft/ForwarderPeelDiagram";
 import { HmacChainDiagram } from "../components/onion-routing-draft/HmacChainDiagram";
 import { WrapTraceDiagram } from "../components/onion-routing-draft/WrapTraceDiagram";
 import { PeelTraceDiagram } from "../components/onion-routing-draft/PeelTraceDiagram";
-import { OnionPeelDiagram } from "../components/onion-routing-draft/OnionPeelDiagram";
 import { ValidationFlowDiagram } from "../components/onion-routing-draft/ValidationFlowDiagram";
 import { ErrorBoomerangDiagram } from "../components/onion-routing-draft/ErrorBoomerangDiagram";
 import { ErrorUnwrapDiagram } from "../components/onion-routing-draft/ErrorUnwrapDiagram";
@@ -41,16 +39,12 @@ import { KnowledgeMatrix } from "../components/onion-routing-draft/KnowledgeMatr
 import { HtlcPropagationDiagram } from "../components/onion-routing-draft/HtlcPropagationDiagram";
 import { EcdhRecapDiagram } from "../components/onion-routing-draft/EcdhRecapDiagram";
 import { BlindingFactorDiagram } from "../components/onion-routing-draft/BlindingFactorDiagram";
-import { SharedSecretSymmetryDiagram } from "../components/onion-routing-draft/SharedSecretSymmetryDiagram";
 import { NaivePacketDiagram } from "../components/onion-routing-draft/NaivePacketDiagram";
 import { SharedSecretsRecapDiagram } from "../components/onion-routing-draft/SharedSecretsRecapDiagram";
 import { NodeKeyAttemptDiagram } from "../components/onion-routing-draft/NodeKeyAttemptDiagram";
 import { HmacRecapDiagram } from "../components/onion-routing-draft/HmacRecapDiagram";
-import { FiveKeysJobsDiagram } from "../components/onion-routing-draft/FiveKeysJobsDiagram";
 import { PerHopKeyMatrixDiagram } from "../components/onion-routing-draft/PerHopKeyMatrixDiagram";
 import { PacketJobsPreviewDiagram } from "../components/onion-routing-draft/PacketJobsPreviewDiagram";
-import { SlicesRecapDiagram } from "../components/onion-routing-draft/SlicesRecapDiagram";
-import { SliceInPacketDiagram } from "../components/onion-routing-draft/SliceInPacketDiagram";
 import { KeyOperationsDiagram } from "../components/onion-routing-draft/KeyOperationsDiagram";
 import { OperationsLifecycleDiagram } from "../components/onion-routing-draft/OperationsLifecycleDiagram";
 import { PythonSnippet } from "../components/onion-routing-draft/PythonSnippet";
@@ -78,7 +72,6 @@ const CUSTOM_BLOCK_TAGS = new Set([
   "network-topology",
   "route-comparison",
   "naive-vs-onion",
-  "ecdh-chain",
   "kdf-pipeline",
   "payload-shrink",
   "padding-strategy",
@@ -91,7 +84,6 @@ const CUSTOM_BLOCK_TAGS = new Set([
   "hmac-chain",
   "wrap-trace",
   "peel-trace",
-  "onion-peel",
   "validation-flow",
   "error-boomerang",
   "error-unwrap",
@@ -102,13 +94,9 @@ const CUSTOM_BLOCK_TAGS = new Set([
   "htlc-propagation",
   "ecdh-recap",
   "blinding-factor",
-  "shared-secret-symmetry",
   "hmac-recap",
-  "five-keys-jobs",
   "per-hop-key-matrix",
   "packet-jobs-preview",
-  "slices-recap",
-  "slice-in-packet",
   "key-operations",
   "operations-lifecycle",
   "operations-lifecycle-keyed",
@@ -1093,9 +1081,6 @@ function ChapterContent({
           "naive-vs-onion": () => {
             return <NaiveVsOnionDiagram />;
           },
-          "ecdh-chain": () => {
-            return <EcdhChainDiagram />;
-          },
           "kdf-pipeline": () => {
             return <KdfPipelineDiagram />;
           },
@@ -1132,9 +1117,6 @@ function ChapterContent({
           "peel-trace": () => {
             return <PeelTraceDiagram />;
           },
-          "onion-peel": () => {
-            return <OnionPeelDiagram />;
-          },
           "validation-flow": () => {
             return <ValidationFlowDiagram />;
           },
@@ -1166,9 +1148,6 @@ function ChapterContent({
           "blinding-factor": () => {
             return <BlindingFactorDiagram />;
           },
-          "shared-secret-symmetry": () => {
-            return <SharedSecretSymmetryDiagram />;
-          },
           "naive-packet": () => {
             return <NaivePacketDiagram />;
           },
@@ -1181,20 +1160,11 @@ function ChapterContent({
           "hmac-recap": () => {
             return <HmacRecapDiagram />;
           },
-          "five-keys-jobs": () => {
-            return <FiveKeysJobsDiagram />;
-          },
           "per-hop-key-matrix": () => {
             return <PerHopKeyMatrixDiagram />;
           },
           "packet-jobs-preview": () => {
             return <PacketJobsPreviewDiagram />;
-          },
-          "slices-recap": () => {
-            return <SlicesRecapDiagram />;
-          },
-          "slice-in-packet": () => {
-            return <SliceInPacketDiagram />;
           },
           "key-operations": () => {
             return <KeyOperationsDiagram />;

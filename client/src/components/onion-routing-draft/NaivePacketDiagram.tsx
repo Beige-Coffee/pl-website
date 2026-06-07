@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { Tok, MathLine } from "./mathTokens";
 import { HatchOverlay, singleHatchBackground } from "./encryptionHatch";
+import { MorphBox } from "./morph";
 
 // ────────────────────────────────────────────────────────────────────────────
 // NaivePacketDiagram (DRAFT)
@@ -518,13 +520,19 @@ export function NaivePacketDiagram() {
                           "background 400ms ease-in-out, border-color 400ms ease-in-out",
                       }}
                     >
-                      {!processed && (
+                      <motion.div
+                        className="absolute inset-0 pointer-events-none"
+                        initial={false}
+                        animate={{ opacity: processed ? 0 : 1 }}
+                        transition={{ duration: 0.45, ease: "easeInOut" }}
+                        style={{ zIndex: 1 }}
+                      >
                         <HatchOverlay
                           hops={[s.forHop]}
                           zIndex={1}
                           stripeOpacity={0.45}
                         />
-                      )}
+                      </motion.div>
                       <div
                         className="text-[9px] uppercase tracking-wider mb-0.5 flex items-center gap-1 relative"
                         style={{ color: labelColor, zIndex: 2 }}
@@ -576,9 +584,19 @@ export function NaivePacketDiagram() {
 
           {/* ECDH calculation panel beside the packet at active forwarder
               steps. Each hop performs ECDH with its OWN ephemeral pubkey from
-              the packet (not Alice's pubkey, unlike the first attempt). */}
-          {isForwarder && ecdh && (
-            <div style={{ width: 280 }}>
+              the packet (not Alice's pubkey, unlike the first attempt). It
+              mounts/unmounts between Alice's setup beat and the forwarder beats,
+              so it fades in/out (and crossfades between forwarders, keyed on the
+              active hop) instead of popping. */}
+          <AnimatePresence mode="wait">
+            {isForwarder && ecdh && (
+              <MorphBox
+                key={active}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                style={{ width: 280 }}
+              >
               <div
                 className="bg-black text-white px-3 py-1.5 border-[1.5px] border-black flex items-center gap-2"
                 style={{ fontFamily: '"JetBrains Mono", "Fira Code", monospace' }}
@@ -668,8 +686,9 @@ export function NaivePacketDiagram() {
                   </span>
                 </div>
               </div>
-            </div>
-          )}
+              </MorphBox>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* Legend: hatched = encrypted, solid = readable */}

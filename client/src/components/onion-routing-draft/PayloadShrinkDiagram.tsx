@@ -3,6 +3,7 @@ import { Tok } from "./mathTokens";
 import { SlotSubCell } from "./SlotSubCell";
 import { HatchOverlay, LAYER_ANGLES, LAYER_COLORS } from "./encryptionHatch";
 import { renderCaption } from "./captionMarkup";
+import { CrossfadeSwap } from "./morph";
 
 // ────────────────────────────────────────────────────────────────────────────
 // PayloadShrinkDiagram (rebuilt 2026-05-08)
@@ -698,26 +699,40 @@ function LayeredHatches({ hopPayloads }: { hopPayloads: ForwarderId[] }) {
 }
 
 function ShrinkingPayloadInner({ state }: { state: State }) {
-  if (state.decrypted) {
-    return (
-      <div
-        className="relative border-[1.5px] flex"
-        style={{ background: HOP_FILL.dave, borderColor: HOP_STROKE.dave, height: 64 }}
-      >
-        <div className="flex-1 flex flex-col items-center justify-center text-center" style={{ padding: "0 8px" }}>
-          <div style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700, color: HOP_STROKE.dave, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-            Dave's payload · 100 B
-          </div>
-          <div style={{ fontFamily: MONO, fontSize: 8.5, color: "#475569", marginTop: 3 }}>
-            payment_data · final amount
-          </div>
-          <div style={{ fontFamily: MONO, fontSize: 9.5, fontWeight: 700, color: "#1f7a4a", marginTop: 5 }}>
-            ✓ decrypted &amp; claimed — nothing to forward
-          </div>
+  // Crossfade the final hard-swap (multi-payload buffer → Dave's decrypted &
+  // claimed panel) instead of jump-cutting. The shrinking container width keeps
+  // morphing as before; only the interior representation crossfades here.
+  return (
+    <CrossfadeSwap swapKey={state.decrypted ? "claimed" : "buffer"}>
+      {state.decrypted
+        ? <DecryptedPayloadInner />
+        : <BufferPayloadInner state={state} />}
+    </CrossfadeSwap>
+  );
+}
+
+function DecryptedPayloadInner() {
+  return (
+    <div
+      className="relative border-[1.5px] flex"
+      style={{ background: HOP_FILL.dave, borderColor: HOP_STROKE.dave, height: 64 }}
+    >
+      <div className="flex-1 flex flex-col items-center justify-center text-center" style={{ padding: "0 8px" }}>
+        <div style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700, color: HOP_STROKE.dave, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          Dave's payload · 100 B
+        </div>
+        <div style={{ fontFamily: MONO, fontSize: 8.5, color: "#475569", marginTop: 3 }}>
+          payment_data · final amount
+        </div>
+        <div style={{ fontFamily: MONO, fontSize: 9.5, fontWeight: 700, color: "#1f7a4a", marginTop: 5 }}>
+          ✓ decrypted &amp; claimed, nothing to forward
         </div>
       </div>
-    );
-  }
+    </div>
+  );
+}
+
+function BufferPayloadInner({ state }: { state: State }) {
   return (
     <div
       className="relative border-[1.5px]"
