@@ -86,7 +86,7 @@ const BEATS: Beat[] = [
     subLabel: "RECEIVE",
     title: "An `update_add_htlc` arrives with the onion",
     caption:
-      "Bob's upstream peer sends an `update_add_htlc`: an incoming HTLC plus 1,366 bytes of onion. The HTLC carries the `payment_hash` (this is the `associated_data`), the incoming amount, and the incoming `cltv_expiry`. Bob hasn't trusted a single byte yet — earning that trust is the whole job of this chapter.",
+      "Bob's upstream peer sends an `update_add_htlc`: an incoming HTLC plus 1,366 bytes of onion. The HTLC carries the `payment_hash` (this is the `associated_data`), the incoming amount, and the incoming `cltv_expiry`. Bob hasn't trusted a single byte yet. Earning that trust is the whole job of this chapter.",
   },
   {
     step: 2,
@@ -100,7 +100,7 @@ const BEATS: Beat[] = [
     step: 3,
     iterLabel: "Bob validates",
     subLabel: "GATE 2 · INTEGRITY",
-    title: "Verify `HMAC(mu_B, hop_payloads ‖ associated_data)` — before decrypting",
+    title: "Verify `HMAC(mu_B, hop_payloads ‖ associated_data)` (before decrypting)",
     caption:
       "The integrity gate, and it runs *before* any decryption. Bob recomputes `HMAC(mu_B, hop_payloads ‖ associated_data)` over the still-encrypted bytes and compares it to the packet's `outer_hmac`. A match means the bytes are authentic and bound to this exact HTLC. A mismatch means tampering or a re-attached onion, so Bob rejects with `invalid_onion_hmac` and never lets those bytes reach his parser.",
   },
@@ -118,7 +118,7 @@ const BEATS: Beat[] = [
     subLabel: "PARSE",
     title: "Read the TLV: `amt_to_forward`, `outgoing_cltv_value`, `short_channel_id`",
     caption:
-      "Bob's hop payload is plaintext now. A provided helper, `parse_tlv_records`, walks the bigsize-prefixed TLV records and hands back `amt_to_forward`, `outgoing_cltv_value`, and `short_channel_id`. The 32 bytes right after the TLVs are `charlie_hmac` — the tag Bob will carry onto the packet he forwards.",
+      "Bob's hop payload is plaintext now. A provided helper, `parse_tlv_records`, walks the bigsize-prefixed TLV records and hands back `amt_to_forward`, `outgoing_cltv_value`, and `short_channel_id`. The 32 bytes right after the TLVs are `charlie_hmac`, the tag Bob will carry onto the packet he forwards.",
   },
   {
     step: 6,
@@ -489,7 +489,7 @@ function ArcTail({ step }: { step: number }) {
         </div>
         <GateBadge
           pass
-          passLabel="match — bytes authentic, bound to this HTLC"
+          passLabel="match (bytes authentic, bound to this HTLC)"
           failCode="invalid_onion_hmac"
         />
       </div>
@@ -682,7 +682,7 @@ function ReceiveView() {
               position: "relative",
             }}
           >
-            1,366 encrypted bytes — Bob can't read any of it yet
+            1,366 encrypted bytes. Bob can't read any of it yet
           </span>
         </div>
       </div>
@@ -1059,7 +1059,7 @@ function OutcomeView() {
         className="text-center mt-3 text-[11px] italic"
         style={{ color: ASSOC_DATA_COLOR, fontFamily: SANS }}
       >
-        Every outcome carries `ss` — the error path always needs the shared
+        Every outcome carries `ss`. The error path always needs the shared
         secret, whether to wrap an error here or relay one from downstream.
       </div>
     </div>

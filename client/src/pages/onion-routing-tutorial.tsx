@@ -21,7 +21,6 @@ import { ONION_ROUTING_EXERCISES_DRAFT as ONION_ROUTING_EXERCISES } from "../dat
 import { getOnionRoutingDraftExerciseGroupContext as getOnionRoutingExerciseGroupContext } from "../lib/onion-routing-exercise-groups-draft";
 import { Tok as MathTok } from "../components/onion-routing-draft/mathTokens";
 import { NetworkTopologyDiagram } from "../components/onion-routing-draft/NetworkTopologyDiagram";
-import { NaiveVsOnionDiagram } from "../components/onion-routing-draft/NaiveVsOnionDiagram";
 import { KdfPipelineDiagram } from "../components/onion-routing-draft/KdfPipelineDiagram";
 import { FillerTraceDiagram } from "../components/onion-routing-draft/FillerTraceDiagram";
 import { ForwarderPeelDiagram } from "../components/onion-routing-draft/ForwarderPeelDiagram";
@@ -40,12 +39,7 @@ import { HtlcPropagationDiagram } from "../components/onion-routing-draft/HtlcPr
 import { EcdhRecapDiagram } from "../components/onion-routing-draft/EcdhRecapDiagram";
 import { BlindingFactorDiagram } from "../components/onion-routing-draft/BlindingFactorDiagram";
 import { NaivePacketDiagram } from "../components/onion-routing-draft/NaivePacketDiagram";
-import { SharedSecretsRecapDiagram } from "../components/onion-routing-draft/SharedSecretsRecapDiagram";
 import { NodeKeyAttemptDiagram } from "../components/onion-routing-draft/NodeKeyAttemptDiagram";
-import { HmacRecapDiagram } from "../components/onion-routing-draft/HmacRecapDiagram";
-import { PerHopKeyMatrixDiagram } from "../components/onion-routing-draft/PerHopKeyMatrixDiagram";
-import { PacketJobsPreviewDiagram } from "../components/onion-routing-draft/PacketJobsPreviewDiagram";
-import { KeyOperationsDiagram } from "../components/onion-routing-draft/KeyOperationsDiagram";
 import { OperationsLifecycleDiagram } from "../components/onion-routing-draft/OperationsLifecycleDiagram";
 import { PythonSnippet } from "../components/onion-routing-draft/PythonSnippet";
 import { SpecFormula } from "../components/onion-routing-draft/SpecFormula";
@@ -71,7 +65,6 @@ const CUSTOM_BLOCK_TAGS = new Set([
   "checkpoint-group",
   "network-topology",
   "route-comparison",
-  "naive-vs-onion",
   "kdf-pipeline",
   "payload-shrink",
   "padding-strategy",
@@ -94,10 +87,6 @@ const CUSTOM_BLOCK_TAGS = new Set([
   "htlc-propagation",
   "ecdh-recap",
   "blinding-factor",
-  "hmac-recap",
-  "per-hop-key-matrix",
-  "packet-jobs-preview",
-  "key-operations",
   "operations-lifecycle",
   "operations-lifecycle-keyed",
   "python-snippet",
@@ -106,7 +95,6 @@ const CUSTOM_BLOCK_TAGS = new Set([
   "forwarder-policy-map",
   "knowledge-matrix",
   "naive-packet",
-  "shared-secrets-recap",
   "node-key-attempt",
 ]);
 
@@ -1078,9 +1066,6 @@ function ChapterContent({
           "route-comparison": () => {
             return <RouteComparisonDiagram />;
           },
-          "naive-vs-onion": () => {
-            return <NaiveVsOnionDiagram />;
-          },
           "kdf-pipeline": () => {
             return <KdfPipelineDiagram />;
           },
@@ -1151,23 +1136,8 @@ function ChapterContent({
           "naive-packet": () => {
             return <NaivePacketDiagram />;
           },
-          "shared-secrets-recap": () => {
-            return <SharedSecretsRecapDiagram />;
-          },
           "node-key-attempt": () => {
             return <NodeKeyAttemptDiagram />;
-          },
-          "hmac-recap": () => {
-            return <HmacRecapDiagram />;
-          },
-          "per-hop-key-matrix": () => {
-            return <PerHopKeyMatrixDiagram />;
-          },
-          "packet-jobs-preview": () => {
-            return <PacketJobsPreviewDiagram />;
-          },
-          "key-operations": () => {
-            return <KeyOperationsDiagram />;
           },
           "operations-lifecycle": () => {
             return <OperationsLifecycleDiagram />;

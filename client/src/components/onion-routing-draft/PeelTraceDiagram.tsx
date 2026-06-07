@@ -116,7 +116,7 @@ const BEATS: Beat[] = [
     subLabel: "VERIFY",
     title: "Verify `HMAC(mu_B, hop_payloads ‖ associated_data)`",
     caption:
-      "Bob recomputes `HMAC(mu_B, hop_payloads ‖ payment_hash)` and compares it byte-for-byte with the outer HMAC tag from the packet. If they don't match, Bob refuses to forward — either someone tampered with `hop_payloads` or the onion was reattached to a different HTLC. If they match, the integrity check passes and Bob can decrypt.",
+      "Bob recomputes `HMAC(mu_B, hop_payloads ‖ payment_hash)` and compares it byte-for-byte with the outer HMAC tag from the packet. If they don't match, Bob refuses to forward. Either someone tampered with `hop_payloads` or the onion was reattached to a different HTLC. If they match, the integrity check passes and Bob can decrypt.",
   },
   {
     step: 5,
@@ -124,7 +124,7 @@ const BEATS: Beat[] = [
     subLabel: "EXTEND",
     title: "Extend the buffer to 2,600 bytes",
     caption:
-      "Bob appends 1,300 zero bytes to the end of `hop_payloads`. This temporary buffer (encrypted half + zero tail) is exactly twice the wire size. The extension is what lets Bob's XOR generate the matching `filler` bytes for Charlie's view — the same bytes Alice precomputed at wrap time.",
+      "Bob appends 1,300 zero bytes to the end of `hop_payloads`. This temporary buffer (encrypted half + zero tail) is exactly twice the wire size. The extension is what lets Bob's XOR generate the matching `filler` bytes for Charlie's view, the same bytes Alice precomputed at wrap time.",
     focus: "trailing",
   } as Beat,
   {
@@ -133,7 +133,7 @@ const BEATS: Beat[] = [
     subLabel: "XOR",
     title: "XOR the 2,600-byte buffer with `rho_B`'s keystream",
     caption:
-      "Bob runs `chacha20(rho_B, 2600)` and XORs it over the whole buffer. The first 1,300 bytes have Bob's layer stripped — Bob's hop payload is now plaintext at the front. The last 1,300 bytes become the keystream itself (`0 ⊕ rho_B[1300:2600]`), which mathematically equals the trailing bytes Alice baked into Charlie's view at wrap time.",
+      "Bob runs `chacha20(rho_B, 2600)` and XORs it over the whole buffer. The first 1,300 bytes have Bob's layer stripped. Bob's hop payload is now plaintext at the front. The last 1,300 bytes become the keystream itself (`0 ⊕ rho_B[1300:2600]`), which mathematically equals the trailing bytes Alice baked into Charlie's view at wrap time.",
   },
   {
     step: 7,
@@ -141,7 +141,7 @@ const BEATS: Beat[] = [
     subLabel: "READ",
     title: "Read Bob's hop payload at the front",
     caption:
-      "The leading bytes are now plaintext. Bob reads the bigsize length prefix (`0x3C` = 60 bytes total), parses the TLV records (`amt_to_forward`, `outgoing_cltv_value`, `short_channel_id`), then reads the 32 bytes immediately after the TLVs. Those 32 bytes are `charlie_hmac` — the HMAC tag that will go in the outer HMAC field of Bob's outgoing packet.",
+      "The leading bytes are now plaintext. Bob reads the bigsize length prefix (`0x3C` = 60 bytes total), parses the TLV records (`amt_to_forward`, `outgoing_cltv_value`, `short_channel_id`), then reads the 32 bytes immediately after the TLVs. Those 32 bytes are `charlie_hmac`, the HMAC tag that will go in the outer HMAC field of Bob's outgoing packet.",
     focus: "front",
   } as Beat,
   {
@@ -150,7 +150,7 @@ const BEATS: Beat[] = [
     subLabel: "LIFT",
     title: "Lift bytes 60..1,360 as Charlie's `hop_payloads`",
     caption:
-      "Bob slices the next 1,300 bytes (starting right after his own hop payload) out of the extended buffer. This is Charlie's `hop_payloads` — same fixed size as what Bob received, with Charlie's encrypted hop payload at the front, then Dave's, then padding, then the 60-byte filler-shaped tail that Alice precomputed.",
+      "Bob slices the next 1,300 bytes (starting right after his own hop payload) out of the extended buffer. This is Charlie's `hop_payloads` (same fixed size as what Bob received), with Charlie's encrypted hop payload at the front, then Dave's, then padding, then the 60-byte filler-shaped tail that Alice precomputed.",
     focus: "trailing",
   } as Beat,
   {

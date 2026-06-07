@@ -12,7 +12,6 @@ export {
 } from "./PerspectiveToggle";
 
 export { NetworkTopologyDiagram } from "./NetworkTopologyDiagram";
-export { BackwardCalcDiagram } from "./BackwardCalcDiagram";
 export {
   TlvByteBreakdown,
   type TlvField,
@@ -28,7 +27,6 @@ export {
   type RouteTimeoutCalculation,
   type RouteInvoice,
 } from "./ComputedRouteDiagram";
-export { NaiveVsOnionDiagram } from "./NaiveVsOnionDiagram";
 export { KdfPipelineDiagram } from "./KdfPipelineDiagram";
 export { PayloadShrinkDiagram } from "./PayloadShrinkDiagram";
 export { FillerTraceDiagram } from "./FillerTraceDiagram";
@@ -43,8 +41,6 @@ export { EncryptedSliceReveal } from "./EncryptedSliceReveal";
 export { HtlcPropagationDiagram } from "./HtlcPropagationDiagram";
 export { EcdhRecapDiagram } from "./EcdhRecapDiagram";
 export { BlindingFactorDiagram } from "./BlindingFactorDiagram";
-export { HmacRecapDiagram } from "./HmacRecapDiagram";
-export { PerHopKeyMatrixDiagram } from "./PerHopKeyMatrixDiagram";
 export { RouteCalcExercise } from "./RouteCalcExercise";
 export {
   FeeCalculatorModal,
