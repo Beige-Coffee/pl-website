@@ -56,10 +56,24 @@ export interface CapstoneEvent {
   text: string;
 }
 
+/**
+ * A semantic event emitted by the instrumented harness (wrapped student
+ * methods + provided helpers). `step` is the index into `steps` BEFORE which
+ * the event fired, so events interleave deterministically with line steps.
+ * These drive the visual stage's scene timeline (see onion-capstone-scenes.ts).
+ */
+export interface SemanticEvent {
+  kind: string;
+  step: number;
+  actor: HopId;
+  [k: string]: unknown;
+}
+
 export interface CapstoneTraceResult {
   ok: boolean;
   steps: CapstoneTraceStep[];
   events: CapstoneEvent[];
+  sem?: SemanticEvent[];
   packetHex: string;
   /** file label -> full source, for the code pane. */
   files: Record<string, string>;
@@ -105,6 +119,17 @@ _seen = set()
 _stack = []
 _steps = []
 _actor = ["alice"]
+# Semantic events: fired by the wrapped student methods + provided helpers.
+# step = len(_steps) at emission, i.e. the event sits between step-1 and step.
+_sem = []
+_quiet = [False]
+def _ev(kind, **kw):
+    if _quiet[0]:
+        return
+    kw["kind"] = kind
+    kw["step"] = len(_steps)
+    kw.setdefault("actor", _actor[0])
+    _sem.append(kw)
 # The module-level values worth showing as "Globals" (route inputs + evolving state).
 _GLOB_KEEP = {"ROUTING_INFO_SIZE", "SESSION_KEY", "PAYMENT_HASH", "PAYLOADS", "POLICY",
               "BOB_INCOMING_AMT", "BOB_INCOMING_CLTV", "packet", "builder", "fwd"}
@@ -203,6 +228,89 @@ PAYLOADS = [
 BOB_INCOMING_AMT = 1_004_002
 BOB_INCOMING_CLTV = 700_080
 
+# ---- semantic-event instrumentation (drives the visual stage scenes) ----
+# Label every expected key by value so keystream calls can be tagged rho_bob /
+# mu_charlie / pad regardless of how the student named things. The chain below
+# uses the ORIGINAL helpers (rebinding happens after).
+_PUB_HOP = {BOB_PUB: "bob", CHARLIE_PUB: "charlie", DAVE_PUB: "dave"}
+_PRIV_HOP = {BOB_PRIV: "bob", CHARLIE_PRIV: "charlie", DAVE_PRIV: "dave"}
+_KEY_LABEL = {}
+_e_tmp = SESSION_KEY
+for _pub_tmp in (BOB_PUB, CHARLIE_PUB, DAVE_PUB):
+    _E_tmp = privkey_to_pubkey(_e_tmp)
+    _ss_tmp = ecdh(_e_tmp, _pub_tmp)
+    for _lbl_tmp in ("rho", "mu", "um", "ammag"):
+        _KEY_LABEL[hmac.new(_lbl_tmp.encode(), _ss_tmp, hashlib.sha256).digest()] = _lbl_tmp + "_" + _PUB_HOP[_pub_tmp]
+    _e_tmp = scalar_mul(_e_tmp, hashlib.sha256(_E_tmp + _ss_tmp).digest())
+_KEY_LABEL[hmac.new(b"pad", SESSION_KEY, hashlib.sha256).digest()] = "pad"
+
+_orig_keystream = chacha20_keystream
+def chacha20_keystream(key, length):
+    _ev("keystream", key=_KEY_LABEL.get(bytes(key), "key"), length=length)
+    return _orig_keystream(key, length)
+
+_orig_xor = xor_bytes
+def xor_bytes(a, b):
+    _ev("xor", length=min(len(a), len(b)))
+    return _orig_xor(a, b)
+
+_orig_ecdh = ecdh
+def ecdh(privkey_bytes, pubkey_bytes):
+    _hop_e = _PRIV_HOP.get(bytes(privkey_bytes)) or _PUB_HOP.get(bytes(pubkey_bytes))
+    _ev("ecdh", hop=_hop_e)
+    return _orig_ecdh(privkey_bytes, pubkey_bytes)
+
+def _wrap_fn(orig, name, info_call, info_ret):
+    def _w(*a, **kw):
+        try:
+            _d = info_call(a)
+        except Exception:
+            _d = {}
+        _ev(name + ":call", **_d)
+        _r = orig(*a, **kw)
+        try:
+            _d = info_ret(a, _r)
+        except Exception:
+            _d = {}
+        _ev(name + ":return", **_d)
+        return _r
+    return _w
+
+def _rho_hop(k):
+    return _KEY_LABEL.get(bytes(k), "_").split("_")[-1]
+
+OnionPacketBuilder.derive_shared_secrets = _wrap_fn(
+    OnionPacketBuilder.derive_shared_secrets, "derive_shared_secrets",
+    lambda a: {}, lambda a, r: {"hops": len(a[0].shared_secrets)})
+OnionPacketBuilder.generate_filler = _wrap_fn(
+    OnionPacketBuilder.generate_filler, "generate_filler",
+    lambda a: {"sizes": list(a[2])}, lambda a, r: {"fillerLen": len(r)})
+OnionPacketBuilder.wrap_hop = _wrap_fn(
+    OnionPacketBuilder.wrap_hop, "wrap_hop",
+    lambda a: {"hop": _rho_hop(a[4]), "payloadLen": len(a[2]), "destination": bytes(a[3]) == b"\\x00" * 32},
+    lambda a, r: {"hop": _rho_hop(a[4]), "tag": bytes(r[1]).hex()[:16]})
+OnionPacketBuilder.build = _wrap_fn(
+    OnionPacketBuilder.build, "build",
+    lambda a: {"payloadSizes": [len(_p) for _p in a[1]]},
+    lambda a, r: {"packetLen": len(r)})
+OnionForwarder.peel_layer = _wrap_fn(
+    OnionForwarder.peel_layer, "peel_layer",
+    lambda a: {"hop": _PRIV_HOP.get(bytes(a[2]), "?")},
+    lambda a, r: {"hop": _PRIV_HOP.get(bytes(a[2]), "?"), "payloadLen": len(r[1])})
+verify_hmac = _wrap_fn(verify_hmac, "verify_hmac",
+    lambda a: {"mu": _KEY_LABEL.get(bytes(a[1]), "mu")},
+    lambda a, r: {"ok": bool(r)})
+check_forward = _wrap_fn(check_forward, "check_forward",
+    lambda a: {"incomingAmt": a[0], "incomingCltv": a[1], "amt": a[2], "cltv": a[3]},
+    lambda a, r: {"verdict": r})
+
+_route_hops = []
+for _p_tmp in PAYLOADS:
+    _r_tmp = _parse_tlv(_p_tmp)
+    _route_hops.append({"amt": int.from_bytes(_r_tmp[2], "big"), "cltv": int.from_bytes(_r_tmp[4], "big"), "size": len(_p_tmp) + 32})
+_ev("route", hops=_route_hops, incomingAmt=BOB_INCOMING_AMT, incomingCltv=BOB_INCOMING_CLTV,
+    feeBase=POLICY.fee_base_msat, feePpm=POLICY.fee_proportional_millionths, cltvDelta=POLICY.cltv_expiry_delta)
+
 _events = []
 def _beat(actor, kind, text):
     _events.append({"actor": actor, "kind": kind, "text": text})
@@ -221,7 +329,10 @@ _ok = True
 for _i, (_name, _priv) in enumerate(_hops):
     _actor[0] = _name
     _beat(_name, "received", _name.capitalize() + " received the 1,366-byte packet")
+    _ev("received")
+    _quiet[0] = True
     _ss = ecdh(_priv, _cur[1:34])
+    _quiet[0] = False
     _mu = hmac.new(b"mu", _ss, hashlib.sha256).digest()
     _valid = verify_hmac(_cur, _mu, PAYMENT_HASH)
     if not _valid:
@@ -235,6 +346,7 @@ for _i, (_name, _priv) in enumerate(_hops):
         _verdict = check_forward(_incoming_amt, _incoming_cltv, _amt, _cltv, POLICY)
         if _verdict is None:
             _beat(_name, "forwarded", _name.capitalize() + " forwards " + str(_amt) + " msat to the next hop")
+            _ev("forwarded", amt=_amt)
         else:
             _ok = False
             _beat(_name, "rejected", _name.capitalize() + " rejects: " + str(_verdict))
@@ -243,6 +355,7 @@ for _i, (_name, _priv) in enumerate(_hops):
         _incoming_amt, _incoming_cltv = _amt, _cltv
     elif 8 in _recs:
         _beat(_name, "delivered", _name.capitalize() + " is the destination and received " + str(_amt) + " msat")
+        _ev("delivered", amt=_amt)
         break
 sys.settrace(None)
 
@@ -250,6 +363,7 @@ _trace_result = json.dumps({
     "ok": _ok,
     "steps": _steps,
     "events": _events,
+    "sem": _sem,
     "packetHex": packet.hex(),
 })
 `;

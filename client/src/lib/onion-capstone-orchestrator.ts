@@ -126,11 +126,8 @@ export const assembleForwarderFile = (getSaved: SavedGetter = defaultGetSaved) =
 // ── Demo mode ────────────────────────────────────────────────────────────────
 // Renders the lab without completed exercises by running the reference solutions
 // through the engine. For chapter preview / review only (not the real capstone).
-const DEMO_INIT = `def __init__(self, session_key, hop_pubkeys):
-    self.session_key = session_key
-    self.hop_pubkeys = hop_pubkeys
-    self.shared_secrets = []
-    self.ephemeral_pubkeys = []`;
+// hints.code is stored in editable-range format (class methods pre-indented,
+// standalone functions at column 0), so it drops in as saved code directly.
 
 function solutionCode(id: string): string {
   let c = EX[id]?.hints?.code ?? "";
@@ -144,19 +141,14 @@ function solutionCode(id: string): string {
   return c.replace(/\s+$/, "");
 }
 
-const indentPy = (s: string, n = 4): string =>
-  s.split("\n").map((l) => (l.length ? " ".repeat(n) + l : l)).join("\n");
-
 /** SavedGetter returning the reference solutions in editable-range format. */
 export const demoGetSaved: SavedGetter = (id) => {
   switch (id) {
     case "exercise-derive-shared-secrets-draft":
-      return indentPy(DEMO_INIT + "\n\n" + solutionCode(id));
     case "exercise-generate-filler-draft":
     case "exercise-wrap-hop-draft":
     case "exercise-build-packet-draft":
     case "exercise-peel-layer-draft":
-      return indentPy(solutionCode(id));
     case "exercise-verify-hmac-draft":
     case "exercise-check-forward-draft":
       return solutionCode(id);
