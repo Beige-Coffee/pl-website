@@ -20,13 +20,14 @@
 //   10. Ship     — assemble + send 1,366-byte packet to Charlie
 //
 // Reuses primitives exported from WrapTraceDiagram (BufferRegion, SlotCell,
-// BufferHeader, SymbolRow, ADBar) plus the shared viewport-clamped Tooltip,
+// BufferHeader, SymbolRow) plus the shared viewport-clamped Tooltip,
 // KeyDerivationCard for the key panels, and StepCaption for the per-beat
 // explanation block rendered below the visual (§1.5).
 // ────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useState, type ReactNode } from "react";
 import { Tooltip } from "./Tooltip";
+import { renderCaption } from "./captionMarkup";
 import { StepCaption } from "./StepCaption";
 import { MorphBox, CrossfadeSwap } from "./morph";
 import { HatchOverlay, type ForwarderId } from "./encryptionHatch";
@@ -61,7 +62,6 @@ import {
   BufferRegion,
   BufferHeader,
   SymbolRow,
-  ADBar,
   // types
   type Beat,
   type Region,
@@ -697,11 +697,17 @@ function ParseVerifyMorphView({ step }: { step: number }) {
         className="border-[1.5px] flex items-stretch relative overflow-hidden"
         style={{ background: "#fffdf5", borderColor: INK }}
       >
-        {/* HEADER flank (collapses on beat 4). */}
+        {/* HEADER flank (collapses on beat 4 — width AND height, so the row
+            hugs the compact bar instead of stretching to the flank's full
+            height and reading as a box-inside-a-box). */}
         <MorphBox
           key="header-flank"
-          initial={{ flexBasis: 130, opacity: 1 }}
-          animate={{ flexBasis: isVerify ? 0 : 130, opacity: isVerify ? 0 : 1 }}
+          initial={{ flexBasis: 130, opacity: 1, height: 96 }}
+          animate={{
+            flexBasis: isVerify ? 0 : 130,
+            opacity: isVerify ? 0 : 1,
+            height: isVerify ? 0 : 96,
+          }}
           className="flex flex-col items-center justify-center text-center border-r-[1.5px] relative"
           style={{
             flexShrink: 0,
@@ -769,11 +775,16 @@ function ParseVerifyMorphView({ step }: { step: number }) {
           ))}
         </MorphBox>
 
-        {/* OUTER HMAC flank (collapses on beat 4). */}
+        {/* OUTER HMAC flank (collapses on beat 4 — width AND height, same as
+            the HEADER flank, so the row hugs the 42px bar). */}
         <MorphBox
           key="hmac-flank"
-          initial={{ flexBasis: 96, opacity: 1 }}
-          animate={{ flexBasis: isVerify ? 0 : 96, opacity: isVerify ? 0 : 1 }}
+          initial={{ flexBasis: 96, opacity: 1, height: 96 }}
+          animate={{
+            flexBasis: isVerify ? 0 : 96,
+            opacity: isVerify ? 0 : 1,
+            height: isVerify ? 0 : 96,
+          }}
           className="flex flex-col items-center justify-center text-center border-l-[1.5px]"
           style={{
             flexShrink: 0,
@@ -805,37 +816,74 @@ function ParseVerifyMorphView({ step }: { step: number }) {
       </div>
 
       {/* Bottom block (swaps per beat): byte axis (parse) vs the HMAC
-          comparison scaffolding (verify). */}
+          comparison (verify). The verify block matches ValidationFlowDiagram's
+          integrity beat and WrapTrace's HMAC beats: ONE focal compare line
+          (recomputed HMAC ≟ outer_hmac) then a small green verdict, with
+          associated_data folded into a hover instead of a separate AD box. */}
       <div key="extra">
         {isVerify ? (
           <MorphBox
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.18 }}
+            className="mt-3"
           >
-            <SymbolRow char="‖" />
-
-            <ADBar />
-
-            <SymbolRow char="↓" />
-            <div
-              className="text-center mb-1"
-              style={{
-                boxShadow: `inset 0 0 0 2.5px ${FOCUS_GOLD}, inset 0 0 0 5px rgba(184,134,11,0.22)`,
-                padding: "10px 14px",
-                background: "#fffdf5",
-              }}
-            >
+            <div className="flex items-center justify-center gap-3 flex-wrap">
               <MathLine
                 text="HMAC(mu_B, hop_payloads ‖ associated_data)"
                 color={KEY_MU_COLOR}
                 fontSize={14}
               />
+              <span
+                style={{ color: NEUTRAL_TEXT, fontSize: 18, fontWeight: 700 }}
+              >
+                ≟
+              </span>
+              <MathLine text="outer_hmac" color={NEUTRAL_TEXT} fontSize={13} />
             </div>
 
-            <SymbolRow char="≟" />
-            <div className="text-center">
-              <MathLine text="outer_hmac" color={NEUTRAL_TEXT} fontSize={13} />
+            {/* associated_data lives behind a hover (folded out of the stacked
+                AD box). */}
+            <div className="flex justify-center mt-1.5">
+              <Tooltip
+                width={260}
+                label={renderCaption(
+                  "`associated_data` = the 32-byte `payment_hash`; it binds the onion to one HTLC.",
+                )}
+              >
+                <span
+                  className="text-[10px] uppercase tracking-[0.06em]"
+                  style={{
+                    fontFamily: MONO,
+                    color: ASSOC_DATA_COLOR,
+                    borderBottom: `1px dotted ${ASSOC_DATA_COLOR}`,
+                    cursor: "help",
+                    fontWeight: 700,
+                  }}
+                >
+                  what is associated_data?
+                </span>
+              </Tooltip>
+            </div>
+
+            {/* Happy-path verdict: the recomputed tag matches. */}
+            <div className="flex justify-center mt-2.5">
+              <div
+                className="inline-flex items-center gap-2 border-[1.5px] px-3 py-1.5"
+                style={{
+                  background: "#e7f6ee",
+                  borderColor: VERIFY_GREEN,
+                  color: VERIFY_GREEN,
+                }}
+              >
+                <span style={{ fontSize: 14, fontWeight: 700 }}>✓</span>
+                <span
+                  className="text-xs font-bold uppercase tracking-[0.05em]"
+                  style={{ fontFamily: MONO }}
+                >
+                  AUTHENTIC
+                </span>
+              </div>
             </div>
           </MorphBox>
         ) : null}
@@ -1064,7 +1112,7 @@ function ExtendedMorphView({ step }: { step: number }) {
             <KeystreamBar />
             <SymbolRow char="=" />
             <CompactExtendedBar
-              label="extended buffer · after XOR"
+              label="Bob's layer stripped · his hop payload now plaintext at front"
               regions={extendedRegionsAfterXor()}
               accentColor={HOP_STROKE.bob}
               emphasis
@@ -1412,20 +1460,29 @@ function EphemeralAdvanceView() {
           </span>
         </div>
 
-        {/* Pipeline: E_AB → (blinding factor) → E_AC. Chips match
-            KeyDerivationCard's key chips; the formulas ride the arrows. */}
+        {/* Pipeline: E_AB → (blinding factor) → E_AC. The through-line is "the
+            ephemeral Bob received, blinded by bf_AB, becomes the one he hands
+            forward to Charlie." Endpoint chips carry that role; the formulas
+            ride the arrows. Chips match KeyDerivationCard's key chips. */}
         <div className="px-4 py-5 flex items-center justify-center flex-wrap gap-x-3 gap-y-4">
-          <PipelineChip name="E_AB" note="33 B point" accent={HOP_STROKE.bob} />
+          <PipelineChip
+            name="E_AB"
+            note="33 B point"
+            role="what Bob received"
+            accent={HOP_STROKE.bob}
+          />
           <PipelineArrow formula="SHA256(E_AB ‖ ss_AB)" accent={FOCUS_GOLD} />
           <PipelineChip
             name="bf_AB"
             note="32 B scalar"
+            role="blinding factor"
             accent={FOCUS_GOLD}
           />
           <PipelineArrow formula="× E_AB" accent={HOP_STROKE.charlie} />
           <PipelineChip
             name="E_AC"
             note="33 B point"
+            role="for Charlie · what he ECDHs against"
             accent={HOP_STROKE.charlie}
             emphasis
           />
@@ -1436,15 +1493,19 @@ function EphemeralAdvanceView() {
 }
 
 // A MONO key chip mirroring KeyDerivationCard's chip styling: accent-tinted
-// fill, accent border, the name in MathLine, a terse byte note beneath.
+// fill, accent border, the name in MathLine, a terse byte note beneath, and an
+// optional role line (e.g. "what Bob received" / "for Charlie") so the
+// endpoints of the pipeline read as the keys Bob got vs. hands forward.
 function PipelineChip({
   name,
   note,
+  role,
   accent,
   emphasis,
 }: {
   name: string;
   note: string;
+  role?: string;
   accent: string;
   emphasis?: boolean;
 }) {
@@ -1466,6 +1527,14 @@ function PipelineChip({
       >
         {note}
       </span>
+      {role && (
+        <span
+          className="text-[9px] mt-0.5 italic leading-tight text-center"
+          style={{ fontFamily: SANS, color: accent, fontWeight: 600 }}
+        >
+          {role}
+        </span>
+      )}
     </div>
   );
 }

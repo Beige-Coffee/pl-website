@@ -251,7 +251,8 @@ function SlotBlock({
       ? HOP_STROKE.charlie
       : HOP_STROKE.dave;
   const slotBytes = hop === "dave" ? 100 : hop === "charlie" ? 80 : 60;
-  const lenHex = hop === "dave" ? "0x64" : hop === "charlie" ? "0x50" : "0x3C";
+  // bigsize LEN = TLV payload bytes only (slot total minus the 1-byte prefix and the 32-byte HMAC)
+  const lenHex = hop === "dave" ? "0x43" : hop === "charlie" ? "0x2F" : "0x1B";
   const hopName = hop[0].toUpperCase() + hop.slice(1);
 
   return (

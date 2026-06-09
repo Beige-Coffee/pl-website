@@ -116,16 +116,24 @@ export function ErrorRouteTrack({
   height = 86,
 }: RouteTrackProps) {
   const dimSet = new Set(dimmed);
+  // Circles sit at top: CIRCLE_TOP with height TRACK_CIRCLE, so their vertical
+  // center is CIRCLE_TOP + TRACK_CIRCLE / 2. The single dashed backbone MUST
+  // run through that center line (§3), so it is pinned there (not above it).
+  const CIRCLE_TOP = 18;
+  const centerY = CIRCLE_TOP + TRACK_CIRCLE / 2;
   return (
     <div className="relative" style={{ height }}>
-      {/* ONE dashed backbone behind the whole row. */}
+      {/* ONE dashed backbone behind the whole row, on the circle CENTER line.
+          Spans Alice's center (12%) to Dave's center (88%); the circles carry
+          explicit positive zIndex below so the line never paints through them. */}
       <div
         className="absolute"
         style={{
-          top: 22,
-          left: "12%",
-          width: "76%",
+          top: centerY,
+          left: `${NODE_X_PCT.alice}%`,
+          width: `${NODE_X_PCT.dave - NODE_X_PCT.alice}%`,
           borderTop: "1.5px dashed #475569",
+          zIndex: 1,
         }}
       />
 
@@ -139,7 +147,7 @@ export function ErrorRouteTrack({
             key={id}
             className="absolute"
             style={{
-              top: 18,
+              top: CIRCLE_TOP,
               left: `${NODE_X_PCT[id]}%`,
               transform: "translateX(-50%)",
               // Explicit positive zIndex: keeps the circle above the dashed
@@ -244,54 +252,44 @@ export function ErrorRouteTrack({
 
 // ── ReturnPathRail: persistent leftward "RETURN PATH" indicator ─────────────
 //
-// The neutral green accent (#5a7a2f) reserved for non-hop elements like
-// ammag / the return path (§2). A thin rail with a leftward chevron makes the
-// backward direction unmistakable on EVERY beat, not just the ones with a
-// hop-to-hop arrow. Both diagrams render this so direction reads instantly.
+// The error travels BACKWARD, so a small left-pointing cue rides above the
+// track on EVERY beat (not just the ones with a hop-to-hop arrow). Rendered in
+// INK (slate/black), NOT green: for the two Chapter 11 error visuals the owner
+// deliberately overrides the §2 "green = return-path" accent because the green
+// dashed rail read as cluttered. The cue is a compact pill (short solid wedge +
+// label), not a long skinny full-width arrow. Both diagrams render this so the
+// backward direction reads instantly and the pair stays matched.
 
 export function ReturnPathRail() {
   return (
-    <div
-      className="relative flex items-center gap-2"
-      style={{ height: 22 }}
-      aria-hidden
-    >
-      <div className="relative flex-1" style={{ height: 10 }}>
-        <svg
-          width="100%"
-          height="10"
-          viewBox="0 0 100 10"
-          preserveAspectRatio="none"
-          style={{ position: "absolute", inset: 0 }}
-        >
-          {/* Dashed rail spanning the track width. */}
-          <line
-            x1="2"
-            y1="5"
-            x2="100"
-            y2="5"
-            stroke={SUCCESS_GREEN}
-            strokeWidth="1.5"
-            strokeDasharray="5 4"
-            opacity={0.7}
-            vectorEffect="non-scaling-stroke"
-          />
-          {/* Leftward chevron head (points back toward Alice). */}
-          <polygon points="0,5 9,1 9,9" fill={SUCCESS_GREEN} />
-        </svg>
-      </div>
-      <span
-        className="uppercase tracking-[0.1em] shrink-0"
+    <div className="flex items-center" aria-hidden style={{ height: 22 }}>
+      <div
+        className="inline-flex items-center gap-1.5"
         style={{
-          fontFamily: MONO,
-          fontSize: 9,
-          fontWeight: 700,
-          color: SUCCESS_GREEN,
-          letterSpacing: "0.1em",
+          padding: "2px 9px 2px 7px",
+          border: `1.5px solid ${INK}`,
+          background: CREAM,
         }}
       >
-        ← return path
-      </span>
+        {/* Short solid left-pointing wedge -- a tasteful direction cue, not a
+            long thin arrow. */}
+        <svg width="14" height="9" viewBox="0 0 14 9" aria-hidden>
+          <polygon points="0,4.5 7,0.5 7,8.5" fill={INK} />
+          <rect x="6" y="3.5" width="8" height="2" fill={INK} />
+        </svg>
+        <span
+          className="uppercase shrink-0"
+          style={{
+            fontFamily: MONO,
+            fontSize: 9,
+            fontWeight: 700,
+            color: INK,
+            letterSpacing: "0.12em",
+          }}
+        >
+          return path
+        </span>
+      </div>
     </div>
   );
 }
@@ -323,7 +321,7 @@ export interface ErrorPacketCardProps {
   /** Optional caption shown under the card (routed through renderCaption). */
   footnote?: string;
   /** Optional badge rendered top-right of the card (e.g. a KeyHoverIcon). */
-  cornerSlot?: ReactNode;
+  cornerBadge?: ReactNode;
   /** Dim the card slightly (used before the packet is "real"). */
   dim?: boolean;
 }
@@ -332,7 +330,7 @@ export function ErrorPacketCard({
   appliedLayers,
   failingHop = FAILING_HOP,
   footnote,
-  cornerSlot,
+  cornerBadge,
   dim = false,
 }: ErrorPacketCardProps) {
   const hmacColor = HOP_STROKE[failingHop];
@@ -347,12 +345,12 @@ export function ErrorPacketCard({
         transition: "opacity 400ms ease-out",
       }}
     >
-      {cornerSlot && (
+      {cornerBadge && (
         <div
           className="absolute"
           style={{ top: -10, right: -8, zIndex: 8 }}
         >
-          {cornerSlot}
+          {cornerBadge}
         </div>
       )}
 

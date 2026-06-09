@@ -66,8 +66,8 @@ const SECRET_TOKEN: Record<ForwarderId, string> = {
   dave: "ss_AD",
 };
 const SLOT_BYTES: Record<ForwarderId, number> = {
-  bob: 65,
-  charlie: 65,
+  bob: 60,
+  charlie: 80,
   dave: 100,
 };
 // Three maximally distinct stripe directions so stacked layers visibly
@@ -164,10 +164,10 @@ function captionForStep(step: number): string {
   }
   // hmac
   if (hop === "bob") {
-    return "Compute `bob_hmac` as `HMAC-SHA256` over the now-encrypted 1,300-byte `hop_payloads`, using a key derived from Bob's shared secret with Alice. `bob_hmac` is the packet's outer HMAC tag: a 32-byte authentication code appended after `hop_payloads` on the wire. It's the value Bob will verify on receipt before peeling.";
+    return "Compute `bob_hmac` as `HMAC-SHA256` over the now-encrypted 1,300-byte `hop_payloads` concatenated with the `associated_data` (the payment hash), using a key derived from Bob's shared secret with Alice. `bob_hmac` is the packet's outer HMAC tag: a 32-byte authentication code appended after `hop_payloads` on the wire. It's the value Bob will verify on receipt before peeling.";
   }
   const nextHopName = HOP_LABEL[BUILD_ORDER[BUILD_ORDER.indexOf(hop) + 1]];
-  return `Compute \`${hop}_hmac\` as \`HMAC-SHA256\` over the now-encrypted \`hop_payloads\`, using a key derived from ${hopName}'s shared secret with Alice. \`${hop}_hmac\` will be embedded in the HMAC field of ${nextHopName}'s hop payload when ${nextHopName}'s iteration runs next, so that ${hopName} can verify the packet when it eventually reaches him.`;
+  return `Compute \`${hop}_hmac\` as \`HMAC-SHA256\` over the now-encrypted \`hop_payloads ‖ associated_data\`, using a key derived from ${hopName}'s shared secret with Alice. \`${hop}_hmac\` will be embedded in the HMAC field of ${nextHopName}'s hop payload when ${nextHopName}'s iteration runs next, so that ${hopName} can verify the packet when it eventually reaches him.`;
 }
 
 function actionsForStep(step: number): { hop: ForwarderId | null; actions: string[] } {
@@ -198,7 +198,7 @@ function actionsForStep(step: number): { hop: ForwarderId | null; actions: strin
     acts.push(`✓ Right-shift hop_payloads by ${slotSize} bytes`);
     acts.push(`✓ Write [bigsize len | ${HOP_LABEL[hop]}'s TLV | ${hmacRef}] at front`);
     acts.push(`✓ XOR with chacha20(rho_${hop}, 0, 1300)`);
-    acts.push(`▶ ${hop}_hmac ← HMAC(mu_${hop}, hop_payloads)`);
+    acts.push(`▶ ${hop}_hmac ← HMAC(mu_${hop}, hop_payloads ‖ associated_data)`);
     if (hop === "bob") {
       acts.push(`▶ packet ← 0x00 || E_AB || hop_payloads || bob_hmac`);
     }
@@ -661,12 +661,12 @@ const SLOT_WIDTH_PCT: Record<ForwarderId, number> = {
   dave: 30,
 };
 
-// bigsize-encoded length of (TLV + HMAC). For hop payloads < 253B that's the hop payload
-// size minus the 1-byte bigsize prefix itself.
+// bigsize LEN encodes the TLV payload length only: the slot total minus the
+// 1-byte bigsize prefix and the trailing 32-byte HMAC field.
 const SLOT_BIGSIZE_HEX: Record<ForwarderId, string> = {
-  bob: "0x40", // 64
-  charlie: "0x40", // 64
-  dave: "0x63", // 99
+  bob: "0x1B", // 60-byte slot → 27
+  charlie: "0x2F", // 80-byte slot → 47
+  dave: "0x43", // 100-byte slot → 67
 };
 const TOTAL_BUFFER_BYTES = 1300;
 

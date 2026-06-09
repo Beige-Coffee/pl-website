@@ -37,10 +37,10 @@ const HOP_PALETTE = {
 
 // Expected values
 const EXPECTED = {
-  htlcAmounts: [401226, 400410, 400000] as const,
+  htlcAmounts: [401225, 400410, 400000] as const,
   htlcTimeouts: [203, 183, 168] as const,
-  // Bob's fee math: rate = 801, total = 816 (the chapter rounds 800.82 to 801)
-  bobFee: { rate: 801, total: 816 },
+  // Bob's fee math: rate = 800, total = 815 (BOLT 7 floors 800.82 to 800)
+  bobFee: { rate: 800, total: 815 },
   // Charlie's fee math: rate = 400, total = 410
   charlieFee: { rate: 400, total: 410 },
   // Single timeout per card
@@ -869,7 +869,7 @@ function RoutePickerPanel({
           onClick={() => onChoose("b")}
         />
         <RouteChoiceButton
-          label="Route C, 1,226 sats"
+          label="Route C, 1,225 sats"
           selected={choice === "c"}
           isCorrect={true}
           finalized={choice !== null}
@@ -886,7 +886,7 @@ function RoutePickerPanel({
           {choice === "c" && (
             <span>
               <strong style={{ color: GREEN }}>✓ Correct.</strong> Route C is
-              the cheapest at 1,226 sats, 74 sats less than Route A and 776
+              the cheapest at 1,225 sats, 75 sats less than Route A and 777
               sats less than Route B. It's also the same path Alice picked back
               in chapter 1: through Bob and Charlie. The fee total wins on
               policy, not hop count.
@@ -895,13 +895,13 @@ function RoutePickerPanel({
           {choice === "a" && (
             <span>
               <strong style={{ color: RED }}>✗ Not quite.</strong> Route A
-              costs 1,300 sats, 74 sats more than Route C (Bob → Charlie).
+              costs 1,300 sats, 75 sats more than Route C (Bob → Charlie).
             </span>
           )}
           {choice === "b" && (
             <span>
               <strong style={{ color: RED }}>✗ That's actually the most expensive option.</strong>{" "}
-              Route B costs 2,002 sats, 776 sats more than Route C.
+              Route B costs 2,002 sats, 777 sats more than Route C.
             </span>
           )}
         </div>

@@ -88,6 +88,14 @@ const WORKER_SRC = [
   "      return;",
   "    }",
   "",
+  '    if (mode === "trace") {',
+  "      // ── Trace mode: run a self-contained program that sets _trace_result (a JSON string) ──",
+  "      await pyodide.runPythonAsync(code);",
+  '      const trace = await pyodide.runPythonAsync("_trace_result");',
+  '      self.postMessage({ id, type: "trace_result", trace });',
+  "      return;",
+  "    }",
+  "",
   '    if (mode === "signature") {',
   "      // ── Signature mode: get function signature via inspect ──",
   '      const script = [',
@@ -215,7 +223,7 @@ function getWorker(): Worker {
   if (!worker) {
     worker = new Worker(workerURL);
     worker.onmessage = (e) => {
-      const { id, type, results, message, output, error, items, signature, phase } = e.data;
+      const { id, type, results, message, output, error, items, signature, phase, trace } = e.data;
       if (type === "loading") {
         currentPhase = phase as PyodideLoadingPhase;
         loadingListeners.forEach((cb) => cb(currentPhase));
@@ -231,6 +239,8 @@ function getWorker(): Worker {
         entry.resolve({ output: output || "", error: error || null });
       } else if (type === "exec_result") {
         entry.resolve(undefined);
+      } else if (type === "trace_result") {
+        entry.resolve(trace);
       } else if (type === "complete_result") {
         entry.resolve(items as CompletionItem[]);
       } else if (type === "signature_result") {
@@ -305,6 +315,24 @@ export async function execPythonSilent(code: string): Promise<void> {
     }, TIMEOUT_MS);
     pending.set(id, { resolve, reject, timer });
     w.postMessage({ id, code, mode: "exec" });
+  });
+}
+
+/**
+ * Run a self-contained trace program (which must set `_trace_result` to a JSON
+ * string) and return that JSON string. Used by the onion capstone step-through
+ * engine to capture per-line local-variable snapshots via sys.settrace.
+ */
+export async function runPythonTrace(code: string): Promise<string> {
+  const w = getWorker();
+  const id = ++messageId;
+  return new Promise<string>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      pending.delete(id);
+      reject(new Error("Trace timed out (60 s)."));
+    }, TIMEOUT_MS);
+    pending.set(id, { resolve, reject, timer });
+    w.postMessage({ id, code, mode: "trace" });
   });
 }
 

@@ -10,10 +10,7 @@ import {
   ErrorRouteTrack,
   ReturnPathRail,
   SUCCESS_GREEN,
-  ERROR_RED,
   INK,
-  MONO,
-  NODE_X_PCT,
   HOP_STROKE,
   type HopId,
 } from "./errorOnionShared";
@@ -89,13 +86,6 @@ function appliedLayersFor(step: number): ("bob" | "charlie")[] {
   return ["bob", "charlie"];
 }
 
-// Backward hop-to-hop arrow shown on the travelling beats.
-function arrowFor(step: number): { from: HopId; to: HopId } | null {
-  if (step === 2) return { from: "charlie", to: "bob" };
-  if (step === 3) return { from: "bob", to: "alice" };
-  return null;
-}
-
 const STAGE_MIN_WIDTH = 640;
 
 export function ErrorBoomerangDiagram() {
@@ -131,7 +121,6 @@ export function ErrorBoomerangDiagram() {
 
   const packetHop = packetHopFor(step);
   const appliedLayers = appliedLayersFor(step);
-  const arrow = arrowFor(step);
   const packetVisible = step >= 1;
 
   return (
@@ -149,106 +138,57 @@ export function ErrorBoomerangDiagram() {
       onReset={onReset}
       onStep={onStep}
       stageMinWidth={STAGE_MIN_WIDTH}
-      stageMinHeight={430}
+      stageMinHeight={400}
     >
-      {/* Persistent leftward RETURN PATH rail -- direction is unmistakable on
-          EVERY beat, not only the two with a hop-to-hop arrow. */}
-      <div className="mb-2">
+      {/* Persistent black RETURN PATH cue -- direction is unmistakable on EVERY
+          beat. The active circle below shows which hop currently holds it. */}
+      <div className="mb-3">
         <ReturnPathRail />
       </div>
 
-      {/* Route track + the travelling packet share one positioned canvas so
-          the packet can slide horizontally to whichever hop holds it. */}
-      <div className="relative" style={{ minHeight: 200 }}>
-        <ErrorRouteTrack
-          activeHop={packetHop}
+      {/* Route track: the active circle marks who is holding the packet right
+          now (Charlie -> Bob -> Alice), Charlie wears the persistent fail
+          badge, Dave is dimmed. No per-hop sliding arrow -- the packet is a
+          FIXED-size buffer re-obfuscated in place, so it stays centered and
+          only gains crosshatch. This mirrors the unwrap visual's layout. */}
+      <ErrorRouteTrack
+        activeHop={packetHop}
+        failingHop="charlie"
+        dimmed={["dave"]}
+      />
+
+      {/* The error packet, centered. It is the SAME element on every beat from
+          step 1 on (it gains hatch in place, never grows, never slides off the
+          stage -- that off-stage slide was the "invisible at step 5" bug). It
+          is centered with mx-auto and NO transform on the wrapper, so the
+          corner KeyHoverIcon's fixed-position popover resolves against the
+          viewport instead of being thrown off by a transformed containing
+          block (§8 -- the dead KEYS-badge bug). */}
+      <div
+        className="mx-auto mt-2"
+        style={{
+          width: 460,
+          opacity: packetVisible ? 1 : 0,
+          pointerEvents: packetVisible ? "auto" : "none",
+          transition: "opacity 400ms ease-out",
+        }}
+      >
+        <ErrorPacketCard
+          appliedLayers={appliedLayers}
           failingHop="charlie"
-          dimmed={["dave"]}
+          cornerBadge={<BoomerangCornerKeys step={step} />}
         />
-
-        {/* Backward hop-to-hop arrow on the travelling beats. */}
-        {arrow && <BackwardArrow from={arrow.from} to={arrow.to} />}
-
-        {/* The packet. Persistent element (mounted from step 0) so it slides
-            and gains hatch in place rather than popping per beat. */}
-        <div
-          className="absolute"
-          style={{
-            top: 104,
-            left: `${NODE_X_PCT[packetHop]}%`,
-            transform: "translateX(-50%)",
-            width: 460,
-            transition: "left 700ms cubic-bezier(0.4,0,0.2,1), opacity 400ms ease-out",
-            opacity: packetVisible ? 1 : 0,
-            pointerEvents: packetVisible ? "auto" : "none",
-          }}
-        >
-          <ErrorPacketCard
-            appliedLayers={appliedLayers}
-            failingHop="charlie"
-            cornerSlot={<BoomerangCornerKeys step={step} />}
-          />
-        </div>
       </div>
 
       {/* Key-derivation zone below the packet. A full card on the beat a key
           is first introduced (§7); collapses to KeyHoverIcon afterward (the
-          compact badges ride along on the packet's top-right corner). */}
-      <div className="mt-3" style={{ minHeight: 156 }}>
+          compact badges ride along on the packet's top-right corner). Sized to
+          its content -- no fixed minHeight reserving dead space on the short
+          beats (§10 no-dead-whitespace). */}
+      <div className="mt-3">
         <BoomerangKeyZone step={step} />
       </div>
     </ErrorChrome>
-  );
-}
-
-// ── Backward arrow between two hops on the track ────────────────────────────
-
-function BackwardArrow({ from, to }: { from: HopId; to: HopId }) {
-  // Arrow drawn between the two circle centers (the track sits at top ~40px).
-  const x1 = NODE_X_PCT[from];
-  const x2 = NODE_X_PCT[to];
-  const markerId = `boomerang-arrow-${from}-${to}`;
-  return (
-    <svg
-      className="absolute pointer-events-none"
-      style={{ left: 0, top: 0, width: "100%", height: 84 }}
-    >
-      <defs>
-        <marker
-          id={markerId}
-          viewBox="0 0 10 10"
-          refX="8"
-          refY="5"
-          markerWidth="8"
-          markerHeight="8"
-          orient="auto"
-        >
-          <path d="M 0 0 L 10 5 L 0 10 z" fill={ERROR_RED} />
-        </marker>
-      </defs>
-      <line
-        x1={`calc(${x1}% - 26px)`}
-        y1={40}
-        x2={`calc(${x2}% + 26px)`}
-        y2={40}
-        stroke={ERROR_RED}
-        strokeWidth={2}
-        markerEnd={`url(#${markerId})`}
-        style={{ transition: "all 600ms ease-in-out" }}
-      />
-      <text
-        x={`${(x1 + x2) / 2}%`}
-        y={30}
-        textAnchor="middle"
-        fontSize={9}
-        fontWeight={700}
-        fill={ERROR_RED}
-        fontFamily={MONO}
-        style={{ letterSpacing: "0.04em", textTransform: "uppercase" }}
-      >
-        error
-      </text>
-    </svg>
   );
 }
 

@@ -76,9 +76,10 @@ const NEXT_COLOR: Record<ForwarderId, string> = {
   dave: "#475569",
 };
 const SLOT_BIGSIZE_HEX: Record<ForwarderId, string> = {
-  bob: "0x3C",     // 60 bytes total → 60-1 prefix = 59 = 0x3B + bigsize convention
-  charlie: "0x50", // 80
-  dave: "0x64",    // 100
+  // bigsize LEN = TLV payload bytes only (slot total minus 1-byte prefix and 32-byte HMAC)
+  bob: "0x1B",     // 60-byte slot → 60 - 1 - 32 = 27
+  charlie: "0x2F", // 80-byte slot → 47
+  dave: "0x43",    // 100-byte slot → 67
 };
 
 export const ROUTING_INFO_SIZE = 1300;

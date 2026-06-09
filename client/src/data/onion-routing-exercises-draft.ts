@@ -18,10 +18,9 @@
 // sphinx/forwarder.py
 //   - exercise-peel-layer-draft                      [Ch 9]
 //   - exercise-verify-hmac-draft                     [Ch 10]
-//   - exercise-process-onion-draft                   [Ch 10]
+//   - exercise-check-forward-draft                   [Ch 10]
 //
 // sphinx/errors.py
-//   - exercise-build-error-onion-draft               [Ch 11]
 //   - exercise-decrypt-error-onion-draft             [Ch 11]
 //
 // (Chapter 11–12 capstones are integrations, not new exercises.)
@@ -176,154 +175,6 @@ def test_different_secrets_produce_different_keys():
     groupOrder: 1,
   },
 
-  "exercise-build-error-onion-draft": {
-    id: "exercise-build-error-onion-draft",
-    title: "Build the Error Onion (Failing Hop)",
-    description:
-      "Implement <code>build_error_onion</code>. Given a failure message and the failing hop's <code>um</code> + <code>ammag</code> keys, produce the 292-byte BOLT 4 error packet. " +
-      "Per BOLT 4 'Failure Messages', the unencrypted payload is " +
-      "<code>[u16:failure_len][failure_len:failure_message][u16:pad_len][pad_len:zeros]</code> " +
-      "where <code>failure_len + pad_len == 256</code>. The 32-byte HMAC over this 260-byte payload prepends, then the whole 292-byte packet is XORed with the <code>ammag</code> keystream.",
-    starterCode: `import hmac, hashlib
-
-# BOLT 4 error packet layout:
-#   [32 bytes: hmac]
-#   [u16 BE:  failure_len]
-#   [failure_len bytes: failure_message]
-#   [u16 BE:  pad_len]
-#   [pad_len bytes: zeros]
-# with failure_len + pad_len == 256, so the encrypted region is always 260 bytes.
-# Total packet size = 32 (hmac) + 260 (payload) = 292 bytes.
-ERROR_PACKET_SIZE = 292
-
-def build_error_onion(failure_message, um_key, ammag_key):
-    """
-    Build the failing hop's encrypted error packet (BOLT 4 'Failure Messages').
-
-    Args:
-      failure_message: bytes, must be <= 256 bytes
-      um_key:          32-byte 'um' key for this hop
-      ammag_key:       32-byte 'ammag' key for this hop
-
-    Returns:
-      292 bytes: (hmac || payload) XOR chacha20_keystream(ammag, 292)
-
-    Algorithm (BOLT 4):
-      1. failure_len = len(failure_message); pad_len = 256 - failure_len.
-      2. payload = u16_be(failure_len) || failure_message || u16_be(pad_len) || zeros(pad_len).
-         (Length is exactly 2 + failure_len + 2 + pad_len = 260 bytes.)
-      3. error_hmac = HMAC-SHA256(um_key, payload).
-      4. error_packet = error_hmac (32 bytes) || payload (260 bytes), 292 bytes total.
-      5. wrapped = error_packet XOR chacha20_keystream(ammag_key, 292).
-
-    Helpers in scope: chacha20_keystream, xor_bytes.
-    """
-    # TODO: implement
-    pass
-`,
-    testCode: `import hmac, hashlib
-
-UM = bytes.fromhex("aa" * 32)
-AMMAG = bytes.fromhex("bb" * 32)
-
-def reference(msg, um, ammag):
-    failure_len = len(msg)
-    pad_len = 256 - failure_len
-    payload = failure_len.to_bytes(2, 'big') + msg + pad_len.to_bytes(2, 'big') + b"\\x00" * pad_len
-    assert len(payload) == 260
-    h = hmac.new(um, payload, hashlib.sha256).digest()
-    pkt = h + payload
-    stream = chacha20_keystream(ammag, 292)
-    return xor_bytes(pkt, stream)
-
-def test_returns_292_bytes():
-    out = build_error_onion(b"temporary_channel_failure", UM, AMMAG)
-    assert isinstance(out, (bytes, bytearray))
-    assert len(out) == 292, f"Expected 292 bytes, got {len(out)}"
-
-def test_matches_reference():
-    msg = b"temporary_channel_failure"
-    out = build_error_onion(msg, UM, AMMAG)
-    expected = reference(msg, UM, AMMAG)
-    assert out == expected, "Wrapped error doesn't match BOLT 4 reference"
-
-def test_round_trip_decrypts_to_length_prefixed_payload():
-    """Decrypting with ammag must reveal [u16:failure_len][msg][u16:pad_len][zeros] structure."""
-    msg = b"channel_disabled"
-    wrapped = build_error_onion(msg, UM, AMMAG)
-    stream = chacha20_keystream(AMMAG, 292)
-    decrypted = xor_bytes(wrapped, stream)
-    failure_len = int.from_bytes(decrypted[32:34], 'big')
-    assert failure_len == len(msg), f"failure_len must equal {len(msg)}, got {failure_len}"
-    assert decrypted[34:34 + failure_len] == msg, "failure_message must follow failure_len"
-    pad_len = int.from_bytes(decrypted[34 + failure_len:36 + failure_len], 'big')
-    assert pad_len == 256 - failure_len, f"pad_len must be 256 - failure_len, got {pad_len}"
-    assert decrypted[36 + failure_len:36 + failure_len + pad_len] == b"\\x00" * pad_len, "padding must be zeros"
-    # HMAC must verify over the 260-byte payload
-    expected_hmac = hmac.new(UM, decrypted[32:], hashlib.sha256).digest()
-    assert decrypted[:32] == expected_hmac, "HMAC must verify over the full length-prefixed payload"
-
-def test_short_message_padded_to_constant_size():
-    """All errors are 292 bytes regardless of failure_message length."""
-    out_short = build_error_onion(b"x", UM, AMMAG)
-    out_long = build_error_onion(b"y" * 200, UM, AMMAG)
-    assert len(out_short) == 292
-    assert len(out_long) == 292
-
-def test_256_byte_message_is_allowed():
-    out = build_error_onion(b"z" * 256, UM, AMMAG)
-    decrypted = xor_bytes(out, chacha20_keystream(AMMAG, 292))
-    assert int.from_bytes(decrypted[32:34], 'big') == 256
-    assert int.from_bytes(decrypted[290:292], 'big') == 0
-
-def test_too_long_message_is_rejected():
-    try:
-        build_error_onion(b"z" * 257, UM, AMMAG)
-    except ValueError:
-        return
-    assert False, "failure_message longer than 256 bytes must raise ValueError"
-
-def test_known_failure_codes():
-    """BOLT 4 failure codes (sender uses these to identify the failure type)."""
-    # 0x1007 = temporary_channel_failure (encoded with channel_update; here just the code)
-    out = build_error_onion(bytes.fromhex("1007"), UM, AMMAG)
-    assert len(out) == 292
-    # 0x400F = incorrect_or_unknown_payment_details (followed by amount + height in real usage)
-    out = build_error_onion(bytes.fromhex("400f"), UM, AMMAG)
-    assert len(out) == 292
-`,
-    hints: {
-      conceptual:
-        "<strong>Goal:</strong> build the BOLT 4-format encrypted error packet from the failing hop's perspective." +
-        "<br><br><strong>Why fixed 292 bytes:</strong> all error onions are the same size regardless of failure code, so observers can't infer the failure type from packet length." +
-        "<br><br><strong>Why length-prefixed:</strong> BOLT 4 encodes the failure message with an explicit u16 length, then a u16 pad length, then padding. This unambiguously delimits the message even when it contains zero bytes (some failure codes carry binary data like channel_update bytes, which can have zero bytes anywhere). 'Strip trailing zeros' would corrupt those.",
-      steps:
-        "<strong>1. Compute lengths:</strong> <code>failure_len = len(failure_message)</code>; <code>pad_len = 256 - failure_len</code>." +
-        "<br><strong>2. Build the 260-byte payload:</strong>" +
-        "<br>&nbsp;&nbsp;&nbsp;<code>payload = failure_len.to_bytes(2, 'big') + failure_message + pad_len.to_bytes(2, 'big') + b'\\x00' * pad_len</code>." +
-        "<br><strong>3. HMAC the payload:</strong> <code>tag = hmac.new(um_key, payload, hashlib.sha256).digest()</code>." +
-        "<br><strong>4. Concatenate:</strong> <code>packet = tag + payload</code> (32 + 260 = 292 bytes)." +
-        "<br><strong>5. Encrypt:</strong> <code>stream = chacha20_keystream(ammag_key, 292)</code>; return <code>xor_bytes(packet, stream)</code>.",
-      code:
-        `def build_error_onion(failure_message, um_key, ammag_key):
-    failure_len = len(failure_message)
-    if failure_len > 256:
-        raise ValueError("failure_message must be at most 256 bytes")
-    pad_len = 256 - failure_len
-    payload = (
-        failure_len.to_bytes(2, "big") + failure_message +
-        pad_len.to_bytes(2, "big") + b"\\x00" * pad_len
-    )
-    tag = hmac.new(um_key, payload, hashlib.sha256).digest()
-    packet = tag + payload
-    stream = chacha20_keystream(ammag_key, 292)
-    return xor_bytes(packet, stream)`,
-    },
-    rewardSats: 50,
-    group: "sphinx/errors",
-    groupOrder: 1,
-  },
-
   "exercise-decrypt-error-onion-draft": {
     id: "exercise-decrypt-error-onion-draft",
     title: "Decrypt the Error Onion (Sender Side)",
@@ -372,12 +223,12 @@ def reference_wrap_raw(payload, um, ammag):
 
 UM_BOB    = bytes.fromhex("01" * 32)
 AMMAG_BOB = bytes.fromhex("02" * 32)
-UM_CAROL    = bytes.fromhex("03" * 32)
-AMMAG_CAROL = bytes.fromhex("04" * 32)
+UM_CHARLIE    = bytes.fromhex("03" * 32)
+AMMAG_CHARLIE = bytes.fromhex("04" * 32)
 UM_DAVE    = bytes.fromhex("05" * 32)
 AMMAG_DAVE = bytes.fromhex("06" * 32)
 
-HOP_KEYS = [(UM_BOB, AMMAG_BOB), (UM_CAROL, AMMAG_CAROL), (UM_DAVE, AMMAG_DAVE)]
+HOP_KEYS = [(UM_BOB, AMMAG_BOB), (UM_CHARLIE, AMMAG_CHARLIE), (UM_DAVE, AMMAG_DAVE)]
 
 def wrap_through_route(originating_hop_index, msg):
     """Simulate the failing hop building the error, then upstream forwarders wrapping it."""
@@ -388,11 +239,11 @@ def wrap_through_route(originating_hop_index, msg):
         wrapped = xor_bytes(wrapped, chacha20_keystream(ammag_up, 292))
     return wrapped
 
-def test_carol_failure_identified():
+def test_charlie_failure_identified():
     msg = b"temporary_channel_failure"
     wrapped = wrap_through_route(originating_hop_index=1, msg=msg)
     idx, recovered = decrypt_error_onion(wrapped, HOP_KEYS)
-    assert idx == 1, f"Expected failing hop index 1 (Carol), got {idx}"
+    assert idx == 1, f"Expected failing hop index 1 (Charlie), got {idx}"
     assert recovered == msg, f"Recovered message must equal '{msg.decode()}', got {recovered!r}"
 
 def test_bob_failure_identified():
@@ -477,7 +328,7 @@ def test_malformed_padding_length_returns_none():
     },
     rewardSats: 75,
     group: "sphinx/errors",
-    groupOrder: 2,
+    groupOrder: 1,
   },
 
   "exercise-verify-hmac-draft": {
@@ -585,306 +436,161 @@ def verify_hmac(packet, mu, associated_data):
     groupOrder: 2,
   },
 
-  "exercise-process-onion-draft": {
-    id: "exercise-process-onion-draft",
-    title: "Process an Inbound Onion",
+  "exercise-check-forward-draft": {
+    id: "exercise-check-forward-draft",
+    title: "Check the Forwarding Policy",
     description:
-      "Implement <code>OnionForwarder.process</code>. Verify length/version, verify the HMAC over <code>(hop_payloads || associated_data)</code>, peel the layer, parse the TLV, and return a <code>ForwardInstruction</code> (forwarder), <code>FinalDelivery</code> (destination), or <code>Rejection</code> (anything wrong). " +
-      "Use the <code>verify_hmac</code> helper from the previous exercise for the integrity check. Skip economic fee/CLTV validation, but still reject malformed payload shape: forwarding payloads need type 6 and a nonzero next HMAC, final payloads need type 8 and an all-zero next HMAC, and type 6 + type 8 together is invalid.",
-    starterCode: `from dataclasses import dataclass
+      "Implement <code>check_forward(incoming_amount_msat, incoming_cltv_expiry, amt_to_forward, outgoing_cltv_value, policy) -> str | None</code>. Once the HMAC verifies and the layer is peeled, the forwarder reads the requested <code>amt_to_forward</code> and <code>outgoing_cltv_value</code> from the hop payload and must decide whether forwarding is actually safe. " +
+      "This is the forward direction of chapter 2's backward math: the incoming HTLC has to leave the forwarder enough margin to (a) cover its own advertised fee and (b) keep enough timelock cushion to claim the downstream HTLC before its upstream HTLC expires. " +
+      "The <code>policy</code> argument is the provided <code>ForwardingPolicy</code> dataclass carrying this hop's BOLT 7 <code>channel_update</code> fields (<code>fee_base_msat</code>, <code>fee_proportional_millionths</code>, <code>cltv_expiry_delta</code>). Return a BOLT 4 failure-code string when a check fails, or <code>None</code> when it is safe to forward.",
+    starterCode: `# ForwardingPolicy is provided (in scope at runtime). It carries this hop's
+# advertised BOLT 7 channel_update fields:
+#     ForwardingPolicy(fee_base_msat, fee_proportional_millionths, cltv_expiry_delta)
+#
+# amt_to_forward and outgoing_cltv_value are already parsed out of the peeled
+# hop payload (the type-2 and type-4 TLV records). Treat them as given; TLV
+# parsing is not part of this exercise.
 
-@dataclass
-class ForwardInstruction:
-    next_packet: bytes
-    short_channel_id: bytes
-    amt_to_forward_msat: int
-    outgoing_cltv_value: int
-    shared_secret: bytes  # for the error path
-
-@dataclass
-class FinalDelivery:
-    amt_msat: int
-    outgoing_cltv_value: int
-    payment_data: bytes  # raw type-8 value; caller validates against invoice
-    shared_secret: bytes
-
-@dataclass
-class Rejection:
-    code: str
-    shared_secret: bytes  # may be b"" if rejection happened before ECDH
-
-class OnionForwarder:
-    def process(self, packet, node_privkey, associated_data):
-        """
-        Process an inbound onion packet.
-
-        Args:
-          packet:           1366-byte BOLT 4 onion packet
-          node_privkey:     this hop's 32-byte node private key
-          associated_data:  32-byte payment_hash bound into the HMAC by the sender
-
-        Steps:
-          1. Length and version check.
-          2. ECDH + HMAC verification over (hop_payloads || associated_data).
-          3. Peel the layer (delegate to self.peel_layer).
-          4. Parse the TLV payload bytes.
-          5. Branch: forwarding (has type 6) vs final delivery (has type 8).
-
-        Returns: ForwardInstruction | FinalDelivery | Rejection
-        """
-        # TODO: implement
-        pass
-
-
-def parse_tlv_records(payload_bytes):
+def check_forward(incoming_amount_msat, incoming_cltv_expiry,
+                  amt_to_forward, outgoing_cltv_value, policy):
     """
-    Parse a bigsize-prefixed TLV payload into a {type: value_bytes} dict.
+    Decide whether this hop can safely forward the HTLC.
 
-    The first bigsize prefix is the total TLV length; after that, each record
-    is bigsize_type || bigsize_length || value_bytes.
+    Args:
+      incoming_amount_msat:  msat offered to this hop on the incoming HTLC
+      incoming_cltv_expiry:  absolute block height the incoming HTLC expires at
+      amt_to_forward:        msat the hop payload asks this hop to send downstream
+      outgoing_cltv_value:   absolute block height requested for the outgoing HTLC
+      policy:                ForwardingPolicy(fee_base_msat,
+                             fee_proportional_millionths, cltv_expiry_delta)
+
+    Returns:
+      A BOLT 4 failure-code string if a check fails, otherwise None.
+
+    Checks (BOLT 7 fee formula + BOLT 4 forwarding requirements):
+      1. Fee check. The fee this hop earns is what it keeps: the difference
+         between what comes in and what it sends on. The advertised fee is:
+             required_fee = fee_base_msat
+                          + (amt_to_forward * fee_proportional_millionths) // 1_000_000
+         (integer floor division, exactly as BOLT 7 specifies). If
+             incoming_amount_msat - amt_to_forward < required_fee
+         the incoming HTLC does not cover the fee: return "fee_insufficient".
+
+      2. CLTV-delta check. The forwarder needs cltv_expiry_delta blocks of
+         cushion between the two HTLCs so it can claim downstream before its
+         upstream HTLC times out. If
+             incoming_cltv_expiry - outgoing_cltv_value < cltv_expiry_delta
+         the cushion is too small: return "incorrect_cltv_expiry".
+
+      3. Otherwise both checks pass: return None.
     """
-    total_len, header_len = parse_bigsize(payload_bytes, 0)
-    records = {}
-    pos = header_len
-    end = header_len + total_len
-    while pos < end:
-        t, t_len = parse_bigsize(payload_bytes, pos)
-        pos += t_len
-        l, l_len = parse_bigsize(payload_bytes, pos)
-        pos += l_len
-        records[t] = bytes(payload_bytes[pos:pos + l])
-        pos += l
-    return records
+    # TODO: implement
+    pass
 `,
-    testCode: `import hmac, hashlib
+    testCode: `# Realistic policy: 1 sat (1000 msat) base fee, 0.1% proportional (1000 ppm),
+# 40-block CLTV delta. These are the BOLT 7 channel_update fields this hop
+# advertises to the rest of the network.
+POLICY = ForwardingPolicy(
+    fee_base_msat=1000,
+    fee_proportional_millionths=1000,
+    cltv_expiry_delta=40,
+)
 
-ROUTING_INFO_SIZE = 1300
+# Forwarding 10,000,000 msat at 1000 ppm => 10,000 msat proportional,
+# + 1000 msat base = 11,000 msat required fee.
+AMT_TO_FORWARD = 10_000_000
+REQUIRED_FEE = 1000 + (AMT_TO_FORWARD * 1000) // 1_000_000  # == 11_000
 
-# Reuse helpers from sphinx/builder.py exercises (in scope at runtime).
-SESSION_KEY = bytes.fromhex("4141414141414141414141414141414141414141414141414141414141414141")
-BOB_PRIV   = bytes.fromhex("4242424242424242424242424242424242424242424242424242424242424242")
-CAROL_PRIV = bytes.fromhex("4343434343434343434343434343434343434343434343434343434343434343")
-DAVE_PRIV  = bytes.fromhex("4444444444444444444444444444444444444444444444444444444444444444")
-PAYMENT_HASH = bytes.fromhex("4242424242424242424242424242424242424242424242424242424242424242")
+# Outgoing CLTV chosen well clear of any min-final cushion.
+OUTGOING_CLTV = 700_000
 
-BOB_PUB   = privkey_to_pubkey(BOB_PRIV)
-CAROL_PUB = privkey_to_pubkey(CAROL_PRIV)
-DAVE_PUB  = privkey_to_pubkey(DAVE_PRIV)
+def test_exact_fee_is_accepted():
+    """incoming - amt_to_forward == required_fee is the boundary: still safe."""
+    incoming = AMT_TO_FORWARD + REQUIRED_FEE  # exactly covers the fee
+    result = check_forward(incoming, OUTGOING_CLTV + 40, AMT_TO_FORWARD, OUTGOING_CLTV, POLICY)
+    assert result is None, f"Exact fee must be accepted, got {result!r}"
 
-# Build well-formed bigsize-prefixed TLVs.
-def build_intermediate_tlv(amt_msat, cltv, scid):
-    inner = (
-        encode_bigsize(2) + encode_bigsize(3) + amt_msat.to_bytes(3, 'big') +
-        encode_bigsize(4) + encode_bigsize(2) + cltv.to_bytes(2, 'big') +
-        encode_bigsize(6) + encode_bigsize(8) + scid
-    )
-    return encode_bigsize(len(inner)) + inner
+def test_one_msat_short_on_fee_fails():
+    """One msat below the required fee must fail with the BOLT 4 code."""
+    incoming = AMT_TO_FORWARD + REQUIRED_FEE - 1
+    result = check_forward(incoming, OUTGOING_CLTV + 40, AMT_TO_FORWARD, OUTGOING_CLTV, POLICY)
+    assert result == "fee_insufficient", f"Expected 'fee_insufficient', got {result!r}"
 
-def build_final_tlv(amt_msat, cltv, payment_data):
-    inner = (
-        encode_bigsize(2) + encode_bigsize(3) + amt_msat.to_bytes(3, 'big') +
-        encode_bigsize(4) + encode_bigsize(2) + cltv.to_bytes(2, 'big') +
-        encode_bigsize(8) + encode_bigsize(len(payment_data)) + payment_data
-    )
-    return encode_bigsize(len(inner)) + inner
+def test_generous_fee_is_accepted():
+    """More than enough fee is obviously fine."""
+    incoming = AMT_TO_FORWARD + REQUIRED_FEE + 5_000
+    result = check_forward(incoming, OUTGOING_CLTV + 40, AMT_TO_FORWARD, OUTGOING_CLTV, POLICY)
+    assert result is None, f"Generous fee must be accepted, got {result!r}"
 
-BOB_SCID   = bytes.fromhex("0102030405060708")
-CAROL_SCID = bytes.fromhex("1112131415161718")
-PAYMENT_DATA = bytes.fromhex("aa" * 32 + "0000000000989680")  # 32 secret + 8 total_msat
+def test_exact_cltv_delta_is_accepted():
+    """incoming_cltv - outgoing_cltv == cltv_expiry_delta is the boundary: still safe."""
+    incoming = AMT_TO_FORWARD + REQUIRED_FEE + 5_000  # fee comfortably covered
+    incoming_cltv = OUTGOING_CLTV + 40  # exactly the delta
+    result = check_forward(incoming, incoming_cltv, AMT_TO_FORWARD, OUTGOING_CLTV, POLICY)
+    assert result is None, f"Exact CLTV delta must be accepted, got {result!r}"
 
-PAYLOADS = [
-    build_intermediate_tlv(10_003_000, 260, BOB_SCID),
-    build_intermediate_tlv(10_002_000, 220, CAROL_SCID),
-    build_final_tlv(10_000_000, 140, PAYMENT_DATA),
-]
+def test_one_block_short_on_cltv_fails():
+    """One block below the required delta must fail with the BOLT 4 code."""
+    incoming = AMT_TO_FORWARD + REQUIRED_FEE + 5_000
+    incoming_cltv = OUTGOING_CLTV + 39  # one short of the 40-block delta
+    result = check_forward(incoming, incoming_cltv, AMT_TO_FORWARD, OUTGOING_CLTV, POLICY)
+    assert result == "incorrect_cltv_expiry", f"Expected 'incorrect_cltv_expiry', got {result!r}"
 
-def chain(session_key, hop_pubkeys):
-    ek_list, ss_list = [], []
-    e = session_key
-    for pub in hop_pubkeys:
-        E = privkey_to_pubkey(e)
-        ss = ecdh(e, pub)
-        b = hashlib.sha256(E + ss).digest()
-        ek_list.append(E); ss_list.append(ss)
-        e = scalar_mul(e, b)
-    return ek_list, ss_list
+def test_clean_all_pass():
+    """A comfortably-funded, comfortably-timed HTLC forwards cleanly."""
+    incoming = AMT_TO_FORWARD + REQUIRED_FEE + 50_000   # well over the fee
+    incoming_cltv = OUTGOING_CLTV + 144                 # ~1 day of extra cushion
+    result = check_forward(incoming, incoming_cltv, AMT_TO_FORWARD, OUTGOING_CLTV, POLICY)
+    assert result is None, f"A clean HTLC must forward (None), got {result!r}"
 
-def reference_build(session_key, hop_pubkeys, payloads, ad):
-    """BOLT 4 build: pad-key noise initial buffer, filler-after-innermost-wrap,
-    HMAC over (buffer || associated_data)."""
-    ek_list, ss_list = chain(session_key, hop_pubkeys)
-    rhos = [hmac.new(b"rho", ss, hashlib.sha256).digest() for ss in ss_list]
-    mus  = [hmac.new(b"mu", ss, hashlib.sha256).digest() for ss in ss_list]
-    pad_key = hmac.new(b"pad", session_key, hashlib.sha256).digest()
+def test_fee_checked_before_cltv():
+    """When both checks would fail, BOLT 4 reports the fee failure first."""
+    incoming = AMT_TO_FORWARD + REQUIRED_FEE - 1        # fee too low
+    incoming_cltv = OUTGOING_CLTV + 39                  # AND cltv too tight
+    result = check_forward(incoming, incoming_cltv, AMT_TO_FORWARD, OUTGOING_CLTV, POLICY)
+    assert result == "fee_insufficient", f"Fee must be checked before CLTV, got {result!r}"
 
-    sizes = [len(p) + 32 for p in payloads[:-1]]
-    # Filler computation
-    filler = b""
-    for i in range(len(rhos) - 1):
-        filler = filler + b"\\x00" * sizes[i]
-        stream = chacha20_keystream(rhos[i], ROUTING_INFO_SIZE + sizes[i])
-        filler = xor_bytes(filler, stream[ROUTING_INFO_SIZE + sizes[i] - len(filler):])
-
-    buf = bytearray(chacha20_keystream(pad_key, ROUTING_INFO_SIZE))
-    nhmac = b"\\x00" * 32
-    n = len(payloads)
-    for i in range(n - 1, -1, -1):
-        hop_size = len(payloads[i]) + 32
-        shifted = bytearray(hop_size) + buf[:-hop_size]
-        shifted[:len(payloads[i])] = payloads[i]
-        shifted[len(payloads[i]):len(payloads[i]) + 32] = nhmac
-        stream = chacha20_keystream(rhos[i], ROUTING_INFO_SIZE)
-        buf = bytearray(xor_bytes(bytes(shifted), stream))
-        if i == n - 1:
-            buf[ROUTING_INFO_SIZE - len(filler):ROUTING_INFO_SIZE] = filler
-        nhmac = hmac.new(mus[i], bytes(buf) + ad, hashlib.sha256).digest()
-    return b"\\x00" + ek_list[0] + bytes(buf) + nhmac
-
-PACKET = reference_build(SESSION_KEY, [BOB_PUB, CAROL_PUB, DAVE_PUB], PAYLOADS, PAYMENT_HASH)
-
-VERIFY_HMAC_CALLS = 0
-
-def verify_hmac(packet, mu, associated_data):
-    """Provided by the previous exercise; instrumented here to ensure process delegates to it."""
-    global VERIFY_HMAC_CALLS
-    VERIFY_HMAC_CALLS += 1
-    if len(packet) != 1366:
-        return False
-    expected = hmac.new(mu, packet[34:1334] + associated_data, hashlib.sha256).digest()
-    return hmac.compare_digest(expected, packet[1334:1366])
-
-def build_both_tlv():
-    inner = (
-        encode_bigsize(2) + encode_bigsize(3) + (10_000_000).to_bytes(3, 'big') +
-        encode_bigsize(4) + encode_bigsize(2) + (140).to_bytes(2, 'big') +
-        encode_bigsize(6) + encode_bigsize(8) + BOB_SCID +
-        encode_bigsize(8) + encode_bigsize(len(PAYMENT_DATA)) + PAYMENT_DATA
-    )
-    return encode_bigsize(len(inner)) + inner
-
-def build_neither_tlv():
-    inner = (
-        encode_bigsize(2) + encode_bigsize(3) + (10_000_000).to_bytes(3, 'big') +
-        encode_bigsize(4) + encode_bigsize(2) + (140).to_bytes(2, 'big')
-    )
-    return encode_bigsize(len(inner)) + inner
-
-def test_forwarding_path_returns_forward_instruction():
-    global VERIFY_HMAC_CALLS
-    VERIFY_HMAC_CALLS = 0
-    f = OnionForwarder()
-    out = f.process(PACKET, BOB_PRIV, PAYMENT_HASH)
-    assert isinstance(out, ForwardInstruction), f"Expected ForwardInstruction, got {type(out).__name__}"
-    assert out.short_channel_id == BOB_SCID
-    assert out.amt_to_forward_msat == 10_003_000
-    assert out.outgoing_cltv_value == 260
-    assert isinstance(out.shared_secret, (bytes, bytearray)) and len(out.shared_secret) == 32
-    assert isinstance(out.next_packet, (bytes, bytearray)) and len(out.next_packet) == 1366
-    assert VERIFY_HMAC_CALLS >= 1, "process must delegate HMAC checking to verify_hmac"
-
-def test_destination_returns_final_delivery():
-    """Peel through Bob and Carol; Dave should see FinalDelivery."""
-    f = OnionForwarder()
-    bob_out = f.process(PACKET, BOB_PRIV, PAYMENT_HASH)
-    assert isinstance(bob_out, ForwardInstruction)
-    carol_out = f.process(bob_out.next_packet, CAROL_PRIV, PAYMENT_HASH)
-    assert isinstance(carol_out, ForwardInstruction)
-    dave_out = f.process(carol_out.next_packet, DAVE_PRIV, PAYMENT_HASH)
-    assert isinstance(dave_out, FinalDelivery), f"Dave should get FinalDelivery, got {type(dave_out).__name__}"
-    assert dave_out.amt_msat == 10_000_000
-    assert dave_out.outgoing_cltv_value == 140
-    assert dave_out.payment_data == PAYMENT_DATA
-
-def test_wrong_associated_data_returns_rejection():
-    """Passing the wrong payment_hash must produce an HMAC mismatch (this is what
-    binds the onion to a specific HTLC)."""
-    f = OnionForwarder()
-    bad_hash = bytes.fromhex("99" * 32)
-    out = f.process(PACKET, BOB_PRIV, bad_hash)
-    assert isinstance(out, Rejection), "Wrong associated_data must yield Rejection (invalid HMAC)"
-
-def test_tampered_hmac_returns_rejection():
-    f = OnionForwarder()
-    tampered = bytearray(PACKET)
-    tampered[1334] ^= 0xff  # flip a byte in the HMAC field
-    out = f.process(bytes(tampered), BOB_PRIV, PAYMENT_HASH)
-    assert isinstance(out, Rejection), f"Tampered HMAC should yield Rejection, got {type(out).__name__}"
-    assert "hmac" in out.code.lower() or "invalid" in out.code.lower()
-
-def test_wrong_version_returns_rejection():
-    f = OnionForwarder()
-    bad = b"\\x01" + PACKET[1:]
-    out = f.process(bad, BOB_PRIV, PAYMENT_HASH)
-    assert isinstance(out, Rejection)
-
-def test_wrong_length_returns_rejection():
-    f = OnionForwarder()
-    out = f.process(PACKET[:-1], BOB_PRIV, PAYMENT_HASH)
-    assert isinstance(out, Rejection)
-
-def test_payload_with_both_scid_and_payment_data_rejected():
-    bad_packet = reference_build(SESSION_KEY, [BOB_PUB, CAROL_PUB, DAVE_PUB], [build_both_tlv(), PAYLOADS[1], PAYLOADS[2]], PAYMENT_HASH)
-    out = OnionForwarder().process(bad_packet, BOB_PRIV, PAYMENT_HASH)
-    assert isinstance(out, Rejection), "A payload containing both type 6 and type 8 is malformed"
-
-def test_payload_with_neither_scid_nor_payment_data_rejected():
-    bad_packet = reference_build(SESSION_KEY, [BOB_PUB, CAROL_PUB, DAVE_PUB], [build_neither_tlv(), PAYLOADS[1], PAYLOADS[2]], PAYMENT_HASH)
-    out = OnionForwarder().process(bad_packet, BOB_PRIV, PAYMENT_HASH)
-    assert isinstance(out, Rejection), "A payload containing neither type 6 nor type 8 is malformed"
-
-def test_payment_data_with_nonzero_next_hmac_rejected():
-    bad_packet = reference_build(SESSION_KEY, [BOB_PUB, CAROL_PUB, DAVE_PUB], [build_final_tlv(10_000_000, 140, PAYMENT_DATA), PAYLOADS[1], PAYLOADS[2]], PAYMENT_HASH)
-    out = OnionForwarder().process(bad_packet, BOB_PRIV, PAYMENT_HASH)
-    assert isinstance(out, Rejection), "Final-delivery payload must also carry an all-zero next HMAC"
-
-def test_scid_with_zero_next_hmac_rejected():
-    single_hop_packet = reference_build(SESSION_KEY, [BOB_PUB], [build_intermediate_tlv(10_000_000, 140, BOB_SCID)], PAYMENT_HASH)
-    out = OnionForwarder().process(single_hop_packet, BOB_PRIV, PAYMENT_HASH)
-    assert isinstance(out, Rejection), "Forwarding payload must not carry an all-zero next HMAC"
+def test_proportional_only_policy():
+    """A zero base-fee, purely proportional policy still uses floor division."""
+    policy = ForwardingPolicy(fee_base_msat=0, fee_proportional_millionths=2500, cltv_expiry_delta=10)
+    amt = 4_000_000
+    required = 0 + (amt * 2500) // 1_000_000  # == 10_000
+    # Exactly covered -> safe.
+    ok = check_forward(amt + required, OUTGOING_CLTV + 10, amt, OUTGOING_CLTV, policy)
+    assert ok is None, f"Exact proportional fee must be accepted, got {ok!r}"
+    # One msat short -> fail.
+    bad = check_forward(amt + required - 1, OUTGOING_CLTV + 10, amt, OUTGOING_CLTV, policy)
+    assert bad == "fee_insufficient", f"Expected 'fee_insufficient', got {bad!r}"
 `,
     hints: {
       conceptual:
-        "<strong>Goal:</strong> tie peel + validation + parsing into a single function that returns one of three result types." +
-        "<br><br><strong>Order matters:</strong> verify before decrypt. Length and version come first; HMAC verification comes before any peel work; peel before parse; parse before branch." +
-        "<br><br><strong>HMAC includes associated_data:</strong> BOLT 4 requires the HMAC be computed over <code>hop_payloads || associated_data</code> where associated_data is the 32-byte <code>payment_hash</code>. This binds the onion to a specific HTLC. If a forwarder receives an onion attached to a different <code>payment_hash</code>, the HMAC mismatches and the onion is rejected." +
-        "<br><br><strong>Branch on TLV contents:</strong> type 6 (short_channel_id) with a nonzero next HMAC means forwarder. Type 8 (payment_data) with an all-zero next HMAC means destination. Anything else (both fields, neither field, or TLV/finality mismatch) is malformed.",
+        "<strong>Goal:</strong> given everything already parsed out of the onion, decide if forwarding is safe by re-checking the two promises this hop made to the network." +
+        "<br><br><strong>This is chapter 2's backward math, run forward.</strong> Back then, Alice worked backward from the destination, adding each hop's fee and CLTV delta as she went, so that by the time the HTLC reaches this forwarder there is exactly enough headroom. Now the forwarder verifies the sender actually did that arithmetic. It never trusts the incoming numbers blindly." +
+        "<br><br><strong>Fee = what the hop keeps.</strong> The forwarder receives <code>incoming_amount_msat</code> and is asked to send <code>amt_to_forward</code> downstream. The difference is its fee. That difference has to be at least the fee it advertised in its <code>channel_update</code>, or it loses money relaying the payment." +
+        "<br><br><strong>CLTV delta = claim-before-you-pay cushion.</strong> The forwarder pays the downstream HTLC first, then claims the upstream one. It needs <code>cltv_expiry_delta</code> blocks between the two expiries so a downstream delay can never leave it having paid out without time left to get paid back." +
+        "<br><br><strong>Why these exact strings:</strong> <code>fee_insufficient</code> and <code>incorrect_cltv_expiry</code> are real BOLT 4 failure codes. Returning them verbatim is what lets a real Lightning sender understand why the hop refused and re-route.",
       steps:
-        "<strong>1. Reject if len != 1366 or packet[0] != 0:</strong> return <code>Rejection('invalid_onion_version', b'')</code>." +
-        "<br><strong>2. Compute ss + mu:</strong> <code>ss = ecdh(node_privkey, packet[1:34])</code>; <code>mu = hmac.new(b'mu', ss, hashlib.sha256).digest()</code>." +
-        "<br><strong>3. HMAC check (with associated_data):</strong> call <code>verify_hmac(packet, mu, associated_data)</code>. If it returns false, return <code>Rejection('invalid_onion_hmac', ss)</code>." +
-        "<br><strong>4. Peel:</strong> call <code>self.peel_layer(packet, node_privkey)</code>; unpack <code>(next_packet, payload_bytes, _)</code>." +
-        "<br><strong>5. Parse:</strong> <code>records = parse_tlv_records(payload_bytes)</code>." +
-        "<br><strong>6. Decode amt_to_forward + outgoing_cltv:</strong> <code>amt = int.from_bytes(records[2], 'big')</code> and similarly for type 4." +
-        "<br><strong>7. Branch:</strong> compute <code>is_final = next_packet[1334:1366] == b'\\x00' * 32</code>. Return <code>ForwardInstruction</code> only for type 6 without type 8 and <code>not is_final</code>. Return <code>FinalDelivery</code> only for type 8 without type 6 and <code>is_final</code>. Otherwise reject.",
+        "<strong>1. Required fee (BOLT 7 formula):</strong>" +
+        "<br>&nbsp;&nbsp;&nbsp;<code>required_fee = policy.fee_base_msat + (amt_to_forward * policy.fee_proportional_millionths) // 1_000_000</code>" +
+        "<br>&nbsp;&nbsp;&nbsp;Use integer floor division (<code>//</code>) exactly as written; that is what the spec mandates." +
+        "<br><strong>2. Fee check:</strong> if <code>incoming_amount_msat - amt_to_forward < required_fee:</code> return <code>\"fee_insufficient\"</code>." +
+        "<br><strong>3. CLTV check:</strong> if <code>incoming_cltv_expiry - outgoing_cltv_value < policy.cltv_expiry_delta:</code> return <code>\"incorrect_cltv_expiry\"</code>." +
+        "<br><strong>4. Otherwise:</strong> return <code>None</code> (safe to forward)." +
+        "<br><br>Check the fee first, then the CLTV, so the boundary tests line up with BOLT 4 ordering.",
       code:
-        `def process(self, packet, node_privkey, associated_data):
-    if len(packet) != 1366 or packet[0] != 0:
-        return Rejection('invalid_onion_version', b'')
-    E = packet[1:34]
-    try:
-        ss = ecdh(node_privkey, E)
-    except Exception:
-        return Rejection('invalid_onion_key', b'')
-    mu = hmac.new(b"mu", ss, hashlib.sha256).digest()
-    if not verify_hmac(packet, mu, associated_data):
-        return Rejection('invalid_onion_hmac', ss)
-    try:
-        next_packet, payload_bytes, _ = self.peel_layer(packet, node_privkey)
-        records = parse_tlv_records(payload_bytes)
-        amt = int.from_bytes(records[2], 'big')
-        cltv = int.from_bytes(records[4], 'big')
-    except Exception:
-        return Rejection('invalid_onion_payload', ss)
-    has_scid = 6 in records
-    has_payment_data = 8 in records
-    is_final = next_packet[1334:1366] == b"\\x00" * 32
-    if has_scid and not has_payment_data and not is_final:
-        return ForwardInstruction(next_packet, records[6], amt, cltv, ss)
-    if has_payment_data and not has_scid and is_final:
-        return FinalDelivery(amt, cltv, records[8], ss)
-    return Rejection('invalid_onion_payload', ss)`,
+        `def check_forward(incoming_amount_msat, incoming_cltv_expiry,
+                  amt_to_forward, outgoing_cltv_value, policy):
+    required_fee = (
+        policy.fee_base_msat
+        + (amt_to_forward * policy.fee_proportional_millionths) // 1_000_000
+    )
+    if incoming_amount_msat - amt_to_forward < required_fee:
+        return "fee_insufficient"
+    if incoming_cltv_expiry - outgoing_cltv_value < policy.cltv_expiry_delta:
+        return "incorrect_cltv_expiry"
+    return None`,
     },
-    rewardSats: 100,
+    rewardSats: 75,
     group: "sphinx/forwarder",
     groupOrder: 3,
   },
@@ -937,15 +643,15 @@ ROUTING_INFO_SIZE = 1300
 # Build a fixed test packet using a BOLT 4-spec reference encoder so we can verify peeling.
 SESSION_KEY = bytes.fromhex("4141414141414141414141414141414141414141414141414141414141414141")
 BOB_PRIV   = bytes.fromhex("4242424242424242424242424242424242424242424242424242424242424242")
-CAROL_PRIV = bytes.fromhex("4343434343434343434343434343434343434343434343434343434343434343")
+CHARLIE_PRIV = bytes.fromhex("4343434343434343434343434343434343434343434343434343434343434343")
 DAVE_PRIV  = bytes.fromhex("4444444444444444444444444444444444444444444444444444444444444444")
 PAYMENT_HASH = bytes.fromhex("4242424242424242424242424242424242424242424242424242424242424242")
 
 BOB_PUB   = privkey_to_pubkey(BOB_PRIV)
-CAROL_PUB = privkey_to_pubkey(CAROL_PRIV)
+CHARLIE_PUB = privkey_to_pubkey(CHARLIE_PRIV)
 DAVE_PUB  = privkey_to_pubkey(DAVE_PRIV)
-HOP_PUBKEYS = [BOB_PUB, CAROL_PUB, DAVE_PUB]
-HOP_PRIVKEYS = [BOB_PRIV, CAROL_PRIV, DAVE_PRIV]
+HOP_PUBKEYS = [BOB_PUB, CHARLIE_PUB, DAVE_PUB]
+HOP_PRIVKEYS = [BOB_PRIV, CHARLIE_PRIV, DAVE_PRIV]
 
 # Bigsize-prefixed TLV payloads (variable length so the test exercises the
 # filler-after-innermost-wrap logic).
@@ -1028,21 +734,21 @@ def test_next_ephemeral_advances():
     next_packet, _, _ = f.peel_layer(PACKET, BOB_PRIV)
     assert next_packet[1:34] == EK_LIST[1], "Outgoing E must equal E_1 from the chain"
 
-def test_carol_can_peel_next():
-    """End-to-end: Bob's output is a valid input for Carol's peel."""
+def test_charlie_can_peel_next():
+    """End-to-end: Bob's output is a valid input for Charlie's peel."""
     f = OnionForwarder()
     bob_out, _, _ = f.peel_layer(PACKET, BOB_PRIV)
-    next_out, carol_payload, carol_ss = f.peel_layer(bob_out, CAROL_PRIV)
-    assert carol_ss == SS_LIST[1], "Carol's recovered ss must match the chain"
-    assert carol_payload == PAYLOADS[1], "Carol's payload must round-trip through the peel"
+    next_out, charlie_payload, charlie_ss = f.peel_layer(bob_out, CHARLIE_PRIV)
+    assert charlie_ss == SS_LIST[1], "Charlie's recovered ss must match the chain"
+    assert charlie_payload == PAYLOADS[1], "Charlie's payload must round-trip through the peel"
 
-def test_dave_can_peel_after_carol():
-    """Full route: peel through Bob, Carol, then Dave. Confirms the BOLT 4 build
+def test_dave_can_peel_after_charlie():
+    """Full route: peel through Bob, Charlie, then Dave. Confirms the BOLT 4 build
     correctly accounts for Dave's hop-payload size during filler placement."""
     f = OnionForwarder()
     bob_out, _, _ = f.peel_layer(PACKET, BOB_PRIV)
-    carol_out, _, _ = f.peel_layer(bob_out, CAROL_PRIV)
-    _, dave_payload, dave_ss = f.peel_layer(carol_out, DAVE_PRIV)
+    charlie_out, _, _ = f.peel_layer(bob_out, CHARLIE_PRIV)
+    _, dave_payload, dave_ss = f.peel_layer(charlie_out, DAVE_PRIV)
     assert dave_ss == SS_LIST[2], "Dave's recovered ss must match the chain"
     assert dave_payload == PAYLOADS[2], "Dave's payload must round-trip through the peel"
 `,
@@ -1279,15 +985,15 @@ ROUTING_INFO_SIZE = 1300
 # Reuse test vectors from the shared-secrets exercise
 SESSION_KEY = bytes.fromhex("4141414141414141414141414141414141414141414141414141414141414141")
 BOB_PRIV   = bytes.fromhex("4242424242424242424242424242424242424242424242424242424242424242")
-CAROL_PRIV = bytes.fromhex("4343434343434343434343434343434343434343434343434343434343434343")
+CHARLIE_PRIV = bytes.fromhex("4343434343434343434343434343434343434343434343434343434343434343")
 DAVE_PRIV  = bytes.fromhex("4444444444444444444444444444444444444444444444444444444444444444")
 PAYMENT_HASH = bytes.fromhex("4242424242424242424242424242424242424242424242424242424242424242")
 
 BOB_PUB   = privkey_to_pubkey(BOB_PRIV)
-CAROL_PUB = privkey_to_pubkey(CAROL_PRIV)
+CHARLIE_PUB = privkey_to_pubkey(CHARLIE_PRIV)
 DAVE_PUB  = privkey_to_pubkey(DAVE_PRIV)
-HOP_PUBKEYS = [BOB_PUB, CAROL_PUB, DAVE_PUB]
-HOP_PRIVKEYS = [BOB_PRIV, CAROL_PRIV, DAVE_PRIV]
+HOP_PUBKEYS = [BOB_PUB, CHARLIE_PUB, DAVE_PUB]
+HOP_PRIVKEYS = [BOB_PRIV, CHARLIE_PRIV, DAVE_PRIV]
 
 # Bigsize-prefixed TLV payloads. Variable-length destination (different hop-payload size from forwarders) so
 # the test exercises the filler-after-innermost-wrap fix.
@@ -1532,20 +1238,20 @@ print(f"final filler ({len(filler)} bytes): {filler.hex()}")
 
 # Test vectors
 RHO_BOB   = bytes.fromhex("01" * 32)
-RHO_CAROL = bytes.fromhex("02" * 32)
+RHO_CHARLIE = bytes.fromhex("02" * 32)
 RHO_DAVE  = bytes.fromhex("03" * 32)
 
 def test_two_hop_filler_size():
-    """For a 3-hop route (Bob, Carol, Dave), filler covers Bob and Carol's hop payloads."""
+    """For a 3-hop route (Bob, Charlie, Dave), filler covers Bob and Charlie's hop payloads."""
     b = OnionPacketBuilder.__new__(OnionPacketBuilder)
-    out = b.generate_filler([RHO_BOB, RHO_CAROL], [65, 65])
+    out = b.generate_filler([RHO_BOB, RHO_CHARLIE], [65, 65])
     assert isinstance(out, (bytes, bytearray))
     assert len(out) == 130, f"Expected 130 bytes (65 + 65), got {len(out)}"
 
 def test_two_hop_matches_reference():
     b = OnionPacketBuilder.__new__(OnionPacketBuilder)
-    out = b.generate_filler([RHO_BOB, RHO_CAROL], [65, 65])
-    expected = reference_generate_filler([RHO_BOB, RHO_CAROL], [65, 65])
+    out = b.generate_filler([RHO_BOB, RHO_CHARLIE], [65, 65])
+    expected = reference_generate_filler([RHO_BOB, RHO_CHARLIE], [65, 65])
     assert out == expected, "Filler bytes don't match the BOLT 4 reference"
 
 def test_one_hop_filler_size():
@@ -1555,15 +1261,15 @@ def test_one_hop_filler_size():
     assert len(out) == 80
 
 def test_three_hop_filler_size():
-    """For a 4-hop route (Bob, Carol, X, Dave), filler covers three intermediate hops."""
+    """For a 4-hop route (Bob, Charlie, X, Dave), filler covers three intermediate hops."""
     b = OnionPacketBuilder.__new__(OnionPacketBuilder)
-    out = b.generate_filler([RHO_BOB, RHO_CAROL, RHO_DAVE], [60, 70, 50])
+    out = b.generate_filler([RHO_BOB, RHO_CHARLIE, RHO_DAVE], [60, 70, 50])
     assert len(out) == 60 + 70 + 50
 
 def test_three_hop_matches_reference():
     b = OnionPacketBuilder.__new__(OnionPacketBuilder)
     sizes = [60, 70, 50]
-    keys = [RHO_BOB, RHO_CAROL, RHO_DAVE]
+    keys = [RHO_BOB, RHO_CHARLIE, RHO_DAVE]
     out = b.generate_filler(keys, sizes)
     expected = reference_generate_filler(keys, sizes)
     assert out == expected
@@ -1649,14 +1355,14 @@ class OnionPacketBuilder:
 # Reference values for a fixed test vector.
 SESSION_KEY = bytes.fromhex("4141414141414141414141414141414141414141414141414141414141414141")
 BOB_PRIV   = bytes.fromhex("4242424242424242424242424242424242424242424242424242424242424242")
-CAROL_PRIV = bytes.fromhex("4343434343434343434343434343434343434343434343434343434343434343")
+CHARLIE_PRIV = bytes.fromhex("4343434343434343434343434343434343434343434343434343434343434343")
 DAVE_PRIV  = bytes.fromhex("4444444444444444444444444444444444444444444444444444444444444444")
 
 BOB_PUB   = privkey_to_pubkey(BOB_PRIV)
-CAROL_PUB = privkey_to_pubkey(CAROL_PRIV)
+CHARLIE_PUB = privkey_to_pubkey(CHARLIE_PRIV)
 DAVE_PUB  = privkey_to_pubkey(DAVE_PRIV)
-HOP_PUBKEYS = [BOB_PUB, CAROL_PUB, DAVE_PUB]
-HOP_PRIVKEYS = [BOB_PRIV, CAROL_PRIV, DAVE_PRIV]
+HOP_PUBKEYS = [BOB_PUB, CHARLIE_PUB, DAVE_PUB]
+HOP_PRIVKEYS = [BOB_PRIV, CHARLIE_PRIV, DAVE_PRIV]
 
 def reference_chain(session_key, hop_pubkeys):
     """Reference implementation used to cross-check the student's output."""

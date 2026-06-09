@@ -91,7 +91,7 @@ const STEPS: StepDef[] = [
     step: 3,
     title: "Bob verifies the outer HMAC",
     caption:
-      "Bob recomputes `HMAC-SHA256(mu_B, hop_payloads)` and compares it against the HMAC field. They match (Alice baked it that way). Bob now knows the packet is authentic and unmodified.",
+      "Bob recomputes `HMAC-SHA256(mu_B, hop_payloads ‖ associated_data)` and compares it against the HMAC field. They match (Alice baked it that way). Bob now knows the packet is authentic and unmodified.",
   },
   {
     step: 4,

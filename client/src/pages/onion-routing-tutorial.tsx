@@ -32,7 +32,7 @@ import { PeelTraceDiagram } from "../components/onion-routing-draft/PeelTraceDia
 import { ValidationFlowDiagram } from "../components/onion-routing-draft/ValidationFlowDiagram";
 import { ErrorBoomerangDiagram } from "../components/onion-routing-draft/ErrorBoomerangDiagram";
 import { ErrorUnwrapDiagram } from "../components/onion-routing-draft/ErrorUnwrapDiagram";
-import { OnionCapstonePanel } from "../components/onion-routing-draft/OnionCapstonePanel";
+import { OnionCapstoneLab } from "../components/onion-routing-draft/OnionCapstoneLab";
 import { LightningNetworkDiagram } from "../components/onion-routing-draft/LightningNetworkDiagram";
 import { PlaintextMessageTear } from "../components/onion-routing-draft/PlaintextMessageTear";
 import { EncryptedSliceReveal } from "../components/onion-routing-draft/EncryptedSliceReveal";
@@ -82,7 +82,7 @@ const CUSTOM_BLOCK_TAGS = new Set([
   "validation-flow",
   "error-boomerang",
   "error-unwrap",
-  "onion-capstone",
+  "onion-capstone-lab",
   "lightning-network",
   "message-tear",
   "encrypted-slice-reveal",
@@ -211,7 +211,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
   },
   // ── Chapter 11: The Error Onion ──────────────────────────────────────────
   "cp-error-trial-decrypt-draft": {
-    question: "Alice receives a wrapped error from a 3-hop route Bob → Carol → Dave. She tries hop 0's keys (Bob), the HMAC doesn't verify, then tries hop 1's keys (Carol), the HMAC verifies. What does Alice's algorithm do if Carol's keys hadn't matched either?",
+    question: "Alice receives a wrapped error from a 3-hop route Bob → Charlie → Dave. She tries hop 0's keys (Bob), the HMAC doesn't verify, then tries hop 1's keys (Charlie), the HMAC verifies. What does Alice's algorithm do if Charlie's keys hadn't matched either?",
     options: [
       "Restart from i=0 with a different decryption mode (CBC instead of CTR), since BOLT 4 allows fallback ciphers",
       "Continue to i=2 (Dave's keys). If no layer matches, conclude the error was tampered with and disconnect the peer",
@@ -386,17 +386,6 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
       "The chain advances by **replacing** the ephemeral key field at each hop, and the construction works because Alice and Bob independently arrive at the same <m>E_AC</m>.\n\n**Option 2 (correct).** Alice's chain produces <m>E_AC</m> as <m>bf_AB</m> · <m>E_AB</m> (since she advances her scalar <m>e_AB</m> by <m>bf_AB</m> to get <m>e_AC</m>, and <m>e_AC</m> · <m>G</m> = <m>bf_AB</m> · <m>E_AB</m>). Bob computes the same <m>E_AC</m> directly via <m>bf_AB</m> · <m>E_AB</m> on the public side. Once both sides agree on <m>E_AC</m>, ECDH between Charlie's node privkey and <m>E_AC</m> produces the same <m>ss_AC</m> Alice computed via <m>e_AC</m> · <m>C</m>, because scalar multiplication commutes.\n\n**Option 1 (wrong).** Appending defeats the fixed-size packet design and reintroduces both flaws we worked to eliminate (the size leak and Alice's key-management burden). The chain-and-replace mechanism is what keeps the packet compact.\n\n**Option 3 (wrong).** There is no signature on the ephemeral key in BOLT 4. Bob is kept honest economically (he loses his fee if he tampers) and via the HMAC we'll add in chapter 7. A signature would also expose Bob's identity to Charlie.\n\n**Option 4 (wrong).** Charlie can't derive <m>E_AC</m> without <m>bf_AB</m>, which requires <m>ss_AB</m>, which requires *Bob's* private key. Charlie has none of those. Each hop derives its own shared secret using the ephemeral key it sees in the packet header, not by recomputing the chain from scratch.",
   },
   // ── Chapter 2: Pathfinding 101 ───────────────────────────────────────────
-  "cp-fees-backward-draft": {
-    question: "In our worked example, Carol's incoming amount is 10,002 sats and Bob's incoming amount is 10,003 sats. Why must Alice work backward from Dave's amount when she computes each hop's input?",
-    options: [
-      "The Lightning spec defines a strict reverse processing order, and Alice's calculation has to follow that ordering to be valid",
-      "Each hop's required input depends on its output, and the only fixed point is the final amount Dave receives",
-      "Timelocks can only be subtracted, not added, so the calculation has to start from the highest CLTV and work down",
-      "Each hop only knows what it forwards, not what it receives, so Alice has to reconstruct the input direction from the destination",
-    ],
-    answer: 1,
-    explanation: "Bob's required incoming amount = his outgoing amount + his fee. His outgoing amount is whatever Carol receives. Carol's incoming amount = her outgoing amount + her fee. Her outgoing amount is whatever Dave receives. So the chain depends on Dave's amount being known first, then propagating backward. If Alice tried to start from her own number (say, 'I have 10,003 sats to spend'), she'd have no way to determine how much each hop should keep as a fee without already knowing the downstream amounts. The same applies to CLTVs: each hop's incoming CLTV must outlast its outgoing one by the hop's CLTV delta, and the only fixed CLTV is the one Dave specifies in his invoice.",
-  },
   "cp-channel-update-direction-draft": {
     question: "A single payment channel between two nodes can have up to two `channel_update`s on the gossip network. Why?",
     options: [
@@ -413,22 +402,11 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
     options: [
       "Route A: direct via Hazel (1,300 sats fee). It's the cheapest on fees, and a single forwarder is the simplest path.",
       "Route B: through Frank and Greg (2,002 sats fee). The most expensive route, but well within the CLTV ceiling.",
-      "Route C: through Bob and Charlie (1,226 sats fee). The cheapest route that also fits under the CLTV ceiling.",
+      "Route C: through Bob and Charlie (1,225 sats fee). The cheapest route that also fits under the CLTV ceiling.",
       "Either Route B or Route C. Once Route A is filtered out, picking between the survivors is a judgment call.",
     ],
     answer: 2,
-    explanation: "The right move is **filter, then minimize**. Route A looks tempting at 1,300 sats, but Hazel's `cltv_expiry_delta = 1000` pushes the total accumulated CLTV to 1,018 blocks, which blows past Alice's 200-block ceiling, so her wallet refuses to lock her funds for that long. Route A drops out before fees are even compared. Among the survivors, Route B totals 60 blocks of CLTV at 2,002 sats, and Route C totals 53 blocks of CLTV at 1,226 sats. Route C is both cheaper *and* lower CLTV, so it wins on every axis that matters. This filter-then-optimize pattern is what real Lightning pathfinders do: they apply hard constraints (CLTV ceiling, HTLC min/max amounts, channel capacity) up front, then minimize a cost function over what's left. Route C is also the same path Alice picked back in chapter 1: Alice → Bob → Charlie → Dave.",
-  },
-  "cp-intermediate-vs-final-draft": {
-    question: "Dave receives a hop payload that's missing one specific TLV field that Bob and Carol's payloads contain. Which field, and what does its absence tell Dave?",
-    options: [
-      "outgoing_cltv_value (type 4) is missing, signaling that the HTLC has already been settled",
-      "amt_to_forward (type 2) is missing, signaling that there is nothing left to forward",
-      "short_channel_id (type 6) is missing, signaling that there is no next hop and Dave is the final destination",
-      "payment_data (type 8) is missing from intermediate hops because they aren't allowed to read invoice metadata",
-    ],
-    answer: 2,
-    explanation: "An intermediate hop's payload contains a type-6 short_channel_id record telling it which channel to forward over. The final hop has no next hop to forward to, so Alice doesn't include type 6 in its payload. When Dave parses his payload and sees no type 6, he knows immediately that the payment terminates with him. Conversely, type 8 (payment_data) appears only in the final hop's payload, since only the final hop validates against the invoice. The structure of the TLV does the work of signaling 'you're the destination' without any explicit flag.",
+    explanation: "The right move is **filter, then minimize**. Route A looks tempting at 1,300 sats, but Hazel's `cltv_expiry_delta = 1000` pushes the total accumulated CLTV to 1,018 blocks, which blows past Alice's 200-block ceiling, so her wallet refuses to lock her funds for that long. Route A drops out before fees are even compared. Among the survivors, Route B totals 60 blocks of CLTV at 2,002 sats, and Route C totals 53 blocks of CLTV at 1,225 sats. Route C is both cheaper *and* lower CLTV, so it wins on every axis that matters. This filter-then-optimize pattern is what real Lightning pathfinders do: they apply hard constraints (CLTV ceiling, HTLC min/max amounts, channel capacity) up front, then minimize a cost function over what's left. Route C is also the same path Alice picked back in chapter 1: Alice → Bob → Charlie → Dave.",
   },
   // ── Intro: Naive plaintext routing leak (Draft) ──────────────────────────
   "cp-naive-plaintext-leak-draft": {
@@ -454,17 +432,6 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
     answer: [1, 2],
     explanation: "Two real privacy problems remain even with per-hop encryption. **First, the packet shrinks.** Each forwarder peels its own slice off the wire before forwarding the rest, so the message gets smaller at each hop. If Bob receives a 3-slice message, he immediately knows there are at least two hops downstream of him; when Charlie sees a 2-slice message, he knows he's the second-to-last forwarder. Size alone reveals each forwarder's position, which directly violates the property 'Bob shouldn't be able to tell whether he's the first hop, the last forwarder, or somewhere in between.' Sphinx fixes this with a **fixed-size packet** that doesn't shrink. **Second, every forwarder's identity is exposed by the keys themselves.** To encrypt a slice for Bob, Alice has to look up Bob's node-identity public key on the gossip network. The very act of using Bob's public key in the packet (or any tag that lets Bob find his slice) signals 'Bob is in this route' to anyone watching. Sphinx fixes this with **shared-secret derivation via ephemeral keys** so Alice never directly references each hop's static identity key. The two distractors are wrong: identical-looking ciphertext is a feature of encryption, not a bug, and public-key crypto cost isn't the central problem here.",
   },
-  "cp-privacy-property-draft": {
-    question: "Bob is forwarding a Lightning payment from Alice → Bob → Carol → Dave. Which of the following does Bob learn as part of forwarding the payment?",
-    options: [
-      "That Alice is the original sender, since the packet had to come from somewhere",
-      "That the next hop is Carol, plus the amount and timelock he should forward to her",
-      "That Dave is the final destination, because the inner payload tells him the payment terminates",
-      "The total number of hops in the route, because a fixed-size packet implies a known maximum",
-    ],
-    answer: 1,
-    explanation: "Bob only learns what he needs to do his job: the next hop is Carol, the amount to forward, and the outgoing timelock. He has no way to tell whether the packet originated with Alice or was forwarded to him from someone before her, and he has no way to tell whether Carol forwards onward or terminates the payment. The 'sender' Bob sees is just whichever node delivered the bytes to him on the wire (Alice in this case), not the payment originator. Likewise, the 'destination' from Bob's perspective is Carol, not Dave. The packet's fixed size hides the total hop count entirely.",
-  },
 };
 
 type Chapter = {
@@ -477,7 +444,6 @@ type Chapter = {
     | "Forwarding"
     | "Failures"
     | "Capstone"
-    | "Beyond"
     | "Pay It Forward";
   kind: "intro" | "md";
   file?: string;
@@ -569,20 +535,6 @@ export const chapters: Chapter[] = [
     file: "/onion_routing_tutorial/12.0-capstone-success.md",
   },
   {
-    id: "capstone-failure",
-    title: "Capstone: Failure Path",
-    section: "Capstone",
-    kind: "md",
-    file: "/onion_routing_tutorial/13.0-capstone-failure.md",
-  },
-  {
-    id: "beyond-sphinx",
-    title: "Beyond Sphinx",
-    section: "Beyond",
-    kind: "md",
-    file: "/onion_routing_tutorial/14.0-beyond-sphinx.md",
-  },
-  {
     id: "pay-it-forward",
     title: "Pay It Forward",
     section: "Pay It Forward",
@@ -604,7 +556,6 @@ export const sectionOrder: Chapter["section"][] = [
   "Forwarding",
   "Failures",
   "Capstone",
-  "Beyond",
   "Pay It Forward",
 ];
 
@@ -631,11 +582,9 @@ export const CHAPTER_REQUIREMENTS: Record<string, {
   "fixed-size-and-filler": { checkpoints: ["cp-payload-shrink-leak-draft", "cp-filler-shared-keystream-draft", "cp-filler-reach-back-draft"], exercises: ["exercise-generate-filler-draft"] },
   "wrapping-layer-by-layer": { checkpoints: ["cp-build-reverse-order-draft", "cp-hmac-commits-to-draft"], exercises: ["exercise-wrap-hop-draft", "exercise-build-packet-draft"] },
   "peeling-a-layer": { checkpoints: ["cp-peel-extended-stream-draft", "cp-peel-next-hmac-draft"], exercises: ["exercise-peel-layer-draft"] },
-  "forwarding-validation": { checkpoints: ["cp-validate-before-decrypt-draft", "cp-tlv-final-vs-forward-draft"], exercises: ["exercise-verify-hmac-draft", "exercise-process-onion-draft"] },
-  "error-onion": { checkpoints: ["cp-error-trial-decrypt-draft"], exercises: ["exercise-build-error-onion-draft", "exercise-decrypt-error-onion-draft"] },
+  "forwarding-validation": { checkpoints: ["cp-validate-before-decrypt-draft", "cp-tlv-final-vs-forward-draft"], exercises: ["exercise-verify-hmac-draft", "exercise-check-forward-draft"] },
+  "error-onion": { checkpoints: ["cp-error-trial-decrypt-draft"], exercises: ["exercise-decrypt-error-onion-draft"] },
   "capstone-success": { checkpoints: [], exercises: [] },
-  "capstone-failure": { checkpoints: [], exercises: [] },
-  "beyond-sphinx": { checkpoints: [], exercises: [] }, // tail chapter, no checkpoint or exercise
   "pay-it-forward": { checkpoints: [], exercises: [] },
 };
 
@@ -1139,9 +1088,8 @@ function ChapterContent({
           "error-unwrap": () => {
             return <ErrorUnwrapDiagram />;
           },
-          "onion-capstone": ({ mode }: any) => {
-            const m = mode === "failure" ? "failure" : "success";
-            return <OnionCapstonePanel mode={m} />;
+          "onion-capstone-lab": ({ demo }: any) => {
+            return <OnionCapstoneLab demo={demo !== undefined} />;
           },
           "lightning-network": () => {
             return <LightningNetworkDiagram />;
@@ -1519,7 +1467,7 @@ function OnionRoutingDraftTutorialShell({ activeId }: { activeId: string }) {
         <aside
           className={`${
             mobileNavOpen ? "fixed inset-y-0 left-0 w-[300px] z-50 overflow-y-auto shadow-xl" : "hidden"
-          } md:relative md:block md:sticky md:top-[68px] md:w-auto md:z-auto md:shadow-none md:h-fit ${theme === "dark" ? "bg-[#0b1220]" : "bg-card"}`}
+          } md:relative md:block md:sticky md:top-[68px] md:w-auto md:z-auto md:shadow-none md:h-[calc(100vh_-_68px)] md:overflow-y-auto md:overscroll-contain ${theme === "dark" ? "bg-[#0b1220]" : "bg-card"}`}
         >
           <div className="md:hidden flex items-center justify-between px-4 pt-4 pb-2">
             <div className={`font-pixel text-sm ${theme === "dark" ? "text-slate-200" : "text-foreground"}`}>

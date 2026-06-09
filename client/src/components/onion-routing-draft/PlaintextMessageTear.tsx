@@ -59,7 +59,7 @@ const SLICES: Slice[] = [
     forHop: "dave",
     fields: [
       { key: "final_amt", value: "10,000 sat" },
-      { key: "final_cltv", value: "block 140" },
+      { key: "final_cltv", value: "block 180" },
       { key: "payment_hash", value: "0xa3f1...e9c4" },
     ],
   },

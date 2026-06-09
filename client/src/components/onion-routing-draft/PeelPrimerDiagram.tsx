@@ -361,7 +361,7 @@ function chainStatus(
 
 function captionForStep(step: number): string {
   if (step === 0) {
-    return "Bob receives the 1,300-byte onion from Alice. To Bob, the entire payload area is encrypted bytes he can't yet read (the gray block). The packet's outer HMAC tag is `bob_hmac`.";
+    return "Bob receives the 1,366-byte onion from Alice. To Bob, the entire 1,300-byte payload area is encrypted bytes he can't yet read (the gray block). The packet's outer HMAC tag is `bob_hmac`.";
   }
   const state = peelStateAtStep(step);
   const hop = state.currentHop!;
@@ -381,7 +381,7 @@ function captionForStep(step: number): string {
   const incomingE = hop === "bob" ? "E_AB" : "E_AC";
   const outgoingE = nextHop === "Charlie" ? "E_AC" : "E_AD";
   const nextHopLower = nextHop.toLowerCase();
-  return `${hopName} reads his hop payload and constructs a new 1,300-byte packet for ${nextHop}. The new header carries \`${outgoingE}\`, derived from the incoming \`${incomingE}\` via ${hopName}'s blinding factor. The new outer HMAC tag is \`${nextHopLower}_hmac\`, the value that was sitting inside ${hopName}'s hop payload, now elevated to the outer tag (the arrow shows the transfer). The payload is the still-encrypted bytes that followed ${hopName}'s hop payload, with fresh filler appended at the back to keep the buffer at 1,300 bytes.`;
+  return `${hopName} reads his hop payload and constructs a new 1,366-byte packet for ${nextHop}. The new header carries \`${outgoingE}\`, derived from the incoming \`${incomingE}\` via ${hopName}'s blinding factor. The new outer HMAC tag is \`${nextHopLower}_hmac\`, the value that was sitting inside ${hopName}'s hop payload, now elevated to the outer tag (the arrow shows the transfer). The payload is the still-encrypted bytes that followed ${hopName}'s hop payload, with fresh filler appended at the back to keep the buffer at 1,300 bytes.`;
 }
 
 // ── Main component ──────────────────────────────────────────────────────────

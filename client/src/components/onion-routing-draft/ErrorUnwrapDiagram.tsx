@@ -170,7 +170,7 @@ export function ErrorUnwrapDiagram() {
         <ErrorPacketCard
           appliedLayers={layers}
           failingHop="charlie"
-          cornerSlot={<ActiveKeyIcon step={step} />}
+          cornerBadge={<ActiveKeyIcon step={step} />}
           footnote={
             step === 0
               ? "fully wrapped: Bob's layer over Charlie's"

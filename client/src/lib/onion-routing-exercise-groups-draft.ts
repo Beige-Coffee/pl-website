@@ -3,8 +3,8 @@
 // Groups the 10 onion-routing exercises into 4 logical Python "files":
 //   1. crypto/keys.py         — derive_keys (KeyMaterial dataclass)
 //   2. sphinx/builder.py      — OnionPacketBuilder class
-//   3. sphinx/forwarder.py    — OnionForwarder class
-//   4. sphinx/errors.py       — build_error_onion, decrypt_error_onion
+//   3. sphinx/forwarder.py    — OnionForwarder class + check_forward
+//   4. sphinx/errors.py       — decrypt_error_onion
 //
 // Cross-group dependencies forward the student's solutions:
 //   - sphinx/builder.py uses derive_keys from crypto/keys.py
@@ -140,7 +140,19 @@ class _OnionPacketBuilderBase:
         sizes = [len(p) + 32 for p in payloads[:-1]]
         return rho_keys, mu_keys, pad_key, sizes
 `;
-const FORWARDER_SETUP = CURVE_HELPERS;
+// The forwarder group also needs the ForwardingPolicy container for the
+// fee/CLTV check exercise. It mirrors the BOLT 7 channel_update fields a hop
+// advertises to the network.
+const FORWARDER_SETUP = CURVE_HELPERS + `
+from dataclasses import dataclass
+
+@dataclass
+class ForwardingPolicy:
+    """This hop's advertised BOLT 7 channel_update forwarding parameters."""
+    fee_base_msat: int
+    fee_proportional_millionths: int
+    cltv_expiry_delta: int
+`;
 // Errors group needs the same helpers (chacha20, xor) from CURVE_HELPERS.
 // We rely on CURVE_HELPERS being executed in the same Pyodide namespace; if
 // it isn't, we re-include the helpers here.
@@ -171,6 +183,7 @@ const FORWARDER_PREAMBLE = `# Provided helpers (in scope at runtime):
 #   privkey_to_pubkey, ecdh, point_mul_pubkey, scalar_mul
 #   chacha20_keystream, xor_bytes
 #   parse_bigsize, encode_bigsize
+#   ForwardingPolicy(fee_base_msat, fee_proportional_millionths, cltv_expiry_delta)
 import hashlib, hmac
 
 ROUTING_INFO_SIZE = 1300
@@ -220,7 +233,7 @@ export const ONION_ROUTING_DRAFT_EXERCISE_GROUPS: Record<string, OnionRoutingExe
     label: "sphinx/forwarder.py",
     setupCode: FORWARDER_SETUP,
     preamble: FORWARDER_PREAMBLE,
-    exerciseIds: ["exercise-peel-layer-draft", "exercise-verify-hmac-draft", "exercise-process-onion-draft"],
+    exerciseIds: ["exercise-peel-layer-draft", "exercise-verify-hmac-draft", "exercise-check-forward-draft"],
     crossGroupDependencies: [],
   },
 
@@ -229,7 +242,7 @@ export const ONION_ROUTING_DRAFT_EXERCISE_GROUPS: Record<string, OnionRoutingExe
     label: "sphinx/errors.py",
     setupCode: ERRORS_SETUP,
     preamble: ERRORS_PREAMBLE,
-    exerciseIds: ["exercise-build-error-onion-draft", "exercise-decrypt-error-onion-draft"],
+    exerciseIds: ["exercise-decrypt-error-onion-draft"],
     crossGroupDependencies: [],
   },
 };
