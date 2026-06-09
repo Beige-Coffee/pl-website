@@ -110,7 +110,7 @@ const SNIPPETS: Record<string, Snippet> = {
 
   "peel-verify-hmac": {
     python:
-      '# Recompute the HMAC tag and compare against the received outer HMAC.\nexpected = hmac.new(\n    mu_B, hop_payloads + associated_data, hashlib.sha256\n).digest()\nif not hmac.compare_digest(expected, outer_hmac):\n    raise InvalidOnionHmacError()',
+      '# Recompute the HMAC tag and compare against the received outer HMAC.\nexpected = hmac.new(\n    mu_B, hop_payloads + associated_data, hashlib.sha256\n).digest()\nif not hmac.compare_digest(expected, outer_hmac):\n    raise ValueError("invalid_onion_hmac")  # reject: fail the HTLC',
   },
 
   "peel-extend-xor": {
@@ -120,17 +120,17 @@ const SNIPPETS: Record<string, Snippet> = {
 
   "peel-read-payload": {
     python:
-      '# Parse the bigsize length prefix, then the TLV records, then the\n# 32-byte next_hmac that follows the TLVs.\npayload_len, tlv_start = read_bigsize(extended, 0)\ntlv_end = tlv_start + payload_len\nthis_hop_payload = extended[tlv_start:tlv_end]\nnext_hmac = bytes(extended[tlv_end:tlv_end + 32])\nhop_size = tlv_end + 32  # offset into the buffer where this hop ends',
+      '# Parse the bigsize length prefix, then the TLV records, then the\n# 32-byte next_hmac that follows the TLVs.\n# parse_bigsize returns (value, bytes_consumed).\npayload_len, tlv_start = parse_bigsize(extended, 0)\ntlv_end = tlv_start + payload_len\nthis_hop_payload = extended[tlv_start:tlv_end]\nnext_hmac = bytes(extended[tlv_end:tlv_end + 32])\nhop_size = tlv_end + 32  # offset into the buffer where this hop ends',
   },
 
   "peel-lift-next": {
     python:
-      "# The next 1,300 bytes after Bob's hop payload become Charlie's\n# hop_payloads field — same fixed wire size as what Bob received.\nnext_hop_payloads = bytes(extended[hop_size:hop_size + 1300])",
+      "# The next 1,300 bytes after Bob's hop payload become Charlie's\n# hop_payloads field, the same fixed wire size as what Bob received.\nnext_hop_payloads = bytes(extended[hop_size:hop_size + 1300])",
   },
 
   "peel-advance-ephemeral": {
     python:
-      '# Blind Alice\'s ephemeral pubkey forward so Charlie sees a fresh\n# E_AC on the wire. The blinding factor is deterministic, so Charlie\n# can recompute the same ss_AC from his node privkey + E_AC.\nblinding = sha256(ephemeral_pubkey + shared_secret)\nnext_ephemeral = point_mul(ephemeral_pubkey, blinding)',
+      '# Blind Alice\'s ephemeral pubkey forward so Charlie sees a fresh\n# E_AC on the wire. The blinding factor is deterministic, so Charlie\n# can recompute the same ss_AC from his node privkey + E_AC.\nblinding = hashlib.sha256(ephemeral_pubkey + shared_secret).digest()\nnext_ephemeral = point_mul_pubkey(ephemeral_pubkey, blinding)',
   },
 
   "peel-assemble": {

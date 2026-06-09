@@ -1,17 +1,16 @@
 // ─── Onion Routing Exercise Groups ──────────────────────────────────────────
 //
-// Groups the 10 onion-routing exercises into 4 logical Python "files":
+// Groups the 9 onion-routing exercises into 4 logical Python "files":
 //   1. crypto/keys.py         — derive_keys (KeyMaterial dataclass)
 //   2. sphinx/builder.py      — OnionPacketBuilder class
-//   3. sphinx/forwarder.py    — OnionForwarder class + check_forward
+//   3. sphinx/forwarder.py    — OnionForwarder class + verify_hmac + check_forward
 //   4. sphinx/errors.py       — decrypt_error_onion
 //
-// Cross-group dependencies forward the student's solutions:
-//   - sphinx/builder.py uses derive_keys from crypto/keys.py
-//   - sphinx/forwarder.py uses derive_keys from crypto/keys.py
-//   - sphinx/errors.py uses derive_keys from crypto/keys.py
+// Key derivation is intentionally restated inline per group (hmac.new with the
+// label) rather than wired as a cross-group dependency on the student's
+// derive_keys; each group stays runnable on its own.
 //
-// Crypto primitives (HKDF, ChaCha20, ECDH) are imported, not re-derived;
+// Crypto primitives (ChaCha20, ECDH, curve math) are imported, not re-derived;
 // students completed these in the Noise course and we link back to those
 // chapters when each primitive comes up.
 
@@ -37,7 +36,12 @@ const KEYS_SETUP = ``;
 const CURVE_HELPERS = `
 from ecdsa import SigningKey, VerifyingKey, SECP256k1
 from ecdsa.util import string_to_number, number_to_string
-import hashlib
+import hashlib, hmac
+
+def generate_key(name, secret):
+    """BOLT 4 key generation (chapter 6): HMAC-SHA256 with the ASCII label as key."""
+    label = name.encode() if isinstance(name, str) else name
+    return hmac.new(label, secret, hashlib.sha256).digest()
 
 # ChaCha20 keystream helper. BOLT 4 uses ChaCha20 with a 96-bit (12-byte)
 # all-zero nonce as a stream cipher to generate per-hop keystream bytes.
@@ -160,35 +164,46 @@ const ERRORS_SETUP = CURVE_HELPERS;
 
 // ─── Visible Preambles (shown in editor, read-only) ────────────────────────
 
-const KEYS_PREAMBLE = `import hashlib, hmac, struct
-from cryptography.hazmat.primitives.kdf.hkdf import HKDF
-from cryptography.hazmat.primitives import hashes`;
+const KEYS_PREAMBLE = `import hashlib, hmac`;
 
 const BUILDER_PREAMBLE = `# Provided helpers (in scope at runtime):
-#   privkey_to_pubkey, ecdh, point_mul_pubkey, scalar_mul
+#   privkey_to_pubkey(privkey: bytes) -> bytes        # 32 -> 33, compressed
+#   ecdh(privkey: bytes, pubkey: bytes) -> bytes      # 32-byte shared secret
+#   point_mul_pubkey(pubkey: bytes, scalar: bytes) -> bytes
+#   scalar_mul(a: bytes, b: bytes) -> bytes           # 32-byte scalars, mod n
 #   chacha20_keystream(key: bytes, length: int) -> bytes
 #   xor_bytes(a: bytes, b: bytes) -> bytes
 # Crypto reference: see Noise course /noise-tutorial/crypto-primitives
 #
-# OnionPacketBuilder inherits from _OnionPacketBuilderBase, which provides
-# self._derive_build_keys(payloads) — a boilerplate helper used by the
-# build exercise. The base class is hidden infrastructure; nothing else.
-import hashlib
+# OnionPacketBuilder inherits from _OnionPacketBuilderBase, which provides one
+# helper for the build exercise: self._derive_build_keys(payloads). It calls
+# self.derive_shared_secrets() for you (populating self.shared_secrets and
+# self.ephemeral_pubkeys), then returns (rho_keys, mu_keys, pad_key, sizes).
+# Note: sizes covers only the forwarder hops; rho_keys covers every hop, so
+# the filler call slices it (rho_keys[:-1]).
+import hashlib, hmac
 
 ROUTING_INFO_SIZE = 1300  # BOLT 4 hop_payloads field length
 
 class OnionPacketBuilder(_OnionPacketBuilderBase):`;
 
 const FORWARDER_PREAMBLE = `# Provided helpers (in scope at runtime):
-#   privkey_to_pubkey, ecdh, point_mul_pubkey, scalar_mul
-#   chacha20_keystream, xor_bytes
-#   parse_bigsize, encode_bigsize
+#   privkey_to_pubkey(privkey: bytes) -> bytes        # 32 -> 33, compressed
+#   ecdh(privkey: bytes, pubkey: bytes) -> bytes      # 32-byte shared secret
+#   point_mul_pubkey(pubkey: bytes, scalar: bytes) -> bytes
+#   chacha20_keystream(key: bytes, length: int) -> bytes
+#   xor_bytes(a: bytes, b: bytes) -> bytes
+#   parse_bigsize(data, offset=0) -> (value, bytes_consumed)
+#   encode_bigsize(value) -> bytes
+#   generate_key(name, secret) -> bytes   # HMAC-SHA256 label KDF from chapter 6
 #   ForwardingPolicy(fee_base_msat, fee_proportional_millionths, cltv_expiry_delta)
 import hashlib, hmac
 
 ROUTING_INFO_SIZE = 1300
 
-class OnionForwarder:`;
+class OnionForwarder:
+    # Methods you write in this group (like peel_layer) are inserted here
+    # when the tests run; functions below the class are module-level.`;
 
 const ERRORS_PREAMBLE = `# Provided helpers (in scope at runtime):
 #   chacha20_keystream(key, length) -> bytes
@@ -196,9 +211,11 @@ const ERRORS_PREAMBLE = `# Provided helpers (in scope at runtime):
 import hashlib, hmac
 
 # BOLT 4 error packet layout: hmac(32) || u16:failure_len || failure_msg ||
-# u16:pad_len || pad zeros, with failure_len + pad_len == 256.
-# Total = 32 + 2 + failure_len + 2 + pad_len = 32 + 260 = 292 bytes.
-ERROR_PACKET_SIZE = 292`;
+# u16:pad_len || pad zeros. The sender pads failure_msg + pad to a fixed
+# total so the size can't leak which error occurred: 256 bytes at minimum
+# (a 292-byte packet, this chapter's worked example), but bigger failures
+# pad to a bigger total. Read the lengths from the packet, never assume.
+ERROR_PACKET_MIN_SIZE = 292  # spec minimum: 32 + 2 + 256 + 2`;
 
 // ─── Group Definitions ──────────────────────────────────────────────────────
 //

@@ -125,7 +125,7 @@ const BEATS: Beat[] = [
     subLabel: "PARSE",
     title: "Fields parsed",
     caption:
-      "Bob's hop payload is plaintext now. The TLV region in the middle of it fans out into its three records: a provided helper, `parse_tlv_records`, walks the bigsize-prefixed bytes and hands back `amt_to_forward`, `outgoing_cltv_value`, and `short_channel_id`. The 32 bytes right after the TLVs are `charlie_hmac`, the tag Bob will carry onto the packet he forwards.",
+      "Bob's hop payload is plaintext now. The TLV region in the middle of it fans out into its three records: Bob walks the bigsize-prefixed bytes and reads out `amt_to_forward`, `outgoing_cltv_value`, and `short_channel_id`. The 32 bytes right after the TLVs are `charlie_hmac`, the tag Bob will carry onto the packet he forwards.",
   },
   {
     step: 6,
@@ -655,7 +655,7 @@ function ParseFanout() {
             whiteSpace: "nowrap",
           }}
         >
-          parse_tlv_records()
+          parse the TLV records
         </span>
       </div>
 
