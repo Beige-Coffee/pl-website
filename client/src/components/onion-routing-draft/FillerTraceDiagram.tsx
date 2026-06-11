@@ -1462,11 +1462,13 @@ function shiftedWidths(step: number): ShiftedWidths {
       tail: 50,
     };
   }
-  // Beats 12-13: real byte proportions of the 1,300-byte buffer. Bob is absent
-  // (width 0) on beat 12 so it can grow in on beat 13.
-  const bobPct = step === 12 ? 0 : (BOB_PAYLOAD / ROUTING_INFO_SIZE) * 100;
-  const charliePct = (CHARLIE_PAYLOAD / ROUTING_INFO_SIZE) * 100;
-  const davePct = (DAVE_PAYLOAD / ROUTING_INFO_SIZE) * 100;
+  // Beats 12-13: schematic proportions (true scale would make the hop-payload
+  // cells ~5% slivers and crush their labels; the padding tail is schematic
+  // anyway, so it absorbs the difference). Bob is absent (width 0) on beat 12
+  // so it can grow in on beat 13.
+  const bobPct = step === 12 ? 0 : 12;
+  const charliePct = 14;
+  const davePct = 16;
   return {
     bob: bobPct,
     charlie: charliePct,
@@ -1629,13 +1631,17 @@ function WrappedPayloadCell({
           className="relative"
           style={{
             fontFamily: MONO,
-            fontSize: 9,
+            fontSize: 8.5,
             fontWeight: 700,
             color: HOP_STROKE_COLOR[hopId],
             background: "rgba(255,253,245,0.85)",
-            padding: "0 4px",
+            padding: "0 2px",
             zIndex: 2,
             whiteSpace: "nowrap",
+            // Fade the label in only once the cell is wide enough to hold it,
+            // so a half-clipped letter never flashes during the width tween.
+            opacity: widthPct < 6 ? 0 : 1,
+            transition: "opacity 250ms ease-out",
           }}
         >
           {label}

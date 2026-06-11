@@ -26,6 +26,7 @@ import { HatchOverlay, type ForwarderId } from "./encryptionHatch";
 import { SlotSubCell } from "./SlotSubCell";
 import { renderCaption } from "./captionMarkup";
 import { StepCaption } from "./StepCaption";
+import { MathLine } from "./mathTokens";
 
 // ── Shared constants ───────────────────────────────────────────────────────
 
@@ -390,104 +391,12 @@ export function ErrorPacketCard({
           </span>
         </div>
 
-        {/* Packet body -- fixed height, fixed widths. The single relative
-            container hosts the field cells AND the accumulating HatchOverlay
-            so every applied ammag layer crosshatches the SAME footprint. */}
-        <div
-          className="relative flex"
-          style={{ height: PACKET_BODY_H, background: CREAM }}
-        >
-          {/* HMAC (32) -- accent = failing hop, never red. */}
-          <SlotSubCell
-            section="hmac"
-            className="relative flex items-center justify-center"
-            style={{
-              width: HMAC_CELL_W,
-              flexShrink: 0,
-              background: HOP_FILL[failingHop],
-              borderRight: `1.5px solid ${hmacColor}`,
-              overflow: "hidden",
-            }}
-          >
-            <LabelIsland borderColor={hmacColor} zIndex={6}>
-              <FieldKicker>HMAC</FieldKicker>
-              <FieldValue color={hmacColor}>32 B</FieldValue>
-              <FieldSub>um_{failingHop.charAt(0)}</FieldSub>
-            </LabelIsland>
-          </SlotSubCell>
-
-          {/* Payload (260) -- LEN u16 │ failure message │ pad. One TLV-style
-              region; the inner three islands sum to the 260-byte payload. */}
-          <div
-            className="relative flex flex-1"
-            style={{ minWidth: 0, background: HOP_FILL[failingHop] }}
-          >
-            {/* LEN (u16) */}
-            <SlotSubCell
-              section="len"
-              className="relative flex items-center justify-center"
-              style={{
-                width: 64,
-                flexShrink: 0,
-                borderRight: `1px dashed ${hmacColor}80`,
-                overflow: "hidden",
-              }}
-            >
-              <LabelIsland borderColor={hmacColor} zIndex={6}>
-                <FieldKicker>LEN</FieldKicker>
-                <FieldValue color={hmacColor}>u16</FieldValue>
-              </LabelIsland>
-            </SlotSubCell>
-
-            {/* failure message */}
-            <SlotSubCell
-              section="tlv"
-              className="relative flex flex-1 items-center justify-center"
-              style={{ minWidth: 0, overflow: "hidden" }}
-            >
-              <LabelIsland borderColor={hmacColor} zIndex={6}>
-                <FieldValue color={hmacColor}>failure msg</FieldValue>
-                <FieldSub>temporary_channel_failure</FieldSub>
-              </LabelIsland>
-            </SlotSubCell>
-
-            {/* pad to fixed length */}
-            <div
-              className="relative flex items-center justify-center"
-              style={{
-                width: 70,
-                flexShrink: 0,
-                borderLeft: `1px dashed ${PAD_STROKE}`,
-                overflow: "hidden",
-              }}
-            >
-              <div
-                className="flex flex-col items-center"
-                style={{
-                  background: CREAM,
-                  border: `1px solid ${PAD_STROKE}`,
-                  padding: "2px 4px",
-                  position: "relative",
-                  zIndex: 6,
-                }}
-              >
-                <FieldKicker>PAD</FieldKicker>
-                <FieldSub>0x00…</FieldSub>
-              </div>
-            </div>
-          </div>
-
-          {/* Accumulating encryption. Each ammag layer crosshatches the whole
-              292-byte footprint; deeper hops add another angle. The footprint
-              never changes -- only the density grows. */}
-          {appliedLayers.length > 0 && (
-            <HatchOverlay
-              hops={appliedLayers}
-              zIndex={4}
-              stripeOpacity={0.16}
-            />
-          )}
-        </div>
+        {/* Packet body -- fixed height, fixed widths. Extracted so the XOR
+            stack can render the same fields as compact before/after bars. */}
+        <ErrorPacketBody
+          appliedLayers={appliedLayers}
+          failingHop={failingHop}
+        />
 
         {/* Byte ruler: HMAC(32) || payload(260). Constant on every beat. */}
         <div
@@ -533,6 +442,224 @@ export function ErrorPacketCard({
           {renderCaption(footnote)}
         </div>
       )}
+    </div>
+  );
+}
+
+// The packet's field row (HMAC │ LEN │ failure msg │ pad) plus the
+// accumulating HatchOverlay, as one reusable element. The single relative
+// container hosts the field cells AND the hatch so every applied ammag layer
+// crosshatches the SAME footprint.
+export function ErrorPacketBody({
+  appliedLayers,
+  failingHop = FAILING_HOP,
+  height = PACKET_BODY_H,
+}: {
+  appliedLayers: ForwarderId[];
+  failingHop?: HopId;
+  height?: number;
+}) {
+  const hmacColor = HOP_STROKE[failingHop];
+  return (
+    <div className="relative flex" style={{ height, background: CREAM }}>
+      {/* HMAC (32) -- accent = failing hop, never red. */}
+      <SlotSubCell
+        section="hmac"
+        className="relative flex items-center justify-center"
+        style={{
+          width: HMAC_CELL_W,
+          flexShrink: 0,
+          background: HOP_FILL[failingHop],
+          borderRight: `1.5px solid ${hmacColor}`,
+          overflow: "hidden",
+        }}
+      >
+        <LabelIsland borderColor={hmacColor} zIndex={6}>
+          <FieldKicker>HMAC</FieldKicker>
+          <FieldValue color={hmacColor}>32 B</FieldValue>
+          <FieldSub>um_{failingHop.charAt(0)}</FieldSub>
+        </LabelIsland>
+      </SlotSubCell>
+
+      {/* Payload (260) -- LEN u16 │ failure message │ pad. One TLV-style
+          region; the inner three islands sum to the 260-byte payload. */}
+      <div
+        className="relative flex flex-1"
+        style={{ minWidth: 0, background: HOP_FILL[failingHop] }}
+      >
+        {/* LEN (u16) */}
+        <SlotSubCell
+          section="len"
+          className="relative flex items-center justify-center"
+          style={{
+            width: 64,
+            flexShrink: 0,
+            borderRight: `1px dashed ${hmacColor}80`,
+            overflow: "hidden",
+          }}
+        >
+          <LabelIsland borderColor={hmacColor} zIndex={6}>
+            <FieldKicker>LEN</FieldKicker>
+            <FieldValue color={hmacColor}>u16</FieldValue>
+          </LabelIsland>
+        </SlotSubCell>
+
+        {/* failure message */}
+        <SlotSubCell
+          section="tlv"
+          className="relative flex flex-1 items-center justify-center"
+          style={{ minWidth: 0, overflow: "hidden" }}
+        >
+          <LabelIsland borderColor={hmacColor} zIndex={6}>
+            <FieldValue color={hmacColor}>failure msg</FieldValue>
+            <FieldSub>temporary_channel_failure</FieldSub>
+          </LabelIsland>
+        </SlotSubCell>
+
+        {/* pad to fixed length */}
+        <div
+          className="relative flex items-center justify-center"
+          style={{
+            width: 70,
+            flexShrink: 0,
+            borderLeft: `1px dashed ${PAD_STROKE}`,
+            overflow: "hidden",
+          }}
+        >
+          <div
+            className="flex flex-col items-center"
+            style={{
+              background: CREAM,
+              border: `1px solid ${PAD_STROKE}`,
+              padding: "2px 4px",
+              position: "relative",
+              zIndex: 6,
+            }}
+          >
+            <FieldKicker>PAD</FieldKicker>
+            <FieldSub>0x00…</FieldSub>
+          </div>
+        </div>
+      </div>
+
+      {/* Accumulating encryption. Each ammag layer crosshatches the whole
+          292-byte footprint; deeper hops add another angle. The footprint
+          never changes -- only the density grows. */}
+      {appliedLayers.length > 0 && (
+        <HatchOverlay hops={appliedLayers} zIndex={4} stripeOpacity={0.16} />
+      )}
+    </div>
+  );
+}
+
+// ── ErrorXorStack: the canonical three-bar XOR for a wrap or peel beat ──────
+//
+// Mirrors the forward-direction grammar (PeelTraceDiagram beat 6, standards
+// §15): the packet BEFORE, ⊕ the hop's ammag keystream (a full hatched bar),
+// = the packet AFTER, gold-emphasized. Same 292-byte footprint on every bar;
+// only the crosshatch changes. This is what makes "encryption is an in-place
+// XOR" explicit instead of implied.
+
+export function ErrorXorStack({
+  wrapHop,
+  beforeLayers,
+  afterLayers,
+  beforeLabel,
+  afterLabel,
+  cornerBadge,
+}: {
+  /** The hop whose ammag keystream this beat applies (wrap or peel). */
+  wrapHop: "bob" | "charlie";
+  beforeLayers: ForwarderId[];
+  afterLayers: ForwarderId[];
+  beforeLabel: string;
+  afterLabel: string;
+  /** Optional badge rendered top-right of the stack (e.g. a KeyHoverIcon). */
+  cornerBadge?: ReactNode;
+}) {
+  const accent = HOP_STROKE[wrapHop];
+  const sub = wrapHop === "bob" ? "B" : "C";
+  return (
+    <div className="relative mx-auto" style={{ width: PACKET_W }}>
+      {cornerBadge && (
+        <div className="absolute" style={{ top: -10, right: -8, zIndex: 8 }}>
+          {cornerBadge}
+        </div>
+      )}
+
+      <XorBarLabel color={NEUTRAL_TEXT}>{beforeLabel}</XorBarLabel>
+      <div
+        className="border-[1.5px]"
+        style={{ borderColor: INK, overflow: "hidden" }}
+      >
+        <ErrorPacketBody appliedLayers={beforeLayers} height={50} />
+      </div>
+
+      <XorOpRow>⊕</XorOpRow>
+
+      <XorBarLabel color={accent} center>
+        keystream · 292 B
+      </XorBarLabel>
+      <div
+        className="border-[1.5px] relative overflow-hidden flex items-center justify-center"
+        style={{ borderColor: accent, height: 42, background: CREAM }}
+      >
+        <HatchOverlay hops={[wrapHop]} zIndex={0} stripeOpacity={0.5} />
+        <span
+          className="relative"
+          style={{ zIndex: 2, background: CREAM, padding: "1px 8px" }}
+        >
+          <MathLine
+            text={`chacha20(ammag_${sub}, 292)`}
+            color={accent}
+            fontSize={12}
+          />
+        </span>
+      </div>
+
+      <XorOpRow>=</XorOpRow>
+
+      <XorBarLabel color={FOCUS_GOLD}>{afterLabel}</XorBarLabel>
+      <div
+        className="border-[1.5px]"
+        style={{
+          borderColor: FOCUS_GOLD,
+          boxShadow: "0 0 0 2px rgba(184,134,11,0.18)",
+          overflow: "hidden",
+        }}
+      >
+        <ErrorPacketBody appliedLayers={afterLayers} height={50} />
+      </div>
+    </div>
+  );
+}
+
+function XorBarLabel({
+  children,
+  color,
+  center,
+}: {
+  children: ReactNode;
+  color: string;
+  center?: boolean;
+}) {
+  return (
+    <div
+      className={`text-[10px] uppercase tracking-[0.06em] mb-1 ${center ? "text-center" : ""}`}
+      style={{ color, fontFamily: MONO, fontWeight: 700 }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function XorOpRow({ children }: { children: ReactNode }) {
+  return (
+    <div
+      className="text-center my-1"
+      style={{ fontSize: 15, fontWeight: 700, color: INK, lineHeight: 1 }}
+    >
+      {children}
     </div>
   );
 }

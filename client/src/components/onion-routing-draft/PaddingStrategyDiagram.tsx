@@ -386,7 +386,7 @@ function HopPayloadCell({ forwarder, layers, dim }: { forwarder: ForwarderId; la
   const color = HOP_KEY_COLORS[forwarder];
   const fill = HOP_FILL[forwarder];
   return (
-    <div className="relative flex" style={{ flexGrow: 2.4, flexBasis: 0, minWidth: 98, borderRight: `1.5px solid ${color}`, opacity: dim ? 0.3 : 1, transition: "opacity 300ms, flex-grow 450ms ease-in-out, flex-basis 450ms ease-in-out" }}>
+    <div className="relative flex" style={{ flexGrow: 2.4, flexBasis: 0, minWidth: 116, borderRight: `1.5px solid ${color}`, opacity: dim ? 0.3 : 1, transition: "opacity 300ms, flex-grow 450ms ease-in-out, flex-basis 450ms ease-in-out" }}>
       <SlotSubCell section="len" style={{ width: 24, flexShrink: 0, background: fill, borderRight: `1px dashed ${color}90`, fontSize: 8.5, fontFamily: MONO, color: SLATE, display: "flex", alignItems: "center", justifyContent: "center", letterSpacing: "0.05em", textTransform: "uppercase", fontWeight: 700 }}>len</SlotSubCell>
       <SlotSubCell section="tlv" className="flex-1 relative flex flex-col items-center justify-center text-center" style={{ background: fill, minWidth: 0 }}>
         <div className="relative text-[9.5px] font-bold uppercase tracking-[0.04em]" style={{ color, fontFamily: MONO }}>{HOP_LABEL[forwarder]}</div>

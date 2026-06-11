@@ -653,6 +653,10 @@ export function WrapTraceDiagram() {
           <div className="mx-auto" style={{ minWidth: 700, maxWidth: 840 }}>
             <HopTrack currentHop={beat.iterLabel} />
 
+            {/* Standardized KEYS badge, top-right (operation rule). HMAC
+                beats render their own labeled badge inside HmacView. */}
+            {!showEnvelope && !isHmacStep(step) && <WrapKeysBadge step={step} />}
+
             {showEnvelope ? (
               <EnvelopeView />
             ) : step === 3 || step === 4 ? (
@@ -668,10 +672,6 @@ export function WrapTraceDiagram() {
                 carryFrom={carryForwardLabel(step)}
               />
             )}
-
-            {/* HMAC beats render their own compact KeyHoverIcon inside
-                HmacView; everything else uses the global keys affordance. */}
-            {!showEnvelope && !isHmacStep(step) && <KeysAffordance step={step} />}
 
             <StepCaption
               label={`${beat.iterLabel} · ${beat.subLabel}`}
@@ -1235,7 +1235,7 @@ export function SlotCell({ hop }: { hop: ForwarderId }) {
           style={{
             background: "#fffdf5",
             border: `1px solid ${color}55`,
-            padding: "2px 4px",
+            padding: "2px 3px",
             position: "relative",
             zIndex: 6,
             minWidth: 0,
@@ -1247,8 +1247,8 @@ export function SlotCell({ hop }: { hop: ForwarderId }) {
             style={{
               color,
               fontFamily: MONO,
-              fontSize: 10,
-              letterSpacing: "0.05em",
+              fontSize: 9.5,
+              letterSpacing: "0.02em",
               lineHeight: 1,
             }}
           >
@@ -1274,7 +1274,7 @@ export function SlotCell({ hop }: { hop: ForwarderId }) {
         section="hmac"
         className="flex items-center justify-center"
         style={{
-          width: 56,
+          width: 62,
           flexShrink: 0,
           background: fill,
           borderLeft: `1px dashed ${color}80`,
@@ -1342,40 +1342,36 @@ const KEY_MU_COLOR = "#3b6aa0";   // blue
 // rendered in a compact ~42px tall bar. Drops the byte-axis labels since the
 // X-axis is the same across all three rows.
 
-// ── Keys affordance: compact chip + hover popover ───────────────────────────
-// Replaces the always-on key-derivation panel. The keys recede into a hover
-// popover so each step shows only the operation, and the derivation (ECDH →
-// ss → rho/mu) is one hover away, clamped inside the component.
+// ── Keys affordance: the standardized KEYS badge (operation rule) ───────────
+// Every beat's working keys are one hover away via the shared KeyHoverIcon,
+// top-right of the stage; the badge names the key actively in use. The
+// popover is the shared equation-stack KeyDerivationCard.
 
-interface KeyEntry {
-  name: string;
-  formula: string;
-  role: string;
-  color: string;
-  active: boolean;
-}
-interface KeysInfo {
-  title: string;
-  ecdh: { inputs: string } | null;
-  ss: { name: string; sub: string; color: string };
-  keys: KeyEntry[];
-}
-
-function keysInfoForStep(step: number): KeysInfo | null {
+function keysPropsForStep(
+  step: number,
+): { card: KeyDerivationCardProps; activeLabel?: string } | null {
   if (step === 1) {
     return {
-      title: "Key in use · pad init",
-      ecdh: null,
-      ss: { name: "session_key", sub: "per-payment private key", color: FOCUS_GOLD },
-      keys: [
-        {
-          name: "pad_key",
-          formula: "HMAC('pad', session_key)",
-          role: "buffer-init key",
-          color: FOCUS_GOLD,
-          active: true,
+      card: {
+        title: "Alice derives the buffer-init key",
+        source: {
+          name: "session_key",
+          subtitle: "per-payment private key",
+          accent: FOCUS_GOLD,
         },
-      ],
+        rows: [
+          {
+            formula: "HMAC('pad', session_key)",
+            keyName: "pad_key",
+            bytes: "32 bytes",
+            useTitle: "Buffer-init key",
+            useSubtitle: "fills the empty buffer with noise",
+            color: FOCUS_GOLD,
+            active: true,
+          },
+        ],
+      },
+      activeLabel: "pad_key",
     };
   }
   const hop: ForwarderId | null =
@@ -1393,156 +1389,58 @@ function keysInfoForStep(step: number): KeysInfo | null {
   const rhoActive = step === 4 || step === 8 || step === 11;
   const muActive = step === 6 || step === 9 || step === 12;
   return {
-    title: `${hopName}'s iteration keys`,
-    ecdh: { inputs: `e_A${initial} · ${hopName.toLowerCase()}_pubkey` },
-    ss: { name: ss, sub: "ECDH shared secret", color: HOP_STROKE[hop] },
-    keys: [
-      {
-        name: `rho_${initial}`,
-        formula: `HMAC('rho', ${ss})`,
-        role: "stream cipher",
-        color: KEY_RHO_COLOR,
-        active: rhoActive,
+    card: {
+      title: `${hopName}'s iteration keys`,
+      source: {
+        name: ss,
+        subtitle: "ECDH shared secret",
+        accent: HOP_STROKE[hop],
       },
-      {
-        name: `mu_${initial}`,
-        formula: `HMAC('mu', ${ss})`,
-        role: "packet HMAC",
-        color: KEY_MU_COLOR,
-        active: muActive,
+      rows: [
+        {
+          formula: `HMAC('rho', ${ss})`,
+          keyName: `rho_${initial}`,
+          bytes: "32 bytes",
+          useTitle: "Stream cipher key",
+          useSubtitle: "the XOR pass",
+          color: KEY_RHO_COLOR,
+          active: rhoActive,
+        },
+        {
+          formula: `HMAC('mu', ${ss})`,
+          keyName: `mu_${initial}`,
+          bytes: "32 bytes",
+          useTitle: "Packet HMAC key",
+          useSubtitle: "tags the buffer",
+          color: KEY_MU_COLOR,
+          active: muActive,
+        },
+      ],
+      upstream: {
+        inputA: {
+          name: `e_A${initial}`,
+          subtitle: "Alice's ephemeral privkey",
+        },
+        inputB: {
+          name: `${hop}_pubkey`,
+          subtitle: `${hopName}'s node pubkey`,
+        },
       },
-    ],
+    },
+    activeLabel: rhoActive
+      ? `rho_${initial}`
+      : muActive
+        ? `mu_${initial}`
+        : undefined,
   };
 }
 
-function KeysAffordance({ step }: { step: number }) {
-  const [hover, setHover] = useState(false);
-  const [pinned, setPinned] = useState(false);
-  useEffect(() => {
-    setHover(false);
-    setPinned(false);
-  }, [step]);
-  const info = keysInfoForStep(step);
-  if (!info) return <div style={{ height: 8 }} />;
-  const open = hover || pinned;
-  const activeKey = info.keys.find((k) => k.active);
-  const chipColor = activeKey?.color ?? info.ss.color;
+function WrapKeysBadge({ step }: { step: number }) {
+  const info = keysPropsForStep(step);
+  if (!info) return null;
   return (
-    <div className="relative flex justify-center mt-5">
-      <button
-        type="button"
-        onMouseEnter={() => setHover(true)}
-        onMouseLeave={() => setHover(false)}
-        onFocus={() => setHover(true)}
-        onBlur={() => setHover(false)}
-        onClick={() => setPinned((p) => !p)}
-        className="inline-flex items-center gap-2 border-[1.5px] px-3 py-1.5"
-        style={{
-          borderColor: chipColor,
-          background: open ? `${chipColor}26` : `${chipColor}14`,
-          cursor: "pointer",
-          fontFamily: MONO,
-        }}
-        aria-label="Show key derivation"
-      >
-        {activeKey ? (
-          <>
-            <span
-              style={{
-                fontSize: 10,
-                color: NEUTRAL_TEXT,
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-              }}
-            >
-              key in use
-            </span>
-            <span style={{ fontSize: 12.5, fontWeight: 700, color: activeKey.color }}>
-              {activeKey.name}
-            </span>
-          </>
-        ) : (
-          <span style={{ fontSize: 11, fontWeight: 700, color: chipColor }}>
-            {info.title}
-          </span>
-        )}
-        <span style={{ fontSize: 10, color: NEUTRAL_TEXT }}>· hover or click for derivation ▴</span>
-      </button>
-      {open && <KeysPopover info={info} />}
-    </div>
-  );
-}
-
-function KeysPopover({ info }: { info: KeysInfo }) {
-  return (
-    <div
-      className="absolute"
-      style={{
-        bottom: "calc(100% + 8px)",
-        left: "50%",
-        transform: "translateX(-50%)",
-        width: "min(400px, calc(100% - 24px))",
-        zIndex: 50,
-        background: "#fffdf5",
-        border: `1.5px solid ${INK}`,
-        boxShadow: "0 8px 30px rgba(0,0,0,0.25)",
-        padding: 14,
-        fontFamily: MONO,
-        textAlign: "left",
-      }}
-    >
-      <div
-        className="text-[10px] uppercase tracking-[0.08em] mb-2.5"
-        style={{ color: INK, fontWeight: 700 }}
-      >
-        {info.title}
-      </div>
-      {info.ecdh && (
-        <div className="mb-2 text-center">
-          <div className="text-[11px]" style={{ color: INK, fontWeight: 700 }}>
-            {info.ecdh.inputs}
-          </div>
-          <div className="text-[10px]" style={{ color: NEUTRAL_TEXT }}>↓ SHA256 (ECDH)</div>
-        </div>
-      )}
-      <div className="text-center mb-2.5">
-        <span
-          className="inline-block px-2.5 py-1 border-[1.5px]"
-          style={{ borderColor: info.ss.color, background: `${info.ss.color}14` }}
-        >
-          <span style={{ fontSize: 12.5, fontWeight: 700, color: info.ss.color }}>
-            {info.ss.name}
-          </span>
-          <span style={{ fontSize: 9, color: NEUTRAL_TEXT, marginLeft: 6 }}>{info.ss.sub}</span>
-        </span>
-      </div>
-      <div className="flex flex-col gap-1.5">
-        {info.keys.map((k) => (
-          <div
-            key={k.name}
-            className="flex items-center justify-between gap-2 border-[1.5px] px-2 py-1"
-            style={{
-              borderColor: k.active ? k.color : "rgba(15,23,42,0.18)",
-              background: k.active ? `${k.color}10` : "transparent",
-              opacity: k.active ? 1 : 0.7,
-            }}
-          >
-            <span className="text-[9.5px]" style={{ color: NEUTRAL_TEXT }}>{k.formula}</span>
-            <span className="flex items-center gap-1.5 shrink-0">
-              <span style={{ fontSize: 12, fontWeight: 700, color: k.color }}>{k.name}</span>
-              <span className="text-[8.5px]" style={{ color: NEUTRAL_TEXT }}>{k.role}</span>
-              {k.active && (
-                <span
-                  className="text-[8px] font-bold px-1.5 py-0.5"
-                  style={{ background: k.color, color: "#fff", whiteSpace: "nowrap" }}
-                >
-                  in use
-                </span>
-              )}
-            </span>
-          </div>
-        ))}
-      </div>
+    <div className="flex justify-end mb-1">
+      <KeyHoverIcon {...info.card} activeLabel={info.activeLabel} />
     </div>
   );
 }
@@ -1895,7 +1793,7 @@ function HmacView({ step }: { step: number }) {
     <>
       {/* Compact key reminder, top-right of the operation (§7). */}
       <div className="flex justify-end mb-1">
-        <KeyHoverIcon {...hmacKeyProps(hop)} />
+        <KeyHoverIcon {...hmacKeyProps(hop)} activeLabel={`mu_${initial}`} />
       </div>
 
       <Buffer
@@ -2070,7 +1968,7 @@ function EnvelopeView() {
         <div
           className="flex flex-col items-center justify-center text-center border-r-[1.5px] relative"
           style={{
-            flexBasis: 130,
+            flexBasis: 112,
             flexShrink: 0,
             borderColor: INK,
             padding: "8px 6px",
@@ -2131,10 +2029,14 @@ function EnvelopeView() {
             boxShadow: `inset 0 0 0 2px ${FOCUS_GOLD}`,
           }}
         >
+          {/* The envelope's side fields (header + outer hmac) eat ~230px of
+              row width, so the hop payloads get wider display percentages
+              here than in the full-width buffer rows; the padding (schematic
+              anyway) absorbs the difference. Keeps LEN | TLV | HMAC readable. */}
           <BufferRegion
             region={{
               key: "bob-slot",
-              widthPct: 100 * (DISPLAY_BOB_PCT / 100),
+              widthPct: 28,
               kind: "slot",
               hop: "bob",
               layers: ["bob"],
@@ -2144,7 +2046,7 @@ function EnvelopeView() {
           <BufferRegion
             region={{
               key: "charlie-slot",
-              widthPct: 100 * (DISPLAY_CHARLIE_PCT / 100),
+              widthPct: 29,
               kind: "slot",
               hop: "charlie",
               layers: ["charlie", "bob"],
@@ -2154,7 +2056,7 @@ function EnvelopeView() {
           <BufferRegion
             region={{
               key: "dave-slot",
-              widthPct: 100 * (DISPLAY_DAVE_PCT / 100),
+              widthPct: 31,
               kind: "slot",
               hop: "dave",
               layers: ["dave", "charlie", "bob"],
@@ -2164,8 +2066,7 @@ function EnvelopeView() {
           <BufferRegion
             region={{
               key: "pad",
-              widthPct:
-                100 - DISPLAY_BOB_PCT - DISPLAY_CHARLIE_PCT - DISPLAY_DAVE_PCT,
+              widthPct: 12,
               kind: "padding-enc",
               layers: ["dave", "charlie", "bob"],
             }}
@@ -2177,7 +2078,7 @@ function EnvelopeView() {
         <div
           className="flex flex-col items-center justify-center text-center border-l-[1.5px]"
           style={{
-            flexBasis: 96,
+            flexBasis: 84,
             flexShrink: 0,
             borderColor: INK,
             padding: "8px 4px",

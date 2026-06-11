@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import {
-  KeyDerivationCard,
   KeyHoverIcon,
   type KeyDerivationCardProps,
 } from "./KeyDerivationCard";
@@ -8,6 +7,7 @@ import {
   ErrorChrome,
   ErrorPacketCard,
   ErrorRouteTrack,
+  ErrorXorStack,
   ReturnPathRail,
   SUCCESS_GREEN,
   INK,
@@ -31,8 +31,10 @@ import {
 // taller per layer, which contradicted the "292 B fixed" caption; that bug
 // is the whole reason this was rebuilt.
 //
-// Per-beat key disclosure follows §7: a full KeyDerivationCard on the beat a
-// key is first introduced, then the compact KeyHoverIcon on later beats.
+// Key disclosure follows the operation rule (2026-06-10): the keys here are
+// INPUTS to each beat's operation (an HMAC, two XOR wraps), so they never
+// expand inline. The compact KeyHoverIcon rides top-right of the packet card
+// or XOR stack on every key-using beat; hover recalls the full derivation.
 // ────────────────────────────────────────────────────────────────────────────
 
 const TOTAL_BEATS = 5;
@@ -121,7 +123,6 @@ export function ErrorBoomerangDiagram() {
 
   const packetHop = packetHopFor(step);
   const appliedLayers = appliedLayersFor(step);
-  const packetVisible = step >= 1;
 
   return (
     <ErrorChrome
@@ -157,34 +158,49 @@ export function ErrorBoomerangDiagram() {
         dimmed={["dave"]}
       />
 
-      {/* The error packet, centered. It is the SAME element on every beat from
-          step 1 on (it gains hatch in place, never grows, never slides off the
-          stage -- that off-stage slide was the "invisible at step 5" bug). It
-          is centered with mx-auto and NO transform on the wrapper, so the
-          corner KeyHoverIcon's fixed-position popover resolves against the
-          viewport instead of being thrown off by a transformed containing
-          block (§8 -- the dead KEYS-badge bug). */}
-      <div
-        className="mx-auto mt-2"
-        style={{
-          width: 460,
-          opacity: packetVisible ? 1 : 0,
-          pointerEvents: packetVisible ? "auto" : "none",
-          transition: "opacity 400ms ease-out",
-        }}
-      >
-        <ErrorPacketCard
-          appliedLayers={appliedLayers}
-          failingHop="charlie"
-          cornerBadge={<BoomerangCornerKeys step={step} />}
-        />
-      </div>
+      {/* The error packet. Build (1) and arrival (4) show the full card; the
+          two wrap beats (2, 3) show the canonical three-bar XOR stack so the
+          encryption is explicit: packet ⊕ ammag keystream = same 292 bytes,
+          one more crosshatch angle. Everything stays centered with mx-auto
+          and NO transform on the wrapper, so the corner KeyHoverIcon's
+          fixed-position popover resolves against the viewport (§8). */}
+      {(step === 1 || step === 4) && (
+        <div className="mx-auto mt-2" style={{ width: 460 }}>
+          <ErrorPacketCard
+            appliedLayers={appliedLayers}
+            failingHop="charlie"
+            cornerBadge={<BoomerangCornerKeys step={step} />}
+          />
+        </div>
+      )}
+      {step === 2 && (
+        <div className="mt-2">
+          <ErrorXorStack
+            wrapHop="charlie"
+            beforeLayers={[]}
+            afterLayers={["charlie"]}
+            beforeLabel="error packet · plaintext"
+            afterLabel="wrapped · charlie's layer on · still 292 B"
+            cornerBadge={<BoomerangCornerKeys step={step} />}
+          />
+        </div>
+      )}
+      {step === 3 && (
+        <div className="mt-2">
+          <ErrorXorStack
+            wrapHop="bob"
+            beforeLayers={["charlie"]}
+            afterLayers={["bob", "charlie"]}
+            beforeLabel="as received from charlie · 1 layer"
+            afterLabel="wrapped again · two layers · still 292 B"
+            cornerBadge={<BoomerangCornerKeys step={step} />}
+          />
+        </div>
+      )}
 
-      {/* Key-derivation zone below the packet. A full card on the beat a key
-          is first introduced (§7); collapses to KeyHoverIcon afterward (the
-          compact badges ride along on the packet's top-right corner). Sized to
-          its content -- no fixed minHeight reserving dead space on the short
-          beats (§10 no-dead-whitespace). */}
+      {/* Below-stage zone: only the final-beat "delivered" chip. Keys never
+          expand inline here (operation rule) -- the corner badges above carry
+          them. Sized to its content (§10 no-dead-whitespace). */}
       <div className="mt-3">
         <BoomerangKeyZone step={step} />
       </div>
@@ -192,15 +208,21 @@ export function ErrorBoomerangDiagram() {
   );
 }
 
-// ── Compact key badges that ride on the packet's corner (later beats) ───────
+// ── Compact key badges that ride top-right of the card / stack ──────────────
+//
+// Operation rule: each beat surfaces exactly the keys its operation takes as
+// input, as hover badges. Beat 1 (build) authenticates with um_C; beat 2
+// (Charlie's wrap) XORs with ammag_C; beat 3 (Bob's wrap) XORs with ammag_B
+// while Charlie's layer is context; beat 4 carries both for recall.
 
 function BoomerangCornerKeys({ step }: { step: number }) {
-  // Beat 3: Charlie's keys have been introduced, collapse to a hover badge
-  // while Bob's full card shows below. Beat 4: both ammag keys are compact.
-  if (step === 3) {
-    return <CharlieAmmagIcon />;
+  if (step === 1) {
+    return <UmCharlieIcon />;
   }
-  if (step === 4) {
+  if (step === 2) {
+    return <CharlieAmmagIcon label />;
+  }
+  if (step === 3 || step === 4) {
     return (
       <div className="flex gap-1.5">
         <BobAmmagIcon />
@@ -211,22 +233,9 @@ function BoomerangCornerKeys({ step }: { step: number }) {
   return null;
 }
 
-// ── Key-derivation zone: full card on the introduction beat ─────────────────
+// ── Below-stage zone: the final-beat payoff chip only ───────────────────────
 
 function BoomerangKeyZone({ step }: { step: number }) {
-  if (step === 1) {
-    // First introduction: the HMAC key Charlie used to authenticate the error.
-    return <UmCharlieCard active />;
-  }
-  if (step === 2) {
-    // First introduction: Charlie's ammag encryption key.
-    return <AmmagCharlieCard active />;
-  }
-  if (step === 3) {
-    // First introduction: Bob's ammag. Charlie's already collapsed to a badge
-    // on the packet corner above.
-    return <AmmagBobCard active />;
-  }
   if (step === 4) {
     return (
       <div
@@ -323,33 +332,18 @@ const AMMAG_BOB_PROPS: KeyDerivationCardProps = {
   ],
 };
 
-function UmCharlieCard({ active }: { active: boolean }) {
-  return (
-    <KeyDerivationCard
-      {...UM_CHARLIE_PROPS}
-      rows={UM_CHARLIE_PROPS.rows.map((r) => ({ ...r, active }))}
-    />
-  );
+// Single-badge beats name the working key inline; the dual-badge beats (3, 4)
+// stay plain so the corner doesn't crowd.
+function UmCharlieIcon() {
+  return <KeyHoverIcon {...UM_CHARLIE_PROPS} activeLabel="um_C" />;
 }
-function AmmagCharlieCard({ active }: { active: boolean }) {
+function CharlieAmmagIcon({ label }: { label?: boolean }) {
   return (
-    <KeyDerivationCard
+    <KeyHoverIcon
       {...AMMAG_CHARLIE_PROPS}
-      rows={AMMAG_CHARLIE_PROPS.rows.map((r) => ({ ...r, active }))}
+      activeLabel={label ? "ammag_C" : undefined}
     />
   );
-}
-function AmmagBobCard({ active }: { active: boolean }) {
-  return (
-    <KeyDerivationCard
-      {...AMMAG_BOB_PROPS}
-      rows={AMMAG_BOB_PROPS.rows.map((r) => ({ ...r, active }))}
-    />
-  );
-}
-
-function CharlieAmmagIcon() {
-  return <KeyHoverIcon {...AMMAG_CHARLIE_PROPS} />;
 }
 function BobAmmagIcon() {
   return <KeyHoverIcon {...AMMAG_BOB_PROPS} />;

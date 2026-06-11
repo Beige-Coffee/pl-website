@@ -13,7 +13,7 @@
 // border, soft shadow).
 // ────────────────────────────────────────────────────────────────────────────
 
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
   resolveGlossary,
@@ -32,9 +32,13 @@ const POP_W = 320;
 export function GlossaryTerm({
   term,
   children,
+  wash,
 }: {
   term: string;
   children: ReactNode;
+  /** Gold-tint the wrapper itself. Used for children with no pill of their
+   * own (math tokens, plain prose words); code pills tint at the pill. */
+  wash?: boolean;
 }) {
   const hit = resolveGlossary(term);
   const [shown, setShown] = useState(false);
@@ -59,6 +63,36 @@ export function GlossaryTerm({
   }
 
   const visible = shown || pinned;
+  const popRef = useRef<HTMLDivElement>(null);
+
+  // The popover is position: fixed, so it can't track its anchor once the
+  // page moves. Dismiss it on any scroll, on pointer-down outside the term
+  // and the popover, and on Escape, so a pinned definition never lingers
+  // detached from the text it belongs to.
+  useEffect(() => {
+    if (!visible) return;
+    const close = () => {
+      setPinned(false);
+      setShown(false);
+    };
+    const onPointerDown = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (ref.current?.contains(t) || popRef.current?.contains(t)) return;
+      close();
+    };
+    const onScroll = () => close();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    window.addEventListener("scroll", onScroll, true);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown, true);
+      window.removeEventListener("scroll", onScroll, true);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [visible]);
 
   return (
     <>
@@ -82,10 +116,19 @@ export function GlossaryTerm({
           setPinned((p) => !p);
         }}
         style={{
-          borderBottom: `1px dotted ${pinned ? "#b8860b" : "#94a3b8"}`,
+          // Gold dotted underline = "this opens a definition" (full gold when
+          // pinned, softer gold at rest). Pairs with the gold pill/wash tint.
+          borderBottom: `1px dotted ${pinned ? "#b8860b" : "#b8860bb3"}`,
           cursor: "help",
           // Keep the dotted line a hair below the text / code pill.
           paddingBottom: 1,
+          ...(wash
+            ? {
+                background: "rgba(184,134,11,0.11)",
+                borderRadius: 3,
+                padding: "0 3px 1px",
+              }
+            : null),
         }}
       >
         {children}
@@ -94,6 +137,7 @@ export function GlossaryTerm({
         typeof document !== "undefined" &&
         createPortal(
           <div
+            ref={popRef}
             role="dialog"
             style={{
               position: "fixed",
@@ -186,6 +230,28 @@ function GlossaryBody({ term, entry }: { term: string; entry: GlossaryEntry }) {
         </div>
       )}
 
+      {/* Python def line, verbatim mono (NOT math-tokenized): the "your
+          function" entries show their signature exactly as the editor does. */}
+      {entry.signature && (
+        <div
+          style={{
+            marginTop: 7,
+            padding: "5px 7px",
+            background: "rgba(15,23,42,0.04)",
+            border: "1px solid rgba(15,23,42,0.10)",
+            borderRadius: 3,
+            fontFamily: MONO,
+            fontSize: 10.5,
+            lineHeight: 1.5,
+            color: INK,
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+          }}
+        >
+          {entry.signature}
+        </div>
+      )}
+
       {entry.chapter && (
         <div
           style={{
@@ -195,7 +261,9 @@ function GlossaryBody({ term, entry }: { term: string; entry: GlossaryEntry }) {
             fontStyle: "italic",
           }}
         >
-          Introduced in chapter {entry.chapter}
+          {entry.category === "your function"
+            ? `You build this in chapter ${entry.chapter}`
+            : `Introduced in chapter ${entry.chapter}`}
         </div>
       )}
     </div>

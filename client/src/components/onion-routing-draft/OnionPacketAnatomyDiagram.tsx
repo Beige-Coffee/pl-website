@@ -356,7 +356,7 @@ function SlotBlock({
         <div
           className="flex flex-col items-center justify-center"
           style={{
-            width: 50,
+            width: 62,
             flexShrink: 0,
             borderLeft: `1px dashed ${stroke}80`,
             padding: "0 2px",
@@ -455,9 +455,9 @@ export function OnionPacketAnatomyDiagram() {
   // HMAC layout matches the wrap/peel diagrams. Padding takes whatever
   // remains, deliberately thin so the hop payloads are the visual focus.
   const SLOT_WIDTH = {
-    bob: 28,
-    charlie: 28,
-    dave: 30,
+    bob: 29,
+    charlie: 30,
+    dave: 31,
   };
   const padWidth = 100 - SLOT_WIDTH.bob - SLOT_WIDTH.charlie - SLOT_WIDTH.dave;
 

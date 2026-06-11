@@ -99,7 +99,7 @@ function TipText({
 // Bob's hop payload is exaggerated for readability; the rest of the
 // incoming 1,300-byte half is one opaque encrypted blob. The right half
 // is the keystream extension.
-const BOB_HOP_PCT_2600 = 11;
+const BOB_HOP_PCT_2600 = 22;
 const OPAQUE_REST_PCT_2600 = 50 - BOB_HOP_PCT_2600; // 39
 const KEYSTREAM_EXT_PCT_2600 = 50;
 
@@ -162,7 +162,7 @@ const BEATS: Beat[] = [
     subLabel: "READ",
     title: "Read Bob's hop payload at the front",
     caption:
-      "The leading bytes are now plaintext. Bob reads the bigsize length prefix (`0x3C` = 60 bytes total), parses the TLV records (`amt_to_forward`, `outgoing_cltv_value`, `short_channel_id`), then reads the 32 bytes immediately after the TLVs. Those 32 bytes are `charlie_hmac`, the HMAC tag that will go in the outer HMAC field of Bob's outgoing packet.",
+      "The leading bytes are now plaintext. Bob reads the bigsize length prefix (`0x1B` = 27 bytes of TLV records, making his hop payload 60 bytes with the prefix and HMAC), parses the TLV records (`amt_to_forward`, `outgoing_cltv_value`, `short_channel_id`), then reads the 32 bytes immediately after the TLVs. Those 32 bytes are `charlie_hmac`, the HMAC tag that will go in the outer HMAC field of Bob's outgoing packet.",
     focus: "front",
   } as Beat,
   {
@@ -953,9 +953,12 @@ function KeyDerivationPanel({ step }: { step: number }) {
 // Compact reminder of the same keys for beats where derivation was already
 // established. Renders top-right of the operation view.
 function KeyHoverBadge({ step }: { step: number }) {
+  // Name the key doing this beat's work on the badge itself.
+  const activeLabel =
+    step === 4 ? "mu_B" : step === 6 ? "rho_B" : undefined;
   return (
     <div className="flex justify-end mb-1">
-      <KeyHoverIcon {...keyDerivationProps(step)} />
+      <KeyHoverIcon {...keyDerivationProps(step)} activeLabel={activeLabel} />
     </div>
   );
 }
@@ -1127,12 +1130,17 @@ function ExtendedMorphView({ step }: { step: number }) {
             transition={{ duration: 0.3, delay: 0.18 }}
           >
             <SliceArrowRow />
-            <CompactBufferBar
-              label="next hop_payloads · 1,300 B (slice [60 : 1,360])"
-              regions={outgoingRegions1300()}
-              accentColor={FOCUS_GOLD}
-              emphasis
-            />
+            {/* The 1,300-byte result is HALF the 2,600-byte buffer above, so
+                it renders at 50% width, aligned under the slice bracket, to
+                keep the byte proportions honest. */}
+            <div style={{ marginLeft: `${BOB_HOP_PCT_2600}%`, width: "50%" }}>
+              <CompactBufferBar
+                label="next hop_payloads · 1,300 B"
+                regions={outgoingRegions1300()}
+                accentColor={FOCUS_GOLD}
+                emphasis
+              />
+            </div>
           </MorphBox>
         )}
       </div>
@@ -1296,8 +1304,8 @@ function FrontSlotZoom() {
         <SubCell
           flexBasis="60px"
           label="LEN"
-          value="0x3C"
-          sublabel="bigsize · 60"
+          value="0x1B"
+          sublabel="bigsize · 27"
           accent={HOP_STROKE.bob}
         />
         <SubCell
@@ -1384,23 +1392,43 @@ function SubCell({
 // below are this beat's own scaffolding.
 
 function SliceArrowRow() {
-  // Bracket above the bytes-60-to-1360 slice (= 1,300 bytes = 50% width
-  // in the 2,600-byte view), starting just after Bob's own hop payload.
+  // Measurement bracket over the bytes-60-to-1360 slice (= 1,300 bytes = 50%
+  // width in the 2,600-byte view), starting just after Bob's own hop payload.
+  // The end ticks extend both above and below the horizontal line so it reads
+  // as a measurement marker, not a stray border.
   return (
     <div
       className="relative my-2"
-      style={{ height: 28, fontFamily: MONO }}
+      style={{ height: 32, fontFamily: MONO }}
     >
       <div
         className="absolute"
         style={{
           left: `${BOB_HOP_PCT_2600}%`,
-          width: `50%`,
+          width: "50%",
+          top: 6,
+          height: 1.5,
+          background: FOCUS_GOLD,
+        }}
+      />
+      <div
+        className="absolute"
+        style={{
+          left: `${BOB_HOP_PCT_2600}%`,
           top: 0,
-          height: 8,
-          borderLeft: `1.5px solid ${FOCUS_GOLD}`,
-          borderRight: `1.5px solid ${FOCUS_GOLD}`,
-          borderTop: `1.5px solid ${FOCUS_GOLD}`,
+          width: 1.5,
+          height: 13,
+          background: FOCUS_GOLD,
+        }}
+      />
+      <div
+        className="absolute"
+        style={{
+          left: `calc(${BOB_HOP_PCT_2600 + 50}% - 1.5px)`,
+          top: 0,
+          width: 1.5,
+          height: 13,
+          background: FOCUS_GOLD,
         }}
       />
       <div
@@ -1408,7 +1436,7 @@ function SliceArrowRow() {
         style={{
           left: `${BOB_HOP_PCT_2600 + 25}%`,
           transform: "translateX(-50%)",
-          top: 10,
+          top: 14,
           color: FOCUS_GOLD,
           background: "#fffdf5",
           padding: "0 6px",
@@ -1422,13 +1450,13 @@ function SliceArrowRow() {
 
 // ── Beat 9: Ephemeral pubkey advance ─────────────────────────────────────
 
-// This beat is a genuine new derivation, so a card is correct (§7). But it's a
-// two-stage EC pipeline — E_AB → bf_AB (blinding factor) → E_AC (point × scalar)
-// — not the "shared secret → HMAC → keys" shape the shared KeyDerivationCard
-// models. Its `upstream` panel also hardcodes "shared secret" / "ECDH" labels
-// that would misdescribe this step. So we keep a hand-rolled card, but match
-// KeyDerivationCard's chrome (accent-tinted header, round accent dot, MONO key
-// chips) and keep the labels terse.
+// This beat is a genuine new derivation, so a card is correct (§7). But it is
+// a two-stage EC derivation (blinding factor, then point times scalar), not
+// the "shared secret to HMAC keys" shape KeyDerivationCard models, and that
+// card's `upstream` panel hardcodes ECDH labels that would misdescribe this
+// step. So we keep a hand-rolled card with the same chrome and the same
+// equation-stack body: the math rendered directly, one annotated equation per
+// derived value.
 function EphemeralAdvanceView() {
   return (
     <div className="my-2">
@@ -1460,103 +1488,40 @@ function EphemeralAdvanceView() {
           </span>
         </div>
 
-        {/* Pipeline: E_AB → (blinding factor) → E_AC. The through-line is "the
-            ephemeral Bob received, blinded by bf_AB, becomes the one he hands
-            forward to Charlie." Endpoint chips carry that role; the formulas
-            ride the arrows. Chips match KeyDerivationCard's key chips. */}
-        <div className="px-4 py-5 flex items-center justify-center flex-wrap gap-x-3 gap-y-4">
-          <PipelineChip
-            name="E_AB"
-            note="33 B point"
-            role="what Bob received"
-            accent={HOP_STROKE.bob}
-          />
-          <PipelineArrow formula="SHA256(E_AB ‖ ss_AB)" accent={FOCUS_GOLD} />
-          <PipelineChip
-            name="bf_AB"
-            note="32 B scalar"
-            role="blinding factor"
-            accent={FOCUS_GOLD}
-          />
-          <PipelineArrow formula="× E_AB" accent={HOP_STROKE.charlie} />
-          <PipelineChip
-            name="E_AC"
-            note="33 B point"
-            role="for Charlie · what he ECDHs against"
-            accent={HOP_STROKE.charlie}
-            emphasis
-          />
+        {/* The math is the diagram (course-wide derivation style, 2026-06-10):
+            two annotated equations, no chip-and-arrow pipeline. */}
+        <div className="px-4 py-3 flex flex-col gap-2.5">
+          <div style={{ padding: "3px 8px" }}>
+            <MathLine
+              text="bf_AB = SHA256(E_AB ‖ ss_AB)"
+              color={FOCUS_GOLD}
+              weight={700}
+              fontSize={13.5}
+            />
+            <div
+              className="text-[9.5px] italic leading-tight mt-0.5"
+              style={{ fontFamily: SANS, color: NEUTRAL_TEXT }}
+            >
+              the blinding factor · E_AB from the packet header · ss_AB from
+              step 3
+            </div>
+          </div>
+          <div style={{ padding: "3px 8px" }}>
+            <MathLine
+              text="E_AC = bf_AB · E_AB"
+              color={HOP_STROKE.charlie}
+              weight={700}
+              fontSize={13.5}
+            />
+            <div
+              className="text-[9.5px] italic leading-tight mt-0.5"
+              style={{ fontFamily: SANS, color: NEUTRAL_TEXT }}
+            >
+              EC scalar multiply · the ephemeral Charlie will ECDH against
+            </div>
+          </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-// A MONO key chip mirroring KeyDerivationCard's chip styling: accent-tinted
-// fill, accent border, the name in MathLine, a terse byte note beneath, and an
-// optional role line (e.g. "what Bob received" / "for Charlie") so the
-// endpoints of the pipeline read as the keys Bob got vs. hands forward.
-function PipelineChip({
-  name,
-  note,
-  role,
-  accent,
-  emphasis,
-}: {
-  name: string;
-  note: string;
-  role?: string;
-  accent: string;
-  emphasis?: boolean;
-}) {
-  return (
-    <div
-      className="border-[1.5px] flex flex-col items-center"
-      style={{
-        background: emphasis ? "#fef3c7" : `${accent}1f`,
-        borderColor: emphasis ? FOCUS_GOLD : accent,
-        boxShadow: emphasis ? `0 0 0 3px rgba(184,134,11,0.18)` : "none",
-        padding: "8px 18px",
-        minWidth: 104,
-      }}
-    >
-      <MathLine text={name} color={accent} fontSize={16} />
-      <span
-        className="text-[9px] mt-1 uppercase tracking-[0.04em]"
-        style={{ fontFamily: MONO, color: NEUTRAL_TEXT }}
-      >
-        {note}
-      </span>
-      {role && (
-        <span
-          className="text-[9px] mt-0.5 italic leading-tight text-center"
-          style={{ fontFamily: SANS, color: accent, fontWeight: 600 }}
-        >
-          {role}
-        </span>
-      )}
-    </div>
-  );
-}
-
-// An arrow carrying the transform that produces the next chip. The formula sits
-// above the arrow shaft so it reads as the operation, not a separate box.
-function PipelineArrow({
-  formula,
-  accent,
-}: {
-  formula: string;
-  accent: string;
-}) {
-  return (
-    <div className="flex flex-col items-center" style={{ minWidth: 150 }}>
-      <MathLine text={formula} color={accent} fontSize={11} />
-      <span
-        className="mt-0.5"
-        style={{ fontFamily: MONO, fontSize: 18, color: accent, lineHeight: 1 }}
-      >
-        →
-      </span>
     </div>
   );
 }

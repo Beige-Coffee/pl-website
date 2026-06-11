@@ -32,7 +32,7 @@
 // format spec.
 // ────────────────────────────────────────────────────────────────────────────
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { HatchOverlay, type ForwarderId } from "./encryptionHatch";
 import { KeyHoverIcon, type KeyDerivationRow } from "./KeyDerivationCard";
 import { MathLine } from "./mathTokens";
@@ -101,7 +101,7 @@ const BEATS: Beat[] = [
     subLabel: "GATE 1 · STRUCTURE",
     title: "Structure OK",
     caption:
-      "Before any decryption, the cheapest gate. Is the packet exactly 1,366 bytes, and is the version byte `0x00`? If either is wrong, Bob rejects immediately. Cheap, defensive checks go first so malformed packets cost almost nothing. Hover *rejects?* for the failure code, or *see fields* to expand the full packet anatomy from chapter 7.",
+      "First, the easy stuff. Is the packet exactly 1,366 bytes? Is the version byte `0x00`? If either answer is no, Bob rejects right away, no decryption needed. There's no point doing any crypto on a packet that isn't even shaped right. Hover *rejects?* for the failure code, or *see fields* to expand the full packet anatomy from chapter 7.",
   },
   {
     step: 3,
@@ -117,7 +117,7 @@ const BEATS: Beat[] = [
     subLabel: "PEEL",
     title: "Layer decrypted",
     caption:
-      "Integrity confirmed, so Bob can finally decrypt. He XORs the buffer with his `rho_B` keystream to strip his layer, exposing his hop payload at the front. This is the chapter-9 peel (the 2,600-byte extend-and-XOR); we keep it to a single annotation here to stay on the decisions around it. Hover *keys* for where `rho_B` comes from.",
+      "Integrity confirmed, so Bob can finally decrypt. He XORs the buffer with his `rho_B` keystream and his layer comes off: his hop payload is now plaintext at the front. This is the chapter-9 peel; the full version extends the buffer to 2,600 bytes first, and what you see here is the front 1,300 bytes of that same XOR. Hover *keys* for where `rho_B` comes from.",
   },
   {
     step: 5,
@@ -125,7 +125,7 @@ const BEATS: Beat[] = [
     subLabel: "PARSE",
     title: "Fields parsed",
     caption:
-      "Bob's hop payload is plaintext now. The TLV region in the middle of it fans out into its three records: Bob walks the bigsize-prefixed bytes and reads out `amt_to_forward`, `outgoing_cltv_value`, and `short_channel_id`. The 32 bytes right after the TLVs are `charlie_hmac`, the tag Bob will carry onto the packet he forwards.",
+      "Bob's hop payload is plaintext now, so he can finally read his instructions. Here is the same 60-byte payload as raw data: the `1b` length prefix (bigsize for 27), the 27 bytes of TLV records, then the 32 HMAC bytes (we won't spell those out). Every record is just a type, a length, then that many bytes of value. Hover anything to decode it. The three routing records give Bob his orders (`amt_to_forward`, `outgoing_cltv_value`, `short_channel_id`), and the trailing HMAC is `charlie_hmac`, the tag Bob carries onto the packet he forwards. (The dim record up front? Type 1 is `padding`. Hover it!)",
   },
   {
     step: 6,
@@ -149,7 +149,7 @@ const BEATS: Beat[] = [
     subLabel: "OUTCOME",
     title: "Forward it",
     caption:
-      "Everything checks out, so `process` returns one of three outcomes. `ForwardInstruction` (Bob's case here): ship `next_packet` to the `short_channel_id`. `FinalDelivery`: Bob is the destination, so settle by revealing the preimage. `Rejection`: something failed, so build an error onion with `um` (chapter 11).",
+      "Every peel ends one of exactly three ways. Bob has a `short_channel_id` and every check passed, so his outcome is forward: ship the rebuilt packet out on channel `118x2x1` with the amount and timelock his TLVs ordered. If `payment_data` had been there instead, Bob would be the destination and would deliver (settle by revealing the preimage). And if anything had failed along the way? Reject: build an error onion and send it back upstream. That's chapter 11.",
   },
 ];
 
@@ -517,16 +517,81 @@ function ArcLeadIn({ step }: { step: number }) {
     // Integrity: the mu_B key drives this HMAC. Badge top-right, mu_B active.
     return (
       <div className="flex justify-end">
-        <KeyHoverIcon {...keyDerivationProps(true)} />
+        <KeyHoverIcon {...keyDerivationProps(true)} activeLabel="mu_B" />
       </div>
     );
   }
 
   if (step === 4) {
-    // Peel: the rho_B key drives the XOR. Badge top-right, rho_B active.
+    // Peel: the full three-bar XOR (canonical §15 grammar, same as the
+    // chapter-9 peel and the error-onion wraps). The persistent bar below is
+    // the RESULT (it morphs from encrypted to stripped), so this lead-in
+    // carries the BEFORE bar ⊕ the rho_B keystream bar =. The keystream is
+    // honestly labeled as the front 1,300 B of the 2,600-byte ch-9 stream.
     return (
-      <div className="flex justify-end">
-        <KeyHoverIcon {...keyDerivationProps(false)} />
+      <div>
+        <div className="flex justify-end mb-1">
+          <KeyHoverIcon {...keyDerivationProps(false)} activeLabel="rho_B" />
+        </div>
+        <div
+          className="text-[10px] uppercase tracking-[0.06em] mb-1"
+          style={{ color: NEUTRAL_TEXT, fontFamily: MONO, fontWeight: 500 }}
+        >
+          hop_payloads · 1,300 B (as received · still encrypted)
+        </div>
+        <div
+          className="border-[1.5px] flex relative overflow-hidden"
+          style={{
+            background: "#fffdf5",
+            borderColor: NEUTRAL_TEXT,
+            height: 42,
+          }}
+        >
+          {encryptedBlob1300().map((r) => (
+            <BufferRegion key={r.key} region={r} dimNonFocus={false} />
+          ))}
+        </div>
+
+        <div
+          className="text-center my-1"
+          style={{ fontSize: 15, fontWeight: 700, color: INK, lineHeight: 1 }}
+        >
+          ⊕
+        </div>
+
+        <div
+          className="text-[10px] uppercase tracking-[0.06em] mb-1 text-center"
+          style={{ color: KEY_RHO_COLOR, fontFamily: MONO, fontWeight: 700 }}
+        >
+          keystream · front 1,300 B of Bob's 2,600 (ch 9)
+        </div>
+        <div
+          className="border-[1.5px] relative overflow-hidden flex items-center justify-center"
+          style={{
+            borderColor: KEY_RHO_COLOR,
+            height: 42,
+            background: "#fffdf5",
+          }}
+        >
+          <HatchOverlay hops={["bob"]} zIndex={0} stripeOpacity={0.5} />
+          <span
+            className="relative"
+            style={{ zIndex: 2, background: "#fffdf5", padding: "1px 8px" }}
+          >
+            <MathLine
+              text="chacha20(rho_B, 2600)[:1300]"
+              color={KEY_RHO_COLOR}
+              fontSize={12}
+            />
+          </span>
+        </div>
+
+        <div
+          className="text-center mt-1"
+          style={{ fontSize: 15, fontWeight: 700, color: INK, lineHeight: 1 }}
+        >
+          =
+        </div>
       </div>
     );
   }
@@ -572,114 +637,238 @@ function ArcTail({ step }: { step: number }) {
     );
   }
 
-  // Beat 4 (peel): a single compact annotation on the morph. The byte-level XOR
-  // mechanics live in chapter 9.
+  // Beat 4 (peel): the XOR stack lives in the lead-in above the persistent
+  // bar (the bar itself is the result); nothing below.
   if (step === 4) {
-    return (
-      <div className="mt-2 flex items-center justify-center gap-2">
-        <span style={{ fontSize: 15, color: KEY_RHO_COLOR, fontWeight: 700 }}>⊕</span>
-        <MathLine text="rho_B" color={KEY_RHO_COLOR} fontSize={12} />
-        <span
-          className="text-[10px] uppercase tracking-[0.06em]"
-          style={{ color: KEY_RHO_COLOR, fontFamily: MONO, fontWeight: 700 }}
-        >
-          keystream (ch 9)
-        </span>
-      </div>
-    );
+    return null;
   }
 
-  // Beat 5: the payload's TLV region fans out DIRECTLY into the three parsed
-  // fields. No detached "parse_tlv_records →" box; the connectors carry the
-  // mapping and the helper name is just a small label on the fan. The byte axis
-  // stays dropped to keep the parse beat clean.
-  return <ParseFanout />;
+  // Beat 5: the TLV region shown as the actual bytes, record by record. Each
+  // record is a hoverable span (type byte gold, length byte slate, value bytes
+  // ink) that decodes itself in a tooltip. The encodings are byte-exact BOLT 1
+  // TLV, and the four records (a type-1 padding record + the three routing
+  // records) sum to exactly the 27 bytes the bar's LEN cell (0x1B) promises.
+  return <ParseHexView />;
 }
 
-// Connector fan tying the persistent payload bar's middle (TLV) region down to
-// the three parsed field cards. The bar above renders LEN | TLV | HMAC; the TLV
-// cell is the flex-1 middle, so the fan anchors at horizontal center (≈ the TLV
-// cell's center) and splays to the three card centers below. `parse_tlv_records`
-// rides the fan as a quiet caption rather than a separate box.
-function ParseFanout() {
-  // Three column centers as fractions of the row width (3 equal cols, gap-2).
-  const cols = [1 / 6, 1 / 2, 5 / 6];
+// One TLV record in the hex strip: byte pairs with the type byte emphasized,
+// underlined in the record's color, name beneath, full decode on hover.
+interface TlvHexRecord {
+  name: string;
+  bytes: string[]; // [type, length, ...value]
+  color: string;
+  dim?: boolean;
+  tip: ReactNode;
+}
+
+const TLV_HEX_RECORDS: TlvHexRecord[] = [
+  {
+    name: "padding",
+    bytes: ["01", "06", "00", "00", "00", "00", "00", "00"],
+    color: NEUTRAL_TEXT,
+    dim: true,
+    tip: (
+      <span>
+        <b>type 1 · padding</b> · length 6, six zero bytes. An odd (so,
+        optional) record a sender may include to pad its TLV stream. Alice uses
+        it here to round Bob's hop payload to 60 bytes; Bob just skips it.
+      </span>
+    ),
+  },
+  {
+    name: "amt_to_forward",
+    bytes: ["02", "03", "0f", "42", "40"],
+    color: INK,
+    tip: (
+      <span>
+        <b>type 2 · amt_to_forward</b> · a tu64, minimally encoded in 3 bytes.
+        <span style={{ fontFamily: MONO }}> 0x0f4240</span> = 1,000,000 msat,
+        the amount Bob must forward to Charlie.
+      </span>
+    ),
+  },
+  {
+    name: "outgoing_cltv_value",
+    bytes: ["04", "02", "03", "20"],
+    color: INK,
+    tip: (
+      <span>
+        <b>type 4 · outgoing_cltv_value</b> · a tu32, minimally encoded in 2
+        bytes.
+        <span style={{ fontFamily: MONO }}> 0x0320</span> = 800, the timelock
+        Bob must set on his outgoing HTLC.
+      </span>
+    ),
+  },
+  {
+    name: "short_channel_id",
+    bytes: ["06", "08", "00", "00", "76", "00", "00", "02", "00", "01"],
+    color: HOP_STROKE.charlie,
+    tip: (
+      <span>
+        <b>type 6 · short_channel_id</b> · always 8 bytes: block ‖ tx index ‖
+        output. <span style={{ fontFamily: MONO }}>0x000076</span> = block 118,
+        <span style={{ fontFamily: MONO }}> 0x000002</span> = tx 2,
+        <span style={{ fontFamily: MONO }}> 0x0001</span> = output 1, so
+        118x2x1: the channel Bob forwards out on.
+      </span>
+    ),
+  },
+];
+
+// The whole 60-byte hop payload rendered as data, aligned under the zoomed
+// bar above: the LEN byte, the 27 TLV bytes in four hoverable records, then
+// the 32 HMAC bytes elided (their value commits to everything beneath this
+// layer, so spelling them out would be fiction).
+function ParseHexView() {
   return (
     <div className="mt-1">
-      {/* A pointer that names the region the fan comes from. */}
+      {/* A pointer tying the strip to the bar above it. */}
       <div className="flex items-center justify-center gap-1.5 mt-2">
         <span style={{ color: NEUTRAL_TEXT, fontSize: 13, fontWeight: 700 }}>↑</span>
         <span
           className="text-[10px] uppercase tracking-[0.06em]"
           style={{ fontFamily: MONO, color: NEUTRAL_TEXT, fontWeight: 700 }}
         >
-          the TLV region, record by record
+          the same 60 bytes, as data
         </span>
       </div>
 
-      {/* The fan: one anchor at top-center splaying to three bottom points that
-          line up with the field cards. viewBox makes it scale with the width. */}
-      <div style={{ position: "relative", height: 34, marginTop: 2 }}>
-        <svg
-          width="100%"
-          height="34"
-          viewBox="0 0 100 34"
-          preserveAspectRatio="none"
-          style={{ display: "block", overflow: "visible" }}
+      {/* The extended rectangle: LEN | TLV records | HMAC, zone separators
+          echoing the bar above. Hover anything to decode it. */}
+      <div
+        className="border-[1.5px] flex items-stretch mt-2"
+        style={{ borderColor: INK, background: "#fffdf5" }}
+      >
+        {/* LEN byte */}
+        <Tooltip
+          width={250}
+          label={
+            <span>
+              <b>bigsize length prefix</b> ·{" "}
+              <span style={{ fontFamily: MONO }}>0x1b</span> = 27: how many
+              bytes of TLV records follow.
+            </span>
+          }
         >
-          {cols.map((c, i) => (
-            <line
-              key={i}
-              x1={50}
-              y1={0}
-              x2={c * 100}
-              y2={34}
-              stroke={i === 2 ? HOP_STROKE.charlie : INK}
-              strokeWidth={0.6}
-              vectorEffect="non-scaling-stroke"
-            />
+          <div
+            className="flex flex-col items-center justify-center px-2.5 py-2 h-full"
+            style={{
+              cursor: "help",
+              borderRight: `1px dashed ${FOCUS_GOLD}80`,
+            }}
+          >
+            <span
+              style={{
+                fontFamily: MONO,
+                fontSize: 11.5,
+                fontWeight: 800,
+                color: FOCUS_GOLD,
+              }}
+            >
+              1b
+            </span>
+            <span
+              className="text-[9px] font-bold mt-1"
+              style={{ fontFamily: MONO, color: NEUTRAL_TEXT }}
+            >
+              len
+            </span>
+          </div>
+        </Tooltip>
+
+        {/* TLV records */}
+        <div className="flex flex-wrap items-end justify-center gap-x-4 gap-y-3 flex-1 px-3 py-2">
+          {TLV_HEX_RECORDS.map((rec) => (
+            <Tooltip key={rec.name} width={290} label={rec.tip}>
+              <div
+                className="flex flex-col items-center"
+                style={{ cursor: "help", opacity: rec.dim ? 0.55 : 1 }}
+              >
+                <div
+                  className="flex"
+                  style={{
+                    gap: 5,
+                    borderBottom: `2px ${rec.dim ? "dotted" : "solid"} ${rec.color}`,
+                    paddingBottom: 4,
+                  }}
+                >
+                  {rec.bytes.map((b, i) => (
+                    <span
+                      key={i}
+                      style={{
+                        fontFamily: MONO,
+                        fontSize: 11.5,
+                        fontWeight: i === 0 ? 800 : i === 1 ? 700 : 600,
+                        color:
+                          i === 0 ? FOCUS_GOLD : i === 1 ? NEUTRAL_TEXT : INK,
+                        letterSpacing: "0.02em",
+                      }}
+                    >
+                      {b}
+                    </span>
+                  ))}
+                </div>
+                <span
+                  className="text-[9px] font-bold mt-1"
+                  style={{ fontFamily: MONO, color: rec.color }}
+                >
+                  {rec.name}
+                </span>
+              </div>
+            </Tooltip>
           ))}
-        </svg>
-        {/* parse_tlv_records label, tucked beside the fan. */}
-        <span
-          className="absolute text-[9px]"
-          style={{
-            left: "50%",
-            top: 9,
-            transform: "translateX(8px)",
-            fontFamily: MONO,
-            color: NEUTRAL_TEXT,
-            fontStyle: "italic",
-            background: "#fffdf5",
-            padding: "0 3px",
-            whiteSpace: "nowrap",
-          }}
+        </div>
+
+        {/* HMAC, elided: 32 bytes we deliberately do not spell out. */}
+        <Tooltip
+          width={280}
+          label={
+            <span>
+              <b>charlie_hmac</b> · the 32-byte tag for the layer beneath
+              Bob's. Its value commits to everything inside, so we don't spell
+              it out. Bob copies it into the outer HMAC field of the packet he
+              forwards.
+            </span>
+          }
         >
-          parse the TLV records
-        </span>
+          <div
+            className="flex flex-col items-center justify-center px-2.5 py-2 h-full"
+            style={{
+              cursor: "help",
+              borderLeft: `1px dashed ${HOP_STROKE.charlie}80`,
+              opacity: 0.75,
+            }}
+          >
+            <span
+              style={{
+                fontFamily: MONO,
+                fontSize: 11.5,
+                fontWeight: 700,
+                color: HOP_STROKE.charlie,
+                letterSpacing: "0.06em",
+                whiteSpace: "nowrap",
+              }}
+            >
+              ⋯ 32 B ⋯
+            </span>
+            <span
+              className="text-[9px] font-bold mt-1"
+              style={{ fontFamily: MONO, color: HOP_STROKE.charlie }}
+            >
+              charlie_hmac
+            </span>
+          </div>
+        </Tooltip>
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
-        <FieldChip type="2" name="amt_to_forward" value={`${fmt(AMT_FORWARD_MSAT)} msat`} />
-        <FieldChip type="4" name="outgoing_cltv_value" value={`${fmt(OUTGOING_CLTV)}`} />
-        <FieldChip type="6" name="short_channel_id" value={SCID} accent={HOP_STROKE.charlie} />
-      </div>
-
-      {/* The 32 bytes after the TLVs: charlie_hmac, noted but not parsed. */}
-      <div className="flex items-center justify-center gap-1.5 mt-2.5">
-        <span
-          className="text-[9px] uppercase tracking-[0.06em]"
-          style={{ fontFamily: MONO, color: NEUTRAL_TEXT, fontWeight: 700 }}
-        >
-          then the trailing 32 B →
-        </span>
-        <MathLine text="charlie_hmac" color={HOP_STROKE.charlie} fontSize={11} />
-        <span
-          className="text-[9px] italic"
-          style={{ fontFamily: SANS, color: NEUTRAL_TEXT }}
-        >
-          carried onto the next packet
-        </span>
+      {/* Legend for the byte roles inside each record. */}
+      <div className="flex items-center justify-center gap-1.5 mt-2.5 text-[9px]" style={{ fontFamily: MONO }}>
+        <span style={{ color: FOCUS_GOLD, fontWeight: 800 }}>type</span>
+        <span style={{ color: NEUTRAL_TEXT }}>·</span>
+        <span style={{ color: NEUTRAL_TEXT, fontWeight: 700 }}>length</span>
+        <span style={{ color: NEUTRAL_TEXT }}>·</span>
+        <span style={{ color: INK, fontWeight: 600 }}>value</span>
       </div>
     </div>
   );
@@ -868,8 +1057,8 @@ function UpdateAddHtlcEnvelope() {
       <div className="px-3 py-2.5">
         {/* Inbound HTLC fields. */}
         <div className="flex flex-wrap items-center gap-1.5">
-          <HtlcChip label="amount" value={`${fmt(AMOUNT_IN_MSAT)} msat`} />
-          <HtlcChip label="cltv" value={`${fmt(CLTV_IN)}`} />
+          <HtlcChip label="amount_msat" value={`${fmt(AMOUNT_IN_MSAT)}`} />
+          <HtlcChip label="cltv_expiry" value={`${fmt(CLTV_IN)}`} />
           <HtlcChip
             label="payment_hash"
             value={PAYMENT_HASH}
@@ -931,7 +1120,7 @@ function StructureGateView() {
           className="text-[10px] uppercase tracking-[0.08em] font-bold"
           style={{ fontFamily: MONO, color: FOCUS_GOLD }}
         >
-          two cheap checks, before any decryption
+          structure check
         </span>
         <SeeFieldsHover />
       </div>
@@ -1068,41 +1257,6 @@ function AnatomyLine({
 
 // ── Beats 3-5 TLV chips (used by the PayloadArcView parse tail) ────────────
 
-function FieldChip({
-  type,
-  name,
-  value,
-  accent,
-}: {
-  type: string;
-  name: string;
-  value: string;
-  accent?: string;
-}) {
-  return (
-    <div
-      className="border-[1.5px] flex flex-col items-center text-center px-2 py-2"
-      style={{ borderColor: accent ?? INK, background: "#fffdf5" }}
-    >
-      <span
-        className="text-[9px] uppercase tracking-[0.05em] font-bold"
-        style={{ fontFamily: MONO, color: NEUTRAL_TEXT }}
-      >
-        type {type}
-      </span>
-      <span
-        className="font-bold mt-0.5"
-        style={{ fontFamily: MONO, fontSize: 11, color: accent ?? INK }}
-      >
-        {name}
-      </span>
-      <span className="text-[11px] mt-0.5" style={{ fontFamily: MONO, color: INK }}>
-        {value}
-      </span>
-    </div>
-  );
-}
-
 // ── Beat 6: Forward vs destination branch ─────────────────────────────────
 //
 // A clean either/or hanging off one question: `short_channel_id` present? YES
@@ -1219,8 +1373,8 @@ function CheckView() {
         >
           checked against the incoming HTLC
         </span>
-        <HtlcChip label="amount" value={`${fmt(AMOUNT_IN_MSAT)} msat`} />
-        <HtlcChip label="cltv" value={`${fmt(CLTV_IN)}`} />
+        <HtlcChip label="amount_msat" value={`${fmt(AMOUNT_IN_MSAT)}`} />
+        <HtlcChip label="cltv_expiry" value={`${fmt(CLTV_IN)}`} />
       </div>
       <div className="space-y-2">
         <CheckRow
@@ -1300,130 +1454,79 @@ function CheckRow({
 
 function OutcomeView() {
   return (
-    <div className="my-2">
-      <div className="text-center mb-3">
-        <MathLine text="process(packet, htlc, node_privkey)" color={INK} fontSize={13} />
-        <span style={{ color: NEUTRAL_TEXT, margin: "0 8px" }}>returns one of</span>
+    <div className="my-2 mx-auto" style={{ maxWidth: 600 }}>
+      <div
+        className="text-center text-[10px] uppercase tracking-[0.08em] font-bold mb-2.5"
+        style={{ fontFamily: MONO, color: NEUTRAL_TEXT }}
+      >
+        every peel ends one of three ways
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <OutcomeCard
-          active
-          title="ForwardInstruction"
-          accent={HOP_STROKE.bob}
-          tag="Bob's case"
-          fields={["next_packet", `scid = ${SCID}`, `amt = ${fmt(AMT_FORWARD_MSAT)}`, `cltv = ${fmt(OUTGOING_CLTV)}`, "ss"]}
-          foot="Send next_packet to the channel."
-        />
-        <OutcomeCard
-          title="FinalDelivery"
-          accent={HOP_STROKE.dave}
-          fields={["amt_to_forward", "outgoing_cltv", "payment_data", "ss"]}
-          foot="Destination: settle by revealing the preimage."
-        />
-        <OutcomeCard
-          title="Rejection"
-          accent={ERROR_RED}
-          fields={["failure_code", "ss"]}
-          foot="Build an error onion with um (chapter 11)."
-        />
-      </div>
+      <OutcomeRow active tag="forward" accent={HOP_STROKE.bob} note="Bob's case">
+        send the rebuilt packet out on <Mono>{SCID}</Mono>, carrying{" "}
+        <Mono>{fmt(AMT_FORWARD_MSAT)} msat</Mono> with CLTV{" "}
+        <Mono>{fmt(OUTGOING_CLTV)}</Mono>
+      </OutcomeRow>
+      <OutcomeRow tag="deliver" accent={HOP_STROKE.dave}>
+        no <Mono>short_channel_id</Mono>, but <Mono>payment_data</Mono>: Bob
+        would be the destination, and claims with the preimage
+      </OutcomeRow>
+      <OutcomeRow tag="reject" accent={ERROR_RED}>
+        any check failed: build an error onion from <Mono>ss</Mono> and send it
+        back (chapter 11)
+      </OutcomeRow>
     </div>
   );
 }
 
-function OutcomeCard({
-  active,
-  title,
-  accent,
+function Mono({ children }: { children: ReactNode }) {
+  return <span style={{ fontFamily: MONO, fontWeight: 600 }}>{children}</span>;
+}
+
+// One outcome as a single readable row: a colored tag, then a plain sentence
+// with the concrete values inline. Bob's row carries the gold active bar.
+function OutcomeRow({
   tag,
-  fields,
-  foot,
+  accent,
+  active,
+  note,
+  children,
 }: {
-  active?: boolean;
-  title: string;
+  tag: string;
   accent: string;
-  tag?: string;
-  fields: string[];
-  foot: string;
+  active?: boolean;
+  note?: string;
+  children: ReactNode;
 }) {
   return (
     <div
-      className="border-[1.5px] overflow-hidden flex flex-col"
+      className="flex items-baseline gap-3 px-3 py-2"
       style={{
-        borderColor: active ? FOCUS_GOLD : "rgba(15,23,42,0.3)",
-        background: active ? "#fffdf5" : "#fbfbf8",
-        boxShadow: active ? `0 0 0 2px rgba(184,134,11,0.2)` : "none",
-        opacity: active ? 1 : 0.78,
+        borderLeft: `3px solid ${active ? FOCUS_GOLD : "transparent"}`,
+        background: active ? "rgba(184,134,11,0.07)" : "transparent",
+        opacity: active ? 1 : 0.72,
       }}
     >
-      <div
-        className="px-3 py-1.5 flex items-center justify-between"
-        style={{ background: `${accent}18`, borderBottom: `1.5px solid ${accent}40` }}
+      <span
+        className="text-[10px] uppercase tracking-[0.06em] font-bold shrink-0"
+        style={{ fontFamily: MONO, color: accent, width: 70 }}
       >
-        <span
-          className="text-[11px] uppercase tracking-[0.04em] font-bold"
-          style={{ fontFamily: MONO, color: accent }}
-        >
-          {title}
-        </span>
-        {tag && (
-          <span className="text-[9px] font-bold uppercase" style={{ color: FOCUS_GOLD }}>
-            {tag}
+        {active ? "✓ " : ""}
+        {tag}
+      </span>
+      <span
+        className="text-[11.5px] leading-relaxed"
+        style={{ fontFamily: SANS, color: INK }}
+      >
+        {children}
+        {note && (
+          <span
+            className="text-[9px] font-bold uppercase ml-2"
+            style={{ fontFamily: MONO, color: FOCUS_GOLD }}
+          >
+            · {note}
           </span>
         )}
-      </div>
-      <div className="px-3 py-2 flex-1">
-        <div className="flex flex-wrap gap-1">
-          {fields.map((f) =>
-            f === "ss" ? (
-              <Tooltip
-                key={f}
-                width={250}
-                label={
-                  <span>
-                    The shared secret. The error path always needs it, whether to
-                    wrap a fresh error here or relay one from downstream (chapter
-                    11).
-                  </span>
-                }
-              >
-                <span
-                  className="text-[10px] px-1.5 py-0.5 border"
-                  style={{
-                    fontFamily: MONO,
-                    color: ASSOC_DATA_COLOR,
-                    borderColor: ASSOC_DATA_COLOR,
-                    background: `${ASSOC_DATA_COLOR}10`,
-                    borderBottom: `1px dotted ${ASSOC_DATA_COLOR}`,
-                    cursor: "help",
-                  }}
-                >
-                  {f}
-                </span>
-              </Tooltip>
-            ) : (
-              <span
-                key={f}
-                className="text-[10px] px-1.5 py-0.5 border"
-                style={{
-                  fontFamily: MONO,
-                  color: INK,
-                  borderColor: "rgba(15,23,42,0.2)",
-                  background: "#fff",
-                }}
-              >
-                {f}
-              </span>
-            )
-          )}
-        </div>
-      </div>
-      <div
-        className="px-3 py-1.5 text-[10.5px] italic"
-        style={{ color: NEUTRAL_TEXT, fontFamily: SANS, borderTop: "1px solid rgba(15,23,42,0.1)" }}
-      >
-        {foot}
-      </div>
+      </span>
     </div>
   );
 }

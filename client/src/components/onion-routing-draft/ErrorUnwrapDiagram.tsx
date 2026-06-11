@@ -10,6 +10,7 @@ import {
   ErrorChrome,
   ErrorPacketCard,
   ErrorRouteTrack,
+  ErrorXorStack,
   ReturnPathRail,
   FOCUS_GOLD,
   SUCCESS_GREEN,
@@ -163,23 +164,49 @@ export function ErrorUnwrapDiagram() {
           active hop highlights; the ✓/✗ verdicts land on the circles. */}
       <ErrorRouteTrack activeHop={activeHop} verdicts={verdicts} />
 
-      {/* One packet, peeled in place. Starts fully crosshatched; loses a layer
-          per beat; footprint never changes. The corner badge is the compact
-          KeyHoverIcon for the hop currently being tried. */}
-      <div className="mt-1">
-        <ErrorPacketCard
-          appliedLayers={layers}
-          failingHop="charlie"
-          cornerBadge={<ActiveKeyIcon step={step} />}
-          footnote={
-            step === 0
-              ? "fully wrapped: Bob's layer over Charlie's"
-              : step === 1
-                ? "Bob's layer peeled, Charlie's remains"
+      {/* One packet, peeled in place. Arrival (0) and the decoded payoff (3)
+          show the full card; the two trial beats (1, 2) show the canonical
+          three-bar XOR stack so the peel is explicit: packet ⊕ that hop's
+          ammag keystream = same 292 bytes, one crosshatch angle removed. The
+          corner badge is the compact KeyHoverIcon for the hop being tried. */}
+      {(step === 0 || step === 3) && (
+        <div className="mt-1">
+          <ErrorPacketCard
+            appliedLayers={layers}
+            failingHop="charlie"
+            cornerBadge={<ActiveKeyIcon step={step} />}
+            footnote={
+              step === 0
+                ? "fully wrapped: Bob's layer over Charlie's"
                 : "all layers peeled, payload is readable"
-          }
-        />
-      </div>
+            }
+          />
+        </div>
+      )}
+      {step === 1 && (
+        <div className="mt-1">
+          <ErrorXorStack
+            wrapHop="bob"
+            beforeLayers={["bob", "charlie"]}
+            afterLayers={["charlie"]}
+            beforeLabel="as received · 2 layers"
+            afterLabel="bob's layer off · charlie's remains"
+            cornerBadge={<ActiveKeyIcon step={step} />}
+          />
+        </div>
+      )}
+      {step === 2 && (
+        <div className="mt-1">
+          <ErrorXorStack
+            wrapHop="charlie"
+            beforeLayers={["charlie"]}
+            afterLayers={[]}
+            beforeLabel="after bob's peel · 1 layer"
+            afterLabel="fully peeled · plaintext · still 292 B"
+            cornerBadge={<ActiveKeyIcon step={step} />}
+          />
+        </div>
+      )}
 
       {/* Active-hop operation zone: the XOR + HMAC check formula shows ONLY
           for the hop Alice is currently trying. On the final beat this zone
@@ -287,23 +314,9 @@ function ActiveCheck({ hop }: { hop: "bob" | "charlie" }) {
           {matched ? "✓ HMAC matches" : "✗ HMAC fails"}
         </span>
       </div>
+      {/* The XOR itself is shown in the stack above; this box carries only
+          the authenticity question that decides the verdict. */}
       <div className="flex flex-wrap items-center gap-x-1 gap-y-1">
-        <MathLine
-          text={`peeled = wrapped ⊕ ammag_${sub}`}
-          color={NEUTRAL_TEXT}
-          fontSize={11.5}
-          weight={600}
-        />
-        <span
-          style={{
-            fontFamily: MONO,
-            fontSize: 11.5,
-            color: NEUTRAL_TEXT,
-            margin: "0 4px",
-          }}
-        >
-          ·
-        </span>
         <MathLine
           text={`HMAC(um_${sub}, peeled[32:]) ?= peeled[:32]`}
           color={matched ? SUCCESS_GREEN : NEUTRAL_TEXT}

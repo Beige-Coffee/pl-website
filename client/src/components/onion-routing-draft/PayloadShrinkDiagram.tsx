@@ -800,10 +800,10 @@ function BufferPayloadInner({ state }: { state: State }) {
                     }}
                   >
                     <div
-                      className="relative text-[10px] font-bold uppercase tracking-[0.05em] text-center"
+                      className="relative text-[10px] font-bold uppercase tracking-[0.02em] text-center"
                       style={{ color, fontFamily: MONO }}
                     >
-                      {HOP_LABEL[forwarder]}'s payload
+                      {HOP_LABEL[forwarder]}
                     </div>
                     <div
                       className="relative text-[9px] mt-0.5 opacity-70 text-center"

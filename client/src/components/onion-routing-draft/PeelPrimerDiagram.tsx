@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { SlotSubCell } from "./SlotSubCell";
-import { Tok } from "./mathTokens";
+import { MathLine, Tok } from "./mathTokens";
 import { StepCaption } from "./StepCaption";
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -66,14 +66,16 @@ const NEXT_HOP_COLOR: Record<ForwarderId, string> = {
   dave: "#475569",
 };
 const SLOT_BYTES: Record<ForwarderId, number> = {
-  bob: 65,
-  charlie: 65,
+  bob: 60,
+  charlie: 80,
   dave: 100,
 };
+// bigsize LEN encodes the TLV payload length only: the hop-payload total
+// minus the 1-byte prefix and the trailing 32-byte HMAC.
 const SLOT_BIGSIZE_HEX: Record<ForwarderId, string> = {
-  bob: "0x40",
-  charlie: "0x40",
-  dave: "0x63",
+  bob: "0x1B", // 60-byte hop payload → 27
+  charlie: "0x2F", // 80-byte hop payload → 47
+  dave: "0x43", // 100-byte hop payload → 67
 };
 
 const HOPS: HopId[] = ["alice", "bob", "charlie", "dave"];
@@ -137,9 +139,9 @@ const STEP_MS = 2400;
 const TOTAL_BUFFER_BYTES = 1300;
 
 const SLOT_WIDTH_PCT: Record<ForwarderId, number> = {
-  bob: 27,
-  charlie: 27,
-  dave: 30,
+  bob: 28,
+  charlie: 29,
+  dave: 31,
 };
 
 // Dimming
@@ -1011,46 +1013,52 @@ function PayloadArea({ config }: { config: PacketConfig }) {
   const frontHop = config.slots.length > 0 ? config.slots[0].hop : null;
 
   return (
-    <div
-      className="relative"
-      style={{
-        background: "#fffdf5",
-        height: 130,
-        border: "1.5px dashed rgba(15,23,42,0.3)",
-        marginBottom: 4,
-      }}
-    >
-      {config.slots.map((slot) => {
-        const isFront = slot.hop === frontHop;
-        const ringed =
-          (config.highlightVisibleSlot || config.highlightZeroHmac) && isFront;
-        const highlightHmac = config.highlightZeroHmac && isFront;
-        const markSource = config.markHmacSource && isFront && slot.visible;
-        return (
-          <SlotRegion
-            key={slot.hop}
-            hop={slot.hop}
-            leftPct={slotLeft[slot.hop]}
-            widthPct={SLOT_WIDTH_PCT[slot.hop]}
-            layers={slot.layers}
-            visible={slot.visible}
-            ringed={ringed}
-            highlightHmacSubcell={highlightHmac}
-            markHmacSource={markSource}
-          />
-        );
-      })}
-
-      <PaddingRegion
-        leftPct={paddingLeft}
-        bytes={config.paddingBytes}
-        layers={config.paddingLayers}
-      />
-
+    <>
+      {/* On the DECRYPT sub-step the keystream operand renders explicitly (the
+          XOR rule: never just a "⊕ keystream" pill while hatch disappears).
+          The buffer below is the live result; this hop's layer comes off as
+          the XOR lands. */}
       {config.showDecryptIndicator && config.decryptIndicatorHop && (
-        <DecryptIndicator hop={config.decryptIndicatorHop} />
+        <KeystreamXorRow hop={config.decryptIndicatorHop} />
       )}
-    </div>
+
+      <div
+        className="relative"
+        style={{
+          background: "#fffdf5",
+          height: 130,
+          border: "1.5px dashed rgba(15,23,42,0.3)",
+          marginBottom: 4,
+        }}
+      >
+        {config.slots.map((slot) => {
+          const isFront = slot.hop === frontHop;
+          const ringed =
+            (config.highlightVisibleSlot || config.highlightZeroHmac) && isFront;
+          const highlightHmac = config.highlightZeroHmac && isFront;
+          const markSource = config.markHmacSource && isFront && slot.visible;
+          return (
+            <SlotRegion
+              key={slot.hop}
+              hop={slot.hop}
+              leftPct={slotLeft[slot.hop]}
+              widthPct={SLOT_WIDTH_PCT[slot.hop]}
+              layers={slot.layers}
+              visible={slot.visible}
+              ringed={ringed}
+              highlightHmacSubcell={highlightHmac}
+              markHmacSource={markSource}
+            />
+          );
+        })}
+
+        <PaddingRegion
+          leftPct={paddingLeft}
+          bytes={config.paddingBytes}
+          layers={config.paddingLayers}
+        />
+      </div>
+    </>
   );
 }
 
@@ -1186,32 +1194,41 @@ function HatchOverlay({ hops }: { hops: ForwarderId[] }) {
   );
 }
 
-function DecryptIndicator({ hop }: { hop: ForwarderId }) {
-  const stroke = HOP_STROKE[hop];
+// The keystream operand for a DECRYPT sub-step: a full hatched bar in the
+// peeling hop's angle, with the chacha20 call as its label, XORed into the
+// live buffer below it. Same grammar as the wrap/peel trace XOR stacks.
+function KeystreamXorRow({ hop }: { hop: ForwarderId }) {
+  const color = HOP_STROKE[hop];
   return (
-    <div
-      className="absolute"
-      style={{
-        top: -16,
-        right: 10,
-        zIndex: 8,
-        animation: "peel-fade-in 350ms ease-out",
-      }}
-    >
+    <div className="mb-1" style={{ animation: "peel-fade-in 350ms ease-out" }}>
       <div
-        className="px-2 py-0.5"
-        style={{
-          background: "#fffdf5",
-          border: `1.5px solid ${stroke}`,
-          fontFamily: MONO,
-          fontSize: 10,
-          fontWeight: 700,
-          color: stroke,
-          letterSpacing: "0.04em",
-          whiteSpace: "nowrap",
-        }}
+        className="text-[10px] uppercase tracking-[0.06em] mb-1 text-center"
+        style={{ fontFamily: MONO, color, fontWeight: 700 }}
       >
-        ⊕ encryption keystream
+        keystream · 1,300 B
+      </div>
+      <div
+        className="border-[1.5px] relative overflow-hidden flex items-center justify-center"
+        style={{ borderColor: color, height: 36, background: "#fffdf5" }}
+      >
+        <HatchOverlay hops={[hop]} />
+        <span
+          className="relative"
+          style={{ zIndex: 2, background: "#fffdf5", padding: "1px 8px" }}
+        >
+          <MathLine text={`chacha20(rho_${hop}, 1300)`} color={color} fontSize={11.5} />
+        </span>
+      </div>
+      <div className="flex items-center justify-center gap-1.5 mt-1 mb-0.5">
+        <span style={{ fontSize: 14, fontWeight: 700, color: "#0f172a", lineHeight: 1 }}>
+          ⊕
+        </span>
+        <span
+          className="uppercase tracking-[0.06em]"
+          style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, color: "#475569" }}
+        >
+          xored over the whole buffer ↓
+        </span>
       </div>
     </div>
   );
@@ -1336,7 +1353,7 @@ function SlotCell({
           style={{
             background: "#fffdf5",
             border: `1px solid ${color}55`,
-            padding: "2px 6px",
+            padding: "2px 3px",
             position: "relative",
             zIndex: 6,
             minWidth: 0,
@@ -1348,8 +1365,8 @@ function SlotCell({
             style={{
               color,
               fontFamily: MONO,
-              fontSize: 11,
-              letterSpacing: "0.05em",
+              fontSize: 8.5,
+              letterSpacing: 0,
               lineHeight: 1,
             }}
           >
@@ -1365,7 +1382,7 @@ function SlotCell({
               lineHeight: 1,
             }}
           >
-            {SLOT_BYTES[hop]} bytes
+            {SLOT_BYTES[hop]} B
           </div>
         </div>
       </SlotSubCell>
@@ -1374,7 +1391,7 @@ function SlotCell({
         section="hmac"
         className="flex items-center justify-center"
         style={{
-          width: 54,
+          width: 62,
           flexShrink: 0,
           background: fill,
           borderLeft: `1px dashed ${color}80`,

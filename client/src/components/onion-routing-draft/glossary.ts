@@ -26,7 +26,8 @@ export type GlossaryCategory =
   | "ephemeral key"
   | "protocol field"
   | "concept"
-  | "operation";
+  | "operation"
+  | "your function";
 
 export interface GlossaryEntry {
   /** How the term renders in the popover header: math (subscripts) / code (mono) / text. */
@@ -36,6 +37,9 @@ export interface GlossaryEntry {
   definition: string;
   /** Optional derivation, rendered as math. Mostly the key / secret / ephemeral families. */
   formula?: string;
+  /** Optional Python def line, rendered verbatim in mono (used by the
+   * "your function" entries; NOT math-tokenized, so rho_key stays rho_key). */
+  signature?: string;
   /** Chapter where the term is introduced, e.g. "6". */
   chapter?: string;
 }
@@ -90,6 +94,14 @@ const ENTRIES: Record<string, GlossaryEntry> = {
       "The single ephemeral keypair Alice generates for one payment. It seeds the ephemeral key chain (`E_AB`, `E_AC`, ...) and the `pad_key`.",
     chapter: "4",
   },
+  pad: {
+    render: "code",
+    category: "session key",
+    definition:
+      "The KDF label for the buffer-setup key. The only one of the five labels used with Alice's session key instead of a hop's shared secret, so the resulting `pad_key` is unique to the payment, not to a hop.",
+    formula: "pad_key = HMAC('pad', sessionkey)",
+    chapter: "6",
+  },
 
   // ── Shared secret + ephemeral key chain ──
   ss: {
@@ -128,7 +140,7 @@ const ENTRIES: Record<string, GlossaryEntry> = {
     render: "text",
     category: "ephemeral key",
     definition:
-      "The per-hop scalar `bf_AB` that advances the ephemeral key chain, so every hop sees a different ephemeral pubkey. (In chapter 14 the same idea is reused on node identities for *blinded paths*.)",
+      "The per-hop scalar `bf_AB` that advances the ephemeral key chain, so every hop sees a different ephemeral pubkey. Both Alice and the forwarder can compute it.",
     formula: "bf_AB = SHA256(E_AB ‖ ss_AB)",
     chapter: "4",
   },
@@ -260,6 +272,48 @@ const ENTRIES: Record<string, GlossaryEntry> = {
       "One hop's HMAC tag, computed over that hop's encrypted layer. It is carried up to the next outer layer as its `next_hmac`.",
     chapter: "8",
   },
+  outer_hmac: {
+    render: "code",
+    category: "protocol field",
+    definition:
+      "The packet's trailing 32-byte tag: `HMAC(mu, hop_payloads ‖ associated_data)` for the current hop. It is the first thing a forwarder verifies, before any decryption.",
+    chapter: "9",
+  },
+  failure_len: {
+    render: "code",
+    category: "protocol field",
+    definition:
+      "The 2-byte length prefix inside an error payload: how many bytes of real `failure_message` follow. Always read it from the packet rather than assuming a size.",
+    chapter: "11",
+  },
+  failure_message: {
+    render: "code",
+    category: "protocol field",
+    definition:
+      "The structured failure bytes inside an error onion: a 2-byte failure code plus any associated data (like a `channel_update` for UPDATE-flagged failures).",
+    chapter: "11",
+  },
+  pad_len: {
+    render: "code",
+    category: "protocol field",
+    definition:
+      "The 2-byte length of the zero padding after the `failure_message`, sized so error payloads don't leak which failure they carry.",
+    chapter: "11",
+  },
+  fee_base_msat: {
+    render: "code",
+    category: "protocol field",
+    definition:
+      "The flat part of a forwarder's fee: a fixed number of millisatoshis charged per forwarded HTLC, advertised in its `channel_update`.",
+    chapter: "2",
+  },
+  fee_proportional_millionths: {
+    render: "code",
+    category: "protocol field",
+    definition:
+      "The rate part of a forwarder's fee: this many millionths of the forwarded amount, advertised in its `channel_update`.",
+    chapter: "2",
+  },
   temporary_channel_failure: {
     render: "code",
     category: "protocol field",
@@ -326,6 +380,83 @@ const ENTRIES: Record<string, GlossaryEntry> = {
     chapter: "11",
   },
 
+  // ── The functions you build (exercise functions; popover shows the def
+  //    line + contract so a prose mention is always one hover from its shape) ──
+  derive_shared_secrets: {
+    render: "code",
+    category: "your function",
+    signature: "def derive_shared_secrets(self):",
+    definition:
+      "Your `OnionPacketBuilder` method. Walks the blinding chain from the session key: for each hop it computes the ephemeral pubkey and the ECDH shared secret, then advances the key by the blinding factor. Populates `self.shared_secrets` and `self.ephemeral_pubkeys`, one entry per hop in route order.",
+    chapter: "4",
+  },
+  derive_keys: {
+    render: "code",
+    category: "your function",
+    signature: "def derive_keys(shared_secret):",
+    definition:
+      "Your standalone KDF. Takes one 32-byte secret and returns a `KeyMaterial` bundle with one key per label (`rho`, `mu`, `um`, `ammag`, `pad`), each computed as `HMAC-SHA256(label, secret)`.",
+    chapter: "6",
+  },
+  generate_filler: {
+    render: "code",
+    category: "your function",
+    signature: "def generate_filler(self, rho_keys, payload_sizes):",
+    definition:
+      "Your `OnionPacketBuilder` method. Precomputes the filler: for each forwarder it extends the filler with zeros and XORs in the tail of that hop's `rho` keystream, reproducing the bytes every downstream HMAC will be computed over. Returns the filler bytes that get overlaid on the innermost wrap.",
+    chapter: "7",
+  },
+  wrap_hop: {
+    render: "code",
+    category: "your function",
+    signature:
+      "def wrap_hop(self, buffer, payload, next_hmac, rho, mu, associated_data):",
+    definition:
+      "Your `OnionPacketBuilder` method: one iteration of the build loop. Right-shifts the buffer, writes `payload ‖ next_hmac` at the front, XORs the whole buffer with the `rho` keystream, then computes this hop's HMAC with `mu` over the buffer plus `associated_data`. Returns `(encrypted, tag)`.",
+    chapter: "8",
+  },
+  build: {
+    render: "code",
+    category: "your function",
+    signature: "def build(self, payloads, associated_data):",
+    definition:
+      "Your `OnionPacketBuilder` method: the full builder. Derives the shared secrets, precomputes the filler, runs `wrap_hop` for every hop in reverse order (overlaying the filler on the innermost pass), then assembles version ‖ ephemeral pubkey ‖ `hop_payloads` ‖ HMAC. Returns the finished 1,366-byte packet.",
+    chapter: "8",
+  },
+  peel_layer: {
+    render: "code",
+    category: "your function",
+    signature: "def peel_layer(self, packet, node_privkey):",
+    definition:
+      "Your `OnionForwarder` method: the full peel. ECDH against the packet's ephemeral pubkey, extend-and-XOR with `rho`, lift the next 1,300 bytes, advance the ephemeral. (HMAC verification is `verify_hmac`'s job.) Returns `(next_packet, payload_bytes, shared_secret)`.",
+    chapter: "9",
+  },
+  verify_hmac: {
+    render: "code",
+    category: "your function",
+    signature: "def verify_hmac(packet, mu, associated_data):",
+    definition:
+      "Your integrity check. Recomputes HMAC-SHA256 over the packet's `hop_payloads ‖ associated_data` with the `mu` key and compares it to the packet's `hmac` field. Returns `True` on a match, `False` otherwise.",
+    chapter: "10",
+  },
+  check_forward: {
+    render: "code",
+    category: "your function",
+    signature:
+      "def check_forward(incoming_amount_msat, incoming_cltv_expiry, amt_to_forward, outgoing_cltv_value, policy):",
+    definition:
+      "Your policy check. Confirms the incoming HTLC covers `amt_to_forward` plus the fee advertised in `policy`, and that the incoming CLTV clears `outgoing_cltv_value` by at least the policy's delta. Returns a BOLT 4 failure-code string, or `None` when it is safe to forward.",
+    chapter: "10",
+  },
+  decrypt_error_onion: {
+    render: "code",
+    category: "your function",
+    signature: "def decrypt_error_onion(wrapped_error, hop_keys):",
+    definition:
+      "Your error decoder: Alice's trial decrypt. Tries each hop in order: XORs off its `ammag` keystream and checks the `um` HMAC after each pass. Returns `(failing_hop_index, failure_message)` when a layer verifies, or `(None, None)` if nothing matches.",
+    chapter: "11",
+  },
+
   // ── Operations ──
   HMAC: {
     render: "text",
@@ -360,6 +491,103 @@ const ENTRIES: Record<string, GlossaryEntry> = {
 /** Bases that take a subscript, so `rho_B` / `ss_AD` / `E_AC` / `bf_AB` / `s_B` resolve to one entry. */
 const FAMILY = new Set(["rho", "mu", "um", "ammag", "ss", "E", "e", "bf", "s"]);
 
+// ── Subscript specialization ────────────────────────────────────────────────
+// A subscripted token names specific parties: `ss_AB` is THE shared secret
+// between Alice and Bob, `rho_C` is Charlie's forward-encryption key. When the
+// suffix names a concrete hop (B/C/D, AB/AC/AD, or a spelled-out bob/charlie/
+// dave), the popover shows a definition and formula for that exact hop instead
+// of the generic family text. Unknown suffixes (`mu_i`, `ss_AX`, ...) keep the
+// generic entry.
+
+type HopLetter = "B" | "C" | "D";
+const HOP_NAME: Record<HopLetter, string> = { B: "Bob", C: "Charlie", D: "Dave" };
+/** The hop after this one on the fixed route (for chain-advance formulas). */
+const NEXT_HOP: Partial<Record<HopLetter, HopLetter>> = { B: "C", C: "D" };
+/** The hop before this one (whose blinding factor produced this hop's key). */
+const PREV_HOP: Partial<Record<HopLetter, HopLetter>> = { C: "B", D: "C" };
+
+/** Map a subscript to the hop it names, or null when it is generic (i, X, ...). */
+function hopFromSuffix(suffix: string): HopLetter | null {
+  const s = suffix.toLowerCase();
+  if (s === "bob") return "B";
+  if (s === "charlie") return "C";
+  if (s === "dave") return "D";
+  if (/^[bcd]$/.test(s)) return s.toUpperCase() as HopLetter;
+  if (/^a[bcd]$/.test(s)) return s[1].toUpperCase() as HopLetter;
+  return null;
+}
+
+const SPECIALIZE: Record<
+  string,
+  (h: HopLetter) => Partial<GlossaryEntry> | null
+> = {
+  ss: (h) => ({
+    definition: `The 32-byte ECDH shared secret between Alice and ${HOP_NAME[h]}. Every one of ${HOP_NAME[h]}'s per-hop keys (\`rho\`, \`mu\`, \`um\`, \`ammag\`) derives from it.`,
+    formula: `ss_A${h} = SHA256(e_A${h} · ${h})`,
+  }),
+  rho: (h) => ({
+    definition: `${HOP_NAME[h]}'s forward-encryption key: the ChaCha20 stream-cipher key that encrypts ${HOP_NAME[h]}'s layer of the \`hop_payloads\` buffer. Derived from his shared secret with Alice.`,
+    formula: `rho_${h} = HMAC('rho', ss_A${h})`,
+  }),
+  mu: (h) => ({
+    definition: `${HOP_NAME[h]}'s forward-authentication key: the HMAC key behind the integrity tag ${HOP_NAME[h]} verifies over the buffer.`,
+    formula: `mu_${h} = HMAC('mu', ss_A${h})`,
+  }),
+  um: (h) => ({
+    definition: `${HOP_NAME[h]}'s return-authentication key (it is \`mu\` spelled backwards). If ${HOP_NAME[h]} fails the payment, this key authenticates the error packet he builds.`,
+    formula: `um_${h} = HMAC('um', ss_A${h})`,
+  }),
+  ammag: (h) => ({
+    definition: `${HOP_NAME[h]}'s return-encryption key (it is \`gamma\` spelled backwards). The ChaCha20 key ${HOP_NAME[h]} uses to wrap error packets on the return path.`,
+    formula: `ammag_${h} = HMAC('ammag', ss_A${h})`,
+  }),
+  E: (h) => {
+    const prev = PREV_HOP[h];
+    return {
+      definition:
+        `Alice's ephemeral *public* key for the ECDH with ${HOP_NAME[h]} (uppercase = public point). ` +
+        (prev
+          ? `${HOP_NAME[prev]} derives it from \`E_A${prev}\` with his blinding factor before forwarding, landing on the same value Alice precomputed.`
+          : `It is the one key that ships in the packet header; every later hop's key is derived from it.`),
+      formula: prev ? `E_A${h} = bf_A${prev} · E_A${prev}` : `E_A${h} = e_A${h} · G`,
+    };
+  },
+  e: (h) => {
+    const prev = PREV_HOP[h];
+    return {
+      definition:
+        `Alice's ephemeral *private* key for ${HOP_NAME[h]} (lowercase = private scalar; uppercase \`E\` is its public point). ` +
+        (prev
+          ? `Advanced from \`e_A${prev}\` by the blinding factor.`
+          : `For the first hop, it is simply the session key.`),
+      formula: prev ? `e_A${h} = bf_A${prev} · e_A${prev}` : `e_A${h} = sessionkey`,
+    };
+  },
+  bf: (h) => {
+    const next = NEXT_HOP[h];
+    if (!next) return null; // the final hop has no blinding factor
+    return {
+      definition: `The blinding factor that advances the ephemeral key chain past ${HOP_NAME[h]}, taking \`E_A${h}\` to \`E_A${next}\`. Alice precomputes it and ${HOP_NAME[h]} re-derives it, so both land on the same next key.`,
+      formula: `bf_A${h} = SHA256(E_A${h} ‖ ss_A${h})`,
+    };
+  },
+  s: (h) => ({
+    definition: `${HOP_NAME[h]}'s hop-payload size in bytes. It sets how far the buffer shifts when ${HOP_NAME[h]}'s payload is added or removed.`,
+  }),
+};
+
+/** Specialized text for bob_hmac / charlie_hmac / dave_hmac. */
+function specializeHopHmac(h: HopLetter): Partial<GlossaryEntry> {
+  const prev = PREV_HOP[h];
+  return {
+    definition:
+      `${HOP_NAME[h]}'s HMAC tag, computed over ${HOP_NAME[h]}'s encrypted layer. ` +
+      (prev
+        ? `Alice tucks it inside ${HOP_NAME[prev]}'s hop payload, and ${HOP_NAME[prev]} lifts it to the packet's outer tag when he forwards.`
+        : `It rides as the outer tag on the 1,366-byte packet Alice ships, the first thing ${HOP_NAME[h]} verifies.`),
+  };
+}
+
 export interface GlossaryHit {
   /** The raw token as hovered (e.g. `rho_B`, `pad_key`). */
   term: string;
@@ -377,12 +605,17 @@ export function resolveGlossary(raw: string): GlossaryHit | null {
   // Subscripted family: base_SUFFIX  (rho_B, ss_AD, E_AC, mu_i, bf_AB, s_B, ...)
   const m = t.match(/^([A-Za-z]+)_[A-Za-z0-9]+$/);
   if (m && FAMILY.has(m[1]) && ENTRIES[m[1]]) {
-    return { term: t, entry: ENTRIES[m[1]] };
+    const base = ENTRIES[m[1]];
+    const hop = hopFromSuffix(t.slice(m[1].length + 1));
+    const special = hop ? SPECIALIZE[m[1]]?.(hop) : null;
+    return { term: t, entry: special ? { ...base, ...special } : base };
   }
 
   // Per-hop HMAC values: bob_hmac / charlie_hmac / dave_hmac
-  if (/^(?:bob|charlie|dave)_hmac$/.test(t)) {
-    return { term: t, entry: ENTRIES.hop_hmac };
+  const hm = t.match(/^(bob|charlie|dave)_hmac$/);
+  if (hm) {
+    const hop = hopFromSuffix(hm[1])!;
+    return { term: t, entry: { ...ENTRIES.hop_hmac, ...specializeHopHmac(hop) } };
   }
 
   return null;
@@ -396,4 +629,5 @@ export const GLOSSARY_CATEGORY_COLOR: Record<GlossaryCategory, string> = {
   "protocol field": "#475569",
   concept: "#2d7a7a",
   operation: "#5a7a2f",
+  "your function": "#a05a2c",
 };

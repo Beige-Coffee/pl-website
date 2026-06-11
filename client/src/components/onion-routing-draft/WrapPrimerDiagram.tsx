@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { SlotSubCell } from "./SlotSubCell";
-import { Tok } from "./mathTokens";
+import { MathLine, Tok } from "./mathTokens";
 import { StepCaption } from "./StepCaption";
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -656,9 +656,9 @@ function DetailedPacket({ state, step }: { state: BuildState; step: number }) {
 // be tiny (65/1300 ≈ 5%), so we enlarge for readability and label exact
 // bytes inline. Padding gets whatever remains.
 const SLOT_WIDTH_PCT: Record<ForwarderId, number> = {
-  bob: 27,
-  charlie: 27,
-  dave: 30,
+  bob: 28,
+  charlie: 29,
+  dave: 31,
 };
 
 // bigsize LEN encodes the TLV payload length only: the slot total minus the
@@ -734,39 +734,88 @@ function PayloadAreaLinear({
 
   const isWriting =
     state.currentSubStep === "write" && state.currentHop !== null;
+  const isEncrypting =
+    state.currentSubStep === "encrypt" && state.currentHop !== null;
 
   return (
-    <div
-      className="relative"
-      style={{
-        background: "#fffdf5",
-        height: 130,
-        border: "1.5px dashed rgba(15,23,42,0.3)",
-        marginBottom: 4,
-      }}
-    >
-      {/* Hop payload regions */}
-      {slotOrder.map((hop) => {
-        const just = isWriting && state.currentHop === hop;
-        return (
-          <SlotRegion
-            key={hop}
-            hop={hop}
-            leftPct={slotLeft[hop]}
-            widthPct={SLOT_WIDTH_PCT[hop]}
-            layers={encryptionLayers(hop, state)}
-            justWritten={just}
-          />
-        );
-      })}
+    <>
+      {/* On the ENCRYPT sub-step the keystream operand renders explicitly (the
+          XOR rule: never just let hatch appear). The buffer below is the live
+          result; it gains this hop's layer as the XOR lands. */}
+      {isEncrypting && <KeystreamXorRow hop={state.currentHop!} />}
 
-      {/* Padding region */}
-      <PaddingRegion
-        leftPct={paddingLeft}
-        bytes={paddingBytes}
-        layers={encryptionLayers("padding", state)}
-        isInit={step === 0}
-      />
+      <div
+        className="relative"
+        style={{
+          background: "#fffdf5",
+          height: 130,
+          border: "1.5px dashed rgba(15,23,42,0.3)",
+          marginBottom: 4,
+        }}
+      >
+        {/* Hop payload regions */}
+        {slotOrder.map((hop) => {
+          const just = isWriting && state.currentHop === hop;
+          return (
+            <SlotRegion
+              key={hop}
+              hop={hop}
+              leftPct={slotLeft[hop]}
+              widthPct={SLOT_WIDTH_PCT[hop]}
+              layers={encryptionLayers(hop, state)}
+              justWritten={just}
+            />
+          );
+        })}
+
+        {/* Padding region */}
+        <PaddingRegion
+          leftPct={paddingLeft}
+          bytes={paddingBytes}
+          layers={encryptionLayers("padding", state)}
+          isInit={step === 0}
+        />
+      </div>
+    </>
+  );
+}
+
+// The keystream operand for an ENCRYPT sub-step: a full hatched bar in the
+// encrypting hop's angle, with the chacha20 call as its label, XORed into the
+// live buffer below it. Same grammar as the wrap/peel trace XOR stacks.
+function KeystreamXorRow({ hop }: { hop: ForwarderId }) {
+  const color = HOP_STROKE[hop];
+  return (
+    <div className="mb-1">
+      <div
+        className="text-[10px] uppercase tracking-[0.06em] mb-1 text-center"
+        style={{ fontFamily: MONO, color, fontWeight: 700 }}
+      >
+        keystream · 1,300 B
+      </div>
+      <div
+        className="border-[1.5px] relative overflow-hidden flex items-center justify-center"
+        style={{ borderColor: color, height: 36, background: "#fffdf5" }}
+      >
+        <HatchOverlay hops={[hop]} />
+        <span
+          className="relative"
+          style={{ zIndex: 2, background: "#fffdf5", padding: "1px 8px" }}
+        >
+          <MathLine text={`chacha20(rho_${hop}, 1300)`} color={color} fontSize={11.5} />
+        </span>
+      </div>
+      <div className="flex items-center justify-center gap-1.5 mt-1 mb-0.5">
+        <span style={{ fontSize: 14, fontWeight: 700, color: "#0f172a", lineHeight: 1 }}>
+          ⊕
+        </span>
+        <span
+          className="uppercase tracking-[0.06em]"
+          style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, color: "#475569" }}
+        >
+          xored over the whole buffer ↓
+        </span>
+      </div>
     </div>
   );
 }
@@ -1000,7 +1049,7 @@ function SlotCell({ hop }: { hop: ForwarderId }) {
           style={{
             background: "#fffdf5",
             border: `1px solid ${color}55`,
-            padding: "2px 6px",
+            padding: "2px 3px",
             position: "relative",
             zIndex: 6,
             minWidth: 0,
@@ -1012,8 +1061,8 @@ function SlotCell({ hop }: { hop: ForwarderId }) {
             style={{
               color,
               fontFamily: MONO,
-              fontSize: 11,
-              letterSpacing: "0.05em",
+              fontSize: 9.5,
+              letterSpacing: "0.02em",
               lineHeight: 1,
             }}
           >
@@ -1030,7 +1079,7 @@ function SlotCell({ hop }: { hop: ForwarderId }) {
               fontStyle: "italic",
             }}
           >
-            {SLOT_BYTES[hop]} bytes
+            {SLOT_BYTES[hop]} B
           </div>
         </div>
       </SlotSubCell>
@@ -1041,7 +1090,7 @@ function SlotCell({ hop }: { hop: ForwarderId }) {
         section="hmac"
         className="flex items-center justify-center"
         style={{
-          width: 54,
+          width: 62,
           flexShrink: 0,
           background: fill,
           borderLeft: `1px dashed ${color}80`,

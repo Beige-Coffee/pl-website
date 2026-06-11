@@ -775,19 +775,32 @@ function ChapterContent({
             />
           ),
           code: ({ className, children, ...props }: any) => {
+            // Auto-link backticked glossary terms (pad_key, rho_i, ss_AX, ...).
+            // Pills that open a definition get a gold wash so "hoverable" is
+            // visible at a glance; plain pills keep the neutral background.
+            const text = String(
+              Array.isArray(children) ? children.join("") : children ?? ""
+            );
+            const hit = resolveGlossary(text) !== null;
             const codeEl = (
               <code
-                className={`${className ?? ""} rounded px-1 py-0.5 ${theme === "dark" ? "bg-white/10" : "bg-black/[0.03]"}`}
+                className={`${className ?? ""} rounded px-1 py-0.5 ${hit ? "" : theme === "dark" ? "bg-white/10" : "bg-black/[0.03]"}`}
+                style={
+                  hit
+                    ? {
+                        background:
+                          theme === "dark"
+                            ? "rgba(255,215,0,0.13)"
+                            : "rgba(184,134,11,0.11)",
+                      }
+                    : undefined
+                }
                 {...props}
               >
                 {children}
               </code>
             );
-            // Auto-link backticked glossary terms (pad_key, rho_i, ss_AX, ...).
-            const text = String(
-              Array.isArray(children) ? children.join("") : children ?? ""
-            );
-            return resolveGlossary(text) ? (
+            return hit ? (
               <GlossaryTerm term={text}>{codeEl}</GlossaryTerm>
             ) : (
               codeEl
@@ -803,8 +816,11 @@ function ChapterContent({
             );
             const mathEl = <MathTok token={tok} />;
             // Make subscripted math symbols glossary-aware too (ss_AB, E_AC, rho_B).
+            // `wash` adds the gold tint here (math tokens have no pill of their own).
             return resolveGlossary(tok) ? (
-              <GlossaryTerm term={tok}>{mathEl}</GlossaryTerm>
+              <GlossaryTerm term={tok} wash>
+                {mathEl}
+              </GlossaryTerm>
             ) : (
               mathEl
             );
@@ -821,7 +837,11 @@ function ChapterContent({
             const text = String(
               Array.isArray(children) ? children.join("") : children ?? ""
             );
-            return <GlossaryTerm term={text}>{children}</GlossaryTerm>;
+            return (
+              <GlossaryTerm term={text} wash>
+                {children}
+              </GlossaryTerm>
+            );
           },
           // Handle <checkpoint id="..." /> tags in markdown (custom HTML element)
           checkpoint: ({ id }: any) => {
