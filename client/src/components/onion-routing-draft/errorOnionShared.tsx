@@ -107,6 +107,11 @@ export interface RouteTrackProps {
   verdicts?: Partial<Record<HopId, "match" | "fail">>;
   /** Extra height below the circles (room for labels). Defaults to 86. */
   height?: number;
+  /** Optional traveling mini-packet under the holder's circle. It slides
+   * between hops on step changes (left transition), so the packet's journey
+   * along the route is something you watch, not infer. Pass height >= 112
+   * to make room for it. */
+  packet?: { holder: HopId; layers: ForwarderId[]; visible: boolean };
 }
 
 export function ErrorRouteTrack({
@@ -115,6 +120,7 @@ export function ErrorRouteTrack({
   dimmed = [],
   verdicts = {},
   height = 86,
+  packet,
 }: RouteTrackProps) {
   const dimSet = new Set(dimmed);
   // Circles sit at top: CIRCLE_TOP with height TRACK_CIRCLE, so their vertical
@@ -137,6 +143,53 @@ export function ErrorRouteTrack({
           zIndex: 1,
         }}
       />
+
+      {/* The traveling packet: a mini 292-byte glyph parked under whoever
+          holds it, sliding hop to hop as the step changes. Its crosshatch
+          mirrors the applied ammag layers, so you can watch the same fixed
+          footprint gain (or lose) layers while it moves. */}
+      {packet && (
+        <div
+          className="absolute"
+          style={{
+            top: CIRCLE_TOP + TRACK_CIRCLE + 26,
+            left: `${NODE_X_PCT[packet.holder]}%`,
+            transform: "translateX(-50%)",
+            transition:
+              "left 800ms cubic-bezier(0.4,0,0.2,1), opacity 400ms ease-out",
+            opacity: packet.visible ? 1 : 0,
+            zIndex: 3,
+          }}
+        >
+          <div
+            className="relative overflow-hidden flex items-center justify-center"
+            style={{
+              width: 66,
+              height: 22,
+              border: `1.5px solid ${INK}`,
+              background: CREAM,
+            }}
+          >
+            {packet.layers.length > 0 && (
+              <HatchOverlay hops={packet.layers} zIndex={1} stripeOpacity={0.35} />
+            )}
+            <span
+              className="relative"
+              style={{
+                zIndex: 2,
+                fontFamily: MONO,
+                fontSize: 8.5,
+                fontWeight: 700,
+                color: INK,
+                background: "rgba(255,253,245,0.85)",
+                padding: "0 3px",
+              }}
+            >
+              292 B
+            </span>
+          </div>
+        </div>
+      )}
 
       {HOPS.map((id) => {
         const isActive = id === activeHop;

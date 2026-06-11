@@ -156,6 +156,12 @@ export function ErrorBoomerangDiagram() {
         activeHop={packetHop}
         failingHop="charlie"
         dimmed={["dave"]}
+        height={114}
+        packet={{
+          holder: packetHop,
+          layers: appliedLayers,
+          visible: step >= 1,
+        }}
       />
 
       {/* The error packet. Build (1) and arrival (4) show the full card; the

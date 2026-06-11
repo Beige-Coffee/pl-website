@@ -137,6 +137,38 @@ const SNIPPETS: Record<string, Snippet> = {
     python:
       '# Bob ships the 1,366-byte packet to Charlie. The next_hmac Bob read\n# from his own hop payload becomes the outer HMAC tag of the outgoing\n# packet.\nnext_packet = b"\\x00" + next_ephemeral + next_hop_payloads + next_hmac',
   },
+
+  // ── Chapter 11: the error onion ──
+  "error-package": {
+    python:
+      '# Package the failure so its size can\'t leak which failure it is:\n# failure_len || failure_message || pad_len || zero padding.\n# Per BOLT 4, failure_len + pad_len must reach at least 256.\npad_len = 256 - len(failure_message)\npayload = (\n    len(failure_message).to_bytes(2, "big") + failure_message\n    + pad_len.to_bytes(2, "big") + bytes(pad_len)\n)  # 2 + failure_len + 2 + pad_len = 260 bytes here',
+  },
+  "error-hmac": {
+    python:
+      "# Authenticate the payload with um, then prepend the tag.\n# Tag + payload is the full error packet: 32 + 260 = 292 bytes.\nerror_hmac = hmac.new(um_charlie, payload, hashlib.sha256).digest()\npacket = error_hmac + payload",
+  },
+  "error-wrap": {
+    python:
+      "# Encrypt in place: XOR the whole packet with the ammag keystream.\n# Same fixed size in, same fixed size out.\nstream = chacha20_keystream(ammag_charlie, len(packet))\nwrapped = xor_bytes(packet, stream)",
+  },
+  "error-rewrap": {
+    python:
+      "# Bob's entire job: one more ammag layer over however many bytes\n# arrived, then pass it along. He never reads a thing.\nwrapped = xor_bytes(wrapped, chacha20_keystream(ammag_bob, len(wrapped)))",
+  },
+  "error-trial-peel": {
+    python:
+      "# One trial iteration: peel hop i's ammag layer (the XOR accumulates\n# across iterations), then ask whether hop i's um key authenticates it.\nwrapped = xor_bytes(wrapped, chacha20_keystream(ammag_i, len(wrapped)))\ntag = wrapped[:32]\npayload = wrapped[32:]\nfound = hmac.new(um_i, payload, hashlib.sha256).digest() == tag",
+  },
+  "error-parse": {
+    python:
+      '# The HMAC verified, so the payload is plaintext. Read the length\n# prefix, then slice exactly that many bytes. Never scan for zeros:\n# the padding is zeros, and the message itself may contain them too.\nfailure_len = int.from_bytes(payload[0:2], "big")\nfailure_message = payload[2:2 + failure_len]',
+  },
+
+  // ── Chapter 10: the policy check ──
+  "check-fee-cltv": {
+    python:
+      '# The fee math, straight from Bob\'s channel_update. Note the floor\n# division: same convention as chapter 2\'s fee calculator.\nrequired_fee = (\n    policy.fee_base_msat\n    + (amt_to_forward * policy.fee_proportional_millionths) // 1_000_000\n)\nif incoming_amount_msat - amt_to_forward < required_fee:\n    return "fee_insufficient"\nif incoming_cltv_expiry - outgoing_cltv_value < policy.cltv_expiry_delta:\n    return "incorrect_cltv_expiry"',
+  },
 };
 
 // ── Python syntax highlighting ──────────────────────────────────────────────
