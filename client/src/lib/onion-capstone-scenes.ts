@@ -644,7 +644,7 @@ export function buildSceneTimeline(trace: CapstoneTraceResult): SceneTimeline {
           policy: { hop, incomingAmt, amt, requiredFee, incomingCltv, cltv, delta: route.cltvDelta },
         },
         pinned: [
-          { name: "fee", value: `${fmt(incomingAmt - amt)} ≥ ${fmt(requiredFee)} msat` },
+          { name: "fee", value: `${fmt(incomingAmt - amt)} ≥ ${fmt(requiredFee)} sats` },
           { name: "cltv", value: `${fmt(incomingCltv - cltv)} ≥ ${route.cltvDelta} blocks` },
         ],
         pinLocals: PIN_LOCALS.policy,
@@ -655,9 +655,9 @@ export function buildSceneTimeline(trace: CapstoneTraceResult): SceneTimeline {
     if (kind === "delivered") {
       open({
         key: "delivered", title: "Payment delivered",
-        caption: `Dave received ${fmt((ev.amt as number) ?? route.amts[2])} msat. Every byte that carried it there, the chain, the filler, the wraps, the peels, came from functions you wrote.`,
+        caption: `Dave received ${fmt((ev.amt as number) ?? route.amts[2])} sats. Every byte that carried it there, the chain, the filler, the wraps, the peels, came from functions you wrote.`,
         stage: { packetAt: "dave", view: "deliver", deliverAmt: (ev.amt as number) ?? route.amts[2] },
-        pinned: [{ name: "amount", value: `${fmt((ev.amt as number) ?? route.amts[2])} msat` }],
+        pinned: [{ name: "amount", value: `${fmt((ev.amt as number) ?? route.amts[2])} sats` }],
       });
       pushSyn("dave", "check_forward", "forwarder", "Dave claims the payment against his invoice. The route settles backward from here.");
       return;

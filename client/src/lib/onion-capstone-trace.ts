@@ -346,7 +346,7 @@ for _i, (_name, _priv) in enumerate(_hops):
     if 6 in _recs:
         _verdict = check_forward(_incoming_amt, _incoming_cltv, _amt, _cltv, POLICY)
         if _verdict is None:
-            _beat(_name, "forwarded", _name.capitalize() + " forwards " + str(_amt) + " msat to the next hop")
+            _beat(_name, "forwarded", _name.capitalize() + " forwards " + str(_amt) + " sats to the next hop")
             _ev("forwarded", amt=_amt)
         else:
             _ok = False
@@ -355,7 +355,7 @@ for _i, (_name, _priv) in enumerate(_hops):
         _cur = _nxt
         _incoming_amt, _incoming_cltv = _amt, _cltv
     elif 8 in _recs:
-        _beat(_name, "delivered", _name.capitalize() + " is the destination and received " + str(_amt) + " msat")
+        _beat(_name, "delivered", _name.capitalize() + " is the destination and received " + str(_amt) + " sats")
         _ev("delivered", amt=_amt)
         break
 sys.settrace(None)

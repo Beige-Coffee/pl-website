@@ -236,7 +236,7 @@ function PolicyCard({ p }: { p: NonNullable<StageState["policy"]> }) {
       </div>
       <div style={row}>
         <span style={{ color: SLATE, width: 36 }}>fee</span>
-        <span>{fmt(p.incomingAmt)} − {fmt(p.amt)} = {fmt(feeMargin)} ≥ {fmt(p.requiredFee)} msat</span>
+        <span>{fmt(p.incomingAmt)} − {fmt(p.amt)} = {fmt(feeMargin)} ≥ {fmt(p.requiredFee)} sats</span>
         <span style={{ color: "#2d7a7a", marginLeft: "auto", fontWeight: 700 }}>✓</span>
       </div>
       <div style={{ ...row, borderTop: `1px solid ${stroke}33` }}>
@@ -255,7 +255,7 @@ function DeliverView({ amt }: { amt: number }) {
         <span style={{ fontSize: 20, color: "#2d7a7a", fontWeight: 700 }}>✓</span>
         <div style={{ textAlign: "left" }}>
           <div style={{ fontFamily: SANS, fontWeight: 700, fontSize: 14, color: INK }}>Payment delivered</div>
-          <div style={{ fontFamily: MONO, fontSize: 11.5, color: "#7a5a08" }}>{amt.toLocaleString("en-US")} msat received by Dave</div>
+          <div style={{ fontFamily: MONO, fontSize: 11.5, color: "#7a5a08" }}>{amt.toLocaleString("en-US")} sats received by Dave</div>
         </div>
       </div>
     </div>
