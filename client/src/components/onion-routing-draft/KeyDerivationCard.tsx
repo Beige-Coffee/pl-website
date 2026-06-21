@@ -28,7 +28,7 @@
 // background; rows with active === false dim.
 // ────────────────────────────────────────────────────────────────────────────
 
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { MathLine } from "./mathTokens";
 
 const MONO = '"JetBrains Mono", "Fira Code", monospace';
@@ -244,6 +244,7 @@ export function KeyHoverIcon(
   const [pinned, setPinned] = useState(false);
   const [pos, setPos] = useState({ left: 0, top: 0, above: false });
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
 
   // The pipeline card is narrower than the old SVG card; size the popover to
   // match its max width plus a little breathing room.
@@ -268,6 +269,34 @@ export function KeyHoverIcon(
   }
 
   const visible = shown || pinned;
+
+  // Dismiss a pinned popover on an outside click, on scroll (it is position:
+  // fixed and can't track its anchor), or on Escape. Without this the popover
+  // could only be closed by clicking the badge again. Mirrors GlossaryTerm.
+  useEffect(() => {
+    if (!visible) return;
+    const close = () => {
+      setPinned(false);
+      setShown(false);
+    };
+    const onPointerDown = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (triggerRef.current?.contains(t) || popRef.current?.contains(t)) return;
+      close();
+    };
+    const onScroll = () => close();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    window.addEventListener("scroll", onScroll, true);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown, true);
+      window.removeEventListener("scroll", onScroll, true);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [visible]);
 
   return (
     <>
@@ -320,6 +349,7 @@ export function KeyHoverIcon(
       </button>
       {visible && (
         <div
+          ref={popRef}
           role="dialog"
           style={{
             position: "fixed",

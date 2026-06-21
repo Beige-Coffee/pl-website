@@ -1,4 +1,5 @@
 import { type CSSProperties, useCallback, useMemo, useRef, useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   runOnionCapstone,
   runOnionCapstoneDemo,
@@ -7,7 +8,7 @@ import {
 } from "../../lib/onion-capstone-orchestrator";
 import { type CapstoneTraceResult, type HopId, type SerializedValue } from "../../lib/onion-capstone-trace";
 import { buildSceneTimeline, type Scene, type SceneFrame } from "../../lib/onion-capstone-scenes";
-import { CapstoneStage, type StageChip } from "./CapstoneStage";
+import { CapstoneStage, palette, type StageChip } from "./CapstoneStage";
 
 // ────────────────────────────────────────────────────────────────────────────
 // OnionCapstoneLab - synced step-through capstone.
@@ -22,8 +23,6 @@ import { CapstoneStage, type StageChip } from "./CapstoneStage";
 
 const SANS = "ui-sans-serif, system-ui, sans-serif";
 const MONO = '"JetBrains Mono", "Fira Code", monospace';
-const INK = "#0f172a";
-const SLATE = "#475569";
 const EDITOR_BG = "#1e1e1e";
 const PANEL_BG = "#252526";
 
@@ -31,6 +30,7 @@ export interface OnionCapstoneLabProps {
   injectedTrace?: CapstoneTraceResult;
   getSaved?: SavedGetter;
   demo?: boolean;
+  dark?: boolean;
 }
 type RunState = "idle" | "running" | "ready" | "blocked" | "error";
 
@@ -133,7 +133,7 @@ function Scope({ title, vars, defaultOpen }: { title: string; vars: Record<strin
 
 // ── code pane ────────────────────────────────────────────────────────────────
 
-function CodePane({ source, line, fn, file, note, height }: { source: string; line?: number; fn?: string; file?: string; note?: string; height: number }) {
+function CodePane({ source, line, fn, file, note, height }: { source: string; line?: number; fn?: string; file?: string; note?: string; height: number | string }) {
   const lines = useMemo(() => source.split("\n"), [source]);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const activeRef = useRef<HTMLDivElement | null>(null);
@@ -161,7 +161,7 @@ function CodePane({ source, line, fn, file, note, height }: { source: string; li
 
 // ── variables panel (scene-pinned + full tree) ───────────────────────────────
 
-function VariablesPanel({ scene, frame, height }: { scene: Scene; frame: SceneFrame; height: number }) {
+function VariablesPanel({ scene, frame, height }: { scene: Scene; frame: SceneFrame; height: number | string }) {
   const pinnedLocals = useMemo(() => {
     const locals = frame.locals ?? {};
     return scene.pinLocals.filter((n) => n in locals).slice(0, 6).map((n) => [n, locals[n]] as const);
@@ -196,15 +196,60 @@ function VariablesPanel({ scene, frame, height }: { scene: Scene; frame: SceneFr
   );
 }
 
+// ── scrubber (hop-colored segmented track) ──────────────────────────────────
+//
+// Replaces the old per-scene tick dashes. Each contiguous run of frames by the
+// same hop becomes a colored band (Alice gold, Bob blue, Charlie teal, Dave
+// purple), so the track *shows the journey*. The played portion is bright, the
+// rest dim; a dark playhead marks the current frame. A transparent native range
+// input rides on top for drag + keyboard scrubbing (a11y preserved).
+
+const HOP_NAME: Record<HopId, string> = { alice: "Alice", bob: "Bob", charlie: "Charlie", dave: "Dave" };
+
+interface ScrubSeg { start: number; leftPct: number; widthPct: number; color: string; label: string }
+
+function Scrubber({ segments, playheadPct, idx, max, onChange, dark }: {
+  segments: ScrubSeg[]; playheadPct: number; idx: number; max: number; onChange: (n: number) => void; dark: boolean;
+}) {
+  const P = palette(dark);
+  return (
+    <div style={{ position: "relative", height: 16 }}>
+      <style>{`
+        .cap-scrub { -webkit-appearance: none; appearance: none; background: transparent; margin: 0; }
+        .cap-scrub:focus-visible { outline: 2px solid ${P.gold}; outline-offset: 3px; border-radius: 4px; }
+        .cap-scrub::-webkit-slider-runnable-track { background: transparent; height: 16px; }
+        .cap-scrub::-moz-range-track { background: transparent; height: 16px; }
+        .cap-scrub::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 1px; height: 1px; opacity: 0; }
+        .cap-scrub::-moz-range-thumb { width: 1px; height: 1px; opacity: 0; border: none; }
+      `}</style>
+      <div style={{ position: "absolute", top: 5, left: 0, right: 0, height: 6, borderRadius: 3, overflow: "hidden", background: P.soft }}>
+        {segments.map((s) => {
+          const segPlayed = Math.max(0, Math.min(1, (playheadPct - s.leftPct) / s.widthPct));
+          return (
+            <div key={s.start} title={s.label} style={{ position: "absolute", top: 0, bottom: 0, left: `${s.leftPct}%`, width: `${s.widthPct}%` }}>
+              <div style={{ position: "absolute", inset: 0, background: s.color, opacity: 0.3 }} />
+              <div style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: `${segPlayed * 100}%`, background: s.color }} />
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ position: "absolute", top: 1, left: `${playheadPct}%`, transform: "translateX(-50%)", width: 3, height: 14, background: P.text, border: `1px solid ${dark ? "#0b1220" : "#fff"}`, borderRadius: 2, pointerEvents: "none" }} aria-hidden />
+      <input className="cap-scrub" type="range" min={0} max={max} value={idx} onChange={(e) => onChange(Number(e.target.value))} style={{ position: "absolute", inset: 0, width: "100%", height: 16, cursor: "pointer" }} aria-label="Scrubber" />
+    </div>
+  );
+}
+
 // ── main ─────────────────────────────────────────────────────────────────────
 
-export function OnionCapstoneLab({ injectedTrace, getSaved, demo }: OnionCapstoneLabProps) {
+export function OnionCapstoneLab({ injectedTrace, getSaved, demo, dark = false }: OnionCapstoneLabProps) {
+  const P = palette(dark);
   const [runState, setRunState] = useState<RunState>(injectedTrace ? "ready" : "idle");
   const [preflight, setPreflight] = useState<PreflightResult | null>(null);
   const [progress, setProgress] = useState<Record<string, boolean>>({});
   const [trace, setTrace] = useState<CapstoneTraceResult | null>(injectedTrace ?? null);
   const [idx, setIdx] = useState(0);
   const [errorMsg, setErrorMsg] = useState("");
+  const [fullscreen, setFullscreen] = useState(false);
 
   const timeline = useMemo(() => (trace ? buildSceneTimeline(trace) : null), [trace]);
   const frames = timeline?.frames ?? [];
@@ -226,13 +271,44 @@ export function OnionCapstoneLab({ injectedTrace, getSaved, demo }: OnionCapston
       active: !!frame && frame.actor === c.hop && frame.fn === c.fn,
     })), [fnFrame, frame]);
 
+  // Hop-colored scrubber segments: one band per contiguous run of same-hop frames.
+  const scrubSegments = useMemo<ScrubSeg[]>(() => {
+    const N = frames.length;
+    if (!N) return [];
+    const runs: Array<{ actor: HopId; start: number; count: number }> = [];
+    frames.forEach((f, i) => {
+      const actor = (f.actor ?? "alice") as HopId;
+      const last = runs[runs.length - 1];
+      if (!last || last.actor !== actor) runs.push({ actor, start: i, count: 1 });
+      else last.count += 1;
+    });
+    return runs.map((r) => ({
+      start: r.start,
+      leftPct: (r.start / N) * 100,
+      widthPct: (r.count / N) * 100,
+      color: palette(dark).hopStroke[r.actor] ?? "#94a3b8",
+      label: HOP_NAME[r.actor] ?? r.actor,
+    }));
+  }, [frames, dark]);
+  const playheadPct = frames.length ? ((idx + 0.5) / frames.length) * 100 : 0;
+
+  // Fullscreen focus mode: Esc exits, and lock the page scroll while open.
+  useEffect(() => {
+    if (!fullscreen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setFullscreen(false); };
+    window.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = prevOverflow; };
+  }, [fullscreen]);
+
   const run = useCallback(async () => {
-    setRunState("running"); setProgress({}); setErrorMsg("");
+    setRunState("running"); setProgress({}); setErrorMsg(""); setFullscreen(false);
     try {
-      if (demo) { const t = await runOnionCapstoneDemo(); setTrace(t); setIdx(0); setRunState("ready"); return; }
+      if (demo) { const t = await runOnionCapstoneDemo(); setTrace(t); setIdx(0); setRunState("ready"); setFullscreen(true); return; }
       const result = await runOnionCapstone(getSaved, (id, passed) => setProgress((p) => ({ ...p, [id]: passed })));
       setPreflight(result.preflight);
-      if (result.trace) { setTrace(result.trace); setIdx(0); setRunState("ready"); } else setRunState("blocked");
+      if (result.trace) { setTrace(result.trace); setIdx(0); setRunState("ready"); setFullscreen(true); } else setRunState("blocked");
     } catch (e) { setErrorMsg(e instanceof Error ? e.message : String(e)); setRunState("error"); }
   }, [getSaved, demo]);
 
@@ -243,77 +319,109 @@ export function OnionCapstoneLab({ injectedTrace, getSaved, demo }: OnionCapston
   const sceneBack = () => setIdx(() => scenes[Math.max(0, sceneIdx - 1)]?.start ?? 0);
   const sceneFwd = () => setIdx(() => scenes[Math.min(scenes.length - 1, sceneIdx + 1)]?.start ?? 0);
 
-  return (
-    <div className="my-8 border-[1.5px] border-foreground/40 bg-card overflow-hidden" data-testid="onion-capstone-lab" style={{ fontFamily: SANS }}>
-      <div className="bg-black text-white px-4 py-2 flex items-center gap-2">
-        <div className="w-1.5 h-1.5 rounded-full bg-[#b8860b]" />
-        <span className="text-sm font-bold tracking-[0.08em] uppercase">Onion Capstone: Step Through Your Code</span>
-      </div>
+  // The stepped-through "ready" content, rendered either inline or inside the
+  // fullscreen overlay. paneHeight differs between the two (fixed vs viewport).
+  const readyBody = (paneHeight: number | string) => {
+    if (!frame || !scene) return null;
+    return (
+      <div className="overflow-x-auto">
+        <div style={{ minWidth: 760 }}>
+          {/* STAGE: full-width chapter-grammar visual, scenes synced to the code */}
+          <CapstoneStage scene={scene} sceneIdx={sceneIdx} sceneCount={scenes.length} chips={chips} onJump={setIdx} dark={dark} />
 
-      <div className="bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-4">
-        {runState === "idle" && (
-          <div style={{ textAlign: "center", padding: "24px 0" }}>
-            <p style={{ color: INK, fontSize: 14, maxWidth: 520, margin: "0 auto 16px" }}>Run a real payment through the onion you built. Your code plays every role: Alice builds the packet, then each forwarder peels and forwards it. Pick a function to watch it run, and see the onion change exactly when your code changes it.</p>
-            <button onClick={run} style={{ fontFamily: SANS, fontWeight: 700, fontSize: 13, color: "#fff", background: "#000", padding: "10px 20px", border: "none", cursor: "pointer" }}>Run the capstone</button>
+          {/* TOOLBAR: stepping + hop-colored scrubber + fullscreen toggle */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "12px 0 12px", flexWrap: "wrap" }}>
+            <button onClick={stepBack} style={ctrlBtn(dark)} title="Previous line">◀ Back</button>
+            <button onClick={stepFwd} style={ctrlBtn(dark)} title="Step: next line (enters functions you call)">Step →</button>
+            <button onClick={stepOut} style={ctrlBtn(dark)} title="Step Out: finish this function and stop at its return">Step Out ↑</button>
+            <span style={{ width: 1, alignSelf: "stretch", background: P.softBorder }} />
+            <button onClick={sceneBack} style={ctrlBtn(dark)} title="Previous scene">⏮ Scene</button>
+            <button onClick={sceneFwd} style={ctrlBtn(dark)} title="Next scene">Scene ⏭</button>
+            <div style={{ flex: 1, minWidth: 160 }}>
+              <Scrubber segments={scrubSegments} playheadPct={playheadPct} idx={idx} max={Math.max(0, frames.length - 1)} onChange={setIdx} dark={dark} />
+            </div>
+            <span style={{ fontFamily: MONO, fontSize: 12, color: P.muted, whiteSpace: "nowrap" }}>{idx + 1} / {frames.length}</span>
+            <button onClick={() => setFullscreen((v) => !v)} style={ctrlBtn(dark)} title={fullscreen ? "Exit fullscreen (Esc)" : "Expand to fullscreen"}>{fullscreen ? "Exit ✕" : "⛶ Fullscreen"}</button>
           </div>
-        )}
-        {runState === "running" && (
-          <div style={{ padding: "12px 0" }}>
-            <p style={{ color: SLATE, fontFamily: MONO, fontSize: 12, marginBottom: 8 }}>Running your code…</p>
-            {Object.entries(progress).map(([id, ok]) => <div key={id} style={{ fontFamily: MONO, fontSize: 12, color: ok ? "#2d7a7a" : "#a13a3a" }}>{ok ? "✓" : "✗"} {id.replace(/^exercise-/, "").replace(/-draft$/, "")}</div>)}
-          </div>
-        )}
-        {runState === "blocked" && preflight && (
-          <div style={{ padding: "6px 0" }}>
-            <p style={{ color: "#a13a3a", fontWeight: 700, fontSize: 14, marginBottom: 8 }}>Finish these exercises first:</p>
-            {preflight.results.filter((r) => !r.passed).map((r) => (<div key={r.id} style={{ marginBottom: 6 }}><div style={{ fontFamily: SANS, fontWeight: 600, color: INK, fontSize: 13 }}>{r.title}</div>{r.failures.slice(0, 2).map((f, i) => <div key={i} style={{ fontFamily: MONO, fontSize: 11, color: SLATE }}>{f}</div>)}</div>))}
-            <button onClick={run} style={{ fontFamily: SANS, fontSize: 12, marginTop: 6, padding: "6px 14px", border: `1.5px solid ${INK}`, background: "transparent", cursor: "pointer" }}>Re-check</button>
-          </div>
-        )}
-        {runState === "error" && <p style={{ color: "#a13a3a", fontFamily: MONO, fontSize: 12 }}>Error: {errorMsg}</p>}
 
-        {runState === "ready" && frame && scene && (
-          <div className="overflow-x-auto">
-            <div style={{ minWidth: 760 }}>
-              {/* STAGE: full-width chapter-grammar visual, scenes synced to the code */}
-              <CapstoneStage scene={scene} sceneIdx={sceneIdx} sceneCount={scenes.length} chips={chips} onJump={setIdx} />
-
-              {/* TOOLBAR: stepping + scene-tick scrubber */}
-              <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "12px 0 12px", flexWrap: "wrap" }}>
-                <button onClick={stepBack} style={ctrlBtn} title="Previous line">◀ Back</button>
-                <button onClick={stepFwd} style={ctrlBtn} title="Step: next line (enters functions you call)">Step →</button>
-                <button onClick={stepOut} style={ctrlBtn} title="Step Out: finish this function and stop at its return">Step Out ↑</button>
-                <span style={{ width: 1, alignSelf: "stretch", background: "#cbd5e1" }} />
-                <button onClick={sceneBack} style={ctrlBtn} title="Previous scene">⏮ Scene</button>
-                <button onClick={sceneFwd} style={ctrlBtn} title="Next scene">Scene ⏭</button>
-                <div style={{ flex: 1, minWidth: 140, position: "relative", paddingTop: 7 }}>
-                  <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 6 }} aria-hidden>
-                    {scenes.map((s) => (
-                      <span key={s.key} style={{ position: "absolute", left: `${(s.start / Math.max(1, frames.length - 1)) * 100}%`, width: 1.5, height: 6, background: "#b3b1a6" }} />
-                    ))}
-                  </div>
-                  <input type="range" min={0} max={Math.max(0, frames.length - 1)} value={idx} onChange={(e) => setIdx(Number(e.target.value))} style={{ width: "100%", accentColor: "#b8860b", display: "block" }} aria-label="Scrubber" />
-                </div>
-                <span style={{ fontFamily: MONO, fontSize: 12, color: SLATE, whiteSpace: "nowrap" }}>{idx + 1} / {frames.length}</span>
-              </div>
-
-              {/* DEBUGGER ROW: tall code (left) + variables (right) */}
-              <div style={{ display: "flex", gap: 10, alignItems: "stretch" }}>
-                <div style={{ flex: "1 1 62%", minWidth: 420 }}>
-                  <CodePane source={frame.file ? (trace!.files[frame.file] ?? "") : ""} line={frame.line} fn={frame.fn} file={frame.file} note={frame.synthetic ? frame.note : undefined} height={430} />
-                </div>
-                <div style={{ flex: "1 1 38%", minWidth: 260 }}>
-                  <VariablesPanel scene={scene} frame={frame} height={430} />
-                </div>
-              </div>
+          {/* DEBUGGER ROW: tall code (left) + variables (right) */}
+          <div style={{ display: "flex", gap: 10, alignItems: "stretch" }}>
+            <div style={{ flex: "1 1 62%", minWidth: 420 }}>
+              <CodePane source={frame.file ? (trace!.files[frame.file] ?? "") : ""} line={frame.line} fn={frame.fn} file={frame.file} note={frame.synthetic ? frame.note : undefined} height={paneHeight} />
+            </div>
+            <div style={{ flex: "1 1 38%", minWidth: 260 }}>
+              <VariablesPanel scene={scene} frame={frame} height={paneHeight} />
             </div>
           </div>
-        )}
+        </div>
       </div>
-    </div>
+    );
+  };
+
+  return (
+    <>
+      <div className="my-8 border-[1.5px] border-foreground/40 bg-card overflow-hidden" data-testid="onion-capstone-lab" style={{ fontFamily: SANS }}>
+        <div className="bg-black text-white px-4 py-2 flex items-center gap-2">
+          <div className="w-1.5 h-1.5 rounded-full bg-[#b8860b]" />
+          <span className="text-sm font-bold tracking-[0.08em] uppercase">Onion Capstone: Step Through Your Code</span>
+        </div>
+
+        <div className="px-4 py-4" style={{ background: dark ? "#0b1220" : "#fefdfb" }}>
+          {runState === "idle" && (
+            <div style={{ textAlign: "center", padding: "24px 0" }}>
+              <p style={{ color: P.text, fontSize: 14, maxWidth: 520, margin: "0 auto 16px" }}>Run a real payment through the onion you built. Your code plays every role: Alice builds the packet, then each forwarder peels and forwards it. Pick a function to watch it run, and see the onion change exactly when your code changes it.</p>
+              <button onClick={run} style={{ fontFamily: SANS, fontWeight: 700, fontSize: 13, color: dark ? P.onAccent : "#fff", background: dark ? P.gold : "#000", padding: "10px 20px", border: "none", cursor: "pointer" }}>Run the capstone</button>
+            </div>
+          )}
+          {runState === "running" && (
+            <div style={{ padding: "12px 0" }}>
+              <p style={{ color: P.muted, fontFamily: MONO, fontSize: 12, marginBottom: 8 }}>Running your code…</p>
+              {Object.entries(progress).map(([id, ok]) => <div key={id} style={{ fontFamily: MONO, fontSize: 12, color: ok ? P.good : P.bad }}>{ok ? "✓" : "✗"} {id.replace(/^exercise-/, "").replace(/-draft$/, "")}</div>)}
+            </div>
+          )}
+          {runState === "blocked" && preflight && (
+            <div style={{ padding: "6px 0" }}>
+              <p style={{ color: P.bad, fontWeight: 700, fontSize: 14, marginBottom: 8 }}>Finish these exercises first:</p>
+              {preflight.results.filter((r) => !r.passed).map((r) => (<div key={r.id} style={{ marginBottom: 6 }}><div style={{ fontFamily: SANS, fontWeight: 600, color: P.text, fontSize: 13 }}>{r.title}</div>{r.failures.slice(0, 2).map((f, i) => <div key={i} style={{ fontFamily: MONO, fontSize: 11, color: P.muted }}>{f}</div>)}</div>))}
+              <button onClick={run} style={{ fontFamily: SANS, fontSize: 12, marginTop: 6, padding: "6px 14px", border: `1.5px solid ${P.line}`, background: "transparent", color: P.text, cursor: "pointer" }}>Re-check</button>
+            </div>
+          )}
+          {runState === "error" && <p style={{ color: P.bad, fontFamily: MONO, fontSize: 12 }}>Error: {errorMsg}</p>}
+
+          {runState === "ready" && frame && scene && !fullscreen && readyBody(430)}
+          {runState === "ready" && frame && scene && fullscreen && (
+            <div style={{ textAlign: "center", padding: "28px 0", color: P.muted, fontFamily: SANS, fontSize: 13 }}>
+              Stepping through in fullscreen.{" "}
+              <button onClick={() => setFullscreen(false)} style={{ ...ctrlBtn(dark), padding: "4px 10px" }}>Return here</button>{" "}
+              <span style={{ color: P.muted }}>or press Esc.</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Fullscreen focus mode: portal to body so it escapes the chapter sidebar,
+          the article width caps, and any transformed ancestor that would trap a
+          fixed element. Background follows the app theme. */}
+      {runState === "ready" && frame && scene && fullscreen && createPortal(
+        <div data-testid="onion-capstone-fullscreen" style={{ position: "fixed", inset: 0, zIndex: 9999, background: dark ? "#0b1220" : "#fefdfb", display: "flex", flexDirection: "column", overflow: "auto" }}>
+          <div className="bg-black text-white" style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 16px", flexShrink: 0 }}>
+            <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#b8860b" }} />
+            <span style={{ fontFamily: SANS, fontWeight: 700, fontSize: 13, letterSpacing: "0.08em", textTransform: "uppercase" }}>Onion Capstone: Step Through Your Code</span>
+            <button onClick={() => setFullscreen(false)} style={{ marginLeft: "auto", fontFamily: SANS, fontSize: 12, fontWeight: 700, color: "#fff", background: "transparent", border: "1.5px solid rgba(255,255,255,0.4)", borderRadius: 3, padding: "5px 12px", cursor: "pointer" }} title="Exit fullscreen (Esc)">Exit fullscreen ✕</button>
+          </div>
+          <div style={{ flex: 1, minWidth: 0, padding: "16px 20px" }}>
+            {readyBody("max(360px, calc(100vh - 430px))")}
+          </div>
+        </div>,
+        document.body,
+      )}
+    </>
   );
 }
 
-const ctrlBtn: CSSProperties = { fontFamily: SANS, fontSize: 11.5, padding: "5px 10px", border: `1.5px solid ${INK}`, background: "#fffdf5", color: INK, cursor: "pointer", whiteSpace: "nowrap" };
+const ctrlBtn = (dark: boolean): CSSProperties => {
+  const P = palette(dark);
+  return { fontFamily: SANS, fontSize: 11.5, padding: "5px 10px", border: `1.5px solid ${P.line}`, background: P.cardBg, color: P.text, cursor: "pointer", whiteSpace: "nowrap" };
+};
 
 export default OnionCapstoneLab;

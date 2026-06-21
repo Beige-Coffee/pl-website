@@ -343,6 +343,41 @@ const ENTRIES: Record<string, GlossaryEntry> = {
       "The channel message that offers an HTLC to a peer. It carries the `payment_hash`, the amount, the `cltv_expiry`, and the 1,366-byte onion.",
     chapter: "9",
   },
+  update_fulfill_htlc: {
+    render: "code",
+    category: "protocol field",
+    definition:
+      "The channel message that settles an HTLC successfully. It carries the `preimage`, which unlocks the funds hop by hop back along the route.",
+    chapter: "11",
+  },
+  update_fail_htlc: {
+    render: "code",
+    category: "protocol field",
+    definition:
+      "The channel message that fails an HTLC. Its `reason` field carries the error onion, passed hop by hop back toward the sender, the mirror of `update_add_htlc` on the way out.",
+    chapter: "11",
+  },
+  update_fail_malformed_htlc: {
+    render: "code",
+    category: "protocol field",
+    definition:
+      "A special failure message for an onion a hop couldn't decrypt. With no shared secret to build a return onion, the hop returns a bare `failure_code` (a `BADONION` code) plus the onion's hash; its upstream neighbor turns that into a normal `update_fail_htlc`.",
+    chapter: "11",
+  },
+  reason: {
+    render: "code",
+    category: "protocol field",
+    definition:
+      "The field of `update_fail_htlc` that holds the error onion: an opaque, `ammag`-obfuscated blob only the sender can peel back to read the failure.",
+    chapter: "11",
+  },
+  failure_code: {
+    render: "code",
+    category: "protocol field",
+    definition:
+      "The two-byte code that says why a payment failed. Its top byte is a set of flags (`BADONION`, `PERM`, `NODE`, `UPDATE`) that combine; the low byte names the specific failure.",
+    chapter: "11",
+  },
   channel_update: {
     render: "code",
     category: "protocol field",
@@ -445,7 +480,7 @@ const ENTRIES: Record<string, GlossaryEntry> = {
     render: "code",
     category: "protocol field",
     definition:
-      "The structured failure bytes inside an error onion: a 2-byte failure code plus any associated data (like a `channel_update` for UPDATE-flagged failures).",
+      "The plaintext failure content carried inside the error onion: a 2-byte `failure_code` plus any data specific to that code (for example, a `channel_update` for an `UPDATE` failure, or the onion's hash for a `BADONION` one). Many codes carry no extra data at all.",
     chapter: "11",
   },
   pad_len: {
@@ -482,6 +517,48 @@ const ENTRIES: Record<string, GlossaryEntry> = {
     definition:
       "A failure code a forwarder returns when the onion's HMAC does not verify, meaning the bytes were tampered with or the onion was re-attached to a different HTLC.",
     chapter: "7",
+  },
+  invalid_onion_version: {
+    render: "code",
+    category: "protocol field",
+    definition:
+      "A `BADONION` failure (`BADONION` + `PERM`): the onion's version byte wasn't `0x00`. Reported via `update_fail_malformed_htlc`.",
+    chapter: "11",
+  },
+  invalid_onion_key: {
+    render: "code",
+    category: "protocol field",
+    definition:
+      "A `BADONION` failure (`BADONION` + `PERM`): the onion's ephemeral public key was unusable, so the hop couldn't run ECDH. Reported via `update_fail_malformed_htlc`.",
+    chapter: "11",
+  },
+  temporary_node_failure: {
+    render: "code",
+    category: "protocol field",
+    definition:
+      "A `NODE` failure: the node can't forward right now, but the problem is transient, so the sender may try it again later.",
+    chapter: "11",
+  },
+  permanent_node_failure: {
+    render: "code",
+    category: "protocol field",
+    definition:
+      "A `PERM` + `NODE` failure: the node is permanently unable to forward, not just on this channel. The sender should drop the whole node from its route map.",
+    chapter: "11",
+  },
+  permanent_channel_failure: {
+    render: "code",
+    category: "protocol field",
+    definition:
+      "A `PERM` failure: this channel can no longer forward (for example, it is closing). The sender should stop routing through it.",
+    chapter: "11",
+  },
+  unknown_next_peer: {
+    render: "code",
+    category: "protocol field",
+    definition:
+      "A `PERM` failure a forwarder returns when it has no channel to the next hop the onion names (a stale route). The sender should pick a different path.",
+    chapter: "11",
   },
   fee_insufficient: {
     render: "code",
@@ -536,8 +613,29 @@ const ENTRIES: Record<string, GlossaryEntry> = {
     render: "text",
     category: "concept",
     definition:
-      "A BOLT 4 failure-message flag meaning the error carries a fresh `channel_update`, so the sender can refresh that hop's fee or timelock policy and retry.",
+      "A failure-code flag (`0x1000`): a channel *forwarding parameter* (the amount, fee, or timelock) was violated. The error may carry an optional `channel_update`, though nodes no longer apply that automatically.",
     chapter: "10",
+  },
+  BADONION: {
+    render: "text",
+    category: "concept",
+    definition:
+      "A failure-code flag (`0x8000`): the onion itself was unreadable, so the hop couldn't process it. With no shared secret to build a return onion, these come back as `update_fail_malformed_htlc`. Every `BADONION` code also sets `PERM`.",
+    chapter: "11",
+  },
+  PERM: {
+    render: "text",
+    category: "concept",
+    definition:
+      "A failure-code flag (`0x4000`): a *permanent* failure. The sender should stop retrying this hop rather than treat it as a transient hiccup.",
+    chapter: "11",
+  },
+  NODE: {
+    render: "text",
+    category: "concept",
+    definition:
+      "A failure-code flag (`0x2000`): the whole *node* is the problem, not one specific channel. The sender should set aside all of that node's channels, not just the one the payment used.",
+    chapter: "11",
   },
 
   // ── Concepts ──
