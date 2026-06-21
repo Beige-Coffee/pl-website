@@ -121,10 +121,10 @@ export function OnionHintContent({ html, dark }: { html: string; dark: boolean }
     .map((s) => tidyAroundBlocks(s.trim()))
     .filter((s) => s.length > 0);
 
-  const inlineBg = dark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.045)";
-  const inlineBorder = dark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.08)";
-  const blockBg = dark ? "#0d1526" : "#fbfaf6";
-  const blockBorder = dark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.10)";
+  const inlineBg = dark ? "rgba(255,255,255,0.07)" : "rgba(13,21,38,0.06)";
+  const inlineBorder = dark ? "rgba(255,255,255,0.10)" : "rgba(13,21,38,0.12)";
+  const blockBg = dark ? "#0d1526" : "#eef1f7";
+  const blockBorder = dark ? "rgba(255,255,255,0.10)" : "rgba(13,21,38,0.16)";
   const accent = dark ? "#FFD700" : "#b8860b";
 
   return (
@@ -147,7 +147,10 @@ export function OnionHintContent({ html, dark }: { html: string; dark: boolean }
           font-family: ${MONO};
           font-size: 0.9em;
           line-height: 1.45;
-          margin: 0.15em 0 0.1em;
+          /* Indent block-code cards so they read as nested under the step that
+             introduces them. Applies uniformly to every onion hint (Conceptual
+             + Steps) via this single shared rule. */
+          margin: 0.15em 0 0.25em 1.4em;
           padding: 0.35em 0.7em 0.35em 0.6em;
           border-radius: 6px;
           background: ${blockBg};

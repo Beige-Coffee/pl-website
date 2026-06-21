@@ -495,7 +495,7 @@ export function PythonSnippet({ id, dark = false }: { id: string; dark?: boolean
       </div>
 
       <div
-        className="relative bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-3"
+        className="relative bg-[#eef1f7] dark:bg-[#0b1220] px-4 py-3"
         style={{
           fontFamily: MONO,
           fontSize: 16,

@@ -1,5 +1,5 @@
 import { Link, Route, Switch, useLocation } from "wouter";
-import { useEffect, useLayoutEffect, useMemo, useState, useCallback, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
@@ -30,6 +30,8 @@ import { PeelTraceDiagram } from "../components/onion-routing-draft/PeelTraceDia
 import { ValidationFlowDiagram } from "../components/onion-routing-draft/ValidationFlowDiagram";
 import { ErrorBoomerangDiagram } from "../components/onion-routing-draft/ErrorBoomerangDiagram";
 import { ErrorUnwrapDiagram } from "../components/onion-routing-draft/ErrorUnwrapDiagram";
+import { ResolutionMessagesDiagram } from "../components/onion-routing-draft/ResolutionMessagesDiagram";
+import { FailureReasonsDiagram } from "../components/onion-routing-draft/FailureReasonsDiagram";
 import { OnionCapstoneLab } from "../components/onion-routing-draft/OnionCapstoneLab";
 import { LightningNetworkDiagram } from "../components/onion-routing-draft/LightningNetworkDiagram";
 import { PlaintextMessageTear } from "../components/onion-routing-draft/PlaintextMessageTear";
@@ -78,6 +80,8 @@ const CUSTOM_BLOCK_TAGS = new Set([
   "validation-flow",
   "error-boomerang",
   "error-unwrap",
+  "resolution-messages",
+  "failure-reasons",
   "onion-capstone-lab",
   "lightning-network",
   "message-tear",
@@ -846,6 +850,7 @@ function ChapterContent({
                 theme={theme}
                 label="CHECKPOINT"
                 storageKey={`pl-collapse-cp-draft-${cpId}`}
+                anchorId={`item-${cpId}`}
               >
                 <CheckpointQuestion
                   checkpointId={cpId}
@@ -899,6 +904,7 @@ function ChapterContent({
                     theme={theme}
                     label="EXERCISE"
                     storageKey={`pl-collapse-ex-draft-${ex.id}`}
+                    anchorId={`item-${ex.id}`}
                   >
                     <CodeExercise
                       exerciseId={ex.id}
@@ -964,6 +970,7 @@ function ChapterContent({
                         theme={theme}
                         label="EXERCISE"
                         storageKey={`pl-collapse-ex-draft-${ex.id}`}
+                        anchorId={`item-${ex.id}`}
                       >
                         <CodeExercise
                           exerciseId={ex.id}
@@ -1055,8 +1062,14 @@ function ChapterContent({
           "error-unwrap": () => {
             return <ErrorUnwrapDiagram />;
           },
+          "resolution-messages": () => {
+            return <ResolutionMessagesDiagram />;
+          },
+          "failure-reasons": () => {
+            return <FailureReasonsDiagram />;
+          },
           "onion-capstone-lab": ({ demo }: any) => {
-            return <OnionCapstoneLab demo={demo !== undefined} />;
+            return <OnionCapstoneLab demo={demo !== undefined} dark={theme === "dark"} />;
           },
           "lightning-network": () => {
             return <LightningNetworkDiagram />;
@@ -1104,6 +1117,7 @@ function ChapterContent({
             const kmId = "km-privacy-rubric-draft";
             const isCompleted = completedCheckpoints.some(c => c.checkpointId === kmId);
             return (
+              <div id={`item-${kmId}`} style={{ scrollMarginTop: 90 }}>
               <KnowledgeMatrix
                 checkpointId={kmId}
                 theme={theme}
@@ -1117,6 +1131,7 @@ function ChapterContent({
                 onLoginRequest={onLoginRequest}
                 onCompleted={onCheckpointCompleted}
               />
+              </div>
             );
           },
           "code-outro": ({ text }: any) => {
@@ -1199,6 +1214,58 @@ function OnionRoutingDraftTutorialShell({ activeId }: { activeId: string }) {
   const active = chapters[activeIndex] ?? chapters[0];
   const prev = chapters[activeIndex - 1];
   const next = chapters[activeIndex + 1];
+
+  // ── Deep-link from the sidebar's checkpoint/exercise badges ──────────────────
+  // Clicking a "?" or "</>" badge jumps to that specific item, opening it and
+  // scrolling it into view, even when it lives in a different chapter.
+  const pendingScrollRef = useRef<string | null>(null);
+
+  const scrollToAnchor = useCallback((anchorId: string) => {
+    // The target renders asynchronously (markdown fetch + collapsible mount), so
+    // poll until it exists, then scroll. setTimeout (not requestAnimationFrame)
+    // so it keeps firing even if the tab is briefly backgrounded.
+    let tries = 0;
+    const tick = () => {
+      const el = document.getElementById(anchorId);
+      if (el) { el.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+      if (tries++ < 60) setTimeout(tick, 50);
+    };
+    tick();
+  }, []);
+
+  const goToItem = useCallback((chapterId: string, itemId: string, kind: "checkpoint" | "exercise") => {
+    // Pre-open the target collapsible: write its storage key (so it mounts open
+    // after a cross-chapter navigation) AND fire an event (so an already-mounted
+    // item on the current chapter opens immediately).
+    const openKey = (key: string) => {
+      try { localStorage.setItem(key, "1"); } catch {}
+      window.dispatchEvent(new CustomEvent("collapse-open", { detail: key }));
+    };
+    if (kind === "checkpoint") {
+      openKey(`pl-collapse-cp-draft-${itemId}`);
+    } else {
+      openKey(`pl-collapse-ex-draft-${itemId}`);
+      const exs = CHAPTER_REQUIREMENTS[chapterId]?.exercises ?? [];
+      if (exs.length > 1) openKey(`pl-collapse-group-draft-${exs.join("-")}`);
+    }
+    setMobileNavOpen(false);
+    const anchorId = `item-${itemId}`;
+    if (chapterId === activeId) {
+      scrollToAnchor(anchorId);
+    } else {
+      pendingScrollRef.current = anchorId;
+      setLocation(chapterId === "intro" ? "/onion-routing-tutorial" : `/onion-routing-tutorial/${chapterId}`);
+    }
+  }, [activeId, setLocation, scrollToAnchor]);
+
+  // Resolve a pending cross-chapter jump once the new chapter's content mounts.
+  useEffect(() => {
+    if (pendingScrollRef.current) {
+      const anchorId = pendingScrollRef.current;
+      pendingScrollRef.current = null;
+      scrollToAnchor(anchorId);
+    }
+  }, [activeId, scrollToAnchor]);
 
   // Save current chapter for "Continue Where You Left Off" on home page
   useEffect(() => {
@@ -1307,12 +1374,23 @@ function OnionRoutingDraftTutorialShell({ activeId }: { activeId: string }) {
     ? "none"
     : "padding-right 300ms cubic-bezier(0.4, 0, 0.2, 1)";
 
+  // Seed the scratchpad with code relevant to the current chapter's exercises,
+  // so opening the sandbox on a given chapter pre-populates chapter-specific
+  // content (the first exercise's sampleCode) instead of the generic example.
+  const chapterSampleCode = useMemo(() => {
+    const ids = CHAPTER_REQUIREMENTS[active.id]?.exercises ?? [];
+    for (const id of ids) {
+      const s = ONION_ROUTING_EXERCISES[id]?.sampleCode;
+      if (s) return s;
+    }
+    return undefined;
+  }, [active.id]);
+
   return (
     <PanelStateContext.Provider value={panelState}>
     <div
       className={`min-h-screen ${t.pageBg} ${t.pageText}`}
       data-theme={theme}
-      style={{ paddingRight: panelPadding, transition: panelTransition }}
     >
       <div className={`w-full border-b-4 ${t.headerBorder} ${t.headerBg} px-2 py-2 md:px-4 md:py-3 flex items-center justify-between sticky top-0 z-50`}>
         <div className="flex items-center gap-2 md:gap-3">
@@ -1431,6 +1509,7 @@ function OnionRoutingDraftTutorialShell({ activeId }: { activeId: string }) {
         </div>
       </div>
 
+      <div style={{ paddingRight: panelPadding, transition: panelTransition }}>
       <div
         className="mx-auto w-full max-w-7xl grid gap-0"
         style={{
@@ -1536,13 +1615,15 @@ function OnionRoutingDraftTutorialShell({ activeId }: { activeId: string }) {
                             : "bg-card text-foreground border-border pixel-shadow"
                         }`;
                         return (
-                          <button
+                          <div
                             key={c.id}
-                            type="button"
+                            role="button"
+                            tabIndex={0}
                             onClick={() => setLocation(href)}
+                            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setLocation(href); } }}
                             className={`${
                               isActive ? t.chapterActive : t.chapterInactive
-                            } w-full text-left border-2 px-3 py-1.5 transition-colors`}
+                            } w-full text-left border-2 px-3 py-1.5 transition-colors cursor-pointer`}
                             data-testid={`button-chapter-${c.id}`}
                           >
                             <div className="flex items-center gap-2">
@@ -1571,27 +1652,27 @@ function OnionRoutingDraftTutorialShell({ activeId }: { activeId: string }) {
                                   {reqs!.checkpoints.map((cpId) => (
                                     <Tooltip key={cpId} delayDuration={200}>
                                       <TooltipTrigger asChild>
-                                        <span className={`font-pixel text-[13px] leading-none cursor-default ${badgeCompleted.has(cpId) ? badgeLit : badgeDim}`}>?</span>
+                                        <button type="button" onClick={(e) => { e.stopPropagation(); goToItem(c.id, cpId, "checkpoint"); }} className={`font-pixel text-[13px] leading-none cursor-pointer ${badgeCompleted.has(cpId) ? badgeLit : badgeDim}`}>?</button>
                                       </TooltipTrigger>
                                       <TooltipContent side="bottom" className={badgeTooltipClass}>
-                                        {badgeCompleted.has(cpId) ? "Quiz complete" : "Quiz question"}
+                                        {badgeCompleted.has(cpId) ? "Jump to quiz (complete)" : "Jump to quiz"}
                                       </TooltipContent>
                                     </Tooltip>
                                   ))}
                                   {reqs!.exercises.map((exId) => (
                                     <Tooltip key={exId} delayDuration={200}>
                                       <TooltipTrigger asChild>
-                                        <span className={`font-mono text-[13px] leading-none font-bold cursor-default ${badgeCompleted.has(exId) ? badgeLit : badgeDim}`}>&lt;/&gt;</span>
+                                        <button type="button" onClick={(e) => { e.stopPropagation(); goToItem(c.id, exId, "exercise"); }} className={`font-mono text-[13px] leading-none font-bold cursor-pointer ${badgeCompleted.has(exId) ? badgeLit : badgeDim}`}>&lt;/&gt;</button>
                                       </TooltipTrigger>
                                       <TooltipContent side="bottom" className={badgeTooltipClass}>
-                                        {badgeCompleted.has(exId) ? "Exercise complete" : "Coding exercise"}
+                                        {badgeCompleted.has(exId) ? "Jump to exercise (complete)" : "Jump to exercise"}
                                       </TooltipContent>
                                     </Tooltip>
                                   ))}
                                 </span>
                               )}
                             </div>
-                          </button>
+                          </div>
                         );
                       })}
                     </nav>
@@ -1660,6 +1741,7 @@ function OnionRoutingDraftTutorialShell({ activeId }: { activeId: string }) {
           </div>
         </main>
       </div>
+      </div>
 
       {/* Scratchpad button: floating on the right edge of the header,
           slides with the panel padding so it never hides behind the open
@@ -1708,7 +1790,7 @@ function OnionRoutingDraftTutorialShell({ activeId }: { activeId: string }) {
         </Tooltip>
       </div>
 
-      <Scratchpad theme={theme} courseKey="onion-routing" />
+      <Scratchpad theme={theme} courseKey="onion-routing" chapterKey={active.id} chapterDefaultCode={chapterSampleCode} />
 
       <FeedbackWidget
         theme={theme}

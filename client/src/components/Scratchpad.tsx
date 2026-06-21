@@ -35,6 +35,31 @@ const lightHighlightStyle = HighlightStyle.define([
   { tag: tags.special(tags.string), color: "#032f62" },
 ]);
 
+// ─── Dark Mode Syntax Highlighting ───────────────────────────────────────────
+// Mirrors lightHighlightStyle tag-for-tag with the GitHub-dark palette (the same
+// colors the read-only PythonSnippet/hint highlighter uses for dark mode), so
+// dark-mode code is colored to match light mode instead of falling back to a
+// flat oneDark default.
+
+const darkHighlightStyle = HighlightStyle.define([
+  { tag: tags.keyword, color: "#ff7b72" },
+  { tag: tags.controlKeyword, color: "#ff7b72" },
+  { tag: tags.definitionKeyword, color: "#ff7b72" },
+  { tag: tags.operatorKeyword, color: "#ff7b72" },
+  { tag: tags.standard(tags.variableName), color: "#79c0ff" },
+  { tag: tags.function(tags.variableName), color: "#d2a8ff" },
+  { tag: tags.function(tags.definition(tags.variableName)), color: "#d2a8ff" },
+  { tag: tags.string, color: "#a5d6ff" },
+  { tag: tags.comment, color: "#8b949e", fontStyle: "italic" },
+  { tag: tags.number, color: "#79c0ff" },
+  { tag: tags.bool, color: "#79c0ff" },
+  { tag: tags.self, color: "#ff7b72" },
+  { tag: tags.operator, color: "#ff7b72" },
+  { tag: tags.className, color: "#d2a8ff" },
+  { tag: tags.propertyName, color: "#79c0ff" },
+  { tag: tags.special(tags.string), color: "#a5d6ff" },
+]);
+
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 // Code is scoped per course (so Noise/Lightning/Onion-routing don't share
@@ -45,10 +70,11 @@ const STORAGE_KEY_OPEN = "pl-scratchpad-open";
 const STORAGE_KEY_WIDTH = "pl-scratchpad-width";
 const STORAGE_KEY_SPLIT = "pl-scratchpad-split";
 
-function codeStorageKey(courseKey?: string): string {
-  return courseKey
+function codeStorageKey(courseKey?: string, chapterKey?: string): string {
+  const base = courseKey
     ? `${STORAGE_KEY_CODE_BASE}:${courseKey}`
     : STORAGE_KEY_CODE_BASE;
+  return chapterKey ? `${base}:${chapterKey}` : base;
 }
 
 const DEFAULT_WIDTH = 420;
@@ -87,9 +113,22 @@ interface ScratchpadProps {
    * backward compatibility with existing tutorial wiring.
    */
   courseKey?: string;
+  /**
+   * Optional current-chapter identifier. When provided, the saved scratchpad
+   * buffer is scoped per-chapter (so each chapter keeps its own independent
+   * experiment) and the editor reloads that chapter's buffer when the chapter
+   * changes. Omitting it preserves the single per-course buffer.
+   */
+  chapterKey?: string;
+  /**
+   * Optional starter code for the current chapter, used only as the seed when
+   * that chapter has no saved buffer yet (so opening the scratchpad on a given
+   * chapter pre-populates it with content relevant to that chapter's exercises).
+   */
+  chapterDefaultCode?: string;
 }
 
-export default function Scratchpad({ theme, courseKey }: ScratchpadProps) {
+export default function Scratchpad({ theme, courseKey, chapterKey, chapterDefaultCode }: ScratchpadProps) {
   const dark = theme === "dark";
   const isMobile = useIsMobile();
   const panel = usePanelState();
@@ -204,7 +243,7 @@ export default function Scratchpad({ theme, courseKey }: ScratchpadProps) {
     const handler = (e: Event) => {
       const code = (e as CustomEvent<string>).detail;
       if (code) {
-        const key = codeStorageKey(courseKey);
+        const key = codeStorageKey(courseKey, chapterKey);
         if (viewRef.current) {
           viewRef.current.dispatch({
             changes: { from: 0, to: viewRef.current.state.doc.length, insert: code },
@@ -222,7 +261,7 @@ export default function Scratchpad({ theme, courseKey }: ScratchpadProps) {
     };
     window.addEventListener("scratchpad-send-code", handler);
     return () => window.removeEventListener("scratchpad-send-code", handler);
-  }, [isOpen, courseKey]);
+  }, [isOpen, courseKey, chapterKey]);
 
   // ── Horizontal drag (panel width) ──────────────────────────────────────
 
@@ -315,8 +354,9 @@ export default function Scratchpad({ theme, courseKey }: ScratchpadProps) {
       pendingCodeRef.current = null;
     } else {
       try {
-        const saved = localStorage.getItem(codeStorageKey(courseKey));
+        const saved = localStorage.getItem(codeStorageKey(courseKey, chapterKey));
         if (saved) initialCode = saved;
+        else if (chapterDefaultCode) initialCode = chapterDefaultCode;
       } catch {}
     }
 
@@ -337,11 +377,13 @@ export default function Scratchpad({ theme, courseKey }: ScratchpadProps) {
         if (update.docChanged) {
           const code = update.state.doc.toString();
           try {
-            localStorage.setItem(codeStorageKey(courseKey), code);
+            localStorage.setItem(codeStorageKey(courseKey, chapterKey), code);
           } catch {}
         }
       }),
-      ...(dark ? [oneDark] : [syntaxHighlighting(lightHighlightStyle)]),
+      ...(dark
+        ? [oneDark, syntaxHighlighting(darkHighlightStyle)]
+        : [syntaxHighlighting(lightHighlightStyle)]),
       EditorView.theme({
         "&": {
           fontSize: isMobile ? "16px" : "13px",
@@ -373,7 +415,7 @@ export default function Scratchpad({ theme, courseKey }: ScratchpadProps) {
       view.destroy();
       viewRef.current = null;
     };
-  }, [isOpen, dark, courseKey]);
+  }, [isOpen, dark, courseKey, chapterKey, chapterDefaultCode]);
 
   // Destroy editor when closing
   useEffect(() => {

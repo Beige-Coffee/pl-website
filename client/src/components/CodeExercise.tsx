@@ -43,6 +43,32 @@ const lightHighlightStyle = HighlightStyle.define([
   { tag: tags.special(tags.string), color: "#032f62" },   // f-strings, docstrings
 ]);
 
+// ─── Dark Mode Syntax Highlighting ───────────────────────────────────────────
+// Mirrors lightHighlightStyle tag-for-tag using the GitHub-dark palette (same
+// colors as pythonHighlight.tsx's DARK_COLOR). Appended after oneDark so these
+// token colors win, while oneDark still supplies the editor chrome (bg/gutter/
+// selection). oneDark's own HighlightStyle leaves several Python tokens (self,
+// builtins, bools, function defs) uncolored; this covers every tag light mode does.
+
+const darkHighlightStyle = HighlightStyle.define([
+  { tag: tags.keyword, color: "#ff7b72" },               // if, for, def, class, return, from, import
+  { tag: tags.controlKeyword, color: "#ff7b72" },
+  { tag: tags.definitionKeyword, color: "#ff7b72" },
+  { tag: tags.operatorKeyword, color: "#ff7b72" },        // and, or, not, in, is
+  { tag: tags.standard(tags.variableName), color: "#79c0ff" }, // bytearray, int, bytes, len, range, print
+  { tag: tags.function(tags.variableName), color: "#d2a8ff" },  // function calls
+  { tag: tags.function(tags.definition(tags.variableName)), color: "#d2a8ff" }, // function defs
+  { tag: tags.string, color: "#a5d6ff" },                 // strings
+  { tag: tags.comment, color: "#8b949e", fontStyle: "italic" },
+  { tag: tags.number, color: "#79c0ff" },
+  { tag: tags.bool, color: "#79c0ff" },                   // True, False
+  { tag: tags.self, color: "#ff7b72" },                   // self
+  { tag: tags.operator, color: "#ff7b72" },               // =, +, *, etc.
+  { tag: tags.className, color: "#d2a8ff" },
+  { tag: tags.propertyName, color: "#79c0ff" },
+  { tag: tags.special(tags.string), color: "#a5d6ff" },   // f-strings, docstrings
+]);
+
 // ─── Editable Range Extensions ───────────────────────────────────────────────
 
 /** Effect to initialize or reset the editable range */
@@ -315,7 +341,9 @@ export default function CodeExercise({
       python(),
       EditorView.editable.of(false),
       EditorState.readOnly.of(true),
-      ...(dark ? [oneDark] : [syntaxHighlighting(lightHighlightStyle)]),
+      ...(dark
+        ? [oneDark, syntaxHighlighting(darkHighlightStyle)]
+        : [syntaxHighlighting(lightHighlightStyle)]),
       syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
       EditorView.theme({
         "&": { fontSize: "14px", borderRadius: "4px", overflow: "hidden" },
@@ -501,7 +529,9 @@ export default function CodeExercise({
       dropCursor(),
       EditorState.allowMultipleSelections.of(true),
       indentOnInput(),
-      ...(dark ? [oneDark] : [syntaxHighlighting(lightHighlightStyle)]),
+      ...(dark
+        ? [oneDark, syntaxHighlighting(darkHighlightStyle)]
+        : [syntaxHighlighting(lightHighlightStyle)]),
       syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
       bracketMatching(),
       closeBrackets(),

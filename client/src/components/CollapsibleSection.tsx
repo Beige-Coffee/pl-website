@@ -47,6 +47,8 @@ interface CollapsibleItemProps {
   label?: string; // e.g. "EXERCISE" or "CHECKPOINT"
   subtitle?: string;
   subtitleLabel?: string;
+  /** Optional DOM id, used as a deep-link scroll target (sidebar badge jumps). */
+  anchorId?: string;
 }
 
 export function CollapsibleItem({
@@ -59,6 +61,7 @@ export function CollapsibleItem({
   label,
   subtitle,
   subtitleLabel,
+  anchorId,
 }: CollapsibleItemProps) {
   const dark = theme === "dark";
   const scopeId = useId().replace(/:/g, "");
@@ -81,6 +84,17 @@ export function CollapsibleItem({
     }
   }, [isOpen, storageKey]);
 
+  // Lets external deep-links (the sidebar checkpoint/exercise badges) open this
+  // item even when it is already mounted and collapsed.
+  useEffect(() => {
+    if (!storageKey) return;
+    const handler = (e: Event) => {
+      if ((e as CustomEvent<string>).detail === storageKey) setIsOpen(true);
+    };
+    window.addEventListener("collapse-open", handler);
+    return () => window.removeEventListener("collapse-open", handler);
+  }, [storageKey]);
+
   const cardBg = dark ? "bg-[#0f1930]" : "bg-card";
   const cardBorder = dark ? "border-[#2a3552]" : "border-border";
   const goldBorder = dark ? "border-[#FFD700]" : "border-[#b8860b]";
@@ -89,7 +103,7 @@ export function CollapsibleItem({
   const greenText = dark ? "text-green-400" : "text-green-700";
 
   return (
-    <div className={`my-4 border-2 ${completed ? goldBorder : cardBorder} ${cardBg} overflow-hidden`}>
+    <div id={anchorId} style={anchorId ? { scrollMarginTop: 90 } : undefined} className={`my-4 border-2 ${completed ? goldBorder : cardBorder} ${cardBg} overflow-hidden`}>
       {/* Strip inner component borders/margins so they sit flush inside the collapsible */}
       <style>{`
         #cc-${scopeId} > div { margin: 0 !important; border: none !important; }
@@ -182,6 +196,17 @@ export function CollapsibleGroup({
       } catch {}
     }
   }, [isOpen, storageKey]);
+
+  // Lets external deep-links open a collapsed group (sidebar badge jumps into a
+  // grouped exercise).
+  useEffect(() => {
+    if (!storageKey) return;
+    const handler = (e: Event) => {
+      if ((e as CustomEvent<string>).detail === storageKey) setIsOpen(true);
+    };
+    window.addEventListener("collapse-open", handler);
+    return () => window.removeEventListener("collapse-open", handler);
+  }, [storageKey]);
 
   const goldText = dark ? "text-[#FFD700]" : "text-[#9a7200]";
   const goldBorder = dark ? "border-[#FFD700]" : "border-[#b8860b]";
