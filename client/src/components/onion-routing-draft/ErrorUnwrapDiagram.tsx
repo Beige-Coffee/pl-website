@@ -47,10 +47,10 @@ import {
 const TOTAL_BEATS = 4;
 
 const CAPTIONS: Record<number, string> = {
-  0: "So, 292 bytes of opaque encrypted data just came back on the return HTLC. Which hop failed? You don't know yet. You'll find out by trial-decrypting layer by layer, in the same order the hops wrapped on the way back.",
-  1: "Iteration `i=0`: try Bob first, since his layer is outermost. XOR with `ammag_B`, then check `HMAC(um_B, peeled[32:])` against `peeled[:32]`. No match. Bob isn't the failing hop, so his `um` can't authenticate this error. Keep peeling...",
-  2: "Iteration `i=1`: now try Charlie. XOR with `ammag_C`, then check `HMAC(um_C, peeled[32:])`. It matches. Charlie made this error, and the packet is fully decrypted now, still 292 bytes.",
-  3: "Finally, parse the payload. The leading 32 bytes are the HMAC you just verified. The next two bytes (a u16 at offset 32) give `failure_len`, and the following `failure_len` bytes are the failure message itself. Now you know *which* hop failed and why, so you can retry on a different route or surface it to your wallet.",
+  0: "So, 292 bytes of encrypted data just came back on the return HTLC. Which hop failed? Alice doesn't know yet. She'll find out by trial-decrypting layer by layer, in the same order the hops wrapped on the way back.",
+  1: "Iteration `i=0`: Alice tries Bob first, since his layer is outermost. She XORs with `ammag_B`, then checks `HMAC(um_B, peeled[32:])` against `peeled[:32]`. No match. Bob isn't the failing hop, so his `um` can't authenticate this error. She keeps peeling...",
+  2: "Iteration `i=1`: now Alice tries Charlie. She XORs with `ammag_C`, then checks `HMAC(um_C, peeled[32:])`. It matches. Charlie made this error, and the packet is fully decrypted now.",
+  3: "Finally, Alice parses the payload. The leading 32 bytes are the HMAC she just verified. The next two bytes (a u16 at offset 32) give `failure_len`, and the following `failure_len` bytes are the failure message itself. Now Alice knows *which* hop failed and why, so she can retry on a different route or surface it to her wallet.",
 };
 
 // Per-beat StepCaption header label + title (the short verdict that used to sit
@@ -62,7 +62,7 @@ const STEP_LABELS: Record<number, string> = {
   3: "Decoded · PARSE",
 };
 const STEP_TITLES: Record<number, string> = {
-  0: "292 opaque bytes return to you",
+  0: "292 encrypted bytes return to Alice",
   1: "Bob's HMAC fails",
   2: "Charlie's HMAC matches",
   3: "Read the failure message",

@@ -911,7 +911,7 @@ function BobTab(props: {
                 </>
               ) : (
                 <>
-                  The bytes decrypted, but they don't decode as a valid TLV record. (The XOR did its job, these source bytes just weren't a real onion hop payload.)
+                  The bytes decrypted, but they don't decode as a valid TLV record.
                 </>
               )
             ) : !cipherValid ? (

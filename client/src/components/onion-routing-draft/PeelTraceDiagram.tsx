@@ -1102,7 +1102,7 @@ function ExtendedMorphView({ step }: { step: number }) {
             <KeystreamBar />
             <SymbolRow char="=" />
             <CompactExtendedBar
-              label="Bob's layer stripped · his hop payload now plaintext at front"
+              label="Bob's layer stripped"
               regions={extendedRegionsAfterXor()}
               accentColor={HOP_STROKE.bob}
               emphasis
@@ -1429,7 +1429,7 @@ function SliceArrowRow() {
           padding: "0 6px",
         }}
       >
-        slice 1,300 B ↓
+        slice ↓
       </div>
     </div>
   );

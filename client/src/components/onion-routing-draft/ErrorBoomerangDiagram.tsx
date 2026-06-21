@@ -40,11 +40,11 @@ import {
 const TOTAL_BEATS = 5;
 
 const CAPTIONS: Record<number, string> = {
-  0: "So, Charlie's decided to fail this payment with `temporary_channel_failure`. Now he has to get that news back to you without tipping off Bob along the way. The error travels backward, a mirror of the forward onion.",
+  0: "Imagine Charlie's decided to fail this payment with `temporary_channel_failure`. Now he has to get that news back to Alice. The error travels backward, mirroring the forward onion.",
   1: "First, Charlie builds the plaintext error packet: a 32-byte HMAC (computed with his `um_charlie` key over the payload) plus the 260-byte length-prefixed payload. That's 292 bytes, and it stays 292 the whole way back.",
   2: "Now Charlie XORs the 292-byte packet with his `ammag_charlie` keystream and sends it up to Bob. Notice the packet doesn't grow. Encryption is an in-place XOR, so the crosshatch just lands over the same bytes.",
-  3: "Bob can't read what he got (he has no `ammag_charlie`), and he doesn't try. He just XORs the same 292 bytes with his own `ammag_bob`, a second layer. Two angles crosshatch the *same* footprint, and off it goes to you.",
-  4: "It reaches you: 292 bytes, Bob's layer on the outside, Charlie's underneath. Never changed size. Next, you'll peel the layers in route order and check each hop's HMAC until one verifies, in the trial-decrypt visual below.",
+  3: "Bob can't read what he got (he has no `ammag_charlie`), and he doesn't try. He just XORs the same 292 bytes with his own `ammag_bob`, a second layer. Then off it goes to Alice.",
+  4: "It reaches Alice: 292 bytes, Bob's layer on the outside, Charlie's underneath. Never changed size. Next, Alice will peel the layers in route order and check each hop's HMAC until one verifies.",
 };
 
 // Per-beat StepCaption header label + title (the short verdict the
@@ -61,7 +61,7 @@ const STEP_TITLES: Record<number, string> = {
   1: "Build the 292-byte error packet",
   2: "Charlie wraps with `ammag_charlie`",
   3: "Bob adds his `ammag_bob` layer",
-  4: "It reaches you, still 292 bytes",
+  4: "It reaches Alice, still 292 bytes",
 };
 
 // Accent color for the StepCaption block. Color-matched to the acting hop, with
@@ -174,18 +174,11 @@ export function ErrorBoomerangDiagram() {
             beforeLayers={["charlie"]}
             afterLayers={["bob", "charlie"]}
             beforeLabel="as received from charlie · 1 layer"
-            afterLabel="wrapped again · two layers · still 292 B"
+            afterLabel="wrapped again · two layers"
             cornerBadge={<BoomerangCornerKeys step={step} />}
           />
         </div>
       )}
-
-      {/* Below-stage zone: only the final-beat "delivered" chip. Keys never
-          expand inline here (operation rule) -- the corner badges above carry
-          them. Sized to its content (§10 no-dead-whitespace). */}
-      <div className="mt-3">
-        <BoomerangKeyZone step={step} />
-      </div>
     </ErrorChrome>
   );
 }
@@ -212,40 +205,6 @@ function BoomerangCornerKeys({ step }: { step: number }) {
       </div>
     );
   }
-  return null;
-}
-
-// ── Below-stage zone: the final-beat payoff chip only ───────────────────────
-
-function BoomerangKeyZone({ step }: { step: number }) {
-  if (step === 4) {
-    return (
-      <div
-        className="mx-auto text-center"
-        style={{ maxWidth: 540 }}
-      >
-        <div
-          className="inline-flex items-center gap-2 px-3 py-2 border-[1.5px]"
-          style={{
-            borderColor: SUCCESS_GREEN,
-            background: "#fffdf5",
-            color: INK,
-            fontFamily: "ui-sans-serif, system-ui, sans-serif",
-            fontSize: 12,
-          }}
-        >
-          <span style={{ color: SUCCESS_GREEN, fontWeight: 700 }}>
-            ✓ delivered
-          </span>
-          <span style={{ color: INK }}>
-            Two ammag layers, still one fixed-size packet. Hover a badge to
-            recall either key.
-          </span>
-        </div>
-      </div>
-    );
-  }
-  // Beat 0: no key activity.
   return null;
 }
 
