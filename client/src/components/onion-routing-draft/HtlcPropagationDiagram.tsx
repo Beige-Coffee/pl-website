@@ -74,7 +74,7 @@ const PAYMENT_HASH = "0xa3f1...e9c4";
 
 const STEP_CAPTIONS: Record<number, string> = {
   0: "Here are three channels along the path, each anchored by its own pair of commitment transactions. Notice Bob and Charlie each hold two, one for each channel they sit between. Let's send a 10,000-sat payment from Alice to Dave and watch what happens.",
-  1: "First, Alice and Bob each add a new HTLC output to their commitments. It's locked to payment_hash 0xa3f1...e9c4 and times out at block 240. Until the preimage shows up, that 10,002 sat is stuck in limbo.",
+  1: "First, Alice and Bob each add a new HTLC output to their commitments. It's locked to payment_hash 0xa3f1...e9c4 and times out at block 260. Until the preimage shows up, that 10,002 sat is stuck in limbo.",
   2: "Now Bob passes the same conditional payment on to Charlie. They each carry an HTLC output on their B↔C commitments, this time with a tighter CLTV of 220 (that's Bob's safety margin, so he can resolve A↔B before B↔C times out).",
   3: "Then Charlie passes it on to Dave, with a CLTV of 180 and an amount of 10,000 sat. Where'd the other two sats go? That's Charlie's forwarding fee. The HTLC now sits on every channel along the path.",
   4: "Dave's the only one who knows the preimage, since he made it for the invoice. Nothing's hit the chain yet, but that little secret is what every HTLC on the route is waiting on.",
@@ -118,7 +118,7 @@ const CHANNELS: ChannelDef[] = [
     endLeft: 589_998,
     endRight: 410_002,
     htlcAmount: 10_002,
-    htlcCltv: 240,
+    htlcCltv: 260,
   },
   {
     id: "bc",

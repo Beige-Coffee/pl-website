@@ -38,13 +38,13 @@ const HOP_PALETTE = {
 // Expected values
 const EXPECTED = {
   htlcAmounts: [401225, 400410, 400000] as const,
-  htlcTimeouts: [203, 183, 168] as const,
+  htlcTimeouts: [223, 183, 168] as const,
   // Bob's fee math: rate = 800, total = 815 (BOLT 7 floors 800.82 to 800)
   bobFee: { rate: 800, total: 815 },
   // Charlie's fee math: rate = 400, total = 410
   charlieFee: { rate: 400, total: 410 },
   // Single timeout per card
-  timeoutAliceBob: 203,
+  timeoutAliceBob: 223,
   timeoutBobCharlie: 183,
   timeoutCharlieDave: 168,
 };
@@ -213,7 +213,7 @@ export function RouteCalcExercise({ headerless }: RouteCalcExerciseProps = {}) {
     .map((x) => x.i);
 
   const channelUpdates = [
-    { atForwarderIndex: 0, baseFee: 15, feePpm: 2000, cltvDelta: 20 },
+    { atForwarderIndex: 0, baseFee: 15, feePpm: 2000, cltvDelta: 40 },
     { atForwarderIndex: 1, baseFee: 10, feePpm: 1000, cltvDelta: 15 },
   ];
 

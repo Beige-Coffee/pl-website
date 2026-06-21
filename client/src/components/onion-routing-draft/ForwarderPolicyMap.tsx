@@ -111,7 +111,7 @@ const NAMED_CHANNEL_UPDATES: ChannelUpdate[] = [
   // route fail Alice's max_total_cltv_expiry_delta ceiling)
   { from: "hazel",   to: "dave",    baseFee: 100, feePpm: 2000, cltvDelta: 1000 },
   // Bob → Charlie → Dave  (Route C, the chapter-1 path)
-  { from: "bob",     to: "charlie", baseFee: 15,  feePpm: 2000, cltvDelta: 20 },
+  { from: "bob",     to: "charlie", baseFee: 15,  feePpm: 2000, cltvDelta: 40 },
   { from: "charlie", to: "dave",    baseFee: 10,  feePpm: 1000, cltvDelta: 15 },
   // Frank → Greg → Dave  (Route B)
   { from: "frank",   to: "greg",    baseFee: 200, feePpm: 2000, cltvDelta: 22 },

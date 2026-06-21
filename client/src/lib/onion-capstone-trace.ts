@@ -299,7 +299,7 @@ OnionForwarder.peel_layer = _wrap_fn(
     lambda a, r: {"hop": _PRIV_HOP.get(bytes(a[2]), "?"), "payloadLen": len(r[1])})
 verify_hmac = _wrap_fn(verify_hmac, "verify_hmac",
     lambda a: {"mu": _KEY_LABEL.get(bytes(a[1]), "mu")},
-    lambda a, r: {"ok": bool(r)})
+    lambda a, r: {"ok": r is None})
 check_forward = _wrap_fn(check_forward, "check_forward",
     lambda a: {"incomingAmt": a[0], "incomingCltv": a[1], "amt": a[2], "cltv": a[3]},
     lambda a, r: {"verdict": r})
@@ -335,10 +335,10 @@ for _i, (_name, _priv) in enumerate(_hops):
     _ss = ecdh(_priv, _cur[1:34])
     _quiet[0] = False
     _mu = hmac.new(b"mu", _ss, hashlib.sha256).digest()
-    _valid = verify_hmac(_cur, _mu, PAYMENT_HASH)
-    if not _valid:
+    _hmac_err = verify_hmac(_cur, _mu, PAYMENT_HASH)
+    if _hmac_err is not None:
         _ok = False
-    _beat(_name, "verified", "HMAC valid" if _valid else "HMAC FAILED")
+    _beat(_name, "verified", "HMAC valid" if _hmac_err is None else "HMAC FAILED")
     _nxt, _payload_bytes, _ss2 = fwd.peel_layer(_cur, _priv)
     _recs = _parse_tlv(_payload_bytes)
     _amt = int.from_bytes(_recs[2], "big")

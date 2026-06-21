@@ -416,8 +416,8 @@ def test_official_bolt4_error_vector():
     id: "exercise-verify-hmac-draft",
     title: "Verify the HMAC",
     description:
-      "Implement <code>verify_hmac(packet, mu, associated_data) -> bool</code>. Given a 1366-byte BOLT 4 onion packet, this hop's <code>mu</code> key (32 bytes), and the 32-byte <code>associated_data</code> (<code>payment_hash</code>), recompute <code>HMAC-SHA256(mu, hop_payloads || associated_data)</code> and compare it against the packet's last 32 bytes (the HMAC field). " +
-      "Return <code>True</code> if the comparison succeeds, <code>False</code> otherwise. Use <code>hmac.compare_digest</code> for a constant-time compare to avoid leaking timing information about which byte didn't match.",
+      "Implement <code>verify_hmac(packet, mu, associated_data) -> str | None</code>. Given a 1366-byte BOLT 4 onion packet, this hop's <code>mu</code> key (32 bytes), and the 32-byte <code>associated_data</code> (<code>payment_hash</code>), recompute <code>HMAC-SHA256(mu, hop_payloads || associated_data)</code> and compare it against the packet's last 32 bytes (the HMAC field). " +
+      "Return <code>None</code> when the HMAC verifies, or the BOLT 4 failure-code string <code>\"invalid_onion_hmac\"</code> when it does not (a packet that is not exactly 1366 bytes also fails). This is the same convention as <code>check_forward</code>: every forwarder check returns a failure code on rejection, or <code>None</code> when the check passes. Use <code>hmac.compare_digest</code> for a constant-time compare to avoid leaking timing information about which byte didn't match.",
     starterCode: `import hmac, hashlib
 
 def verify_hmac(packet, mu, associated_data):
@@ -430,8 +430,8 @@ def verify_hmac(packet, mu, associated_data):
       mu:               this hop's 32-byte mu key (HMAC-SHA256(b"mu", ss_i))
       associated_data:  32-byte payment_hash bound into the HMAC by the sender
 
-    Returns: True if the HMAC verifies, False otherwise. A packet that is
-    not exactly 1366 bytes never verifies.
+    Returns: None if the HMAC verifies, otherwise the BOLT 4 failure code
+    "invalid_onion_hmac". A packet that is not exactly 1366 bytes never verifies.
 
     Use hmac.compare_digest for the comparison (constant-time, no timing leak).
     """
@@ -453,35 +453,35 @@ GOOD_PACKET = b"\\x00" + EPHEMERAL_PUBKEY + HOP_PAYLOADS + expected_hmac
 assert len(GOOD_PACKET) == 1366
 
 def test_well_formed_packet_verifies():
-    assert verify_hmac(GOOD_PACKET, MU, PAYMENT_HASH) is True, "A well-formed packet must verify; check the slices (hop_payloads = packet[34:1334], hmac = packet[1334:1366]) and that associated_data is appended to the message"
+    assert verify_hmac(GOOD_PACKET, MU, PAYMENT_HASH) is None, "A well-formed packet must verify (return None); check the slices (hop_payloads = packet[34:1334], hmac = packet[1334:1366]) and that associated_data is appended to the message"
 
 def test_tampered_hop_payloads_fails():
     # Flip a byte in the hop_payloads field.
     tampered = bytearray(GOOD_PACKET)
     tampered[100] ^= 0x01
-    assert verify_hmac(bytes(tampered), MU, PAYMENT_HASH) is False, "A flipped byte inside hop_payloads must break the HMAC (the tag commits to every byte)"
+    assert verify_hmac(bytes(tampered), MU, PAYMENT_HASH) == "invalid_onion_hmac", "A flipped byte inside hop_payloads must break the HMAC (the tag commits to every byte)"
 
 def test_tampered_hmac_fails():
     # Flip a byte in the HMAC field.
     tampered = bytearray(GOOD_PACKET)
     tampered[-1] ^= 0x01
-    assert verify_hmac(bytes(tampered), MU, PAYMENT_HASH) is False, "A modified HMAC field must fail the comparison"
+    assert verify_hmac(bytes(tampered), MU, PAYMENT_HASH) == "invalid_onion_hmac", "A modified HMAC field must fail the comparison"
 
 def test_wrong_associated_data_fails():
     wrong_hash = bytes(32)
-    assert verify_hmac(GOOD_PACKET, MU, wrong_hash) is False, "A different associated_data must fail: the payment_hash is part of the HMAC'd message, binding the onion to one HTLC"
+    assert verify_hmac(GOOD_PACKET, MU, wrong_hash) == "invalid_onion_hmac", "A different associated_data must fail: the payment_hash is part of the HMAC'd message, binding the onion to one HTLC"
 
 def test_wrong_mu_fails():
     wrong_mu = bytes(32)
-    assert verify_hmac(GOOD_PACKET, wrong_mu, PAYMENT_HASH) is False, "A different mu key must fail; only the right per-hop key verifies"
+    assert verify_hmac(GOOD_PACKET, wrong_mu, PAYMENT_HASH) == "invalid_onion_hmac", "A different mu key must fail; only the right per-hop key verifies"
 
-def test_short_packet_returns_false():
+def test_short_packet_fails():
     short = GOOD_PACKET[:1000]
-    assert verify_hmac(short, MU, PAYMENT_HASH) is False, "A packet that is not exactly 1366 bytes must return False (do the length check first)"
+    assert verify_hmac(short, MU, PAYMENT_HASH) == "invalid_onion_hmac", "A packet that is not exactly 1366 bytes must fail with invalid_onion_hmac (do the length check first)"
 
-def test_long_packet_returns_false():
+def test_long_packet_fails():
     long_packet = GOOD_PACKET + b"\\x00"
-    assert verify_hmac(long_packet, MU, PAYMENT_HASH) is False, "A packet that is not exactly 1366 bytes must return False (do the length check first)"
+    assert verify_hmac(long_packet, MU, PAYMENT_HASH) == "invalid_onion_hmac", "A packet that is not exactly 1366 bytes must fail with invalid_onion_hmac (do the length check first)"
 `,
     hints: {
       conceptual:
@@ -489,23 +489,23 @@ def test_long_packet_returns_false():
         "<br><br><strong>Why this is the first thing the forwarder does:</strong> if the HMAC doesn't verify, we don't trust any of the bytes in the packet. We don't decrypt, we don't parse the TLV, we don't run any of our parser code on adversarial input. Encrypt-then-MAC means we authenticate the encrypted ciphertext as it appears on the wire, before anything else." +
         "<br><br><strong>Why associated_data is part of the HMAC:</strong> the <code>payment_hash</code> binds the onion to a specific HTLC. An attacker can't lift this onion off one HTLC and re-attach it to another, since the HMAC won't verify with a different <code>payment_hash</code>.",
       steps:
-        "<strong>1. Length check:</strong> if <code>len(packet) != 1366</code>, return <code>False</code>." +
+        "<strong>1. Length check:</strong> if <code>len(packet) != 1366</code>, return <code>\"invalid_onion_hmac\"</code>." +
         "<br><strong>2. Slice the fields:</strong>" +
         "<br>&nbsp;&nbsp;&nbsp;&nbsp;<code>hop_payloads = packet[34:1334]</code>" +
         "<br>&nbsp;&nbsp;&nbsp;&nbsp;<code>inbound_hmac = packet[1334:1366]</code>" +
         "<br><strong>3. Compute expected HMAC:</strong>" +
         "<br>&nbsp;&nbsp;&nbsp;&nbsp;<code>expected = hmac.new(mu, hop_payloads + associated_data, hashlib.sha256).digest()</code>" +
-        "<br><strong>4. Constant-time compare:</strong> <code>return hmac.compare_digest(expected, inbound_hmac)</code>.",
+        "<br><strong>4. Constant-time compare:</strong> <code>return None if hmac.compare_digest(expected, inbound_hmac) else \"invalid_onion_hmac\"</code>.",
       code:
         `import hmac, hashlib
 
 def verify_hmac(packet, mu, associated_data):
     if len(packet) != 1366:
-        return False
+        return "invalid_onion_hmac"
     hop_payloads = packet[34:1334]
     inbound_hmac = packet[1334:1366]
     expected = hmac.new(mu, hop_payloads + associated_data, hashlib.sha256).digest()
-    return hmac.compare_digest(expected, inbound_hmac)
+    return None if hmac.compare_digest(expected, inbound_hmac) else "invalid_onion_hmac"
 `,
     },
     rewardSats: 40,

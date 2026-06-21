@@ -78,6 +78,21 @@ const ENTRIES: Record<string, GlossaryEntry> = {
     formula: "ammag_i = HMAC('ammag', ss_i)",
     chapter: "6",
   },
+  ammagext: {
+    render: "math",
+    category: "per-hop key",
+    definition:
+      "An optional fifth per-hop key for *attribution data* (added to BOLT 4 in 2025), which lets the sender pin down *which* hop failed on the return path. Derived just like the other four; this course scopes to the original four.",
+    formula: "ammagext_i = HMAC('ammagext', ss_i)",
+    chapter: "6",
+  },
+  gamma: {
+    render: "text",
+    category: "per-hop key",
+    definition:
+      "The original Sphinx name for the return-path encryption key. Lightning calls it `ammag` (gamma reversed) and derives it the same way; you will meet `gamma` in the Sphinx paper and older write-ups.",
+    chapter: "6",
+  },
 
   // ── Session / buffer key ──
   pad_key: {
@@ -244,6 +259,83 @@ const ENTRIES: Record<string, GlossaryEntry> = {
       "The block-count safety margin a forwarder requires between the timelock on its incoming HTLC and the one on its outgoing HTLC.",
     chapter: "2",
   },
+  total_msat: {
+    render: "code",
+    category: "protocol field",
+    definition:
+      "Part of the destination's `payment_data` TLV: the full amount the invoice expects, so the final hop knows when a (possibly multi-part) payment is complete.",
+    chapter: "10",
+  },
+  min_final_cltv_expiry_delta: {
+    render: "code",
+    category: "protocol field",
+    definition:
+      "The invoice field setting how many blocks the *final* hop's HTLC must stay valid. Route timelocks are computed backward from this floor.",
+    chapter: "2",
+  },
+  ephemeral_pubkey: {
+    render: "code",
+    category: "protocol field",
+    definition:
+      "The 33-byte public key in the packet header (the `E_AB` for Bob). Each hop runs ECDH against it to recover its shared secret, then blinds it forward for the next hop.",
+    chapter: "9",
+  },
+  version: {
+    render: "code",
+    category: "protocol field",
+    definition:
+      "The packet's leading byte. The only currently valid value is `0x00`; any other value is rejected at the structure gate.",
+    chapter: "7",
+  },
+  bigsize_LEN: {
+    render: "code",
+    category: "protocol field",
+    definition:
+      "The `bigsize` length prefix at the front of a hop payload. It says how many TLV bytes follow before the 32-byte HMAC.",
+    chapter: "9",
+  },
+  LEN: {
+    render: "code",
+    category: "protocol field",
+    definition:
+      "The byte length of a hop payload's TLV section, carried at the front of the payload as the `bigsize_LEN` prefix.",
+    chapter: "9",
+  },
+  payload: {
+    render: "code",
+    category: "protocol field",
+    definition:
+      "One hop's instructions: the `bigsize_LEN` prefix plus its TLV records (not the trailing HMAC). Distinct from `hop_payloads`, which is the whole 1,300-byte buffer.",
+    chapter: "8",
+  },
+  payload_bytes: {
+    render: "code",
+    category: "protocol field",
+    definition:
+      "The decrypted bytes of this hop's `payload` that `peel_layer` returns, ready to parse into TLV records.",
+    chapter: "10",
+  },
+  next_packet: {
+    render: "code",
+    category: "protocol field",
+    definition:
+      "The reassembled 1,366-byte onion a forwarder sends to the next hop: a fresh version byte, the blinded `ephemeral_pubkey`, the shifted `hop_payloads`, and the lifted `next_hmac`.",
+    chapter: "9",
+  },
+  hmac: {
+    render: "code",
+    category: "protocol field",
+    definition:
+      "Shorthand for the packet's 32-byte authentication tag (`outer_hmac` on the wire). A hop recomputes it with `mu` and compares before trusting any bytes.",
+    chapter: "9",
+  },
+  bob_privkey: {
+    render: "code",
+    category: "concept",
+    definition:
+      "Bob's long-lived node private key. He runs ECDH between it and the packet's `ephemeral_pubkey` to recover his shared secret with Alice.",
+    chapter: "9",
+  },
   update_add_htlc: {
     render: "code",
     category: "protocol field",
@@ -405,6 +497,48 @@ const ENTRIES: Record<string, GlossaryEntry> = {
       "Returned by a forwarder when the outgoing `cltv_expiry` does not satisfy its required `cltv_expiry_delta` cushion; the HTLC is failed back.",
     chapter: "10",
   },
+  amount_below_minimum: {
+    render: "code",
+    category: "protocol field",
+    definition:
+      "A failure code a forwarder returns when `amt_to_forward` is below the outgoing channel's `htlc_minimum_msat`; the HTLC is failed back.",
+    chapter: "10",
+  },
+  expiry_too_soon: {
+    render: "code",
+    category: "protocol field",
+    definition:
+      "A failure code a forwarder returns when the outgoing timelock is too close to the current block height to forward safely; the HTLC is failed back.",
+    chapter: "10",
+  },
+  expiry_too_far: {
+    render: "code",
+    category: "protocol field",
+    definition:
+      "A failure code a forwarder MAY return when the requested timelock reaches unreasonably far into the future (more than `max_htlc_cltv` out); the HTLC is failed back.",
+    chapter: "10",
+  },
+  incorrect_or_unknown_payment_details: {
+    render: "code",
+    category: "protocol field",
+    definition:
+      "The failure code the *destination* returns when the `payment_hash`, `payment_secret`, or amount does not match a payment it expects. Deliberately vague, so a prober cannot tell which detail was wrong.",
+    chapter: "10",
+  },
+  max_htlc_cltv: {
+    render: "code",
+    category: "concept",
+    definition:
+      "BOLT 4's cap on how far out an HTLC's total timelock may reach, fixed at 2,016 blocks (about two weeks). A CLTV beyond it draws an `expiry_too_far` failure.",
+    chapter: "10",
+  },
+  UPDATE: {
+    render: "text",
+    category: "concept",
+    definition:
+      "A BOLT 4 failure-message flag meaning the error carries a fresh `channel_update`, so the sender can refresh that hop's fee or timelock policy and retry.",
+    chapter: "10",
+  },
 
   // ── Concepts ──
   HTLC: {
@@ -420,6 +554,27 @@ const ENTRIES: Record<string, GlossaryEntry> = {
     definition:
       "The secret whose SHA256 hash is the `payment_hash`. Revealing it claims the HTLC, and it propagates back along the route to settle each hop.",
     chapter: "1",
+  },
+  to_local: {
+    render: "code",
+    category: "concept",
+    definition:
+      "A channel's balance output that pays its own owner. When a routed payment settles, sats shift from the payer's `to_local` toward the payee's along each hop.",
+    chapter: "1",
+  },
+  OnionPacketBuilder: {
+    render: "code",
+    category: "concept",
+    definition:
+      "The class on Alice's (the sender's) side that assembles the onion: derive the shared secrets, build the filler, then wrap each hop's payload inside-out into the 1,366-byte packet.",
+    chapter: "4",
+  },
+  wrapped: {
+    render: "code",
+    category: "concept",
+    definition:
+      "The obfuscated error packet on the return path. Each hop XORs it with its `ammag` keystream; the sender peels those layers off to read the failure.",
+    chapter: "11",
   },
   filler: {
     render: "text",

@@ -130,12 +130,12 @@ export function OnionHintContent({ html, dark }: { html: string; dark: boolean }
   return (
     <>
       <style>{`
-        .onion-hint-line { margin: 0 0 0.6em 0; line-height: 1.65; }
+        .onion-hint-line { margin: 0 0 0.25em 0; line-height: 1.5; }
         .onion-hint-line:last-child { margin-bottom: 0; }
         .hint-content .onion-hint-code-inline {
           font-family: ${MONO};
           font-size: 0.86em;
-          padding: 0.08em 0.36em;
+          padding: 0.06em 0.34em;
           border-radius: 4px;
           background: ${inlineBg};
           border: 1px solid ${inlineBorder};
@@ -146,10 +146,10 @@ export function OnionHintContent({ html, dark }: { html: string; dark: boolean }
           display: block;
           font-family: ${MONO};
           font-size: 0.9em;
-          line-height: 1.55;
-          margin: 0.45em 0 0.6em;
-          padding: 0.6em 0.85em 0.6em 0.75em;
-          border-radius: 7px;
+          line-height: 1.45;
+          margin: 0.15em 0 0.1em;
+          padding: 0.35em 0.7em 0.35em 0.6em;
+          border-radius: 6px;
           background: ${blockBg};
           border: 1px solid ${blockBorder};
           border-left: 3px solid ${accent};

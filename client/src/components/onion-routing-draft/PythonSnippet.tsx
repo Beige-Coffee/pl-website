@@ -129,7 +129,7 @@ const SNIPPETS: Record<string, Snippet> = {
 
   "peel-verify-hmac": {
     python:
-      '# Recompute the HMAC tag and compare against the received outer HMAC.\nexpected = hmac.new(\n    mu_B, hop_payloads + associated_data, hashlib.sha256\n).digest()\nif not hmac.compare_digest(expected, outer_hmac):\n    raise ValueError("invalid_onion_hmac")  # reject: fail the HTLC',
+      '# Recompute the HMAC tag and compare against the received outer HMAC.\nexpected = hmac.new(\n    mu_B, hop_payloads + associated_data, hashlib.sha256\n).digest()\nif not hmac.compare_digest(expected, outer_hmac):\n    return "invalid_onion_hmac"  # fail the HTLC with this code\nreturn None  # integrity OK',
   },
 
   "peel-extend-xor": {

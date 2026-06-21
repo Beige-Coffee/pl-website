@@ -48,7 +48,6 @@ import {
   HOP_STROKE,
   FULL_PACKET_BYTES,
   BufferRegion,
-  BufferHeader,
   SlotCell,
   type Beat,
   type Region,
@@ -87,7 +86,7 @@ const BEATS: Beat[] = [
     subLabel: "RECEIVE",
     title: "Nothing trusted yet",
     caption:
-      "Bob's upstream peer sends him an `update_add_htlc`. The channel message carries the incoming HTLC fields (the amount, the `cltv_expiry`, and the `payment_hash`, which is the `associated_data`) and, tucked inside it, the 1,366-byte onion. Zoom into that onion and what do you get? Just encrypted bytes. Bob can't read a single one of them yet, and earning the right to act on them is the whole job of this chapter.",
+      "First, Alice sends Bob an `update_add_htlc`. The channel message carries the incoming HTLC fields (the amount, the `cltv_expiry`, and the `payment_hash`, which is the `associated_data`) and, tucked inside it, the 1,366-byte onion. As of now, the onion is just encrypted bytes. Bob can't understand a single one of them yet.",
   },
   {
     step: 2,
@@ -95,7 +94,7 @@ const BEATS: Beat[] = [
     subLabel: "GATE 1 · STRUCTURE",
     title: "Structure OK",
     caption:
-      "First, the easy stuff. Is the packet exactly 1,366 bytes? Is the version byte `0x00`? If either answer is no, Bob rejects right away, no decryption needed. Why bother running crypto on a packet that isn't even *shaped* right? Hover *rejects?* for the failure code, or *see fields* to open up the full packet anatomy from chapter 7.",
+      "When Bob receives the packet, he'll check a few things. For example, is it exactly 1,366 bytes? Is the version byte `0x00`? If either answer is no, Bob rejects right away. Hover *rejects?* for the failure code, or *see fields* to open up the packet anatomy from chapter 7.",
   },
   {
     step: 3,
@@ -103,7 +102,7 @@ const BEATS: Beat[] = [
     subLabel: "GATE 2 · INTEGRITY",
     title: "Bytes are authentic",
     caption:
-      "Now, the integrity gate, and notice it runs *before* any decryption. Bob recomputes `HMAC(mu_B, hop_payloads ‖ associated_data)` over the still-encrypted bytes and checks it against the packet's `outer_hmac`. A match? The bytes are authentic and bound to this exact HTLC (the `payment_hash` beside the HMAC is that `associated_data`). A mismatch means tampering or a re-attached onion, so Bob rejects and never lets those bytes near his parser. He derived `mu_B` back in chapter 9, so hover *keys* for the reminder.",
+      "Now, the integrity check, which is completed *before* any decryption. Bob will recompute `HMAC(mu_B, hop_payloads ‖ associated_data)` over the still-encrypted bytes and checks it against the packet's `outer_hmac`. If they match, then the bytes are authentic and bound to this exact HTLC. If there is a mismatch, then something has gone wrong, and Bob will reject it!",
   },
   {
     step: 4,
@@ -111,7 +110,7 @@ const BEATS: Beat[] = [
     subLabel: "PEEL",
     title: "Layer decrypted",
     caption:
-      "Integrity's confirmed, so now Bob can finally decrypt. He XORs the buffer with his `rho_B` keystream and his layer slides off, leaving his hop payload as plaintext at the front. This is the chapter-9 peel. The full version stretches the buffer to 2,600 bytes first, and what you see here is the front 1,300 bytes of that same XOR. Hover *keys* for where `rho_B` comes from.",
+      "If the HMAC verifies, Bob will proceed to decrypt the message. He'll XOR the buffer with his `rho_B` keystream and his layer will slide off, leaving his hop payload as plaintext at the front.",
   },
   {
     step: 5,
@@ -119,7 +118,7 @@ const BEATS: Beat[] = [
     subLabel: "PARSE",
     title: "Fields parsed",
     caption:
-      "Bob's hop payload is plaintext now, so let's read his instructions. Here's that same 60-byte payload as raw data: the `1b` length prefix (bigsize for 27), the 27 bytes of TLV records, then the 32 HMAC bytes (we won't spell those out). Every record is just a type, a length, then that many bytes of value. Hover anything to decode it. The three routing records hand Bob his orders (`amt_to_forward`, `outgoing_cltv_value`, `short_channel_id`), and the trailing HMAC is `charlie_hmac`, the tag Bob carries onto the packet he forwards. (That dim record up front? Type 1 is `padding`. Hover it!)",
+      "Bob's hop payload is plaintext now, so he'll read his instructions. Here's that same 60-byte payload as raw data: the `1b` length prefix (bigsize for 27), the 27 bytes of TLV records, then the 32 HMAC bytes. Every record is just a type, a length, then that many bytes of value. Hover anything to decode it.)",
   },
   {
     step: 6,
@@ -127,7 +126,7 @@ const BEATS: Beat[] = [
     subLabel: "BRANCH",
     title: "Bob is a forwarder",
     caption:
-      "So, which role is Bob playing? A `short_channel_id` present means Bob is a *forwarder* and should send the onion onward, and that's his path here. A `payment_data` present with no `short_channel_id` would make Bob the *destination* instead. Hover the branch question to see why both, or neither, gets rejected as malformed.",
+      "Next, Bob will check to see what is responsibilities are. If a `short_channel_id` is present, then Bob is a *forwarder* and should send the onion onward, (which is what happens in this example!). On the other hand, if `payment_data` was present with no `short_channel_id`, then Bob would be the *destination*.",
   },
   {
     step: 7,
@@ -135,7 +134,7 @@ const BEATS: Beat[] = [
     subLabel: "CHECK",
     title: "Fees & timelocks OK",
     caption:
-      "Bob's forwarding, so he holds the TLV's numbers up against the incoming HTLC (its amount and `cltv_expiry` sit beside the checks). Does the incoming amount cover `amt_to_forward` plus his fee? Does the incoming `cltv_expiry` clear `outgoing_cltv_value` by at least his published delta? And is the outgoing CLTV still in the future? These are the same fees and timelocks Alice worked out backward in chapter 2. Hover *rejects?* on a row for its failure code.",
+      "Since Bob is forwarding, he'll needs to perform some checks on the incoming HTLC. For instance, does the incoming amount cover `amt_to_forward` plus his fee? Does the incoming `cltv_expiry` clear `outgoing_cltv_value` by at least his published delta? And is the outgoing CLTV still in the future? Hover *rejects?* on a row for its failure code.",
   },
   {
     step: 8,
@@ -143,7 +142,7 @@ const BEATS: Beat[] = [
     subLabel: "OUTCOME",
     title: "Forward it",
     caption:
-      "Finally, every peel ends one of exactly three ways. Bob has a `short_channel_id` and every check passed, so his outcome is forward: ship the rebuilt packet out on channel `118x2x1` with the amount and timelock his TLVs ordered. Had `payment_data` been there instead, Bob would be the destination and would deliver (settle by revealing the preimage). And if anything had failed along the way? Reject: build an error onion and send it back upstream. We'll get to that in chapter 11.",
+      "In summary, every peel will end in one of three ways. In this case, Bob has a `short_channel_id` and every check passed, so his outcome is to forward the HTLC. If Bob was the destination, then he would likely settle the payment by revealing the preimage. if anything had failed along the way, then he would reject the HTLC and build an error onion to send back to Alice. We'll get to that in chapter 11.",
   },
 ];
 
@@ -180,6 +179,90 @@ function strippedRegions1300(): Region[] {
       layers: OPAQUE_HATCH,
     },
   ];
+}
+
+// One labeled segment of the full-packet bar (beat 3). A stacked name + byte
+// count, optionally faded (parts not involved in the integrity check) and/or
+// hatched (the still-encrypted hop_payloads).
+function PacketSegment({
+  name,
+  bytes,
+  widthPct,
+  faded = false,
+  hatch = false,
+  nameColor = INK,
+}: {
+  name: string;
+  bytes: string;
+  widthPct: number;
+  faded?: boolean;
+  hatch?: boolean;
+  nameColor?: string;
+}) {
+  const chipBg = "rgba(255,253,245,0.85)";
+  return (
+    <div
+      className="relative flex flex-col items-center justify-center"
+      style={{
+        width: `${widthPct}%`,
+        background: "#fffdf5",
+        opacity: faded ? 0.4 : 1,
+        borderLeft: "1.5px dashed rgba(15,23,42,0.18)",
+        transition: "opacity 400ms ease-out",
+      }}
+    >
+      {hatch && <HatchOverlay hops={OPAQUE_HATCH} zIndex={1} stripeOpacity={0.16} />}
+      <span
+        className="text-[9px]"
+        style={{
+          fontFamily: MONO,
+          fontWeight: 700,
+          color: nameColor,
+          background: chipBg,
+          padding: "0 4px",
+          zIndex: 2,
+          position: "relative",
+          letterSpacing: "0.02em",
+          lineHeight: 1.3,
+        }}
+      >
+        {name}
+      </span>
+      <span
+        className="text-[9px]"
+        style={{
+          fontFamily: MONO,
+          color: NEUTRAL_TEXT,
+          background: chipBg,
+          padding: "0 4px",
+          zIndex: 2,
+          position: "relative",
+          lineHeight: 1.3,
+        }}
+      >
+        {bytes}
+      </span>
+    </div>
+  );
+}
+
+// Beat 3 (integrity): the whole 1,366-byte packet. The header plays no part in
+// the HMAC, so it's faded; the two operands of the check stand out: hop_payloads
+// (the HMAC input, still encrypted) and outer_hmac (the tag Bob compares against).
+function FullPacketBar() {
+  return (
+    <>
+      <PacketSegment name="header" bytes="34 B" widthPct={13} faded />
+      <PacketSegment
+        name="hop_payloads"
+        bytes="1,300 B"
+        widthPct={62}
+        hatch
+        nameColor={KEY_MU_COLOR}
+      />
+      <PacketSegment name="outer_hmac" bytes="32 B" widthPct={25} />
+    </>
+  );
 }
 
 // ── Main component ────────────────────────────────────────────────────────
@@ -424,7 +507,9 @@ function PayloadArcView({ step }: { step: number }) {
   const isParse = step === 5;
 
   // The persistent bar grows when we zoom into the 60-byte payload at beat 5.
-  const barHeight = isParse ? 72 : 46;
+  // The integrity beat (3) shows the whole packet, so it needs room for the
+  // header / hop_payloads / outer_hmac segment labels.
+  const barHeight = isParse ? 72 : isVerify ? 56 : 46;
   const barBorder = isParse ? FOCUS_GOLD : isPeel ? HOP_STROKE.bob : NEUTRAL_TEXT;
   const barShadow = isParse
     ? `0 0 0 2px rgba(184,134,11,0.22)`
@@ -434,7 +519,7 @@ function PayloadArcView({ step }: { step: number }) {
 
   // Caption directly above the persistent bar (its label changes per beat).
   const barLabel = isVerify
-    ? "hop_payloads · 1,300 B (still encrypted)"
+    ? "onion_routing_packet · 1,366 B (still encrypted)"
     : isPeel
       ? "hop_payloads · after XOR (Bob's layer stripped)"
       : "bob's hop payload · 60 bytes (now plaintext)";
@@ -479,8 +564,10 @@ function PayloadArcView({ step }: { step: number }) {
           <div style={{ flex: 1, position: "relative", minWidth: 0 }}>
             <SlotCell hop="bob" />
           </div>
+        ) : isVerify ? (
+          <FullPacketBar />
         ) : (
-          (isPeel ? strippedRegions1300() : encryptedBlob1300()).map((r) => (
+          strippedRegions1300().map((r) => (
             <BufferRegion key={r.key} region={r} dimNonFocus={false} />
           ))
         )}
@@ -608,11 +695,22 @@ function ArcTail({ step }: { step: number }) {
         <div className="mt-2 flex items-center justify-center gap-1.5">
           <MathLine text="associated_data" color={ASSOC_DATA_COLOR} fontSize={11} />
           <span style={{ color: NEUTRAL_TEXT, fontSize: 12 }}>=</span>
-          <HtlcChip
-            label="payment_hash"
-            value={PAYMENT_HASH}
-            accent={ASSOC_DATA_COLOR}
-          />
+          <Tooltip width={320} label={<UpdateAddHtlcMini />}>
+            <span
+              style={{
+                cursor: "help",
+                borderBottom: `1px dotted ${ASSOC_DATA_COLOR}`,
+                paddingBottom: 1,
+                display: "inline-flex",
+              }}
+            >
+              <HtlcChip
+                label="payment_hash"
+                value={PAYMENT_HASH}
+                accent={ASSOC_DATA_COLOR}
+              />
+            </span>
+          </Tooltip>
         </div>
         <VerdictStamp
           label="AUTHENTIC"
@@ -941,81 +1039,23 @@ function VerdictStamp({
 // ── Beat 1: Receive ───────────────────────────────────────────────────────
 //
 // The chapter's opening framing (a step-1 intro, gone from step 2 on): the
-// `update_add_htlc` channel message arrives carrying the incoming HTLC fields
-// AND, nested inside it, the onion. An arrow zooms that nested onion out to its
-// full 1,366-byte self, and it's all encrypted, so Bob can't read any of it
-// yet. From here the message envelope is dropped; the onion is the working
-// surface for every later beat.
+// `update_add_htlc` channel message from Alice arrives carrying the incoming
+// HTLC fields (amount, cltv_expiry, payment_hash). The onion it carries is left
+// to the caption here; the packet itself becomes the working surface from the
+// integrity beat (3) onward, where its header/payload/HMAC are shown in full.
 
 function ReceiveView() {
   return (
     <div className="mt-1">
       <UpdateAddHtlcEnvelope />
-
-      {/* Zoom connector: the nested onion blows up to its full size below. */}
-      <div className="flex flex-col items-center" style={{ margin: "2px 0" }}>
-        <span
-          style={{ color: FOCUS_GOLD, fontSize: 20, fontWeight: 700, lineHeight: 1 }}
-        >
-          ↓
-        </span>
-        <span
-          className="text-[9px] uppercase tracking-[0.08em]"
-          style={{ fontFamily: MONO, color: NEUTRAL_TEXT, fontWeight: 700 }}
-        >
-          zoom into the onion
-        </span>
-      </div>
-
-      <BufferHeader
-        leftLabel="onion_routing_packet"
-        rightLabel={
-          <Tooltip
-            width={280}
-            label={
-              <span>
-                Fixed 1,366-byte Sphinx wire format. Same size at every hop, so
-                an observer can't tell where Bob sits in the route.
-              </span>
-            }
-          >
-            <span style={{ borderBottom: "1px dotted #94a3b8", cursor: "help" }}>
-              {fmt(FULL_PACKET_BYTES)} bytes
-            </span>
-          </Tooltip>
-        }
-        accentColor={FOCUS_GOLD}
-      />
-      <div
-        className="border-[1.5px] flex items-center justify-center relative overflow-hidden"
-        style={{ background: "#fffdf5", borderColor: FOCUS_GOLD, height: 78 }}
-      >
-        <HatchOverlay hops={OPAQUE_HATCH} zIndex={1} stripeOpacity={0.16} />
-        <span
-          style={{
-            fontFamily: MONO,
-            fontSize: 13,
-            color: INK,
-            background: "rgba(255,253,245,0.92)",
-            padding: "6px 14px",
-            letterSpacing: "0.04em",
-            fontWeight: 700,
-            zIndex: 2,
-            position: "relative",
-            textAlign: "center",
-          }}
-        >
-          1,366 encrypted bytes. Bob can't read any of it yet.
-        </span>
-      </div>
     </div>
   );
 }
 
 // The channel message that delivers the HTLC. A small bordered card: a labeled
-// header, the inbound HTLC fields as quiet HtlcChips, and a nested mini onion
-// (a hatched bar reading "onion · 1,366 B"). The nesting is the point: the
-// onion rides inside the message, and the zoom below pulls it out to full size.
+// header ("update_add_htlc · channel message from Alice") and the inbound HTLC
+// fields (amount, cltv_expiry, payment_hash = associated_data) as quiet
+// HtlcChips. The onion it carries is described in the caption, not drawn here.
 function UpdateAddHtlcEnvelope() {
   const accent = HOP_STROKE.bob;
   return (
@@ -1037,7 +1077,7 @@ function UpdateAddHtlcEnvelope() {
           className="text-[9px] uppercase tracking-[0.06em]"
           style={{ fontFamily: SANS, color: NEUTRAL_TEXT, fontStyle: "italic" }}
         >
-          channel message from upstream peer
+          channel message from Alice
         </span>
       </div>
       <div className="px-3 py-2.5">
@@ -1051,42 +1091,53 @@ function UpdateAddHtlcEnvelope() {
             note="= associated_data"
           />
         </div>
+      </div>
+    </div>
+  );
+}
 
-        {/* The nested onion: a mini hatched bar held inside the message. */}
-        <div
-          className="mt-2.5 border-[1.5px] flex items-center gap-2 relative overflow-hidden"
-          style={{ borderColor: FOCUS_GOLD, background: "#fffdf5", padding: "5px 8px" }}
+// Compact form of the update_add_htlc message, shown in a tooltip when the
+// reader hovers the integrity beat's payment_hash chip, so they can see where
+// the associated_data comes from (the channel message, beat 1).
+function UpdateAddHtlcMini() {
+  const accent = HOP_STROKE.bob;
+  return (
+    <div style={{ fontFamily: SANS }}>
+      <div
+        className="text-[10px] uppercase tracking-[0.06em] font-bold mb-1.5"
+        style={{ fontFamily: MONO, color: accent }}
+      >
+        update_add_htlc{" "}
+        <span
+          style={{
+            color: NEUTRAL_TEXT,
+            fontStyle: "italic",
+            fontWeight: 400,
+            textTransform: "none",
+          }}
         >
-          <HatchOverlay hops={OPAQUE_HATCH} zIndex={1} stripeOpacity={0.16} />
-          <span
-            className="text-[9px] uppercase tracking-[0.06em] shrink-0"
-            style={{
-              fontFamily: MONO,
-              color: FOCUS_GOLD,
-              fontWeight: 700,
-              background: "rgba(255,253,245,0.9)",
-              padding: "0 4px",
-              zIndex: 2,
-              position: "relative",
-            }}
-          >
-            onion_routing_packet
-          </span>
-          <span
-            className="text-[10px] ml-auto shrink-0"
-            style={{
-              fontFamily: MONO,
-              color: INK,
-              fontWeight: 700,
-              background: "rgba(255,253,245,0.9)",
-              padding: "0 4px",
-              zIndex: 2,
-              position: "relative",
-            }}
-          >
-            onion · {fmt(FULL_PACKET_BYTES)} B
-          </span>
-        </div>
+          · from Alice
+        </span>
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5 mb-2">
+        <HtlcChip label="amount_msat" value={fmt(AMOUNT_IN_MSAT)} />
+        <HtlcChip label="cltv_expiry" value={fmt(CLTV_IN)} />
+        <HtlcChip
+          label="payment_hash"
+          value={PAYMENT_HASH}
+          accent={ASSOC_DATA_COLOR}
+        />
+      </div>
+      <div className="text-[11px]" style={{ color: INK, lineHeight: 1.45 }}>
+        Bob takes the{" "}
+        <span style={{ fontFamily: MONO, color: ASSOC_DATA_COLOR }}>
+          payment_hash
+        </span>{" "}
+        straight from this message and feeds it in as the{" "}
+        <span style={{ fontFamily: MONO, color: ASSOC_DATA_COLOR }}>
+          associated_data
+        </span>{" "}
+        of the HMAC, binding the onion to this exact HTLC.
       </div>
     </div>
   );
