@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Tok, MathLine } from "./mathTokens";
 import { MorphBox } from "./morph";
@@ -35,10 +35,10 @@ const HOP_COLORS: Record<HopId, { stroke: string; fill: string }> = {
 };
 
 const NODE_X_PCT: Record<HopId, number> = {
-  alice: 20,
-  bob: 40,
-  charlie: 60,
-  dave: 80,
+  alice: 12,
+  bob: 38,
+  charlie: 62,
+  dave: 88,
 };
 
 // Decrypted-slice palette (gray, deliberately neutral so it doesn't borrow
@@ -48,12 +48,12 @@ const DECRYPTED = { stroke: "#94a3b8", fill: "#f1f5f9", accent: "#475569" };
 const TOTAL_STEPS = 6;
 
 const STEP_CAPTIONS: Record<number, string> = {
-  0: "Alice constructs an onion using her published node-identity public key as the sender pubkey. The pubkey rides at the top of the packet in plaintext, because every forwarder needs it to derive a shared secret with her.",
-  1: "The packet arrives at Bob. He combines his own private key with Alice's public key to derive ss_AB, then uses ss_AB to decrypt his slice. Notice: the same pubkey lookup also tells him the sender is Alice.",
-  2: "Bob peels his slice off the packet and forwards the rest to Charlie. The pubkey field stays intact, so the next hop sees the same Alice key.",
-  3: "Charlie does the same: ECDH between his node private key and Alice's public key produces ss_AC. He decrypts his slice and learns Alice is the sender for free.",
-  4: "Charlie peels his slice off and forwards what remains to Dave.",
-  5: "Dave performs ECDH to derive ss_AD and decrypts his slice. The math worked at every hop, but every forwarder along the way deanonymized Alice from the pubkey field that's there for cryptographic reasons.",
+  0: "So, Alice builds her onion using her published node-identity public key as the sender pubkey. That pubkey rides at the top of the packet *in plaintext*, since every forwarder needs it to derive a shared secret with her.",
+  1: "Now the packet reaches Bob. He combines his own private key with Alice's public key to get ss_AB, then uses ss_AB to decrypt his slice. But notice: that same pubkey lookup also tells him the sender is Alice.",
+  2: "Bob peels his slice off and forwards the rest to Charlie. The pubkey field stays put, so the next hop sees the *same* Alice key.",
+  3: "Charlie does the same thing. ECDH between his node private key and Alice's public key gives ss_AC, he decrypts his slice, and he learns Alice is the sender for free.",
+  4: "Then Charlie peels his slice off and forwards what's left to Dave.",
+  5: "Finally Dave runs ECDH to get ss_AD and decrypts his slice. The math worked at every hop. Ouch, though: every forwarder along the way figured out Alice was the sender, straight from the pubkey field that's only there for crypto.",
 };
 
 const STEP_TITLES: Record<number, string> = {
@@ -147,34 +147,8 @@ function ecdhFor(step: number): {
 
 export function NodeKeyAttemptDiagram() {
   const [step, setStep] = useState(0);
-  const [playing, setPlaying] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    if (!playing) return;
-    timerRef.current = setTimeout(() => {
-      setStep((s) => {
-        if (s + 1 >= TOTAL_STEPS) {
-          setPlaying(false);
-          return s;
-        }
-        return s + 1;
-      });
-    }, 2400);
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, [playing, step]);
-
-  function play() {
-    if (step >= TOTAL_STEPS - 1) setStep(0);
-    setPlaying(true);
-  }
-  function pause() {
-    setPlaying(false);
-  }
   function reset() {
-    setPlaying(false);
     setStep(0);
   }
 
@@ -224,9 +198,9 @@ export function NodeKeyAttemptDiagram() {
                 key={i}
                 className="absolute pointer-events-none"
                 style={{
-                  top: 29,
-                  left: `calc(${startPct}% + 32px)`,
-                  width: `calc(${endPct - startPct}% - 64px)`,
+                  top: 32,
+                  left: `calc(${startPct}% + 34px)`,
+                  width: `calc(${endPct - startPct}% - 68px)`,
                   borderTop: "1.5px dashed #475569",
                 }}
               />
@@ -261,8 +235,8 @@ export function NodeKeyAttemptDiagram() {
                 <div
                   className="rounded-full flex items-center justify-center transition-all duration-500 relative"
                   style={{
-                    width: 60,
-                    height: 60,
+                    width: 64,
+                    height: 64,
                     background: hop.fill,
                     color: "#0f172a",
                     border: `${isActive ? 3 : 2}px solid ${hop.stroke}`,
@@ -574,15 +548,20 @@ export function NodeKeyAttemptDiagram() {
         <div className="flex flex-col md:flex-row md:items-start md:gap-4">
           <div className="flex gap-1.5 items-center flex-wrap shrink-0">
             <button
-              onClick={playing ? pause : play}
-              className="px-3 py-1.5 border-[1.5px] border-black bg-black text-white font-bold text-xs tracking-[0.05em] uppercase hover:bg-[#b8860b] hover:border-[#b8860b] transition-colors"
-              data-testid="node-key-attempt-play"
+              onClick={() => setStep((s) => Math.max(0, s - 1))}
+              disabled={step <= 0}
+              className="px-3 py-1.5 border-[1.5px] border-foreground/40 bg-card text-foreground text-xs uppercase tracking-[0.05em] hover:bg-secondary transition-colors disabled:opacity-40 disabled:pointer-events-none"
+              data-testid="node-key-attempt-back"
             >
-              {playing
-                ? "❚❚ Pause"
-                : step >= TOTAL_STEPS - 1
-                  ? "↻ Replay"
-                  : "▶ Play"}
+              ← Back
+            </button>
+            <button
+              onClick={() => setStep((s) => Math.min(TOTAL_STEPS - 1, s + 1))}
+              disabled={step >= TOTAL_STEPS - 1}
+              className="px-3 py-1.5 border-[1.5px] border-foreground/40 bg-card text-foreground text-xs uppercase tracking-[0.05em] hover:bg-secondary transition-colors disabled:opacity-40 disabled:pointer-events-none"
+              data-testid="node-key-attempt-next"
+            >
+              Next →
             </button>
             <button
               onClick={reset}
@@ -595,7 +574,6 @@ export function NodeKeyAttemptDiagram() {
                 <button
                   key={i}
                   onClick={() => {
-                    setPlaying(false);
                     setStep(i);
                   }}
                   className="w-7 h-7 border-[1.5px] text-[10px] font-bold transition-colors"

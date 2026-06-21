@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { Tooltip } from "./Tooltip";
+import { CheckpointRewardClaim } from "./CheckpointRewardClaim";
 
 // ────────────────────────────────────────────────────────────────────────────
 // KnowledgeMatrix (DRAFT)
@@ -47,7 +49,7 @@ const PARTICIPANTS: Participant[] = [
   { id: "alice",   name: "Alice",   role: "Sender",     hop: { stroke: "#b8860b", fill: "#fef3c7" } },
   { id: "bob",     name: "Bob",     role: "Forwarder",  hop: { stroke: "#3b6aa0", fill: "#dbeafe" } },
   { id: "charlie", name: "Charlie", role: "Forwarder",  hop: { stroke: "#2d7a7a", fill: "#ccece8" } },
-  { id: "dave",    name: "Dave",    role: "Receiver",   hop: { stroke: "#7b4b8a", fill: "#ede1f3" } },
+  { id: "dave",    name: "Dave",    role: "Destination", hop: { stroke: "#7b4b8a", fill: "#ede1f3" } },
 ];
 
 interface Fact {
@@ -137,12 +139,105 @@ function emptyAnswers(): AnswerMap {
   return out;
 }
 
-export function KnowledgeMatrix() {
-  const [answers, setAnswers] = useState<AnswerMap>(emptyAnswers);
-  const [submitted, setSubmitted] = useState(false);
+// The fully-correct grid + an all-cells-locked map, used to restore the
+// completed state when the student has already finished this checkpoint.
+function fullCorrectAnswers(): AnswerMap {
+  const out = {} as AnswerMap;
+  for (const p of PARTICIPANTS) {
+    out[p.id] = {} as Record<FactId, Answer | null>;
+    for (const f of FACTS) out[p.id][f.id] = CORRECT[p.id][f.id];
+  }
+  return out;
+}
+
+function allLockedMap(): Record<string, boolean> {
+  const out: Record<string, boolean> = {};
+  for (const p of PARTICIPANTS) for (const f of FACTS) out[`${p.id}:${f.id}`] = true;
+  return out;
+}
+
+interface KnowledgeMatrixProps {
+  // When wired as a real checkpoint, these enable saving completion + claiming
+  // the sat reward. Omitted (standalone) renders just the interactive grid.
+  checkpointId?: string;
+  theme?: "light" | "dark";
+  authenticated?: boolean;
+  sessionToken?: string | null;
+  lightningAddress?: string | null;
+  emailVerified?: boolean;
+  pubkey?: string | null;
+  alreadyCompleted?: boolean;
+  claimInfo?: { checkpointId: string; amountSats: number; paidAt: string } | null;
+  onLoginRequest?: () => void;
+  onCompleted?: (checkpointId: string, amountSats?: number) => void;
+  onOpenProfile?: () => void;
+}
+
+export function KnowledgeMatrix({
+  checkpointId,
+  theme = "light",
+  authenticated = false,
+  sessionToken = null,
+  lightningAddress = null,
+  emailVerified = false,
+  pubkey = null,
+  alreadyCompleted = false,
+  claimInfo = null,
+  onLoginRequest,
+  onCompleted,
+  onOpenProfile,
+}: KnowledgeMatrixProps = {}) {
+  // Persist the in-progress grid to localStorage (scoped per user, mirroring
+  // CheckpointQuestion) so a reload never wipes the student's work, even before
+  // they submit or log in. When the checkpoint is already completed server-side,
+  // that state is authoritative and we ignore any local draft.
+  const userSuffix = sessionToken ? `-${sessionToken.slice(0, 8)}` : "";
+  const storageKey = `pl-km-${checkpointId ?? "standalone"}${userSuffix}`;
+
+  const restored = (() => {
+    if (alreadyCompleted) return null;
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) {
+        return JSON.parse(raw) as {
+          answers: AnswerMap;
+          submitted: boolean;
+          locked: Record<string, boolean>;
+        };
+      }
+    } catch {}
+    return null;
+  })();
+
+  const [answers, setAnswers] = useState<AnswerMap>(() =>
+    alreadyCompleted ? fullCorrectAnswers() : (restored?.answers ?? emptyAnswers()),
+  );
+  const [submitted, setSubmitted] = useState(
+    alreadyCompleted || !!restored?.submitted,
+  );
+  // Cells the student has already gotten right and locked in. "Try again"
+  // keeps these and only clears the wrong ones, so prior work isn't lost.
+  const [locked, setLocked] = useState<Record<string, boolean>>(() =>
+    alreadyCompleted ? allLockedMap() : (restored?.locked ?? {}),
+  );
+
+  // Save the in-progress attempt whenever it changes. Once completed
+  // server-side, the alreadyCompleted prop is the source of truth, so skip.
+  useEffect(() => {
+    if (alreadyCompleted) return;
+    try {
+      localStorage.setItem(
+        storageKey,
+        JSON.stringify({ answers, submitted, locked }),
+      );
+    } catch {}
+  }, [answers, submitted, locked, alreadyCompleted, storageKey]);
+
+  const cellKey = (p: ParticipantId, f: FactId) => `${p}:${f}`;
 
   function setCell(p: ParticipantId, f: FactId, v: Answer) {
     if (submitted) return;
+    if (locked[cellKey(p, f)]) return;
     setAnswers((prev) => ({
       ...prev,
       [p]: { ...prev[p], [f]: v },
@@ -167,8 +262,26 @@ export function KnowledgeMatrix() {
     }
   }
 
-  function reset() {
-    setAnswers(emptyAnswers());
+  // Reward is earned once the whole grid is correct (or was on a prior visit).
+  const allCorrectNow = submitted && correctCount === totalCells;
+  const earned = alreadyCompleted || allCorrectNow;
+
+  // "Try again": lock in the cells that are now correct and clear only the
+  // wrong ones, so the student keeps the progress they already earned.
+  function tryAgain() {
+    const nextLocked = { ...locked };
+    const nextAnswers = emptyAnswers();
+    for (const p of PARTICIPANTS) {
+      for (const f of FACTS) {
+        const cur = answers[p.id][f.id];
+        if (cur === CORRECT[p.id][f.id]) {
+          nextLocked[cellKey(p.id, f.id)] = true;
+          nextAnswers[p.id][f.id] = cur;
+        }
+      }
+    }
+    setLocked(nextLocked);
+    setAnswers(nextAnswers);
     setSubmitted(false);
   }
 
@@ -230,7 +343,6 @@ export function KnowledgeMatrix() {
                   <th
                     key={f.id}
                     className="p-2 border-[1.5px] text-center"
-                    title={f.long}
                     style={{
                       borderColor: INK,
                       background: "#fffdf5",
@@ -243,7 +355,9 @@ export function KnowledgeMatrix() {
                       verticalAlign: "bottom",
                     }}
                   >
-                    {f.short}
+                    <Tooltip label={f.long}>
+                      <span style={{ cursor: "help" }}>{f.short}</span>
+                    </Tooltip>
                   </th>
                 ))}
               </tr>
@@ -298,24 +412,24 @@ export function KnowledgeMatrix() {
                   {FACTS.map((f) => {
                     const studentAnswer = answers[p.id][f.id];
                     const correctAnswer = CORRECT[p.id][f.id];
+                    const isLocked = locked[cellKey(p.id, f.id)];
                     const isCorrect =
-                      submitted && studentAnswer === correctAnswer;
+                      isLocked || (submitted && studentAnswer === correctAnswer);
                     const isWrong =
-                      submitted && studentAnswer !== null && studentAnswer !== correctAnswer;
-                    const cellBg = !submitted
-                      ? "#fffdf5"
-                      : isCorrect
-                        ? "#eaf2db"
-                        : isWrong
-                          ? "#fde0e0"
-                          : "#fffdf5";
-                    const cellBorder = !submitted
-                      ? INK
-                      : isCorrect
-                        ? GREEN
-                        : isWrong
-                          ? RED
-                          : INK;
+                      submitted &&
+                      !isLocked &&
+                      studentAnswer !== null &&
+                      studentAnswer !== correctAnswer;
+                    const cellBg = isCorrect
+                      ? "#eaf2db"
+                      : isWrong
+                        ? "#fde0e0"
+                        : "#fffdf5";
+                    const cellBorder = isCorrect
+                      ? GREEN
+                      : isWrong
+                        ? RED
+                        : INK;
                     return (
                       <td
                         key={f.id}
@@ -332,8 +446,8 @@ export function KnowledgeMatrix() {
                             symbol="✓"
                             color={GREEN}
                             selected={studentAnswer === "knows"}
-                            disabled={submitted}
-                            submitted={submitted}
+                            disabled={submitted || isLocked}
+                            submitted={submitted || isLocked}
                             onClick={() => setCell(p.id, f.id, "knows")}
                           />
                           <CellButton
@@ -341,8 +455,8 @@ export function KnowledgeMatrix() {
                             symbol="✗"
                             color={RED}
                             selected={studentAnswer === "doesnt-know"}
-                            disabled={submitted}
-                            submitted={submitted}
+                            disabled={submitted || isLocked}
+                            submitted={submitted || isLocked}
                             onClick={() => setCell(p.id, f.id, "doesnt-know")}
                           />
                           {submitted && isWrong && (
@@ -439,8 +553,9 @@ export function KnowledgeMatrix() {
                   </span>
                 )}
               </div>
+              {correctCount < totalCells && (
               <button
-                onClick={reset}
+                onClick={tryAgain}
                 className="px-3 py-2 border-[1.5px] font-bold text-xs uppercase tracking-[0.06em] transition-colors"
                 style={{
                   borderColor: INK,
@@ -461,9 +576,34 @@ export function KnowledgeMatrix() {
               >
                 Try again
               </button>
+              )}
             </>
           )}
         </div>
+
+        {earned && checkpointId && (
+          <div
+            className="mt-4 pt-4 border-t-[1.5px]"
+            style={{ borderColor: `${INK}25` }}
+            data-testid="knowledge-matrix-reward"
+          >
+            <CheckpointRewardClaim
+              checkpointId={checkpointId}
+              answer={0}
+              theme={theme}
+              authenticated={authenticated}
+              sessionToken={sessionToken}
+              lightningAddress={lightningAddress}
+              emailVerified={emailVerified}
+              pubkey={pubkey}
+              alreadyCompleted={alreadyCompleted}
+              claimInfo={claimInfo}
+              onLoginRequest={onLoginRequest ?? (() => {})}
+              onCompleted={onCompleted ?? (() => {})}
+              onOpenProfile={onOpenProfile}
+            />
+          </div>
+        )}
 
         {submitted && correctCount < totalCells && (
           <div
@@ -479,7 +619,7 @@ export function KnowledgeMatrix() {
             asymmetric. Alice (the sender) is the only one who needs to see the
             full picture. Bob and Charlie should know almost nothing about the
             wider route, only their immediate neighbors and the slice they're
-            forwarding. Dave (the receiver) sits in between: he knows the
+            forwarding. Dave (the destination) sits in between: he knows the
             payment is for him and learns whatever metadata Alice put in the
             invoice, but not who paid him or how the route reached him.
           </div>

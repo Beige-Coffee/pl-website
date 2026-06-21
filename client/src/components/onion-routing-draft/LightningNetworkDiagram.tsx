@@ -263,6 +263,7 @@ export function LightningNetworkDiagram() {
                     fontSize={20}
                     fontWeight={700}
                     fill="#0f172a"
+                    fontFamily="ui-sans-serif, system-ui, sans-serif"
                   >
                     {(n.label ?? "")[0]}
                   </text>
@@ -273,6 +274,7 @@ export function LightningNetworkDiagram() {
                     fontSize={13}
                     fontWeight={700}
                     fill="#0f172a"
+                    fontFamily="ui-sans-serif, system-ui, sans-serif"
                   >
                     {n.label}
                   </text>
@@ -286,6 +288,7 @@ export function LightningNetworkDiagram() {
                         fontSize={11}
                         fontWeight={700}
                         fill="#fffdf5"
+                        fontFamily="ui-sans-serif, system-ui, sans-serif"
                       >
                         {n.highlightOrder}
                       </text>

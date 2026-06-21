@@ -15,6 +15,7 @@ import { runPythonTests, type TestResult, subscribeToPyodideStatus, type Pyodide
 import { createPyodideCompletionSource, createWordCompletionSource, preloadCompletionContext, invalidateCompletionCache } from "../lib/pyodide-completions";
 import { buildExerciseTestCode } from "../lib/exercise-code-assembly";
 import { signatureHints } from "../lib/signature-hint-extension";
+import { OnionHintContent } from "./onion-routing-draft/OnionHintContent";
 import { cleanErrorMessage } from "../lib/error-cleanup";
 import { QRCodeSVG } from "qrcode.react";
 import ExerciseFileBrowser from "./ExerciseFileBrowser";
@@ -187,6 +188,9 @@ interface CodeExerciseProps {
   priorInGroupExercises?: Array<{ id: string; starterCode: string }>; // Same-group priors — after preamble
   futureExercises?: Array<{ id: string; starterCode: string }>;
   tutorialType?: "lightning" | "noise" | "onion-routing";
+  // Optional reference visual shown in a popup (icon left of "SEND TO SANDBOX")
+  // so students can consult a diagram while coding.
+  referenceDiagram?: React.ReactNode;
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -211,6 +215,7 @@ export default function CodeExercise({
   classMethodExercises,
   priorInGroupExercises,
   tutorialType,
+  referenceDiagram,
 }: CodeExerciseProps) {
   const dark = theme === "dark";
   const isMobile = useIsMobile();
@@ -260,6 +265,8 @@ export default function CodeExercise({
 
   // File browser state
   const [fileBrowserOpen, setFileBrowserOpen] = useState(false);
+  // Reference-diagram popup state
+  const [refDiagramOpen, setRefDiagramOpen] = useState(false);
 
   // Hint state: null = closed, "conceptual" | "steps" | "code" = which is open
   const [activeHint, setActiveHint] = useState<"conceptual" | "steps" | "code" | null>(null);
@@ -997,7 +1004,22 @@ export default function CodeExercise({
       )}
 
       {/* Scratchpad button — above editor, right-aligned */}
-      <div className="flex justify-end mb-1.5 hidden lg:flex">
+      <div className="flex justify-end items-center gap-2 mb-1.5 hidden lg:flex">
+        {referenceDiagram && (
+          <button
+            onClick={() => setRefDiagramOpen(true)}
+            className={`font-pixel text-[9px] px-2.5 py-1.5 border transition-all cursor-pointer flex items-center gap-1.5 ${
+              dark
+                ? "border-[#2a3552]/80 bg-[#0f1930] text-slate-500 hover:text-[#FFD700] hover:border-[#FFD700]/40"
+                : "border-border/60 bg-white text-foreground/40 hover:text-[#9a7200] hover:border-[#b8860b]/40"
+            }`}
+            data-testid="button-reference-diagram"
+            title="Open the reference diagram for this exercise"
+          >
+            <span style={{ fontSize: "11px", lineHeight: 1 }}>🖼️</span>
+            <span>REFERENCE</span>
+          </button>
+        )}
         <div className="relative">
           <button
             onClick={handleSendToScratchpad}
@@ -1152,15 +1174,25 @@ export default function CodeExercise({
                   {results.filter((r) => r.passed).length}/{results.length} passed
                 </div>
                 {failed.map((r, i) => (
-                  <div key={i} className={`flex items-baseline gap-1.5 text-sm py-0.5`}>
-                    <span className="text-red-400 font-bold shrink-0">✗</span>
-                    <span className={`${dark ? "text-red-300" : "text-red-700"}`}>
-                      {r.name.replace(/^test_/, "").replace(/_/g, " ")}
-                    </span>
-                    {r.message && (
-                      <span className={`text-[13px] px-1.5 py-0.5 rounded ${dark ? "text-red-300/80 bg-red-500/10" : "text-red-600/80 bg-red-100"}`}>
-                        {r.message}
+                  <div key={i} className="py-0.5">
+                    <div className="flex items-baseline gap-1.5 text-sm">
+                      <span className="text-red-400 font-bold shrink-0">✗</span>
+                      <span className={`${dark ? "text-red-300" : "text-red-700"}`}>
+                        {r.name.replace(/^test_/, "").replace(/_/g, " ")}
                       </span>
+                      {r.message && (
+                        <span className={`text-[13px] px-1.5 py-0.5 rounded ${dark ? "text-red-300/80 bg-red-500/10" : "text-red-600/80 bg-red-100"}`}>
+                          {r.message}
+                        </span>
+                      )}
+                    </div>
+                    {r.source && (
+                      <div className="flex items-baseline gap-1.5 mt-0.5 pl-5">
+                        <span className={`text-[12px] shrink-0 ${textMuted}`}>{"↳ failed at:"}</span>
+                        <code className={`text-[12px] px-1.5 py-0.5 rounded font-mono break-all ${dark ? "text-amber-200/90 bg-amber-500/10" : "text-amber-800 bg-amber-100"}`}>
+                          {r.source}
+                        </code>
+                      </div>
                     )}
                   </div>
                 ))}
@@ -1219,12 +1251,20 @@ export default function CodeExercise({
             `}</style>
             {activeHint === "conceptual" && (
               <div className={`text-lg ${textMuted} leading-relaxed pr-6`}>
-                <div dangerouslySetInnerHTML={{ __html: data.hints.conceptual }} />
+                {tutorialType === "onion-routing" ? (
+                  <OnionHintContent html={data.hints.conceptual} dark={dark} />
+                ) : (
+                  <div dangerouslySetInnerHTML={{ __html: data.hints.conceptual }} />
+                )}
               </div>
             )}
             {activeHint === "steps" && (
               <div className={`text-lg ${textMuted} leading-relaxed pr-6`}>
-                <div dangerouslySetInnerHTML={{ __html: data.hints.steps }} />
+                {tutorialType === "onion-routing" ? (
+                  <OnionHintContent html={data.hints.steps} dark={dark} />
+                ) : (
+                  <div dangerouslySetInnerHTML={{ __html: data.hints.steps }} />
+                )}
               </div>
             )}
             {activeHint === "code" && data.hints.codeBlocks?.length ? (
@@ -1482,6 +1522,32 @@ export default function CodeExercise({
     />
   ) : null;
 
+  const referenceDiagramModal = refDiagramOpen && referenceDiagram ? (
+    <div
+      className="fixed inset-0 z-[9999] flex items-start justify-center"
+      onClick={(e) => { if (e.target === e.currentTarget) setRefDiagramOpen(false); }}
+    >
+      <div
+        className={`absolute inset-0 ${dark ? "bg-black/80" : "bg-black/50"} backdrop-blur-sm`}
+        onClick={() => setRefDiagramOpen(false)}
+      />
+      <div className={`relative w-full ${isMobile ? "mx-0 my-0 h-[100dvh] rounded-none p-3" : "max-w-4xl mx-4 my-4 max-h-[calc(100vh-32px)] p-5"} overflow-y-auto border-2 flex flex-col ${cardBorder} ${cardBg}`}>
+        <button
+          onClick={() => setRefDiagramOpen(false)}
+          className={`self-end font-pixel text-xs border-2 px-3 py-1.5 mb-3 transition-all ${
+            dark
+              ? "border-[#2a3552] bg-[#0f1930] text-slate-400 hover:text-slate-200 hover:bg-[#132043]"
+              : "border-border bg-background text-foreground/60 hover:text-foreground hover:bg-secondary"
+          }`}
+          data-testid="button-close-reference-diagram"
+        >
+          ✕ CLOSE
+        </button>
+        {referenceDiagram}
+      </div>
+    </div>
+  ) : null;
+
   if (expanded) {
     return (
       <>
@@ -1512,6 +1578,7 @@ export default function CodeExercise({
           </div>
         </div>
         {fileBrowserModal}
+        {referenceDiagramModal}
       </>
     );
   }
@@ -1520,6 +1587,7 @@ export default function CodeExercise({
     <>
       {exerciseContent}
       {fileBrowserModal}
+      {referenceDiagramModal}
     </>
   );
 }

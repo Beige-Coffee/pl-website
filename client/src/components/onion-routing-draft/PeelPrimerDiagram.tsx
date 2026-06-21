@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { SlotSubCell } from "./SlotSubCell";
 import { MathLine, Tok } from "./mathTokens";
 import { StepCaption } from "./StepCaption";
+import { HatchOverlay } from "./encryptionHatch";
 
 // ────────────────────────────────────────────────────────────────────────────
 // PeelPrimerDiagram (privacy-accurate two-packet rebuild 2026-05-08)
@@ -80,10 +81,10 @@ const SLOT_BIGSIZE_HEX: Record<ForwarderId, string> = {
 
 const HOPS: HopId[] = ["alice", "bob", "charlie", "dave"];
 const NODE_X_PCT: Record<HopId, number> = {
-  alice: 14,
+  alice: 12,
   bob: 38,
   charlie: 62,
-  dave: 86,
+  dave: 88,
 };
 
 const PEEL_ORDER: ForwarderId[] = ["bob", "charlie", "dave"];
@@ -135,7 +136,6 @@ function peelStateAtStep(step: number): PeelState {
 }
 
 const TOTAL_BEATS = 10;
-const STEP_MS = 2400;
 const TOTAL_BUFFER_BYTES = 1300;
 
 const SLOT_WIDTH_PCT: Record<ForwarderId, number> = {
@@ -153,15 +153,6 @@ const FOCUS_RING_INSET =
   "inset 0 0 0 2px rgba(184,134,11,0.55), inset 0 0 18px rgba(184,134,11,0.35)";
 
 // ── Packet config ──────────────────────────────────────────────────────────
-
-// Three maximally distinct stripe directions for layered hatches, matching
-// the wrap-primer diagram so the colors carry through visually as each
-// layer is peeled off.
-const LAYER_ANGLES: Record<ForwarderId, number> = {
-  bob: 90,
-  charlie: 45,
-  dave: 0,
-};
 
 interface SlotInBuffer {
   hop: ForwarderId;
@@ -363,7 +354,7 @@ function chainStatus(
 
 function captionForStep(step: number): string {
   if (step === 0) {
-    return "Bob receives the 1,366-byte onion from Alice. To Bob, the entire 1,300-byte payload area is encrypted bytes he can't yet read (the gray block). The packet's outer HMAC tag is `bob_hmac`.";
+    return "Alice hands Bob a 1,366-byte onion. To Bob, that whole 1,300-byte payload area is just encrypted bytes he can't read yet (the gray block). The one thing he can point to is the packet's outer HMAC tag, `bob_hmac`.";
   }
   const state = peelStateAtStep(step);
   const hop = state.currentHop!;
@@ -371,48 +362,28 @@ function captionForStep(step: number): string {
   const hopName = HOP_LABEL[hop];
 
   if (sub === "verify") {
-    return `Recompute \`HMAC-SHA256\` over the incoming \`hop_payloads\` using a key derived from ${hopName}'s shared secret with Alice, and compare the result to the outer HMAC tag in the packet. If they don't match, the packet is dropped. If they do, ${hopName} can proceed to decrypt.`;
+    return `First, ${hopName} recomputes \`HMAC-SHA256\` over the incoming \`hop_payloads\` with a key derived from his shared secret with Alice, then checks it against the outer HMAC tag in the packet. No match? The packet gets dropped. Match? Then ${hopName} can go ahead and decrypt.`;
   }
   if (sub === "decrypt") {
-    return `XOR the entire 1,300-byte \`hop_payloads\` buffer, byte-by-byte, with a 1,300-byte \`chacha20\` keystream derived from ${hopName}'s shared secret with Alice. ${hopName}'s hop payload at the front of the buffer becomes readable plaintext; every other region stays encrypted noise to ${hopName}.`;
+    return `Now, ${hopName} XORs the whole 1,300-byte \`hop_payloads\` buffer, byte-by-byte, against a 1,300-byte \`chacha20\` keystream from his shared secret with Alice. Watch the front: ${hopName}'s own hop payload turns into readable plaintext. Everything else stays encrypted noise to him.`;
   }
   if (hop === "dave") {
-    return "Dave reads his hop payload. The HMAC field at the end of the hop payload is `0x00…` (32 zero bytes), the universal \"you're the destination\" signal. Dave verifies the payment hash and claims the funds. No outgoing packet to forward.";
+    return "Finally, Dave reads his hop payload. The HMAC field at the end is `0x00…` (32 zero bytes), which is the universal \"you're the destination\" signal. So Dave checks the payment hash and claims the funds. Nothing to forward, the onion stops here.";
   }
   const nextHop = hop === "bob" ? "Charlie" : "Dave";
   const incomingE = hop === "bob" ? "E_AB" : "E_AC";
   const outgoingE = nextHop === "Charlie" ? "E_AC" : "E_AD";
   const nextHopLower = nextHop.toLowerCase();
-  return `${hopName} reads his hop payload and constructs a new 1,366-byte packet for ${nextHop}. The new header carries \`${outgoingE}\`, derived from the incoming \`${incomingE}\` via ${hopName}'s blinding factor. The new outer HMAC tag is \`${nextHopLower}_hmac\`, the value that was sitting inside ${hopName}'s hop payload, now elevated to the outer tag (the arrow shows the transfer). The payload is the still-encrypted bytes that followed ${hopName}'s hop payload, with fresh filler appended at the back to keep the buffer at 1,300 bytes.`;
+  return `Now ${hopName} reads his hop payload and builds a fresh 1,366-byte packet for ${nextHop}. The new header carries \`${outgoingE}\`, which he derives from the incoming \`${incomingE}\` with his blinding factor. Where does the new outer HMAC come from? It's \`${nextHopLower}_hmac\`, the value that was tucked inside ${hopName}'s hop payload, now promoted to the outer tag (the arrow shows the hand-off). The payload is just the still-encrypted bytes that came after ${hopName}'s hop payload, with fresh filler tacked on the back to hold the buffer at 1,300 bytes.`;
 }
 
 // ── Main component ──────────────────────────────────────────────────────────
 
 export function PeelPrimerDiagram() {
   const [step, setStep] = useState(0);
-  const [playing, setPlaying] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    if (!playing) return;
-    if (step >= TOTAL_BEATS - 1) {
-      setPlaying(false);
-      return;
-    }
-    timerRef.current = setTimeout(() => setStep((s) => s + 1), STEP_MS);
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, [playing, step]);
-
-  const play = () => {
-    if (step >= TOTAL_BEATS - 1) setStep(0);
-    setPlaying(true);
-  };
-  const pause = () => setPlaying(false);
   const reset = () => {
     setStep(0);
-    setPlaying(false);
   };
 
   const state = peelStateAtStep(step);
@@ -474,14 +445,18 @@ export function PeelPrimerDiagram() {
         <div className="flex flex-col md:flex-row md:items-start md:gap-4">
           <div className="flex gap-1.5 items-center flex-wrap shrink-0">
             <button
-              onClick={playing ? pause : play}
-              className="px-3 py-1.5 border-[1.5px] border-black bg-black text-white font-bold text-xs tracking-[0.05em] uppercase hover:bg-[#b8860b] hover:border-[#b8860b] transition-colors"
+              onClick={() => setStep((s) => Math.max(0, s - 1))}
+              disabled={step <= 0}
+              className="px-3 py-1.5 border-[1.5px] border-foreground/40 bg-card text-foreground text-xs uppercase tracking-[0.05em] hover:bg-secondary transition-colors disabled:opacity-40 disabled:cursor-default disabled:hover:bg-card"
             >
-              {playing
-                ? "❚❚ Pause"
-                : step >= TOTAL_BEATS - 1
-                  ? "↻ Replay"
-                  : "▶ Play"}
+              ← Back
+            </button>
+            <button
+              onClick={() => setStep((s) => Math.min(TOTAL_BEATS - 1, s + 1))}
+              disabled={step >= TOTAL_BEATS - 1}
+              className="px-3 py-1.5 border-[1.5px] border-foreground/40 bg-card text-foreground text-xs uppercase tracking-[0.05em] hover:bg-secondary transition-colors disabled:opacity-40 disabled:cursor-default disabled:hover:bg-card"
+            >
+              Next →
             </button>
             <button
               onClick={reset}
@@ -489,7 +464,7 @@ export function PeelPrimerDiagram() {
             >
               Reset
             </button>
-            <StepButtonsGrouped step={step} setStep={setStep} setPlaying={setPlaying} />
+            <StepButtonsGrouped step={step} setStep={setStep} />
           </div>
         </div>
       </div>
@@ -534,7 +509,7 @@ function HopTrack({ state }: { state: PeelState }) {
               top: 22,
               left: `calc(${NODE_X_PCT[a]}% + 28px)`,
               width: `calc(${NODE_X_PCT[b] - NODE_X_PCT[a]}% - 56px)`,
-              borderTop: "1.5px dashed #94a3b8",
+              borderTop: "1.5px dashed #475569",
             }}
           />
         );
@@ -941,7 +916,7 @@ function PacketOuterHmacCell({ config }: { config: PacketConfig }) {
   const flag =
     outer.kind === "zero"
       ? "(zeros)"
-      : `→ ${HOP_LABEL[outer.hop as ForwarderId]}`;
+      : `for ${HOP_LABEL[outer.hop as ForwarderId]}`;
   const annotation = outer.kind === "hop" ? outer.annotation : undefined;
   const isFocus = config.highlightOuter || config.markHmacTarget;
   const isDimmed =
@@ -1156,44 +1131,6 @@ function PaddingRegion({
   );
 }
 
-// Per-layer light shading + bold colored stripes, matching the wrap-primer
-// diagram. Three different stripe directions (Bob vertical, Charlie
-// diagonal, Dave horizontal) so stacked layers visibly cross over.
-function HatchOverlay({ hops }: { hops: ForwarderId[] }) {
-  return (
-    <>
-      {hops.map((hop) => {
-        const stroke = HOP_STROKE[hop];
-        const angle = LAYER_ANGLES[hop];
-        return (
-          <div
-            key={hop}
-            className="absolute inset-0 pointer-events-none"
-            style={{ zIndex: 4 }}
-          >
-            <div
-              className="absolute inset-0"
-              style={{
-                background: stroke,
-                opacity: 0.08,
-                transition: "opacity 600ms ease-out",
-              }}
-            />
-            <div
-              className="absolute inset-0"
-              style={{
-                backgroundImage: `repeating-linear-gradient(${angle}deg, ${stroke} 0px, ${stroke} 2.5px, transparent 2.5px, transparent 11px)`,
-                opacity: 0.6,
-                transition: "opacity 600ms ease-out",
-              }}
-            />
-          </div>
-        );
-      })}
-    </>
-  );
-}
-
 // The keystream operand for a DECRYPT sub-step: a full hatched bar in the
 // peeling hop's angle, with the chacha20 call as its label, XORed into the
 // live buffer below it. Same grammar as the wrap/peel trace XOR stacks.
@@ -1262,9 +1199,9 @@ function DestinationPanel() {
           marginInline: "auto",
         }}
       >
-        Dave reads the hop payload at the front of his decrypted payload. The hop payload's HMAC field is{" "}
+        Dave reads the hop payload at the front of his decrypted payload. Its HMAC field is{" "}
         <code style={{ fontFamily: MONO }}>0x00…</code>{" "}
-        (32 zero bytes), the universal "you're the destination" signal. Dave verifies the payment hash matches what he was expecting and claims the funds. There's no next-hop HMAC to extract and no packet to forward.
+        (32 zero bytes), the universal "you're the destination" signal. So Dave checks that the payment hash is the one he was expecting and claims the funds. There's no next-hop HMAC to pull out and no packet to forward.
       </div>
     </div>
   );
@@ -1536,7 +1473,7 @@ function HmacChainIndicator({ state }: { state: PeelState }) {
 // code (monospace, light background, subtle border). Caption sources use
 // `\`identifier\`` for code spans, e.g., `\`hop_payloads\``.
 function renderCaptionWithCode(text: string) {
-  const parts = text.split(/(`[^`]+`)/g);
+  const parts = text.split(/(`[^`]+`|\*[^*]+\*)/g);
   return parts.map((part, i) => {
     if (part.startsWith("`") && part.endsWith("`") && part.length >= 2) {
       return (
@@ -1556,6 +1493,9 @@ function renderCaptionWithCode(text: string) {
         </code>
       );
     }
+    if (part.startsWith("*") && part.endsWith("*") && part.length >= 2) {
+      return <em key={i}>{part.slice(1, -1)}</em>;
+    }
     return <span key={i}>{part}</span>;
   });
 }
@@ -1565,13 +1505,11 @@ function renderCaptionWithCode(text: string) {
 interface StepButtonsGroupedProps {
   step: number;
   setStep: (n: number) => void;
-  setPlaying: (b: boolean) => void;
 }
 
 function StepButtonsGrouped({
   step,
   setStep,
-  setPlaying,
 }: StepButtonsGroupedProps) {
   const groups: Array<{
     label: string;
@@ -1623,7 +1561,6 @@ function StepButtonsGrouped({
               <button
                 key={i}
                 onClick={() => {
-                  setPlaying(false);
                   setStep(i);
                 }}
                 className="w-7 h-7 border-[1.5px] text-xs font-bold transition-colors"

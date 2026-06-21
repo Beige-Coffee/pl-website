@@ -1,10 +1,10 @@
 // ─── Onion Routing Exercise Groups ──────────────────────────────────────────
 //
 // Groups the 10 onion-routing exercises into 4 logical Python "files":
-//   1. crypto/keys.py         — derive_keys (KeyMaterial dataclass)
-//   2. sphinx/builder.py      — OnionPacketBuilder class
-//   3. sphinx/forwarder.py    — OnionForwarder class
-//   4. sphinx/errors.py       — build_error_onion, decrypt_error_onion
+//   1. crypto/keys.py         - derive_keys (KeyMaterial dataclass)
+//   2. sphinx/builder.py      - OnionPacketBuilder class
+//   3. sphinx/forwarder.py    - OnionForwarder class
+//   4. sphinx/errors.py       - build_error_onion, decrypt_error_onion
 //
 // Cross-group dependencies forward the student's solutions:
 //   - sphinx/builder.py uses derive_keys from crypto/keys.py

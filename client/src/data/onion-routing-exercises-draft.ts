@@ -89,7 +89,7 @@ export const ONION_ROUTING_EXERCISES_DRAFT: Record<string, CodeExerciseData> = {
     title: "Derive the Per-Hop Keys",
     description:
       "Implement <code>derive_keys(shared_secret) -> KeyMaterial</code>. Given a 32-byte secret, return the named keys (<code>rho</code>, <code>mu</code>, <code>um</code>, <code>pad</code>, <code>ammag</code>) defined by BOLT 4's key-generation function. " +
-      "Each key is computed as <code>HMAC-SHA256(key=ASCII label, msg=secret)</code> and is exactly 32 bytes long. In packet construction, <code>rho</code>, <code>mu</code>, <code>um</code>, and <code>ammag</code> are derived from each hop's shared secret, while <code>pad</code> is derived from Alice's session key. The <code>KeyMaterial</code> dataclass is included at the top of the starter code as a small named container; leave it as is.",
+      "Each key is computed as <code>HMAC-SHA256(key=ASCII label, msg=secret)</code> and is exactly 32 bytes long. In packet construction, <code>rho</code>, <code>mu</code>, <code>um</code>, and <code>ammag</code> are derived from each hop's shared secret, while <code>pad</code> is derived from Alice's session key. The <code>KeyMaterial</code> dataclass is included at the top of the starter code as a small named container.",
     starterCode: `import hmac, hashlib
 from dataclasses import dataclass
 
@@ -163,23 +163,25 @@ def test_different_secrets_produce_different_keys():
         "<strong>Goal:</strong> map one 32-byte secret to five 32-byte keys, each tagged with a different ASCII label." +
         "<br><br><strong>Why HMAC:</strong> HMAC-SHA256 acts as a pseudorandom function: changing either input (key OR message) gives an output that looks statistically uncorrelated with the original. So HMAC(b'rho', ss) and HMAC(b'mu', ss) are independent-looking even though they share the same ss." +
         "<br><br><strong>Where pad fits:</strong> <code>rho</code>, <code>mu</code>, <code>um</code>, and <code>ammag</code> are per-hop keys derived from each hop's shared secret. <code>pad</code> uses the same key-generation function, but the packet builder calls it with Alice's session key to initialize the empty buffer. BOLT 4 also defines an optional attribution-data key, <code>ammagext</code>; this tutorial scopes that extension out." +
-        "<br><br><strong>Argument order matters:</strong> the BOLT 4 construction puts the label as the HMAC key and the shared secret as the message. <code>hmac.new(key, msg, digestmod)</code> takes them in that order.",
+        "<br><br><strong>Argument order matters:</strong> the BOLT 4 construction puts the label as the HMAC key and the shared secret as the message. <code>hmac.new(key, msg, digestmod)</code> takes them in that order." +
+        "<br><br><strong>What you return (<code>KeyMaterial</code>):</strong> it's a Python <code>@dataclass</code>, which is just a lightweight named record. It's already defined for you in the starter code with five <code>bytes</code> fields, so you don't define it yourself; you only construct one. You build a dataclass by calling it like a function and passing each field by name:" +
+        "<br><code>KeyMaterial(rho=..., mu=..., um=..., pad=..., ammag=...)</code>",
       steps:
         "<strong>Imports already done:</strong> hmac, hashlib, and the KeyMaterial dataclass are in scope." +
         "<br><br>For each of the five labels (rho, mu, um, pad, ammag):" +
         "<br>1. Encode the label to bytes: <code>b\"rho\"</code> etc." +
         "<br>2. Compute <code>hmac.new(label_bytes, shared_secret, hashlib.sha256).digest()</code>." +
-        "<br><br>Pack the five 32-byte values into a KeyMaterial(rho=..., mu=..., ...) and return it.",
+        "<br><br><strong>Return a <code>KeyMaterial</code>:</strong> it's a <code>@dataclass</code> (already defined in the starter code), so you construct one by calling it like a function with one keyword argument per field, then return it:" +
+        "<br><code>return KeyMaterial(rho=..., mu=..., um=..., pad=..., ammag=...)</code>" +
+        "<br>Fill each <code>...</code> with its matching <code>hmac.new(...).digest()</code> from step 2.",
       code:
         `def derive_keys(shared_secret):
-    def k(name):
-        return hmac.new(name, shared_secret, hashlib.sha256).digest()
     return KeyMaterial(
-        rho=k(b"rho"),
-        mu=k(b"mu"),
-        um=k(b"um"),
-        pad=k(b"pad"),
-        ammag=k(b"ammag"),
+        rho=hmac.new(b"rho", shared_secret, hashlib.sha256).digest(),
+        mu=hmac.new(b"mu", shared_secret, hashlib.sha256).digest(),
+        um=hmac.new(b"um", shared_secret, hashlib.sha256).digest(),
+        pad=hmac.new(b"pad", shared_secret, hashlib.sha256).digest(),
+        ammag=hmac.new(b"ammag", shared_secret, hashlib.sha256).digest(),
     )`,
     },
     rewardSats: 30,
@@ -308,7 +310,8 @@ ${BOLT4_ONION_VECTOR_TEST_FIXTURES}
 # official 5-hop test route fails with incorrect_or_unknown_payment_details
 # (carrying a 300-byte TLV), pads failuremsg + pad to 1,024 bytes, and every
 # hop re-wraps with its ammag on the way back. This is the exact 1,060-byte
-# blob the origin receives, as published in BOLT 4.
+# blob the origin receives. It is the historical BOLT 4 error test vector;
+# current master publishes a 292-byte vector for the same route.
 BOLT4_ERROR_PACKET = bytes.fromhex(
     "2dd2f49c1f5af0fcad371d96e8cddbdcd5096dc309c1d4e110f955926506b3c03b44c192896f45610741c85ed4074212537e0c11"
     "8d472ff3a559ae244acd9d783c65977765c5d4e00b723d00f12475aafaafff7b31c1be5a589e6e25f8da2959107206dd42bbcb43"
@@ -365,11 +368,11 @@ def test_official_bolt4_error_vector():
         "<br>3. <code>tag, payload = wrapped[:32], wrapped[32:]</code>." +
         "<br>4. <code>expected = hmac.new(um, payload, hashlib.sha256).digest()</code>." +
         "<br>5. If <code>tag == expected</code>: this is the candidate failing hop. Parse and validate the length-prefixed payload:" +
-        "<br>&nbsp;&nbsp;&nbsp;<code>failure_len = int.from_bytes(payload[0:2], 'big')</code>" +
+        "<br><code>failure_len = int.from_bytes(payload[0:2], 'big')</code>" +
         "<br>&nbsp;&nbsp;&nbsp;Reject (keep looping) if <code>2 + failure_len + 2</code> reaches past the end of the payload." +
-        "<br>&nbsp;&nbsp;&nbsp;<code>pad_len = int.from_bytes(payload[2 + failure_len:4 + failure_len], 'big')</code>" +
+        "<br><code>pad_len = int.from_bytes(payload[2 + failure_len:4 + failure_len], 'big')</code>" +
         "<br>&nbsp;&nbsp;&nbsp;Reject (keep looping) unless <code>2 + failure_len + 2 + pad_len == len(payload)</code>, the two length fields must exactly tile the payload." +
-        "<br>&nbsp;&nbsp;&nbsp;<code>failure_msg = payload[2:2 + failure_len]</code>, then <code>return (i, failure_msg)</code>." +
+        "<br><code>failure_msg = payload[2:2 + failure_len]\nreturn (i, failure_msg)</code>" +
         "<br><br>If the loop ends with no match, return <code>(None, None)</code>.",
       code:
         `def decrypt_error_onion(wrapped_error, hop_keys):
@@ -620,10 +623,12 @@ def test_proportional_only_policy():
         "<br><br><strong>Why these exact strings:</strong> <code>fee_insufficient</code> and <code>incorrect_cltv_expiry</code> are real BOLT 4 failure codes. Returning them verbatim is what lets a real Lightning sender understand why the hop refused and re-route.",
       steps:
         "<strong>1. Required fee (BOLT 7 formula):</strong>" +
-        "<br>&nbsp;&nbsp;&nbsp;<code>required_fee = policy.fee_base_msat + (amt_to_forward * policy.fee_proportional_millionths) // 1_000_000</code>" +
+        "<br><code>required_fee = policy.fee_base_msat + (amt_to_forward * policy.fee_proportional_millionths) // 1_000_000</code>" +
         "<br>&nbsp;&nbsp;&nbsp;Use integer floor division (<code>//</code>) exactly as written; that is what the spec mandates." +
-        "<br><strong>2. Fee check:</strong> if <code>incoming_amount_msat - amt_to_forward < required_fee:</code> return <code>\"fee_insufficient\"</code>." +
-        "<br><strong>3. CLTV check:</strong> if <code>incoming_cltv_expiry - outgoing_cltv_value < policy.cltv_expiry_delta:</code> return <code>\"incorrect_cltv_expiry\"</code>." +
+        "<br><strong>2. Fee check:</strong> fail if the inbound amount minus what you forward cannot cover the required fee:" +
+        "<br><code>if incoming_amount_msat - amt_to_forward < required_fee:\n    return \"fee_insufficient\"</code>" +
+        "<br><strong>3. CLTV check:</strong> fail if the timelock delta is below the policy minimum:" +
+        "<br><code>if incoming_cltv_expiry - outgoing_cltv_value < policy.cltv_expiry_delta:\n    return \"incorrect_cltv_expiry\"</code>" +
         "<br><strong>4. Otherwise:</strong> return <code>None</code> (safe to forward)." +
         "<br><br>Check the fee first, then the CLTV, matching the order the docstring specifies.",
       code:
@@ -649,8 +654,8 @@ def test_proportional_only_policy():
     title: "Peel a Single Layer",
     description:
       "Implement <code>OnionForwarder.peel_layer</code>. Given a 1366-byte BOLT 4 onion packet and the forwarder's 32-byte node private key, return <code>(next_packet, payload_bytes, shared_secret)</code>. " +
-      "Hop payloads are bigsize-length-prefixed (as in BOLT 4); <code>parse_bigsize</code> is in scope for reading the length. " +
-      "Skip HMAC validation in this exercise; chapter 10 layers it on. Focus on the ECDH, the keystream-extended XOR, hop payload extraction, and ephemeral pubkey advancement.",
+      "Note that hop payloads are bigsize-length-prefixed (as in BOLT 4), and you can use <code>parse_bigsize</code> to read the length. " +
+      "<b>For this exercise, we'll skip HMAC validation</b>, as it will be explored in more depth in the next chapter. Instead, this exercise will focus on the ECDH, the keystream-extended XOR, hop payload extraction, and ephemeral pubkey advancement.",
     starterCode: `    def peel_layer(self, packet, node_privkey):
         """
         Args:
@@ -810,13 +815,16 @@ def test_peels_the_official_bolt4_onion():
       steps:
         "<em>Step numbers match chapter 9's walkthrough. Step 3 (HMAC verification) is chapter 10's exercise, so it's skipped here.</em>" +
         "<br><br><strong>1. Parse the packet:</strong>" +
-        "<br>&nbsp;&nbsp;&nbsp;&nbsp;<code>E_i = packet[1:34]</code>" +
-        "<br>&nbsp;&nbsp;&nbsp;&nbsp;<code>hop_payloads = packet[34:1334]</code>" +
+        "<br><code>E_i = packet[1:34]\nhop_payloads = packet[34:1334]</code>" +
         "<br><strong>2. Derive keys:</strong> ss<sub>i</sub> = ecdh(node_privkey, <i>E</i><sub>i</sub>); rho<sub>i</sub> = HMAC(b\"rho\", ss<sub>i</sub>)." +
-        "<br><strong>4. Extend, then decrypt:</strong> <code>work = hop_payloads + b\"\\x00\" * 1300</code>, then <code>work = xor_bytes(work, chacha20_keystream(rho, 2600))</code>." +
-        "<br><strong>5. Read the payload at the front:</strong> <code>length, header_len = parse_bigsize(work, 0)</code>; <code>payload = work[0:header_len + length]</code>; the hop-payload size including HMAC is <code>hop_size = header_len + length + 32</code>; <code>next_hmac = work[hop_size - 32:hop_size]</code>." +
-        "<br><strong>6. Lift the next 1,300 bytes:</strong> <code>next_hop_payloads = work[hop_size : hop_size + 1300]</code>." +
-        "<br><strong>7. Advance the ephemeral key:</strong> <code>b = SHA256(E_i + ss)</code>; <code>E_next = point_mul_pubkey(E_i, b)</code>." +
+        "<br><strong>4. Extend, then decrypt:</strong>" +
+        "<br><code>work = hop_payloads + b\"\\x00\" * 1300\nwork = xor_bytes(work, chacha20_keystream(rho, 2600))</code>" +
+        "<br><strong>5. Read the payload at the front:</strong>" +
+        "<br><code>length, header_len = parse_bigsize(work, 0)\npayload = work[0:header_len + length]\nhop_size = header_len + length + 32  # prefix + TLVs + 32-byte HMAC\nnext_hmac = work[hop_size - 32:hop_size]</code>" +
+        "<br><strong>6. Lift the next 1,300 bytes:</strong>" +
+        "<br><code>next_hop_payloads = work[hop_size : hop_size + 1300]</code>" +
+        "<br><strong>7. Advance the ephemeral key:</strong>" +
+        "<br><code>b = SHA256(E_i + ss)\nE_next = point_mul_pubkey(E_i, b)</code>" +
         "<br><strong>8. Assemble the outgoing packet:</strong> <code>b\"\\x00\" + E_next + next_hop_payloads + next_hmac</code>.",
       code:
         `    def peel_layer(self, packet, node_privkey):
@@ -862,7 +870,7 @@ def test_peels_the_official_bolt4_onion():
     title: "Wrap a Single Layer",
     description:
       "Implement <code>OnionPacketBuilder.wrap_hop</code>. Given the current 1300-byte buffer, this hop's bigsize-prefixed payload, the next-hop HMAC, this hop's <code>rho</code>/<code>mu</code> keys, and the payment's <code>associated_data</code> (32-byte <code>payment_hash</code>), produce the new buffer (after shift + write + XOR) and the HMAC computed over <code>(new_buffer || associated_data)</code> per BOLT 4.",
-    starterCode: `    def wrap_hop(self, buffer, payload, next_hmac, rho, mu, associated_data):
+    starterCode: `    def wrap_hop(self, buffer, payload, next_hmac, rho, mu, associated_data, filler=None):
         """
         Args:
           buffer:           current 1300-byte hop_payloads buffer (bytes)
@@ -874,13 +882,17 @@ def test_peels_the_official_bolt4_onion():
           mu:               this hop's 32-byte mu key
           associated_data:  32-byte payment_hash for HTLC payments
                             (BOLT 4 binds the onion to the payment via this field)
+          filler:           precomputed filler bytes, or None. Only the innermost
+                            (destination) hop gets a filler; build passes None for
+                            every forwarder. When given, overlay it onto the buffer
+                            tail BEFORE the HMAC (step 4) so the single HMAC covers it.
 
         Returns: (new_buffer, this_hop_hmac)
           new_buffer:     the rewritten + encrypted 1300-byte buffer
           this_hop_hmac:  the 32-byte tag the layer above will commit to
 
-        The moves are chapter 8's steps 1, 2, 3, and 5 for one iteration
-        (the filler overlay, step 4, happens in build, not here).
+        The moves are chapter 8's steps 1-5 for one iteration. Step 4 (the filler
+        overlay) runs only when filler is not None.
 
         Helpers in scope: chacha20_keystream(key, length), xor_bytes(a, b).
         """
@@ -891,14 +903,16 @@ def test_peels_the_official_bolt4_onion():
 
 ROUTING_INFO_SIZE = 1300
 
-def reference_wrap_hop(buffer, payload, next_hmac, rho, mu, ad):
+def reference_wrap_hop(buffer, payload, next_hmac, rho, mu, ad, filler=None):
     hop_size = len(payload) + 32
     shifted = bytearray(hop_size) + bytearray(buffer[:-hop_size])
     shifted[:hop_size] = payload + next_hmac
     stream = chacha20_keystream(rho, ROUTING_INFO_SIZE)
-    encrypted = xor_bytes(bytes(shifted), stream)
-    tag = hmac.new(mu, encrypted + ad, hashlib.sha256).digest()
-    return encrypted, tag
+    encrypted = bytearray(xor_bytes(bytes(shifted), stream))
+    if filler is not None:
+        encrypted[ROUTING_INFO_SIZE - len(filler):] = filler
+    tag = hmac.new(mu, bytes(encrypted) + ad, hashlib.sha256).digest()
+    return bytes(encrypted), tag
 
 # Test vector. Use nonzero bytes so the tests catch implementations that forget
 # to preserve the shifted inner buffer.
@@ -955,28 +969,51 @@ def test_shift_preserves_existing_inner_buffer():
     plaintext = xor_bytes(new_buf, chacha20_keystream(RHO, ROUTING_INFO_SIZE))
     hop_size = len(PAYLOAD) + 32
     assert plaintext[hop_size:] == INIT_BUFFER[:-hop_size], "Bytes after this hop's hop payload must be the shifted previous buffer"
+
+def test_filler_overlay_runs_before_hmac():
+    """Innermost hop: a filler= argument must overwrite the buffer tail, and the
+    HMAC must be computed AFTER that overlay (so it covers the filler bytes)."""
+    b = OnionPacketBuilder.__new__(OnionPacketBuilder)
+    filler = bytes((i * 7 + 3) % 256 for i in range(140))
+    new_buf, tag = b.wrap_hop(INIT_BUFFER, PAYLOAD, NEXT_HMAC, RHO, MU, PAYMENT_HASH, filler=filler)
+    assert new_buf[ROUTING_INFO_SIZE - len(filler):] == filler, "filler must overwrite the trailing len(filler) bytes"
+    ref_buf, ref_tag = reference_wrap_hop(INIT_BUFFER, PAYLOAD, NEXT_HMAC, RHO, MU, PAYMENT_HASH, filler=filler)
+    assert new_buf == ref_buf and tag == ref_tag, "filler path must match the reference"
+    _, no_filler_tag = b.wrap_hop(INIT_BUFFER, PAYLOAD, NEXT_HMAC, RHO, MU, PAYMENT_HASH)
+    assert tag != no_filler_tag, "HMAC must be computed after the overlay, so it differs from the no-filler tag"
+
+def test_no_filler_default_unchanged():
+    """Forwarder hops pass no filler; default must behave exactly as before."""
+    b = OnionPacketBuilder.__new__(OnionPacketBuilder)
+    with_default = b.wrap_hop(INIT_BUFFER, PAYLOAD, NEXT_HMAC, RHO, MU, PAYMENT_HASH)
+    explicit_none = b.wrap_hop(INIT_BUFFER, PAYLOAD, NEXT_HMAC, RHO, MU, PAYMENT_HASH, filler=None)
+    assert with_default == explicit_none, "filler=None must match the no-argument call"
 `,
     hints: {
       conceptual:
         "<strong>Goal:</strong> perform one iteration of the build loop. Take the current buffer, the new hop's data, the inner-layer HMAC, and produce a buffer that has this hop's data at the front (encrypted with rho) plus the HMAC over (new_buffer || associated_data) for use by the layer above." +
         "<br><br><strong>Hop-payload size:</strong> the bytes consumed by this hop = len(payload) + 32 (HMAC). The 'shift right' makes room for those bytes at the front by pushing existing contents back." +
-        "<br><br><strong>Why associated_data:</strong> BOLT 4 binds the onion to a specific HTLC by including the 32-byte <code>payment_hash</code> in every hop's HMAC. A forwarder receiving the onion attached to a different <code>payment_hash</code> gets a HMAC mismatch and rejects the packet. This is what stops an attacker from re-attaching a captured onion to a different payment.",
+        "<br><br><strong>Why associated_data:</strong> BOLT 4 binds the onion to a specific HTLC by including the 32-byte <code>payment_hash</code> in every hop's HMAC. A forwarder receiving the onion attached to a different <code>payment_hash</code> gets a HMAC mismatch and rejects the packet. This is what stops an attacker from re-attaching a captured onion to a different payment." +
+        "<br><br><strong>The filler (innermost hop only):</strong> the destination's call passes a <code>filler</code> argument; forwarders pass <code>None</code>. When present, overwrite the trailing <code>len(filler)</code> bytes of the encrypted buffer with it BEFORE computing the HMAC, so the one HMAC commits to it. That's the full BOLT 4 sequence for an iteration: shift, write, XOR, overlay filler, then a single HMAC. (There is no second HMAC; the filler goes in before the only one.)",
       steps:
         "<strong>1. Compute hop_size = len(payload) + 32.</strong>" +
         "<br><strong>2. Shift right:</strong> the new buffer should be <code>bytearray(hop_size) + bytearray(buffer[:-hop_size])</code>. (You'll overwrite the leading hop_size bytes immediately.)" +
         "<br><strong>3. Write the payload + next_hmac</strong> at the front: <code>new_buffer[:hop_size] = payload + next_hmac</code>." +
-        "<br><strong>4. Encrypt</strong> the whole 1300-byte buffer: XOR with <code>chacha20_keystream(rho, 1300)</code>." +
-        "<br><strong>5. HMAC</strong> the encrypted buffer concatenated with associated_data: <code>hmac.new(mu, encrypted + associated_data, hashlib.sha256).digest()</code>." +
-        "<br><strong>6. Return</strong> <code>(encrypted_buffer, hmac_tag)</code>.",
+        "<br><strong>4. Encrypt</strong> the whole 1300-byte buffer: XOR with <code>chacha20_keystream(rho, 1300)</code>. (Keep it as a <code>bytearray</code> so step 5 can patch it.)" +
+        "<br><strong>5. Overlay the filler (innermost hop only):</strong> if <code>filler is not None</code>, overwrite the tail: <code>encrypted[ROUTING_INFO_SIZE - len(filler):] = filler</code>. Do this BEFORE the HMAC so the single HMAC covers it." +
+        "<br><strong>6. HMAC</strong> the (possibly filler-patched) buffer concatenated with associated_data: <code>hmac.new(mu, bytes(encrypted) + associated_data, hashlib.sha256).digest()</code>." +
+        "<br><strong>7. Return</strong> <code>(bytes(encrypted), hmac_tag)</code>.",
       code:
-        `    def wrap_hop(self, buffer, payload, next_hmac, rho, mu, associated_data):
+        `    def wrap_hop(self, buffer, payload, next_hmac, rho, mu, associated_data, filler=None):
         hop_size = len(payload) + 32
         shifted = bytearray(hop_size) + bytearray(buffer[:-hop_size])
         shifted[:hop_size] = payload + next_hmac
         stream = chacha20_keystream(rho, ROUTING_INFO_SIZE)
-        encrypted = xor_bytes(bytes(shifted), stream)
-        tag = hmac.new(mu, encrypted + associated_data, hashlib.sha256).digest()
-        return encrypted, tag`,
+        encrypted = bytearray(xor_bytes(bytes(shifted), stream))
+        if filler is not None:                       # innermost hop only
+            encrypted[ROUTING_INFO_SIZE - len(filler):] = filler
+        tag = hmac.new(mu, bytes(encrypted) + associated_data, hashlib.sha256).digest()
+        return bytes(encrypted), tag`,
     },
     rewardSats: 75,
     group: "sphinx/builder",
@@ -988,7 +1025,7 @@ def test_shift_preserves_existing_inner_buffer():
     title: "Build the Full Onion Packet",
     description:
       "Implement <code>OnionPacketBuilder.build</code>. Given the route data already on <code>self</code> (<code>session_key</code>, <code>hop_pubkeys</code>), the per-hop bigsize-prefixed payloads, and the payment's 32-byte <code>associated_data</code> (<code>payment_hash</code>), produce the final 1366-byte BOLT 4 onion packet. " +
-      "This is the chapter's wrap loop end to end, orchestrating your <code>derive_shared_secrets</code>, <code>generate_filler</code>, and <code>wrap_hop</code>. A provided helper, <code>_derive_build_keys</code>, packages the per-hop key derivation.",
+      "This is the chapter's wrap loop end to end, wiring together the functions you already wrote: <code>derive_shared_secrets</code> (chapter 4), <code>derive_keys</code> (chapter 6), <code>generate_filler</code> (chapter 7), and <code>wrap_hop</code>. Only the elliptic-curve and ChaCha20 primitives are provided.",
     starterCode: `    def build(self, payloads, associated_data):
         """
         Build a complete 1366-byte BOLT 4 onion packet.
@@ -1003,18 +1040,23 @@ def test_shift_preserves_existing_inner_buffer():
           bytes of length 1366: version (1) || ephemeral_pubkey (33) ||
                                 hop_payloads (1300) || hmac (32)
 
-        This is the chapter's wrap loop end to end, built from your earlier
-        functions (generate_filler, wrap_hop).
+        This is the chapter's wrap loop end to end. The shared secrets are
+        already derived for you: self.shared_secrets and self.ephemeral_pubkeys
+        are populated before build runs (the harness calls derive_shared_secrets
+        first). You wire together the functions you wrote in earlier chapters:
+          derive_keys(secret)           -> KeyMaterial(rho, mu, um, pad, ammag)
+                                           for one secret (chapter 6). Call it per
+                                           hop for rho/mu, and once on
+                                           self.session_key for the pad key.
+          self.generate_filler(rho_keys, sizes) -> filler bytes (chapter 7)
+          self.wrap_hop(...)            -> one layer; pass filler= on the
+                                           innermost hop only
 
-        Provided helper, so you don't re-write chapter 6's key plumbing:
-          self._derive_build_keys(payloads)
-            -> (rho_keys, mu_keys, pad_key, sizes)
-            Per-hop rho/mu key lists, the pad key, and the per-hop sizes
-            (len(payload) + 32) that generate_filler expects. It also refreshes
-            self.shared_secrets and self.ephemeral_pubkeys by calling your
-            derive_shared_secrets.
+        Initialize the buffer with pad-key noise (not zeros) so the unused tail
+        can't reveal a short route. Wrap hops innermost-first (destination first,
+        out to the first hop). Then assemble version || E_0 || buffer || hmac.
 
-        Also in scope: chacha20_keystream(key, length), xor_bytes(a, b).
+        In scope: derive_keys, chacha20_keystream(key, length), xor_bytes(a, b).
         """
         # TODO: implement
         pass
@@ -1048,23 +1090,27 @@ PAYLOADS = [encode_bigsize(len(t)) + t for t in RAW_TLVS]
 ${BOLT4_ONION_VECTOR_TEST_FIXTURES}
 def test_returns_1366_bytes():
     b = OnionPacketBuilder(SESSION_KEY, HOP_PUBKEYS)
+    b.derive_shared_secrets()
     packet = b.build(PAYLOADS, PAYMENT_HASH)
     assert isinstance(packet, (bytes, bytearray))
     assert len(packet) == 1366, f"Expected 1366 bytes, got {len(packet)}"
 
 def test_version_byte():
     b = OnionPacketBuilder(SESSION_KEY, HOP_PUBKEYS)
+    b.derive_shared_secrets()
     packet = b.build(PAYLOADS, PAYMENT_HASH)
     assert packet[0] == 0x00, "Version byte must be 0x00"
 
 def test_ephemeral_pubkey_field():
     b = OnionPacketBuilder(SESSION_KEY, HOP_PUBKEYS)
+    b.derive_shared_secrets()
     packet = b.build(PAYLOADS, PAYMENT_HASH)
     assert packet[1:34] == b.ephemeral_pubkeys[0], "Bytes 1..34 must be E_0"
 
 def test_hmac_validates_with_assoc_data():
     """Bob's verification: HMAC-SHA256(bob_mu, hop_payloads || associated_data) must match packet.hmac."""
     b = OnionPacketBuilder(SESSION_KEY, HOP_PUBKEYS)
+    b.derive_shared_secrets()
     packet = b.build(PAYLOADS, PAYMENT_HASH)
     bob_ss = b.shared_secrets[0]
     bob_mu = hmac.new(b"mu", bob_ss, hashlib.sha256).digest()
@@ -1076,6 +1122,7 @@ def test_hmac_validates_with_assoc_data():
 def test_hmac_fails_without_assoc_data():
     """Sanity: HMAC over hop_payloads alone (without associated_data) must NOT match."""
     b = OnionPacketBuilder(SESSION_KEY, HOP_PUBKEYS)
+    b.derive_shared_secrets()
     packet = b.build(PAYLOADS, PAYMENT_HASH)
     bob_ss = b.shared_secrets[0]
     bob_mu = hmac.new(b"mu", bob_ss, hashlib.sha256).digest()
@@ -1091,12 +1138,13 @@ def test_initial_buffer_is_pad_noise_not_zeros():
             super().__init__(session_key, hop_pubkeys)
             self.first_buffer_seen = None
 
-        def wrap_hop(self, buffer, payload, next_hmac, rho, mu, associated_data):
+        def wrap_hop(self, buffer, payload, next_hmac, rho, mu, associated_data, filler=None):
             if self.first_buffer_seen is None:
                 self.first_buffer_seen = bytes(buffer)
-            return super().wrap_hop(buffer, payload, next_hmac, rho, mu, associated_data)
+            return super().wrap_hop(buffer, payload, next_hmac, rho, mu, associated_data, filler=filler)
 
     b = SpyBuilder(SESSION_KEY, HOP_PUBKEYS)
+    b.derive_shared_secrets()
     b.build(PAYLOADS, PAYMENT_HASH)
     assert b.first_buffer_seen is not None, "build must call self.wrap_hop for each hop (this test instruments it)"
     pad_key = hmac.new(b"pad", SESSION_KEY, hashlib.sha256).digest()
@@ -1104,6 +1152,7 @@ def test_initial_buffer_is_pad_noise_not_zeros():
 
 def test_matches_official_bolt4_onion_vector():
     b = OnionPacketBuilder(SESSION_KEY, BOLT4_HOP_PUBKEYS)
+    b.derive_shared_secrets()
     packet = bytes(b.build(BOLT4_PAYLOADS, PAYMENT_HASH))
     if packet != BOLT4_EXPECTED_ONION:
         n = min(len(packet), len(BOLT4_EXPECTED_ONION))
@@ -1118,6 +1167,7 @@ def test_end_to_end_peel_through_route():
     """Definitive correctness check: build a packet, peel it through every hop with HMAC validation.
     Validates initial buffer, filler placement, wrap order, and assoc_data threading all at once."""
     b = OnionPacketBuilder(SESSION_KEY, HOP_PUBKEYS)
+    b.derive_shared_secrets()
     packet = b.build(PAYLOADS, PAYMENT_HASH)
 
     # Peel hop by hop, validating HMAC at each step
@@ -1149,39 +1199,39 @@ def test_end_to_end_peel_through_route():
 `,
     hints: {
       conceptual:
-        "<strong>Goal:</strong> orchestrate the full construction. The key derivations (rho, mu, pad) and the per-hop sizes list are provided as a helper (<code>self._derive_build_keys(payloads)</code>) so you can focus on three BOLT 4-mandated details that aren't obvious from the wrap_hop primitive alone." +
-        "<br><br><strong>Detail 1 (pad-key noise):</strong> initialize the buffer with ChaCha20 keystream derived from <code>pad_key</code>. The unused trailing bytes look like random noise, not zeros. A receiver who sees zeros at the end of their decrypted hop_payloads could infer that no padding was applied (i.e., a short route)." +
-        "<br><br><strong>Detail 2 (filler post-innermost-wrap):</strong> after wrap_hop returns the buffer for the destination, OVERWRITE the trailing <code>len(filler)</code> bytes with the filler value, then RECOMPUTE the HMAC over the corrected buffer. Pre-placing filler in the initial buffer doesn't work for variable-length payloads, because the destination's right-shift drops bytes off the end and can lose filler content." +
-        "<br><br><strong>Detail 3 (associated_data in HMAC):</strong> the <code>associated_data</code> argument (32-byte <code>payment_hash</code>) is concatenated with the buffer for every HMAC. This binds the onion to the specific HTLC, preventing replay across payments.",
+        "<strong>Goal:</strong> wire together the functions you already wrote into the full construction. <code>derive_keys</code> (ch6), <code>generate_filler</code> (ch7), and <code>wrap_hop</code> all come back here; build is the integration step. The shared secrets are already on <code>self.shared_secrets</code> / <code>self.ephemeral_pubkeys</code> (the harness runs <code>derive_shared_secrets</code> before build), so build doesn't derive them. The only provided pieces are the crypto primitives (<code>chacha20_keystream</code>, <code>xor_bytes</code>, ECDH)." +
+        "<br><br><strong>Per-hop keys from your own derive_keys:</strong> for each secret already in <code>self.shared_secrets</code>, call <code>derive_keys(ss)</code> to get its <code>KeyMaterial</code> (use <code>.rho</code> and <code>.mu</code>). The pad key comes from the SESSION key, not a hop secret, so it's <code>derive_keys(self.session_key).pad</code> (same KDF, different input)." +
+        "<br><br><strong>Pad-key noise (not zeros):</strong> initialize the buffer with <code>chacha20_keystream(pad_key, 1300)</code>. A destination who sees zeros at the end of their decrypted hop_payloads could infer a short route." +
+        "<br><br><strong>Inside-out order:</strong> wrap the destination first, then each forwarder, ending with the first hop on the outside, because each hop's HMAC commits to the layer beneath it (which must already exist). Iterate with <code>reversed(...)</code>." +
+        "<br><br><strong>Filler goes through wrap_hop now:</strong> <code>wrap_hop</code> lays the filler in (before its single HMAC) on the innermost hop. You just pass <code>filler=filler</code> on the destination's wrap and <code>filler=None</code> on every forwarder. No overwrite-and-recompute in build.",
       steps:
-        "<strong>1. Pull keys + sizes:</strong> <code>rho_keys, mu_keys, pad_key, sizes = self._derive_build_keys(payloads)</code>." +
-        "<br><strong>2. Filler:</strong> <code>filler = self.generate_filler(rho_keys[:-1], sizes)</code>." +
-        "<br><strong>3. Buffer init (pad-noise):</strong> <code>buffer = bytearray(chacha20_keystream(pad_key, ROUTING_INFO_SIZE))</code>." +
-        "<br><strong>4. next_hmac:</strong> <code>b\"\\x00\" * 32</code> (destination signal)." +
-        "<br><strong>5. Reverse loop:</strong> <code>for i in range(len(payloads) - 1, -1, -1):</code> call <code>self.wrap_hop(buffer, payloads[i], next_hmac, rho_keys[i], mu_keys[i], associated_data)</code>." +
-        "<br><strong>6. On the innermost iteration only</strong> (<i>i</i> == len-1): overlay the filler and RECOMPUTE next_hmac over the corrected buffer." +
-        "<br>&nbsp;&nbsp;&nbsp;<code>buffer = bytes(buffer[:ROUTING_INFO_SIZE - len(filler)]) + filler</code>" +
-        "<br>&nbsp;&nbsp;&nbsp;<code>next_hmac = hmac.new(mu_keys[i], buffer + associated_data, hashlib.sha256).digest()</code>" +
-        "<br><strong>7. Final packet:</strong> <code>b'\\x00' + self.ephemeral_pubkeys[0] + bytes(buffer) + next_hmac</code>.",
+        "<strong>1. Per-hop keys:</strong> the shared secrets are already on <code>self.shared_secrets</code>, so derive each hop's keys: <code>keys = [derive_keys(ss) for ss in self.shared_secrets]</code>." +
+        "<br><strong>2. Filler</strong> (forwarders only, so slice off the destination): <code>filler = self.generate_filler([k.rho for k in keys[:-1]], [len(p) + 32 for p in payloads[:-1]])</code>." +
+        "<br><strong>3. Buffer init (pad-noise):</strong>" +
+        "<br><code>pad_key = derive_keys(self.session_key).pad\nbuffer = bytearray(chacha20_keystream(pad_key, ROUTING_INFO_SIZE))</code>" +
+        "<br><strong>4. next_hmac:</strong> <code>b\"\\x00\" * 32</code> (the destination's all-zero signal)." +
+        "<br><strong>5. Wrap inside-out:</strong> pair each payload with its keys, then walk them destination-first, clearing the filler after the first (innermost) wrap so it is laid in only once:" +
+        "<br><code>hops = list(zip(payloads, keys))\nfor payload, k in reversed(hops):\n    buffer, next_hmac = self.wrap_hop(\n        buffer, payload, next_hmac,\n        k.rho, k.mu, associated_data, filler=filler,\n    )\n    filler = None</code>" +
+        "<br><strong>6. Assemble:</strong> <code>b'\\x00' + self.ephemeral_pubkeys[0] + bytes(buffer) + next_hmac</code>.",
       code:
         `    def build(self, payloads, associated_data):
-        rho_keys, mu_keys, pad_key, sizes = self._derive_build_keys(payloads)
-        filler = self.generate_filler(rho_keys[:-1], sizes)
+        keys = [derive_keys(ss) for ss in self.shared_secrets]
 
+        filler = self.generate_filler(
+            [k.rho for k in keys[:-1]],
+            [len(p) + 32 for p in payloads[:-1]],
+        )
+
+        pad_key = derive_keys(self.session_key).pad
         buffer = bytearray(chacha20_keystream(pad_key, ROUTING_INFO_SIZE))
         next_hmac = b"\\x00" * 32
-        n = len(payloads)
 
-        for i in range(n - 1, -1, -1):
+        hops = list(zip(payloads, keys))
+        for payload, k in reversed(hops):
             buffer, next_hmac = self.wrap_hop(
-                buffer, payloads[i], next_hmac,
-                rho_keys[i], mu_keys[i], associated_data,
+                buffer, payload, next_hmac, k.rho, k.mu, associated_data, filler=filler,
             )
-            if i == n - 1 and filler:  # innermost: overlay filler, recompute HMAC
-                buffer = bytes(buffer[:-len(filler)]) + filler
-                next_hmac = hmac.new(
-                    mu_keys[i], buffer + associated_data, hashlib.sha256,
-                ).digest()
+            filler = None  # the filler is laid in only on the innermost (first) wrap
 
         return b"\\x00" + self.ephemeral_pubkeys[0] + bytes(buffer) + next_hmac`,
     },
@@ -1196,7 +1246,7 @@ def test_end_to_end_peel_through_route():
     description:
       "Implement <code>OnionPacketBuilder.generate_filler</code>. Given the <code>rho</code> keys and per-hop payload sizes for hops <code>0..N-2</code> (every hop except the final one), produce the filler bytes that will appear at the trailing positions of each hop's <code>hop_payloads</code> view after peeling. " +
       "This is chapter 7's filler algorithm as a single function. " +
-      "Reference: BOLT 4 'Filler Generation'. Helpers in scope: <code>chacha20_keystream</code>, <code>xor_bytes</code>.",
+      "Helpers in scope: <code>chacha20_keystream</code>, <code>xor_bytes</code>.",
     sampleCode: `# Filler construction sandbox - explore the BOLT 4 algorithm
 #
 # Filler is built one iteration at a time. Each iteration:
@@ -1352,11 +1402,12 @@ def test_matches_official_bolt4_filler():
         "<br><br><strong>Why this works:</strong> Alice can't compute filler in isolation; it has to account for what each rho<sub>i</sub> XOR will do during peeling. By simulating the hops one by one (in order from first forwarder to last forwarder), Alice builds up the cumulative effect of all those XORs in the trailing positions." +
         "<br><br><strong>Loop invariant:</strong> after iteration <i>i</i>, <code>filler</code> contains exactly what the last <code>sum(payload_sizes[:i+1])</code> bytes of hop <i>i</i>'s view of the packet would look like, given that earlier hops' rho XORs have already been applied (virtually).",
       steps:
-        "<strong>For each hop <i>i</i> in 0..len(rho_keys)-1:</strong>" +
-        "<br>1. Extend filler at the END with <code>payload_sizes[i]</code> zero bytes." +
-        "<br>2. Generate this hop's rho<sub>i</sub> keystream of length <code>ROUTING_INFO_SIZE + payload_sizes[i]</code> using <code>chacha20_keystream</code>." +
-        "<br>3. Take the trailing <code>len(filler)</code> bytes of that keystream and XOR them into <code>filler</code> using <code>xor_bytes</code>." +
-        "<br><br><strong>Return:</strong> the accumulated filler bytes. Total length = <code>sum(payload_sizes)</code>.",
+        "<strong>1. Start with an empty filler:</strong> <code>filler = b\"\"</code> (you'll grow it one hop at a time)." +
+        "<br><br><strong>2. For each hop <i>i</i> in 0..len(rho_keys)-1:</strong>" +
+        "<br>&nbsp;&nbsp;&nbsp;a. Extend filler at the END with <code>payload_sizes[i]</code> zero bytes." +
+        "<br>&nbsp;&nbsp;&nbsp;b. Generate this hop's rho<sub>i</sub> keystream of length <code>ROUTING_INFO_SIZE + payload_sizes[i]</code> using <code>chacha20_keystream</code>." +
+        "<br>&nbsp;&nbsp;&nbsp;c. Take the trailing <code>len(filler)</code> bytes of that keystream and XOR them into <code>filler</code> using <code>xor_bytes</code>." +
+        "<br><br><strong>3. Return</strong> the accumulated filler bytes. Total length = <code>sum(payload_sizes)</code>.",
       code:
         `    def generate_filler(self, rho_keys, payload_sizes):
         filler = b""
@@ -1377,15 +1428,15 @@ def test_matches_official_bolt4_filler():
     id: "exercise-derive-shared-secrets-draft",
     title: "Derive the Shared-Secret Chain",
     description:
-      "Implement <code>OnionPacketBuilder.derive_shared_secrets</code>. Given Alice's <code>session_key</code> (32 bytes) and the route's hop pubkeys (33-byte compressed each), produce the chain of <code>(ephemeral_pubkey, shared_secret)</code> pairs. " +
-      "This is chapter 4's blinding chain: one session key advanced hop by hop. " +
-      "Use the provided helpers: <code>privkey_to_pubkey</code>, <code>ecdh</code>, <code>point_mul_pubkey</code>, <code>scalar_mul</code>.",
+      "Implement <code>OnionPacketBuilder.derive_shared_secrets</code>. Given Alice's <code>session_key</code> (32 bytes) and the route's hop pubkeys (33-byte compressed each), your task is to build the session secrets and ephemeral public keys for all hops in the route. As you build them, be sure to append them to the two internal lists: <code>self.ephemeral_pubkeys</code> and <code>self.shared_secrets</code>. " +
+      "In case it's helpful, a pop-up icon can be found to the left of the 'SEND TO SANDBOX' button, which will show you a visual representation of what you need to complete with this function. " +
+      "Be sure to use the provided helpers: <code>privkey_to_pubkey</code>, <code>ecdh</code>, <code>point_mul_pubkey</code>, <code>scalar_mul</code>.",
     starterCode: `    def __init__(self, session_key: bytes, hop_pubkeys: list[bytes]):
         """
         Args:
           session_key:  32 bytes. Alice's per-payment ephemeral private key.
           hop_pubkeys:  list of 33-byte compressed node public keys, in route order.
-                        Index 0 is the first forwarder, last index is the receiver.
+                        Index 0 is the first forwarder, last index is the destination.
         """
         self.session_key = session_key
         self.hop_pubkeys = hop_pubkeys
@@ -1394,11 +1445,9 @@ def test_matches_official_bolt4_filler():
 
     def derive_shared_secrets(self):
         """
-        Walk the blinding chain and populate self.shared_secrets and
-        self.ephemeral_pubkeys. Each entry corresponds to one hop, in route order.
-
-        Start by resetting both lists to empty. The build helper calls this
-        method again later, so repeated calls must not append duplicates.
+        Walk the blinding chain and append to self.shared_secrets and
+        self.ephemeral_pubkeys (both created empty in __init__). Each entry
+        corresponds to one hop, in route order.
 
         The chain is chapter 4's third attempt (one session key, advanced by
         a blinding factor at each hop), one entry per hop.
@@ -1474,14 +1523,6 @@ def test_hops_can_recover_same_shared_secrets():
             f"Hop {i}: forwarder's ECDH(hop_priv, E_i) must match Alice's ss_i"
         )
 
-def test_repeated_call_resets_derived_state():
-    b = OnionPacketBuilder(SESSION_KEY, HOP_PUBKEYS)
-    b.derive_shared_secrets()
-    first_ss = list(b.shared_secrets)
-    first_ek = list(b.ephemeral_pubkeys)
-    b.derive_shared_secrets()
-    assert b.shared_secrets == first_ss, "derive_shared_secrets should reset, not append duplicate secrets"
-    assert b.ephemeral_pubkeys == first_ek, "derive_shared_secrets should reset, not append duplicate pubkeys"
 ${BOLT4_ONION_VECTOR_TEST_FIXTURES}
 def test_matches_official_bolt4_vector():
     """Interoperability: BOLT 4 publishes the shared secrets for its official
@@ -1493,12 +1534,11 @@ def test_matches_official_bolt4_vector():
 `,
     hints: {
       conceptual:
-        "<strong>Goal:</strong> turn one session key into a deterministic sequence of (ephemeral_pubkey, shared_secret) pairs, one per hop." +
+        "<strong>Goal:</strong> turn one session key into two parallel lists, <code>self.ephemeral_pubkeys</code> and <code>self.shared_secrets</code>, populated with one entry each per hop in route order. The method mutates those instance lists and returns <code>None</code>." +
         "<br><br><strong>Why a chain:</strong> we want a single ephemeral key (<i>E</i><sub>0</sub>) in the packet, not one per hop. Each forwarder computes the next ephemeral key on its own from public information. The chain advances by multiplying the current ephemeral private key by a 'blinding factor' derived from the current ephemeral pubkey and shared secret." +
         "<br><br><strong>Key invariant:</strong> after the loop, both Alice and the <i>i</i>-th hop must derive the same ss<sub>i</sub>. Alice does it as ecdh(<i>e</i><sub>i</sub>, hop_pubkey<sub>i</sub>); the hop does it as ecdh(hop_privkey, <i>E</i><sub>i</sub>). The math works because both sides compute the same point on the curve.",
       steps:
-        "<strong>0. Reset:</strong> set <code>self.shared_secrets</code> and <code>self.ephemeral_pubkeys</code> to fresh empty lists (the build helper calls this method again later, so it must not append duplicates)." +
-        "<br><br><strong>Initial state:</strong> <i>e</i> = session_key. This is the ephemeral private key for hop 0." +
+        "<strong>Initial state:</strong> <i>e</i> = session_key, the ephemeral private key for hop 0. Both <code>self.shared_secrets</code> and <code>self.ephemeral_pubkeys</code> are already created empty in <code>__init__</code>, so you only need to append to them." +
         "<br><br><strong>For each hop <i>i</i>:</strong>" +
         "<br>1. Compute the ephemeral pubkey <i>E</i><sub>i</sub> with <code>privkey_to_pubkey(e)</code>. Append it to <code>self.ephemeral_pubkeys</code>." +
         "<br>2. Compute the shared secret ss<sub>i</sub> with <code>ecdh(e, hop_pubkey_i)</code>. Append it to <code>self.shared_secrets</code>." +
@@ -1513,8 +1553,6 @@ def test_matches_official_bolt4_vector():
         self.ephemeral_pubkeys = []
 
     def derive_shared_secrets(self):
-        self.shared_secrets = []
-        self.ephemeral_pubkeys = []
         e = self.session_key
         for hop_pubkey in self.hop_pubkeys:
             E = privkey_to_pubkey(e)

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Tok, mathLineToSvgTspans } from "./mathTokens";
+import { renderCaption } from "./captionMarkup";
 
 // ────────────────────────────────────────────────────────────────────────────
 // KdfPipelineDiagram (DRAFT)
@@ -38,7 +39,7 @@ const KEYS: KeySpec[] = [
     use: "Stream cipher key (forward)",
     source: "perhop",
     detail:
-      "Generates a 1,300-byte ChaCha20 keystream that XORs onto the hop payload area when wrapping or peeling each layer of the onion. This is the key that actually encrypts hop instructions.",
+      "This is the one that actually encrypts. It becomes a 1,300-byte ChaCha20 keystream, XORed across the hop payload area every time a layer gets wrapped or peeled.",
   },
   {
     name: "mu",
@@ -46,7 +47,7 @@ const KEYS: KeySpec[] = [
     use: "Packet HMAC key (forward)",
     source: "perhop",
     detail:
-      "Authenticates the next layer's contents with a 32-byte HMAC tag. The forwarder verifies this HMAC first when it receives a packet; if it fails, the packet is rejected before any decryption happens.",
+      "Stamps the next layer's contents with a 32-byte HMAC tag. A forwarder checks this *first*, before it decrypts anything. If the tag doesn't match, the packet gets tossed (no point decrypting bytes someone tampered with).",
   },
   {
     name: "um",
@@ -54,7 +55,7 @@ const KEYS: KeySpec[] = [
     use: "Error HMAC key (return)",
     source: "perhop",
     detail:
-      "When this hop fails a payment, it builds an error packet authenticated with um. Alice verifies these HMACs on the return path to identify which hop failed and decode the failure code.",
+      "If this hop has to fail the payment, it signs the error packet with um. On the way back, Alice checks these HMACs to figure out *which* hop failed and read the failure code.",
   },
   {
     name: "ammag",
@@ -62,15 +63,15 @@ const KEYS: KeySpec[] = [
     use: "Stream cipher key (return)",
     source: "perhop",
     detail:
-      "ChaCha20 keystream key for error packets. Each hop wraps the error in another layer of ammag-encrypted bytes on the way back to Alice, who peels them off in order.",
+      "The return-path cipher key. Each hop wraps the error in one more layer of ammag keystream on the way back, and Alice peels them off in order.",
   },
   {
     name: "pad",
-    color: "#7b4b8a",
+    color: "#5b6b8a",
     use: "Buffer init (sender-only)",
     source: "session",
     detail:
-      "Derived once from Alice's session key (not from any per-hop shared secret). Pre-fills the 1,300-byte payload buffer with deterministic random-looking bytes before any onion layer is applied. Forwarders never compute pad.",
+      "The odd one out. Alice derives it once from her session key (not from any per-hop secret) and uses it to pre-fill the 1,300-byte buffer with random-looking bytes before any layer goes on. Forwarders never touch it.",
   },
 ];
 
@@ -84,6 +85,7 @@ const ERROR_COLOR = "#a13a3a";
 import {
   LAYER_ANGLES as SHARED_LAYER_ANGLES,
   LAYER_COLORS as SHARED_LAYER_COLORS,
+  singleHatchBackground,
 } from "./encryptionHatch";
 const LAYER_COLORS = SHARED_LAYER_COLORS;
 const LAYER_ANGLES = SHARED_LAYER_ANGLES;
@@ -243,7 +245,7 @@ function renderSources() {
         height={SESSION_SRC_H}
         rx={2}
         fill="#fffdf5"
-        stroke="#7b4b8a"
+        stroke="#5b6b8a"
         strokeWidth={1.5}
       />
       <text
@@ -546,7 +548,7 @@ function KeyDemoInline({
           color: "#0f172a",
         }}
       >
-        {spec.detail}
+        {renderCaption(spec.detail)}
       </div>
     </div>
   );
@@ -842,7 +844,6 @@ function DemoPacket({
               {hatchesVisible && !isError &&
                 (["dave", "charlie", "bob"] as ForwarderId[]).map((hop) => {
                   const c = LAYER_COLORS[hop];
-                  const angle = LAYER_ANGLES[hop];
                   const delay =
                     ["dave", "charlie", "bob"].indexOf(hop) * 200;
                   const animation = hatchSweep
@@ -861,7 +862,7 @@ function DemoPacket({
                       <div
                         className="absolute inset-0"
                         style={{
-                          backgroundImage: `repeating-linear-gradient(${angle}deg, ${c} 0px, ${c} 2.5px, transparent 2.5px, transparent 11px)`,
+                          backgroundImage: singleHatchBackground(hop),
                           opacity: 0.6,
                           animation,
                         }}
@@ -981,13 +982,13 @@ function DemoLegend({ keyName, spec }: { keyName: KeyName; spec: KeySpec }) {
   let text: string;
   switch (keyName) {
     case "rho":
-      text = "Each forwarder XORs the entire 1,300-byte payload with a ChaCha20 keystream derived from rho. Watch the encryption hatches sweep in.";
+      text = "Each forwarder XORs the entire 1,300-byte payload with a ChaCha20 keystream derived from rho. Watch the encryption layers sweep in.";
       break;
     case "mu":
       text = "Alice runs HMAC-SHA256 with mu over the encrypted payload to produce the 32-byte tag at the back of the packet. Watch the tag fill in.";
       break;
     case "ammag":
-      text = "Bob (or any failing hop) wraps the error message with a ChaCha20 keystream derived from ammag. Watch the red encryption hatch sweep in.";
+      text = "Bob (or any failing hop) wraps the error message with a ChaCha20 keystream derived from ammag. Watch the red encryption layer sweep in.";
       break;
     case "um":
       text = "Bob runs HMAC-SHA256 with um over the encrypted error to produce the return-trip tag. Watch the tag fill in.";

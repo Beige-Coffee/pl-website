@@ -32,7 +32,7 @@
 // format spec.
 // ────────────────────────────────────────────────────────────────────────────
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { HatchOverlay, type ForwarderId } from "./encryptionHatch";
 import { KeyHoverIcon, type KeyDerivationRow } from "./KeyDerivationCard";
 import { MathLine } from "./mathTokens";
@@ -47,7 +47,6 @@ import {
   NEUTRAL_TEXT,
   HOP_STROKE,
   FULL_PACKET_BYTES,
-  STEP_MS,
   BufferRegion,
   BufferHeader,
   SlotCell,
@@ -62,11 +61,6 @@ const ERROR_RED = "#a13a3a";
 const ASSOC_DATA_COLOR = "#5a7a2f";
 
 const TOTAL_BEATS = 8;
-
-// This is a decision-flow visual, not a byte trace, so its beats run a touch
-// faster than the byte-trace ceiling (STEP_MS = 2400 in WrapTraceDiagram). See
-// onion-routing-visual-standards §10.
-const BEAT_MS = Math.min(STEP_MS, 1900);
 
 // Example values for Bob's incoming HTLC and his parsed TLV. Chosen so every
 // policy check passes with a visible cushion (see CHECK beat).
@@ -93,7 +87,7 @@ const BEATS: Beat[] = [
     subLabel: "RECEIVE",
     title: "Nothing trusted yet",
     caption:
-      "Bob's upstream peer sends an `update_add_htlc`. The channel message carries the incoming HTLC fields (the amount, the `cltv_expiry`, and the `payment_hash`, which is the `associated_data`) and, nested inside it, the 1,366-byte onion. Zoom into that onion and it is just encrypted bytes: Bob can't read a single one of them yet. Earning the trust to act on them is the whole job of this chapter.",
+      "Bob's upstream peer sends him an `update_add_htlc`. The channel message carries the incoming HTLC fields (the amount, the `cltv_expiry`, and the `payment_hash`, which is the `associated_data`) and, tucked inside it, the 1,366-byte onion. Zoom into that onion and what do you get? Just encrypted bytes. Bob can't read a single one of them yet, and earning the right to act on them is the whole job of this chapter.",
   },
   {
     step: 2,
@@ -101,7 +95,7 @@ const BEATS: Beat[] = [
     subLabel: "GATE 1 · STRUCTURE",
     title: "Structure OK",
     caption:
-      "First, the easy stuff. Is the packet exactly 1,366 bytes? Is the version byte `0x00`? If either answer is no, Bob rejects right away, no decryption needed. There's no point doing any crypto on a packet that isn't even shaped right. Hover *rejects?* for the failure code, or *see fields* to expand the full packet anatomy from chapter 7.",
+      "First, the easy stuff. Is the packet exactly 1,366 bytes? Is the version byte `0x00`? If either answer is no, Bob rejects right away, no decryption needed. Why bother running crypto on a packet that isn't even *shaped* right? Hover *rejects?* for the failure code, or *see fields* to open up the full packet anatomy from chapter 7.",
   },
   {
     step: 3,
@@ -109,7 +103,7 @@ const BEATS: Beat[] = [
     subLabel: "GATE 2 · INTEGRITY",
     title: "Bytes are authentic",
     caption:
-      "The integrity gate, and it runs *before* any decryption. Bob recomputes `HMAC(mu_B, hop_payloads ‖ associated_data)` over the still-encrypted bytes and compares it to the packet's `outer_hmac`. A match means the bytes are authentic and bound to this exact HTLC (the `payment_hash` beside the HMAC is that `associated_data`). A mismatch means tampering or a re-attached onion, so Bob rejects and never lets those bytes reach his parser. The `mu_B` key was derived back in chapter 9; hover *keys* for the reminder.",
+      "Now, the integrity gate, and notice it runs *before* any decryption. Bob recomputes `HMAC(mu_B, hop_payloads ‖ associated_data)` over the still-encrypted bytes and checks it against the packet's `outer_hmac`. A match? The bytes are authentic and bound to this exact HTLC (the `payment_hash` beside the HMAC is that `associated_data`). A mismatch means tampering or a re-attached onion, so Bob rejects and never lets those bytes near his parser. He derived `mu_B` back in chapter 9, so hover *keys* for the reminder.",
   },
   {
     step: 4,
@@ -117,7 +111,7 @@ const BEATS: Beat[] = [
     subLabel: "PEEL",
     title: "Layer decrypted",
     caption:
-      "Integrity confirmed, so Bob can finally decrypt. He XORs the buffer with his `rho_B` keystream and his layer comes off: his hop payload is now plaintext at the front. This is the chapter-9 peel; the full version extends the buffer to 2,600 bytes first, and what you see here is the front 1,300 bytes of that same XOR. Hover *keys* for where `rho_B` comes from.",
+      "Integrity's confirmed, so now Bob can finally decrypt. He XORs the buffer with his `rho_B` keystream and his layer slides off, leaving his hop payload as plaintext at the front. This is the chapter-9 peel. The full version stretches the buffer to 2,600 bytes first, and what you see here is the front 1,300 bytes of that same XOR. Hover *keys* for where `rho_B` comes from.",
   },
   {
     step: 5,
@@ -125,7 +119,7 @@ const BEATS: Beat[] = [
     subLabel: "PARSE",
     title: "Fields parsed",
     caption:
-      "Bob's hop payload is plaintext now, so he can finally read his instructions. Here is the same 60-byte payload as raw data: the `1b` length prefix (bigsize for 27), the 27 bytes of TLV records, then the 32 HMAC bytes (we won't spell those out). Every record is just a type, a length, then that many bytes of value. Hover anything to decode it. The three routing records give Bob his orders (`amt_to_forward`, `outgoing_cltv_value`, `short_channel_id`), and the trailing HMAC is `charlie_hmac`, the tag Bob carries onto the packet he forwards. (The dim record up front? Type 1 is `padding`. Hover it!)",
+      "Bob's hop payload is plaintext now, so let's read his instructions. Here's that same 60-byte payload as raw data: the `1b` length prefix (bigsize for 27), the 27 bytes of TLV records, then the 32 HMAC bytes (we won't spell those out). Every record is just a type, a length, then that many bytes of value. Hover anything to decode it. The three routing records hand Bob his orders (`amt_to_forward`, `outgoing_cltv_value`, `short_channel_id`), and the trailing HMAC is `charlie_hmac`, the tag Bob carries onto the packet he forwards. (That dim record up front? Type 1 is `padding`. Hover it!)",
   },
   {
     step: 6,
@@ -133,7 +127,7 @@ const BEATS: Beat[] = [
     subLabel: "BRANCH",
     title: "Bob is a forwarder",
     caption:
-      "Which role is Bob playing? `short_channel_id` present means Bob is a *forwarder* and should send the onion onward, which is Bob's path here. `payment_data` present with no `short_channel_id` would make Bob the *destination*. Hover the branch question to see why both present, or neither, is rejected as malformed.",
+      "So, which role is Bob playing? A `short_channel_id` present means Bob is a *forwarder* and should send the onion onward, and that's his path here. A `payment_data` present with no `short_channel_id` would make Bob the *destination* instead. Hover the branch question to see why both, or neither, gets rejected as malformed.",
   },
   {
     step: 7,
@@ -141,7 +135,7 @@ const BEATS: Beat[] = [
     subLabel: "CHECK",
     title: "Fees & timelocks OK",
     caption:
-      "Bob is forwarding, so he holds the TLV's numbers up against the incoming HTLC (its amount and `cltv_expiry` are shown beside the checks). Does the incoming amount cover `amt_to_forward` plus his fee? Does the incoming `cltv_expiry` clear `outgoing_cltv_value` by at least his published delta? Is the outgoing CLTV still in the future? These are the very fees and timelocks Alice solved backward in chapter 2. Hover *rejects?* on a row for its failure code.",
+      "Bob's forwarding, so he holds the TLV's numbers up against the incoming HTLC (its amount and `cltv_expiry` sit beside the checks). Does the incoming amount cover `amt_to_forward` plus his fee? Does the incoming `cltv_expiry` clear `outgoing_cltv_value` by at least his published delta? And is the outgoing CLTV still in the future? These are the same fees and timelocks Alice worked out backward in chapter 2. Hover *rejects?* on a row for its failure code.",
   },
   {
     step: 8,
@@ -149,7 +143,7 @@ const BEATS: Beat[] = [
     subLabel: "OUTCOME",
     title: "Forward it",
     caption:
-      "Every peel ends one of exactly three ways. Bob has a `short_channel_id` and every check passed, so his outcome is forward: ship the rebuilt packet out on channel `118x2x1` with the amount and timelock his TLVs ordered. If `payment_data` had been there instead, Bob would be the destination and would deliver (settle by revealing the preimage). And if anything had failed along the way? Reject: build an error onion and send it back upstream. That's chapter 11.",
+      "Finally, every peel ends one of exactly three ways. Bob has a `short_channel_id` and every check passed, so his outcome is forward: ship the rebuilt packet out on channel `118x2x1` with the amount and timelock his TLVs ordered. Had `payment_data` been there instead, Bob would be the destination and would deliver (settle by revealing the preimage). And if anything had failed along the way? Reject: build an error onion and send it back upstream. We'll get to that in chapter 11.",
   },
 ];
 
@@ -192,27 +186,12 @@ function strippedRegions1300(): Region[] {
 
 export function ValidationFlowDiagram() {
   const [step, setStep] = useState(1);
-  const [playing, setPlaying] = useState(false);
 
-  useEffect(() => {
-    if (!playing) return;
-    if (step >= TOTAL_BEATS) {
-      setPlaying(false);
-      return;
-    }
-    const t = setTimeout(() => setStep((s) => s + 1), BEAT_MS);
-    return () => clearTimeout(t);
-  }, [playing, step]);
-
-  const play = () => {
-    if (step >= TOTAL_BEATS) setStep(1);
-    setPlaying(true);
-  };
-  const pause = () => setPlaying(false);
-  const reset = () => {
-    setStep(1);
-    setPlaying(false);
-  };
+  const atFirst = step <= 1;
+  const atLast = step >= TOTAL_BEATS;
+  const back = () => setStep((s) => Math.max(1, s - 1));
+  const next = () => setStep((s) => Math.min(TOTAL_BEATS, s + 1));
+  const reset = () => setStep(1);
 
   const beat = BEATS[step - 1];
   // Bob's-view decision loop: the framing beat (RECEIVE, nothing trusted yet)
@@ -254,10 +233,18 @@ export function ValidationFlowDiagram() {
         <div className="flex flex-col md:flex-row md:items-start md:gap-4">
           <div className="flex gap-1.5 items-center flex-wrap shrink-0">
             <button
-              onClick={playing ? pause : play}
-              className="px-3 py-1.5 border-[1.5px] border-black bg-black text-white font-bold text-xs tracking-[0.05em] uppercase hover:bg-[#b8860b] hover:border-[#b8860b] transition-colors"
+              onClick={back}
+              disabled={atFirst}
+              className="px-3 py-1.5 border-[1.5px] border-foreground/40 bg-card text-foreground text-xs uppercase tracking-[0.05em] hover:bg-secondary transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-card"
             >
-              {playing ? "❚❚ Pause" : step >= TOTAL_BEATS ? "↻ Replay" : "▶ Play"}
+              ← Back
+            </button>
+            <button
+              onClick={next}
+              disabled={atLast}
+              className="px-3 py-1.5 border-[1.5px] border-foreground/40 bg-card text-foreground text-xs uppercase tracking-[0.05em] hover:bg-secondary transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-card"
+            >
+              Next →
             </button>
             <button
               onClick={reset}
@@ -272,7 +259,6 @@ export function ValidationFlowDiagram() {
                   <button
                     key={n}
                     onClick={() => {
-                      setPlaying(false);
                       setStep(n);
                     }}
                     className="w-7 h-7 border-[1.5px] text-xs font-bold transition-colors"

@@ -1,3 +1,4 @@
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ChannelUpdateCard } from "./ChannelUpdateCard";
 import { Tooltip } from "./Tooltip";
 
@@ -79,6 +80,125 @@ export interface ComputedRouteDiagramProps {
    * Used by RouteComparisonDiagram, which provides its own wrapper header.
    */
   headerless?: boolean;
+  /**
+   * When set, an info pill in the top-right opens a stepped overlay that
+   * derives this route's fee and timeout from scratch (with the "why"),
+   * ending on this verdict line. Omit it (e.g. the fillable practice route)
+   * and no pill renders.
+   */
+  walkthrough?: { verdict: string };
+}
+
+const MONO = '"JetBrains Mono", "Fira Code", monospace';
+
+interface WalkthroughStep {
+  kicker: string;
+  body: string;
+  math?: string;
+  // data-spot key of the element this step highlights; null dims everything
+  // and centers the caption (the verdict).
+  spot: string | null;
+}
+
+// One measured spotlight: the target's rect relative to the panel, plus the
+// panel's own size (so the caption can be placed inside it).
+interface Spotlight {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  ch: number;
+  cw: number;
+}
+
+// Build the guided fee + timeout walkthrough from the route's own data, so it
+// stays in sync with what the figure shows. Each step names the element it
+// spotlights (by data-spot key). Works for any forwarder count.
+function buildWalkthrough(args: {
+  title: string;
+  invoice: RouteInvoice;
+  feeCalculations: RouteFeeCalculation[];
+  timeoutCalculations: RouteTimeoutCalculation[];
+  verdict: string;
+}): WalkthroughStep[] {
+  const { title, invoice, feeCalculations, timeoutCalculations, verdict } = args;
+  const routeName = title.split("·")[0].trim() || title;
+  const fmt = (n: number) => n.toLocaleString("en-US");
+  const steps: WalkthroughStep[] = [];
+
+  steps.push({
+    spot: "invoice",
+    kicker: "The goal",
+    body: `Alice is sizing up ${routeName}. For every hop she needs two numbers: the fee the forwarder takes, and the CLTV timeout she puts on that hop's HTLC. The invoice is her starting point, pay Dave ${fmt(invoice.amount)} sats and keep his HTLC valid at least ${invoice.minFinalCltvDelta} blocks.`,
+  });
+  steps.push({
+    spot: "cu-0",
+    kicker: "Why there's a fee",
+    body: `Each forwarder ties up its own liquidity while the payment is mid-flight, and only earns if it goes through. The fee is the carrot. Every forwarder advertises two numbers in its channel_update: a flat base_fee, plus a rate in millionths (ppm).`,
+  });
+  feeCalculations.forEach((fc, i) => {
+    const grew = fc.amount !== invoice.amount;
+    steps.push({
+      spot: `fee-${i}`,
+      kicker: `${fc.forwarderName}'s fee`,
+      body:
+        `${fc.forwarderName} takes ${fc.baseFee} flat, plus ${fmt(fc.feePpm)} ppm of the ${fmt(fc.amount)} sats passing through.` +
+        (grew
+          ? ` (Notice that's ${fmt(fc.amount)}, not ${fmt(invoice.amount)}: this hop's amount has to cover the fees of every hop after it.)`
+          : ``),
+      math: `${fc.baseFee} + (${fmt(fc.feePpm)} / 1,000,000 × ${fmt(fc.amount)}) = ${fmt(fc.total)} sats`,
+    });
+  });
+  steps.push({
+    spot: "cu-0",
+    kicker: "Why the timeout cushion",
+    body: `Now the timeouts. A forwarder has to be able to claim its incoming HTLC even if the next hop stalls or only reveals the preimage at the last second. So it demands a gap, its cltv_expiry_delta, between the HTLC it receives and the one it sends on.`,
+  });
+  const rev = timeoutCalculations.slice().reverse();
+  if (rev[0]) {
+    steps.push({
+      spot: `timeout-${timeoutCalculations.length - 1}`,
+      kicker: "Start at Dave",
+      body: `Work backward from the destination. Dave's HTLC has to stay valid until the current block height plus the invoice's min_final_cltv_expiry_delta.`,
+      math: `${rev[0].calculation} = ${rev[0].total}`,
+    });
+  }
+  rev.slice(1).forEach((tc, k) => {
+    const origIdx = timeoutCalculations.length - 2 - k;
+    const inside = tc.label.match(/\(([^)]+)\)/);
+    steps.push({
+      spot: `timeout-${origIdx}`,
+      kicker: inside ? inside[1] : tc.label,
+      body: `Step back one hop. The incoming HTLC has to expire later than the outgoing one by that forwarder's cltv_expiry_delta, so we stack it on top.`,
+      math: `${tc.calculation} = ${tc.total}`,
+    });
+  });
+  steps.push({ spot: null, kicker: "The verdict", body: verdict });
+  return steps;
+}
+
+// Place the caption below the spotlit element if there's room, else above;
+// centered when there's no target (the verdict).
+function popoverStyle(spot: Spotlight | null): React.CSSProperties {
+  const POP_W = 320;
+  const MARGIN = 12;
+  const EST_H = 200;
+  if (!spot) return { left: 8, top: 8, width: POP_W };
+  if (spot.width === 0) {
+    return {
+      left: Math.max(8, (spot.cw - POP_W) / 2),
+      top: Math.max(8, spot.ch / 2 - 110),
+      width: POP_W,
+    };
+  }
+  const left = Math.max(
+    8,
+    Math.min(spot.cw - POP_W - 8, spot.left + spot.width / 2 - POP_W / 2),
+  );
+  const below = spot.top + spot.height + EST_H + MARGIN <= spot.ch;
+  return below
+    ? { left, top: spot.top + spot.height + MARGIN, width: POP_W }
+    : { left, bottom: spot.ch - spot.top + MARGIN, width: POP_W };
 }
 
 function truncateProductLabel(s: string, max = 28): string {
@@ -97,7 +217,62 @@ export function ComputedRouteDiagram({
   feeCalculations,
   timeoutCalculations,
   headerless,
+  walkthrough,
 }: ComputedRouteDiagramProps) {
+  const [wtOpen, setWtOpen] = useState(false);
+  const [wtStep, setWtStep] = useState(0);
+  const wtSteps = useMemo(
+    () =>
+      walkthrough && invoice
+        ? buildWalkthrough({
+            title,
+            invoice,
+            feeCalculations,
+            timeoutCalculations,
+            verdict: walkthrough.verdict,
+          })
+        : [],
+    [walkthrough, invoice, title, feeCalculations, timeoutCalculations],
+  );
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [spot, setSpot] = useState<Spotlight | null>(null);
+
+  // Measure the current step's spotlight target (relative to the panel) on
+  // open and on every step change, so the highlight + caption slide to it.
+  useLayoutEffect(() => {
+    if (!wtOpen) {
+      setSpot(null);
+      return;
+    }
+    const measure = () => {
+      const c = containerRef.current;
+      if (!c) return;
+      const cr = c.getBoundingClientRect();
+      const base = { ch: cr.height, cw: cr.width };
+      const key = wtSteps[wtStep]?.spot;
+      const el = key ? c.querySelector(`[data-spot="${key}"]`) : null;
+      if (!el) {
+        setSpot({ left: 0, top: 0, width: 0, height: 0, ...base });
+        return;
+      }
+      const tr = el.getBoundingClientRect();
+      setSpot({
+        left: tr.left - cr.left,
+        top: tr.top - cr.top,
+        width: tr.width,
+        height: tr.height,
+        ...base,
+      });
+    };
+    measure();
+    const raf = requestAnimationFrame(measure);
+    window.addEventListener("resize", measure);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", measure);
+    };
+  }, [wtOpen, wtStep, wtSteps]);
+
   const NODE_DIAMETER = 60;
   const SEGMENT_WIDTH = 220; // horizontal distance between adjacent node centers
   const LEFT_GUTTER = 40;    // small gutter on the left now that wallet is gone
@@ -119,14 +294,173 @@ export function ComputedRouteDiagram({
 
   return (
     <div
+      ref={containerRef}
       className={
         headerless
-          ? "border-foreground/40 bg-card overflow-hidden"
-          : "my-8 border-[1.5px] border-foreground/40 bg-card overflow-hidden"
+          ? "relative border-foreground/40 bg-card overflow-hidden"
+          : "relative my-8 border-[1.5px] border-foreground/40 bg-card overflow-hidden"
       }
       data-testid="computed-route-diagram"
       style={{ fontFamily: "ui-sans-serif, system-ui, sans-serif" }}
     >
+      {/* Walkthrough: an info pill (top-right) opens a stepped overlay that
+          derives this route's fee and timeout from scratch, with the "why".
+          Only renders when the caller supplies walkthrough copy. */}
+      {walkthrough && invoice && wtSteps.length > 0 && (
+        <>
+          <button
+            type="button"
+            onClick={() => {
+              setWtStep(0);
+              setWtOpen(true);
+            }}
+            className="absolute z-10 flex items-center gap-1 border-[1.5px] px-2 py-1 text-[10px] font-bold uppercase tracking-[0.06em]"
+            style={{
+              top: 8,
+              right: 8,
+              borderColor: AMBER,
+              background: "#fffdf5",
+              color: AMBER,
+              cursor: "pointer",
+              fontFamily: MONO,
+            }}
+            aria-label="Walk through how this route's fee and timeout are computed"
+          >
+            ⓘ Walk me through it
+          </button>
+
+          {wtOpen && (
+            <>
+              {/* Spotlight: a gold ring on the element being described, with a
+                  huge box-shadow that dims everything else in the panel. It
+                  slides to each target as you step. When a step has no target
+                  (the verdict), dim the whole panel instead. */}
+              {spot && spot.width > 0 ? (
+                <div
+                  className="absolute z-20 pointer-events-none"
+                  style={{
+                    left: spot.left - 6,
+                    top: spot.top - 6,
+                    width: spot.width + 12,
+                    height: spot.height + 12,
+                    border: `2px solid ${AMBER}`,
+                    borderRadius: 4,
+                    boxShadow: "0 0 0 9999px rgba(15,23,42,0.55)",
+                    transition:
+                      "left 280ms ease, top 280ms ease, width 280ms ease, height 280ms ease",
+                  }}
+                />
+              ) : (
+                <div
+                  className="absolute inset-0 z-20 pointer-events-none"
+                  style={{ background: "rgba(15,23,42,0.55)" }}
+                />
+              )}
+
+              {/* The moving caption. */}
+              <div
+                className="absolute z-30 border-[1.5px] flex flex-col"
+                style={{
+                  ...popoverStyle(spot),
+                  borderColor: INK,
+                  background: "#fffdf5",
+                  boxShadow: "0 8px 24px rgba(0,0,0,0.28)",
+                  transition: "left 280ms ease, top 280ms ease, bottom 280ms ease",
+                }}
+              >
+                <div className="px-3.5 py-3">
+                  <div
+                    className="text-[10px] font-bold uppercase tracking-[0.08em] mb-1.5"
+                    style={{ color: AMBER }}
+                  >
+                    {wtSteps[wtStep].kicker}
+                  </div>
+                  <div className="text-[12.5px] leading-relaxed" style={{ color: INK }}>
+                    {wtSteps[wtStep].body}
+                  </div>
+                  {wtSteps[wtStep].math && (
+                    <div
+                      className="mt-2.5 px-2.5 py-1.5 border-[1.5px] tabular-nums"
+                      style={{
+                        borderColor: AMBER,
+                        background: AMBER_FILL,
+                        color: INK,
+                        fontFamily: MONO,
+                        fontSize: 12,
+                        fontWeight: 700,
+                      }}
+                    >
+                      {wtSteps[wtStep].math}
+                    </div>
+                  )}
+                </div>
+
+                <div
+                  className="flex items-center justify-between px-3 py-2 border-t-[1px]"
+                  style={{ borderColor: "rgba(15,23,42,0.15)" }}
+                >
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setWtOpen(false)}
+                      className="text-[10px] uppercase tracking-[0.06em]"
+                      style={{ color: SLATE, cursor: "pointer", fontFamily: MONO }}
+                    >
+                      Skip
+                    </button>
+                    <div className="flex items-center gap-1">
+                      {wtSteps.map((_, i) => (
+                        <span
+                          key={i}
+                          style={{
+                            width: 5,
+                            height: 5,
+                            borderRadius: 9,
+                            background:
+                              i === wtStep ? AMBER : "rgba(15,23,42,0.2)",
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex gap-1.5">
+                    {wtStep > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setWtStep((s) => Math.max(0, s - 1))}
+                        className="border-[1.5px] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.05em]"
+                        style={{ borderColor: INK, background: "#fffdf5", color: INK, cursor: "pointer" }}
+                      >
+                        ← Back
+                      </button>
+                    )}
+                    {wtStep < wtSteps.length - 1 ? (
+                      <button
+                        type="button"
+                        onClick={() => setWtStep((s) => Math.min(wtSteps.length - 1, s + 1))}
+                        className="border-[1.5px] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.05em]"
+                        style={{ borderColor: INK, background: INK, color: "#fffdf5", cursor: "pointer" }}
+                      >
+                        Next →
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setWtOpen(false)}
+                        className="border-[1.5px] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.05em]"
+                        style={{ borderColor: AMBER, background: AMBER, color: "#fffdf5", cursor: "pointer" }}
+                      >
+                        Done
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </>
+      )}
+
       {/* Black header (hidden when wrapped in RouteComparisonDiagram) */}
       {!headerless && (
         <div className="bg-black text-white px-4 py-2 flex items-center justify-between">
@@ -151,6 +485,7 @@ export function ComputedRouteDiagram({
           {invoice && (
             <div className="mb-4">
               <div
+                data-spot="invoice"
                 className="border-[1.5px]"
                 style={{
                   width: 220,
@@ -201,7 +536,7 @@ export function ComputedRouteDiagram({
                       </span>
                     </div>
                   </Tooltip>
-                  <Tooltip label="The amount the receiver expects to be paid, in satoshis.">
+                  <Tooltip label="The amount the destination expects to be paid, in satoshis.">
                     <div className="mb-0.5">
                       <span style={{ color: SLATE }}>Amount: </span>
                       <span className="font-bold tabular-nums">
@@ -209,7 +544,7 @@ export function ComputedRouteDiagram({
                       </span>
                     </div>
                   </Tooltip>
-                  <Tooltip label="The minimum number of blocks the receiver requires their incoming HTLC to remain valid for after the current block height. Sets the timelock floor for the final hop.">
+                  <Tooltip label="The minimum number of blocks the destination requires their incoming HTLC to remain valid for after the current block height. Sets the timelock floor for the final hop.">
                     <div className="mb-0.5">
                       <span style={{ color: SLATE }}>min_final_cltv_expiry_delta: </span>
                       <span className="font-bold tabular-nums">
@@ -261,6 +596,7 @@ export function ComputedRouteDiagram({
               return (
                 <div
                   key={`cu-${cu.atForwarderIndex}`}
+                  data-spot={`cu-${cu.atForwarderIndex}`}
                   className="absolute"
                   style={{
                     top: 0,
@@ -365,7 +701,7 @@ export function ComputedRouteDiagram({
                 hop.role === "sender"
                   ? "Sender"
                   : hop.role === "receiver"
-                    ? "Receiver"
+                    ? "Destination"
                     : "Forwarder";
               return (
                 <div
@@ -412,14 +748,14 @@ export function ComputedRouteDiagram({
             {feeCalculations.length > 0 && (
               <CalcRow label="Fees">
                 {feeCalculations.map((fc, i) => (
-                  <FeeCalcCard key={`fc-${i}`} fc={fc} />
+                  <FeeCalcCard key={`fc-${i}`} fc={fc} spot={`fee-${i}`} />
                 ))}
               </CalcRow>
             )}
             {timeoutCalculations.length > 0 && (
               <CalcRow label="HTLC Timeout">
                 {timeoutCalculations.map((tc, i) => (
-                  <TimeoutCalcCard key={`tc-${i}`} tc={tc} />
+                  <TimeoutCalcCard key={`tc-${i}`} tc={tc} spot={`timeout-${i}`} />
                 ))}
               </CalcRow>
             )}
@@ -455,9 +791,10 @@ function CalcRow({
   );
 }
 
-function FeeCalcCard({ fc }: { fc: RouteFeeCalculation }) {
+function FeeCalcCard({ fc, spot }: { fc: RouteFeeCalculation; spot?: string }) {
   return (
     <div
+      data-spot={spot}
       className="px-3 py-2 flex-1 min-w-[420px]"
       style={{
         border: `1.5px dashed ${SLATE}`,
@@ -513,9 +850,10 @@ function FeeCalcCard({ fc }: { fc: RouteFeeCalculation }) {
   );
 }
 
-function TimeoutCalcCard({ tc }: { tc: RouteTimeoutCalculation }) {
+function TimeoutCalcCard({ tc, spot }: { tc: RouteTimeoutCalculation; spot?: string }) {
   return (
     <div
+      data-spot={spot}
       className="px-3 py-2 flex-1 min-w-[240px]"
       style={{
         border: `1.5px dashed ${SLATE}`,

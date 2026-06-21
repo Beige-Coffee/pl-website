@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useState } from "react";
 import { Tok } from "./mathTokens";
 import { SlotSubCell } from "./SlotSubCell";
 import { MorphBox, CrossfadeSwap } from "./morph";
 import { StepCaption } from "./StepCaption";
+import { KeyHoverIcon, type KeyDerivationCardProps } from "./KeyDerivationCard";
+import { LAYER_ANGLES, LAYER_COLORS, type ForwarderId } from "./encryptionHatch";
 
 // ────────────────────────────────────────────────────────────────────────────
 // OperationsLifecycleDiagram (DRAFT)
@@ -34,7 +35,6 @@ import { StepCaption } from "./StepCaption";
 const MONO = '"JetBrains Mono", "Fira Code", monospace';
 
 type HopId = "alice" | "bob" | "charlie" | "dave";
-type ForwarderId = "bob" | "charlie" | "dave";
 
 const HOP_FILL: Record<HopId, string> = {
   alice: "#fef3c7",
@@ -57,19 +57,9 @@ const HOP_LABEL: Record<HopId, string> = {
   dave: "Dave",
 };
 
-// Match PeelPrimer / WrapPrimer angles so the encryption hatches read as
-// the *same* layers across all the chapter visuals.
-const LAYER_ANGLES: Record<ForwarderId, number> = {
-  dave: 0,
-  charlie: 45,
-  bob: 90,
-};
-
-const LAYER_COLORS: Record<ForwarderId, string> = {
-  bob: "#3b6aa0",
-  charlie: "#2d7a7a",
-  dave: "#7b4b8a",
-};
+// LAYER_ANGLES / LAYER_COLORS are imported from the shared encryptionHatch
+// module so the encryption hatches read as the *same* layers across all the
+// chapter visuals.
 
 // Per-spec hop payload internals: each hop's hop payload ends with a 32-byte HMAC pointing
 // to the *next* hop's view of hop_payloads.
@@ -83,6 +73,14 @@ const HOP_PAYLOAD_BYTES: Record<ForwarderId, number> = {
   bob: 60,
   charlie: 80,
   dave: 100,
+};
+// BigSize LEN prefix shown in the len sub-cell. The length encoded is the
+// TLV-payload size (payload total minus the 33-byte HMAC), so the canonical
+// 60/80/100-byte hop payloads encode size-33 = 27/47/67 = 0x1B/0x2F/0x43.
+const HOP_LEN_BIGSIZE: Record<ForwarderId, string> = {
+  bob: "0x1B",
+  charlie: "0x2F",
+  dave: "0x43",
 };
 const NEXT_HOP_COLOR: Record<ForwarderId, string> = {
   bob: LAYER_COLORS.charlie,
@@ -105,7 +103,7 @@ function hexToRgba(hex: string, alpha: number): string {
 // PeelPrimer's `renderCaptionWithCode` so captions across the chapter
 // pick up the same code styling for protocol identifiers.
 function renderCaptionWithCode(text: string) {
-  const parts = text.split(/(`[^`]+`)/g);
+  const parts = text.split(/(`[^`]+`|\*[^*]+\*)/g);
   return parts.map((part, i) => {
     if (part.startsWith("`") && part.endsWith("`") && part.length >= 2) {
       return (
@@ -125,192 +123,79 @@ function renderCaptionWithCode(text: string) {
         </code>
       );
     }
+    if (part.startsWith("*") && part.endsWith("*") && part.length >= 2) {
+      return <em key={i}>{part.slice(1, -1)}</em>;
+    }
     return <span key={i}>{part}</span>;
   });
 }
 
-// Comprehensive hover-tooltip showing the active key's full derivation chain
-// from start to finish: session_key → ephemeral key → shared secret → key
-// (for per-hop keys), or session_key → key (for pad). Rendered via portal
-// so it isn't clipped by the diagram's overflow-x-auto wrapper.
-function KeyDerivationTooltip({
-  keyName,
-  keyToken,
-  keyColor,
-  pos,
-}: {
-  keyName: string;
-  keyToken: string;
-  keyColor: string;
-  pos: { top: number; left: number };
-}) {
-  const isSession = keyName === "pad";
-  const sessionColor = "#7b4b8a";
-  const sharedColor = "#b8860b";
-
-  // Clamp horizontally so the 360px card never spills past the viewport edge
-  // (it's centered on the trigger via translateX(-50%)).
-  const TIP_W = 360;
-  const EDGE_MARGIN = 10;
-  const clampedLeft = Math.max(
-    TIP_W / 2 + EDGE_MARGIN,
-    Math.min(window.innerWidth - TIP_W / 2 - EDGE_MARGIN, pos.left),
-  );
-
-  return (
-    <div
-      role="tooltip"
-      style={{
-        position: "fixed",
-        top: pos.top,
-        left: clampedLeft,
-        transform: "translate(-50%, -100%)",
-        background: "#fffdf5",
-        border: `1.5px solid ${keyColor}`,
-        padding: "10px 12px",
-        boxShadow: "0 6px 22px rgba(15,23,42,0.22)",
-        zIndex: 100,
-        pointerEvents: "none",
-        fontFamily: "ui-sans-serif, system-ui, sans-serif",
-        width: 360,
-      }}
-    >
-      <div
-        className="text-[10px] uppercase tracking-[0.08em] font-bold mb-2 text-center"
-        style={{ color: "#475569" }}
-      >
-        How {keyName} is derived
-      </div>
-
-      {isSession ? (
-        // ── pad: session_key → pad (no ECDH) ──
-        <div className="flex flex-col items-stretch gap-1">
-          <DerivStepBox
-            color={sessionColor}
-            note="random 32-byte secret per payment"
-          >
-            session_key
-          </DerivStepBox>
-          <DerivArrow color={keyColor} label='HMAC with "pad" label' />
-          <DerivStepBox color={keyColor} highlight>
-            <Tok token="pad" color={keyColor} />
-            {" = HMAC(\"pad\", session_key)"}
-          </DerivStepBox>
-        </div>
-      ) : (
-        // ── per-hop keys: session_key → e_AB → ss_AB → key_AB ──
-        <div className="flex flex-col items-stretch gap-1">
-          <DerivStepBox
-            color={sessionColor}
-            note="random 32-byte secret per payment"
-          >
-            session_key
-          </DerivStepBox>
-          <DerivArrow
-            color={keyColor}
-            label="Alice picks it as the first ephemeral key"
-          />
-          <DerivStepBox color={sharedColor}>
-            <Tok token="e_AB" color="#0f172a" />
-            {" = session_key"}
-          </DerivStepBox>
-          <DerivArrow
-            color={keyColor}
-            label="ECDH with Bob's node pubkey"
-          />
-          <DerivStepBox color={sharedColor}>
-            <Tok token="ss_AB" color="#0f172a" />
-            {" = SHA256("}
-            <Tok token="e_AB" color="#0f172a" />
-            {" · "}
-            <Tok token="B" color="#0f172a" />
-            {")"}
-          </DerivStepBox>
-          <DerivArrow
-            color={keyColor}
-            label={`HMAC with "${keyName}" label`}
-          />
-          <DerivStepBox color={keyColor} highlight>
-            <Tok token={keyToken} color={keyColor} />
-            {' = HMAC("'}
-            {keyName}
-            {'", '}
-            <Tok token="ss_AB" color={keyColor} />
-            {")"}
-          </DerivStepBox>
-        </div>
-      )}
-    </div>
-  );
+// Build the shared KeyHoverIcon's KeyDerivationCard props for the active
+// step's key, so the key chip's hover affordance is the canonical
+// equation-stack card (not a bespoke tooltip).
+function keyRoleTitle(keyName: string): string {
+  switch (keyName) {
+    case "rho":
+      return "Stream cipher key";
+    case "mu":
+      return "Integrity HMAC key";
+    case "um":
+      return "Error HMAC key";
+    case "ammag":
+      return "Error stream key";
+    default:
+      return "Per-hop key";
+  }
 }
 
-function DerivStepBox({
-  children,
-  color,
-  note,
-  highlight,
-}: {
-  children: React.ReactNode;
-  color: string;
-  note?: string;
-  highlight?: boolean;
-}) {
-  return (
-    <div
-      className="border-[1.5px] px-2.5 py-1.5"
-      style={{
-        borderColor: color,
-        background: highlight ? hexToRgba(color, 0.18) : hexToRgba(color, 0.07),
-        fontFamily: MONO,
-        fontSize: 11,
-        fontWeight: 700,
-        color: "#0f172a",
-        textAlign: "center",
-        lineHeight: 1.35,
-      }}
-    >
-      <div>{children}</div>
-      {note && (
-        <div
-          style={{
-            fontSize: 9,
-            fontStyle: "italic",
-            color: "#475569",
-            fontWeight: 400,
-            marginTop: 2,
-          }}
-        >
-          {note}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function DerivArrow({ label, color }: { label: string; color: string }) {
-  return (
-    <div className="flex flex-col items-center" style={{ padding: "1px 0" }}>
-      <div
-        style={{
-          fontSize: 9,
-          fontStyle: "italic",
-          color: "#475569",
-        }}
-      >
-        {label}
-      </div>
-      <div
-        style={{
-          fontSize: 14,
-          lineHeight: 0.8,
-          color,
-          fontWeight: 700,
-        }}
-      >
-        ↓
-      </div>
-    </div>
-  );
+function keyCardPropsFor(
+  keyName: string,
+  keyToken: string,
+  keyColor: string,
+): KeyDerivationCardProps {
+  if (keyName === "pad") {
+    return {
+      title: "How pad is derived",
+      source: {
+        name: "session_key",
+        subtitle: "random 32-byte secret per payment",
+        accent: "#7b4b8a",
+      },
+      rows: [
+        {
+          formula: 'HMAC("pad", session_key)',
+          keyName: keyToken,
+          bytes: "32 bytes",
+          useTitle: "Filler-init key",
+          color: keyColor,
+          active: true,
+        },
+      ],
+    };
+  }
+  return {
+    title: `How ${keyName} is derived`,
+    source: {
+      name: "ss_AB",
+      subtitle: "Alice and Bob's ECDH shared secret",
+      accent: "#b8860b",
+    },
+    upstream: {
+      inputA: { name: "e_AB", subtitle: "Alice's session key" },
+      inputB: { name: "B", subtitle: "Bob's node pubkey" },
+      formulaOverride: "SHA256(e_AB · B)",
+    },
+    rows: [
+      {
+        formula: `HMAC("${keyName}", ss_AB)`,
+        keyName: keyToken,
+        bytes: "32 bytes",
+        useTitle: keyRoleTitle(keyName),
+        color: keyColor,
+        active: true,
+      },
+    ],
+  };
 }
 
 // Single accent color shared by all 5 operation badges and the focus-ring on
@@ -367,14 +252,14 @@ const STEPS: StepState[] = [
     badgeColor: ACCENT_COLOR,
     badgeLabel: "Initialize the empty buffer",
     caption:
-      "Alice fills the empty packet's payload area with random-looking bytes before doing anything else. Without this, unused space at the back of the packet would tell observers how short the route really is.",
+      "First, before anything else, Alice fills the empty payload area with random-looking bytes. Why bother? Because empty space at the back of the packet would quietly tell observers how short the route really is.",
     keyedCaption:
-      "Alice fills the empty packet's payload area with random-looking bytes derived from `pad` before doing anything else. Without this, unused space at the back of the packet would tell observers how short the route really is.",
+      "First, before anything else, Alice fills the empty payload area with random-looking bytes from `pad`. Why bother? Because empty space at the back of the packet would quietly tell observers how short the route really is.",
     activeHop: "alice",
     focus: "payload",
     keyName: "pad",
     keyToken: "pad",
-    keyColor: "#7b4b8a",
+    keyColor: "#5b6b8a",
   },
   {
     position: "alice",
@@ -390,9 +275,9 @@ const STEPS: StepState[] = [
     badgeColor: ACCENT_COLOR,
     badgeLabel: "Encrypt the forward payload",
     caption:
-      "Alice scrambles the entire payload with a stream cipher, layering one round of encryption per hop in the route. The bytes are now ciphertext that only the right hops can unscramble.",
+      "Now Alice scrambles the whole payload with a stream cipher, adding one round of encryption for each hop on the route. The bytes are *ciphertext* now, and only the right hops can unscramble them.",
     keyedCaption:
-      "Alice scrambles the entire payload with `rho`, a `ChaCha20` keystream that layers one round of encryption per hop in the route. The bytes are now ciphertext that only the right hops can unscramble.",
+      "Now Alice scrambles the whole payload with `rho`, a `ChaCha20` keystream, adding one round of encryption for each hop on the route. The bytes are *ciphertext* now, and only the right hops can unscramble them.",
     activeHop: "alice",
     focus: "payload",
     keyName: "rho",
@@ -413,9 +298,9 @@ const STEPS: StepState[] = [
     badgeColor: ACCENT_COLOR,
     badgeLabel: "Authenticate the forward packet",
     caption:
-      "Alice computes a 32-byte authentication tag (`HMAC-SHA256`) over the payload and attaches it to the back of the packet. Each forwarder will recompute and verify this tag on receipt, before any decryption, so any tampering en route gets rejected immediately.",
+      "Next, Alice computes a 32-byte authentication tag (`HMAC-SHA256`) over the payload and sticks it on the back of the packet. Every forwarder recomputes and checks this tag the moment it arrives, before decrypting anything, so tampering en route gets caught right away.",
     keyedCaption:
-      "Alice computes a 32-byte authentication tag over the payload using `mu` and attaches it to the back of the packet. Each forwarder will recompute and verify this tag on receipt, before any decryption, so any tampering en route gets rejected immediately.",
+      "Next, Alice computes a 32-byte authentication tag over the payload with `mu` and sticks it on the back of the packet. Every forwarder recomputes and checks this tag the moment it arrives, before decrypting anything, so tampering en route gets caught right away.",
     activeHop: "alice",
     focus: "hmac",
     keyName: "mu",
@@ -436,9 +321,9 @@ const STEPS: StepState[] = [
     badgeColor: ACCENT_COLOR,
     badgeLabel: "Encrypt the return error",
     caption:
-      "Bob can't forward the payment (say his channel to Charlie is temporarily out of liquidity). He writes a small error message with the BOLT 4 failure code `temporary_channel_failure` (`0x1007`) and encrypts it with a different stream cipher.",
+      "Ouch. Bob can't forward the payment (say his channel to Charlie is out of liquidity for the moment). So he writes a short error with the BOLT 4 failure code `temporary_channel_failure` (`0x1007`) and encrypts it with a different stream cipher.",
     keyedCaption:
-      "Bob can't forward the payment (say his channel to Charlie is temporarily out of liquidity). He writes a small error message with the BOLT 4 failure code `temporary_channel_failure` (`0x1007`) and encrypts it with `ammag`.",
+      "Ouch. Bob can't forward the payment (say his channel to Charlie is out of liquidity for the moment). So he writes a short error with the BOLT 4 failure code `temporary_channel_failure` (`0x1007`) and encrypts it with `ammag`.",
     activeHop: "bob",
     focus: "payload",
     keyName: "ammag",
@@ -459,9 +344,9 @@ const STEPS: StepState[] = [
     badgeColor: ACCENT_COLOR,
     badgeLabel: "Authenticate the return error",
     caption:
-      "Bob computes a 32-byte authentication tag (`HMAC-SHA256`) over the error packet and attaches it to the back. The error packet is now sealed and ready to ship back to Alice.",
+      "Finally, Bob computes a 32-byte authentication tag (`HMAC-SHA256`) over the error packet and tacks it on the back. The error is sealed now, ready to ship back to Alice.",
     keyedCaption:
-      "Bob computes a 32-byte authentication tag over the error packet using `um` and attaches it to the back. The error packet is now sealed and ready to ship back to Alice.",
+      "Finally, Bob computes a 32-byte authentication tag over the error packet with `um` and tacks it on the back. The error is sealed now, ready to ship back to Alice.",
     activeHop: "bob",
     focus: "hmac",
     keyName: "um",
@@ -497,17 +382,17 @@ function stepDurationMs(step: number): number {
 // and Dave smaller, pushed to the right side so they read as "the rest of
 // the route, but not the focus right now."
 const HOP_X_PCT: Record<HopId, number> = {
-  alice: 14,
-  bob: 48,
-  charlie: 75,
-  dave: 90,
+  alice: 12,
+  bob: 38,
+  charlie: 62,
+  dave: 88,
 };
 
 const HOP_SIZE: Record<HopId, number> = {
   alice: 60,
   bob: 60,
-  charlie: 38,
-  dave: 38,
+  charlie: 60,
+  dave: 60,
 };
 
 function HopCircle({
@@ -832,7 +717,7 @@ function HopTrack({ state, step }: { state: StepState; step: number }) {
               width: `calc(${HOP_X_PCT[b] - HOP_X_PCT[a]}% - ${
                 aOff + bOff
               }px)`,
-              borderTop: "1.5px dashed #94a3b8",
+              borderTop: "1.5px dashed #475569",
             }}
           />
         );
@@ -861,7 +746,7 @@ function HopTrack({ state, step }: { state: StepState; step: number }) {
           key={h}
           className="absolute z-10"
           style={{
-            top: 12,
+            top: 0,
             left: `${HOP_X_PCT[h]}%`,
             transform: "translateX(-50%)",
           }}
@@ -955,26 +840,44 @@ function ForwardPayloadContents({
                   height: "100%",
                 }}
               >
-                {/* len sub-cell */}
+                {/* len sub-cell: BigSize length prefix (size-33) */}
                 <SlotSubCell
                   section="len"
                   style={{
-                    width: 22,
+                    width: 30,
                     flexShrink: 0,
                     background: fill,
                     borderRight: `1px dashed ${c}90`,
-                    fontSize: 8,
                     fontFamily: MONO,
-                    color: "#475569",
                     display: "flex",
+                    flexDirection: "column",
                     alignItems: "center",
                     justifyContent: "center",
-                    letterSpacing: "0.06em",
-                    textTransform: "uppercase",
-                    fontWeight: 700,
                   }}
                 >
-                  len
+                  <div
+                    style={{
+                      fontSize: 7,
+                      color: "#475569",
+                      letterSpacing: "0.06em",
+                      textTransform: "uppercase",
+                      fontWeight: 700,
+                      lineHeight: 1,
+                    }}
+                  >
+                    LEN
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 8.5,
+                      color: c,
+                      fontWeight: 700,
+                      marginTop: 1.5,
+                      lineHeight: 1,
+                    }}
+                  >
+                    {HOP_LEN_BIGSIZE[hop]}
+                  </div>
                 </SlotSubCell>
 
                 {/* Payload sub-cell */}
@@ -1556,57 +1459,83 @@ function PacketContainer({
   );
 }
 
+// Short "what it does" label for each key, in STEP order. Connects each of the
+// five operations to a distinct key without naming it yet (Key 1..5). Mirrors
+// the bullet list above the visual in the chapter prose.
+const KEY_ROLES = [
+  "Padding",
+  "Encrypt payload",
+  "Authenticate payload",
+  "Encrypt error",
+  "Authenticate error",
+];
+
+// A strip of the five distinct keys, one per operation. The current step's key
+// lights up (full color) while the others dim, so the reader can see which key
+// is doing the work at each step. In the unkeyed instance the keys are numbered
+// (Key 1..5); the keyed instance shows their real names.
+function KeyStrip({ step, showKeys }: { step: number; showKeys: boolean }) {
+  return (
+    <div className="mb-4">
+      <div
+        className="text-[10px] uppercase tracking-[0.08em] font-bold mb-1.5"
+        style={{ color: "#475569", fontFamily: MONO }}
+      >
+        The five keys · one per operation
+      </div>
+      <div className="grid grid-cols-5 gap-1.5">
+        {STEPS.map((s, i) => {
+          const active = i === step;
+          return (
+            <div
+              key={i}
+              className="border-[1.5px] px-1.5 py-1.5 text-center"
+              style={{
+                borderColor: s.keyColor,
+                background: active ? hexToRgba(s.keyColor, 0.16) : "#fffdf5",
+                opacity: active ? 1 : 0.4,
+                boxShadow: active
+                  ? `0 2px 10px ${hexToRgba(s.keyColor, 0.3)}`
+                  : "none",
+                transition:
+                  "opacity 300ms ease-out, background 300ms ease-out, box-shadow 300ms ease-out",
+              }}
+              data-testid={`op-key-${i}`}
+            >
+              <div
+                className="text-[11px] font-bold leading-none"
+                style={{ fontFamily: MONO, color: s.keyColor }}
+              >
+                {showKeys ? s.keyName : `Key ${i + 1}`}
+              </div>
+              <div
+                className="text-[9px] leading-tight mt-1"
+                style={{ color: "#0f172a" }}
+              >
+                {KEY_ROLES[i]}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function OperationsLifecycleDiagram({
   showKeys = false,
 }: {
   showKeys?: boolean;
 } = {}) {
   const [step, setStep] = useState(0);
-  const [playing, setPlaying] = useState(false);
-  const [tooltipPos, setTooltipPos] = useState<
-    { top: number; left: number } | null
-  >(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const chipRef = useRef<HTMLSpanElement>(null);
 
-  function showKeyTooltip() {
-    if (chipRef.current) {
-      const rect = chipRef.current.getBoundingClientRect();
-      setTooltipPos({
-        top: rect.top - 8,
-        left: rect.left + rect.width / 2,
-      });
-    }
+  function back() {
+    setStep((s) => Math.max(0, s - 1));
   }
-  function hideKeyTooltip() {
-    setTooltipPos(null);
-  }
-
-  useEffect(() => {
-    if (!playing) return;
-    timerRef.current = setTimeout(() => {
-      setStep((s) => {
-        if (s + 1 >= TOTAL_STEPS) {
-          setPlaying(false);
-          return s;
-        }
-        return s + 1;
-      });
-    }, stepDurationMs(step));
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, [playing, step]);
-
-  function play() {
-    if (step >= TOTAL_STEPS - 1) setStep(0);
-    setPlaying(true);
-  }
-  function pause() {
-    setPlaying(false);
+  function next() {
+    setStep((s) => Math.min(TOTAL_STEPS - 1, s + 1));
   }
   function reset() {
-    setPlaying(false);
     setStep(0);
   }
 
@@ -1718,6 +1647,11 @@ export function OperationsLifecycleDiagram({
           >
             <HopTrack state={current} step={step} />
 
+            {/* The five keys, one per operation. Sits between the hop track and
+                the packet so the reader connects "this step's operation" to a
+                distinct key. The active step's key lights up; the rest dim. */}
+            <KeyStrip step={step} showKeys={showKeys} />
+
             {/* Packet visual: ONE persistent step-switching container across
                 all five steps (§14 morph). The forward→error transition (step
                 3→4) morphs in place: the HEADER region collapses to 0 width,
@@ -1745,24 +1679,15 @@ export function OperationsLifecycleDiagram({
               accentColor={accentColor}
               chip={
                 showKeys ? (
-                  <span
-                    ref={chipRef}
-                    className="text-sm font-bold inline-flex"
-                    style={{
-                      color: current.keyColor,
-                      fontFamily: MONO,
-                      cursor: "help",
-                      borderBottom: `1px dotted ${current.keyColor}80`,
-                      padding: "0 2px",
-                      transition: "color 400ms ease-out",
-                    }}
+                  <KeyHoverIcon
                     key={`key-${current.keyName}`}
-                    onMouseEnter={showKeyTooltip}
-                    onMouseLeave={hideKeyTooltip}
-                    data-testid="operations-lifecycle-key-chip"
-                  >
-                    <Tok token={current.keyToken} color={current.keyColor} />
-                  </span>
+                    {...keyCardPropsFor(
+                      current.keyName,
+                      current.keyToken,
+                      current.keyColor,
+                    )}
+                    activeLabel={current.keyToken}
+                  />
                 ) : undefined
               }
             />
@@ -1774,23 +1699,30 @@ export function OperationsLifecycleDiagram({
       <div className="px-4 py-3 border-t-[1.5px] border-foreground/30 bg-card">
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex gap-1.5 items-center flex-wrap shrink-0">
-            {playing ? (
-              <button
-                onClick={pause}
-                className="px-3 py-1.5 border-[1.5px] border-black bg-black text-white font-bold text-xs tracking-[0.05em] uppercase hover:bg-[#b8860b] hover:border-[#b8860b] transition-colors"
-                data-testid="operations-lifecycle-pause"
-              >
-                ❚❚ Pause
-              </button>
-            ) : (
-              <button
-                onClick={play}
-                className="px-3 py-1.5 border-[1.5px] border-black bg-black text-white font-bold text-xs tracking-[0.05em] uppercase hover:bg-[#b8860b] hover:border-[#b8860b] transition-colors"
-                data-testid="operations-lifecycle-play"
-              >
-                ▶ Play
-              </button>
-            )}
+            <button
+              onClick={back}
+              disabled={step === 0}
+              className="px-3 py-1.5 border-[1.5px] border-black bg-transparent text-black font-bold text-xs tracking-[0.05em] uppercase hover:bg-[#b8860b] hover:text-white hover:border-[#b8860b] transition-colors"
+              style={{
+                opacity: step === 0 ? 0.4 : 1,
+                cursor: step === 0 ? "default" : "pointer",
+              }}
+              data-testid="operations-lifecycle-back"
+            >
+              ← Back
+            </button>
+            <button
+              onClick={next}
+              disabled={step === TOTAL_STEPS - 1}
+              className="px-3 py-1.5 border-[1.5px] border-black bg-transparent text-black font-bold text-xs tracking-[0.05em] uppercase hover:bg-[#b8860b] hover:text-white hover:border-[#b8860b] transition-colors"
+              style={{
+                opacity: step === TOTAL_STEPS - 1 ? 0.4 : 1,
+                cursor: step === TOTAL_STEPS - 1 ? "default" : "pointer",
+              }}
+              data-testid="operations-lifecycle-next"
+            >
+              Next →
+            </button>
             <button
               onClick={reset}
               className="px-3 py-1.5 border-[1.5px] border-black bg-transparent text-black font-bold text-xs tracking-[0.05em] uppercase hover:bg-[#b8860b] hover:text-white hover:border-[#b8860b] transition-colors"
@@ -1849,7 +1781,6 @@ export function OperationsLifecycleDiagram({
                     <button
                       key={i}
                       onClick={() => {
-                        setPlaying(false);
                         setStep(i);
                       }}
                       className="w-7 h-7 border-[1.5px] text-xs font-bold transition-colors"
@@ -1874,20 +1805,6 @@ export function OperationsLifecycleDiagram({
         </div>
       </div>
 
-      {/* Hover tooltip for the key chip, portal-mounted so it isn't clipped
-          by the diagram's overflow-x-auto wrapper. */}
-      {tooltipPos &&
-        showKeys &&
-        typeof document !== "undefined" &&
-        createPortal(
-          <KeyDerivationTooltip
-            keyName={current.keyName}
-            keyToken={current.keyToken}
-            keyColor={current.keyColor}
-            pos={tooltipPos}
-          />,
-          document.body,
-        )}
     </div>
   );
 }

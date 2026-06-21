@@ -1,6 +1,10 @@
 import { useRef, useState, type ReactNode } from "react";
 import { lookupSignature, type SignatureInfo } from "../../lib/signature-hints";
 import { SNIPPET_VAR_DOCS, type VarDoc } from "./snippetVarDocs";
+// DARK_COLOR is the dark-mode palette; the local COLOR below is the light variant.
+// (tokenizePython is duplicated here for now; the shared version lives in
+// lib/pythonHighlight.tsx and is what OnionHintContent uses.)
+import { DARK_COLOR } from "../../lib/pythonHighlight";
 
 // ────────────────────────────────────────────────────────────────────────────
 // PythonSnippet
@@ -34,6 +38,26 @@ interface Snippet {
 // ── Snippet registry ────────────────────────────────────────────────────────
 
 const SNIPPETS: Record<string, Snippet> = {
+  "route-fee-formula": {
+    python:
+      "fee = base_fee + (amount_forwarded * fee_per_millionth) // 1_000_000",
+  },
+
+  "route-fee-example": {
+    python:
+      "# base_fee = 1_000, fee_per_millionth = 500, amount_forwarded = 2_000_000\nfee = 1_000 + (2_000_000 * 500) // 1_000_000   # = 1_000 + 1_000 = 2_000 sats",
+  },
+
+  "route-timeout-formula": {
+    python:
+      "# Timeouts are computed backwards, from the destination up.\n# Final hop: the receiver's HTLC must stay valid this long.\noutgoing_cltv = current_block + min_final_cltv_expiry_delta\n\n# Each forwarder upstream adds its own cushion on top:\nincoming_cltv = outgoing_cltv + forwarder_cltv_expiry_delta",
+  },
+
+  "route-timeout-example": {
+    python:
+      "# current_block = 150, min_final_cltv_expiry_delta = 18\nhazel_to_dave  = 150 + 18       # = 168, the floor Dave's invoice sets\nalice_to_hazel = 168 + 1000     # + Hazel's cltv_expiry_delta  -> 1168",
+  },
+
   "filler-init": {
     python: 'filler = b""',
   },
@@ -92,11 +116,6 @@ const SNIPPETS: Record<string, Snippet> = {
       '# HMAC over (encrypted buffer || associated_data). The 32-byte\n# associated_data is the payment_hash; it binds the onion to one HTLC.\nthis_hop_hmac = hmac.new(mu, buffer + associated_data, hashlib.sha256).digest()',
   },
 
-  "packet-assemble": {
-    python:
-      '# After the outermost wrap, the buffer is the packet\'s hop_payloads\n# field and the final this_hop_hmac is the packet\'s outer HMAC tag.\npacket = b"\\x00" + ephemeral_pubkey + bytes(buffer) + bob_hmac\n# Total: 1 + 33 + 1300 + 32 = 1366 bytes.',
-  },
-
   // ── Chapter 9: peel algorithm ────────────────────────────────────────────
   "peel-parse": {
     python:
@@ -120,7 +139,7 @@ const SNIPPETS: Record<string, Snippet> = {
 
   "peel-read-payload": {
     python:
-      '# Parse the bigsize length prefix, then the TLV records, then the\n# 32-byte next_hmac that follows the TLVs.\n# parse_bigsize returns (value, bytes_consumed).\npayload_len, tlv_start = parse_bigsize(extended, 0)\ntlv_end = tlv_start + payload_len\nthis_hop_payload = extended[tlv_start:tlv_end]\nnext_hmac = bytes(extended[tlv_end:tlv_end + 32])\nhop_size = tlv_end + 32  # offset into the buffer where this hop ends',
+      '# Parse the bigsize length prefix, then keep the whole hop payload\n# (prefix + TLV records), then the 32-byte next_hmac that follows it.\n# parse_bigsize returns (value, bytes_consumed).\npayload_len, header_len = parse_bigsize(extended, 0)\nthis_hop_payload = extended[0:header_len + payload_len]\nhop_size = header_len + payload_len + 32  # prefix + TLVs + next_hmac\nnext_hmac = bytes(extended[hop_size - 32:hop_size])',
   },
 
   "peel-lift-next": {
@@ -236,8 +255,8 @@ function tokenizePython(code: string): Tok[] {
       continue;
     }
 
-    // numbers
-    m = rest.match(/^\d+(?:\.\d+)?/);
+    // numbers (incl. underscores and hex)
+    m = rest.match(/^0[xX][0-9a-fA-F_]+|^\d[\d_]*(?:\.\d+)?/);
     if (m) {
       out.push({ type: "number", text: m[0] });
       pos += m[0].length;
@@ -289,22 +308,27 @@ function lookupHover(t: Tok): SignatureInfo | VarDoc | null {
   return null;
 }
 
-function renderPython(code: string): ReactNode {
+function renderPython(code: string, dark: boolean): ReactNode {
+  const palette = dark ? DARK_COLOR : COLOR;
   const tokens = tokenizePython(code);
   return tokens.map((t, i) => {
-    const color = t.type === "default" ? COLOR.default : COLOR[t.type];
-    const style: React.CSSProperties = { color };
-    if (t.type === "comment") style.fontStyle = "italic";
+    const color = palette[t.type];
+    // Color is set with !important (via ref) so it survives the layered
+    // ".noise-md-dark span { color: ... !important }" rule in dark mode.
+    const setColor = (el: HTMLElement | null) => {
+      if (el) el.style.setProperty("color", color, "important");
+    };
+    const italic = t.type === "comment";
     const hover = lookupHover(t);
     if (hover) {
       return (
-        <HoverToken key={i} style={style} hover={hover}>
+        <HoverToken key={i} color={color} italic={italic} hover={hover}>
           {t.text}
         </HoverToken>
       );
     }
     return (
-      <span key={i} style={style}>
+      <span key={i} ref={setColor} style={italic ? { fontStyle: "italic" } : undefined}>
         {t.text}
       </span>
     );
@@ -319,11 +343,13 @@ function renderPython(code: string): ReactNode {
 // snippetVarDocs.ts (variables / constants).
 function HoverToken({
   children,
-  style,
+  color,
+  italic,
   hover,
 }: {
   children: ReactNode;
-  style: React.CSSProperties;
+  color: string;
+  italic?: boolean;
   hover: SignatureInfo | VarDoc;
 }) {
   const [show, setShow] = useState(false);
@@ -353,16 +379,19 @@ function HoverToken({
   return (
     <>
       <span
-        ref={triggerRef}
+        ref={(el) => {
+          triggerRef.current = el;
+          if (el) el.style.setProperty("color", color, "important");
+        }}
         onMouseEnter={() => {
           updatePos();
           setShow(true);
         }}
         onMouseLeave={() => setShow(false)}
         style={{
-          ...style,
           borderBottom: "1px dotted currentColor",
           cursor: "help",
+          ...(italic ? { fontStyle: "italic" } : {}),
         }}
       >
         {children}
@@ -439,7 +468,7 @@ function HoverToken({
 
 // ── Component ───────────────────────────────────────────────────────────────
 
-export function PythonSnippet({ id }: { id: string }) {
+export function PythonSnippet({ id, dark = false }: { id: string; dark?: boolean }) {
   const snippet = SNIPPETS[id];
   if (!snippet) {
     return (
@@ -471,11 +500,15 @@ export function PythonSnippet({ id }: { id: string }) {
           fontFamily: MONO,
           fontSize: 16,
           lineHeight: 1.55,
-          color: COLOR.default,
+          color: (dark ? DARK_COLOR : COLOR).default,
           letterSpacing: "0.005em",
         }}
       >
         <pre
+          ref={(el) => {
+            // !important beats ".noise-md pre { font-family: inherit !important }"
+            if (el) el.style.setProperty("font-family", MONO, "important");
+          }}
           style={{
             margin: 0,
             fontFamily: MONO,
@@ -485,7 +518,7 @@ export function PythonSnippet({ id }: { id: string }) {
             wordBreak: "break-word",
           }}
         >
-          {renderPython(snippet.python)}
+          {renderPython(snippet.python, dark)}
         </pre>
       </div>
     </div>

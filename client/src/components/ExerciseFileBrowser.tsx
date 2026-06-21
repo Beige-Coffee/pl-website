@@ -6,10 +6,10 @@ import { oneDark } from "@codemirror/theme-one-dark";
 import { syntaxHighlighting, defaultHighlightStyle } from "@codemirror/language";
 import { EXERCISE_GROUPS, LN_MODULE_DISPLAY_CODE, type ExerciseGroup } from "../lib/exercise-groups";
 import { NOISE_EXERCISE_GROUPS } from "../lib/noise-exercise-groups";
-import { ONION_ROUTING_EXERCISE_GROUPS } from "../lib/onion-routing-exercise-groups";
+import { ONION_ROUTING_DRAFT_EXERCISE_GROUPS } from "../lib/onion-routing-exercise-groups-draft";
 import { LIGHTNING_EXERCISES } from "../data/lightning-exercises";
 import { CODE_EXERCISES } from "../data/code-exercises";
-import { ONION_ROUTING_EXERCISES } from "../data/onion-routing-exercises";
+import { ONION_ROUTING_EXERCISES_DRAFT } from "../data/onion-routing-exercises-draft";
 import { useIsMobile } from "../hooks/use-mobile";
 
 // ─── Search highlight for CodeMirror ─────────────────────────────────────────
@@ -176,10 +176,10 @@ export default function ExerciseFileBrowser({
   const isMobile = useIsMobile();
   const isNoise = tutorialType === "noise";
   const isOnionRouting = tutorialType === "onion-routing";
-  const exerciseGroups = isOnionRouting ? ONION_ROUTING_EXERCISE_GROUPS : isNoise ? NOISE_EXERCISE_GROUPS : EXERCISE_GROUPS;
-  const exercises: Record<string, { starterCode: string }> = isOnionRouting ? ONION_ROUTING_EXERCISES : isNoise ? CODE_EXERCISES : LIGHTNING_EXERCISES;
+  const exerciseGroups = isOnionRouting ? ONION_ROUTING_DRAFT_EXERCISE_GROUPS : isNoise ? NOISE_EXERCISE_GROUPS : EXERCISE_GROUPS;
+  const exercises: Record<string, { starterCode: string }> = isOnionRouting ? ONION_ROUTING_EXERCISES_DRAFT : isNoise ? CODE_EXERCISES : LIGHTNING_EXERCISES;
   const dirOrder = useMemo(() => {
-    if (isOnionRouting) return Array.from(new Set(Object.values(ONION_ROUTING_EXERCISE_GROUPS).map(g => g.label.replace(/\.py$/, "").split("/")[0])));
+    if (isOnionRouting) return Array.from(new Set(Object.values(ONION_ROUTING_DRAFT_EXERCISE_GROUPS).map(g => g.label.replace(/\.py$/, "").split("/")[0])));
     if (isNoise) return Array.from(new Set(Object.values(NOISE_EXERCISE_GROUPS).map(g => g.label.replace(/\.py$/, "").split("/")[0])));
     return DIR_ORDER;
   }, [isNoise, isOnionRouting]);

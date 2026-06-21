@@ -4,11 +4,11 @@
 // Shared visual for "this source secret derives these keys via HMAC."
 // Used by ForwarderPeelDiagram, WrapTraceDiagram, PeelTraceDiagram,
 // ValidationFlowDiagram, the error pair (ErrorBoomerang / ErrorUnwrap), and
-// OperationsLifecycle. One component, many callsites — the look stays
+// OperationsLifecycle. One component, many callsites - the look stays
 // consistent course-wide.
 //
 // Layout (2026-06-10 redesign, user directive): the derivation is shown as the
-// math itself — a stack of left-aligned equations, one per derived value, each
+// math itself - a stack of left-aligned equations, one per derived value, each
 // with a small annotation line beneath. No chip-and-arrow pipeline; the
 // equation IS the diagram.
 //
@@ -110,7 +110,7 @@ export function KeyDerivationCard({
         fontFamily: SANS,
       }}
     >
-      {/* Header bar — accent-tinted (correct for the sub-card, §7). */}
+      {/* Header bar - accent-tinted (correct for the sub-card, §7). */}
       <div
         className="px-3 py-1.5 flex items-center gap-2"
         style={{
@@ -219,8 +219,8 @@ function EquationRow({
 //
 // Course-wide progressive-disclosure pattern: show the full KeyDerivationCard
 // once on the beat where the derivation is introduced (so the student grounds
-// where the keys come from), then on subsequent beats — where the same keys
-// are simply *used* — render this small icon instead. Hovering the icon
+// where the keys come from), then on subsequent beats - where the same keys
+// are simply *used* - render this small icon instead. Hovering the icon
 // expands the full card as a popover.
 //
 // Visual: a small gold-bordered key glyph + "keys" label. Hover produces a
@@ -340,7 +340,7 @@ export function KeyHoverIcon(
   );
 }
 
-// Inline SVG key glyph — single color, sized to match adjacent text.
+// Inline SVG key glyph - single color, sized to match adjacent text.
 function KeyGlyph(): ReactNode {
   return (
     <svg

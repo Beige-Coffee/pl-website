@@ -89,6 +89,18 @@ describe("glossary subscript specialization", () => {
     }
   });
 
+  it("gossip-message fields resolve", () => {
+    expect(def("channel_announcement")).toContain("announces a new channel");
+    expect(def("chain_hash")).toContain("which chain");
+    expect(def("timestamp")).toContain("newest update");
+    expect(def("channel_flags")).toContain("disable flag");
+    expect(def("htlc_minimum_msat")).toContain("smallest HTLC");
+    expect(def("htlc_maximum_msat")).toContain("largest single HTLC");
+    expect(def("base_fee")).toContain("fee_base_msat");
+    expect(def("ppm")).toContain("fee_proportional_millionths");
+    expect(def("fee_rate")).toContain("fee_proportional_millionths");
+  });
+
   it("specialized definitions never use em dashes", () => {
     for (const t of ["ss_AB", "ss_AC", "rho_B", "mu_C", "um_D", "ammag_B", "E_AC", "e_AD", "bf_AB", "s_B", "bob_hmac", "charlie_hmac", "dave_hmac", "failure_len", "failure_message", "pad_len", "outer_hmac", "fee_base_msat", "fee_proportional_millionths", "pad"]) {
       expect(def(t)).not.toContain("—");

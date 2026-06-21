@@ -697,15 +697,15 @@ function AliceTab(props: {
             isAnimating ? (
               <>
                 <strong style={{ color: ACTIVE_GOLD }}>Encrypting…</strong>{" "}
-                a wave sweeps left to right, XORing each plaintext byte with the keystream byte to produce the ciphertext byte below.
+                watch the wave sweep left to right, XORing each plaintext byte with its keystream byte to give the ciphertext byte below.
               </>
             ) : encrypted ? (
               <>
-                The ciphertext is on the wire; bytes look random and would be unrecoverable without the keystream. Copy and paste into the <strong style={{ color: BOB_HOP }}>Bob</strong> tab to decrypt.
+                Now the ciphertext is on the wire. Those bytes look like noise, and without the keystream you'd never get them back. Copy them and paste into the <strong style={{ color: BOB_HOP }}>Bob</strong> tab to decrypt.
               </>
             ) : (
               <>
-                You're looking at <strong style={{ color: "#0f172a" }}>plaintext</strong>: the values are readable and the bytes encode the TLV records directly. Click <strong style={{ color: "#0f172a" }}>Encrypt</strong> to XOR each byte with the rho keystream.
+                Right now you're looking at <strong style={{ color: "#0f172a" }}>plaintext</strong>, so the values are readable and the bytes encode the TLV records directly. Hit <strong style={{ color: "#0f172a" }}>Encrypt</strong> to XOR each byte with the rho keystream.
               </>
             )
           }
@@ -900,25 +900,25 @@ function BobTab(props: {
             isAnimating ? (
               <>
                 <strong style={{ color: ACTIVE_GOLD }}>Decrypting…</strong>{" "}
-                same XOR, applied to the ciphertext. The keystream cancels itself out and the plaintext re-emerges.
+                same XOR, same keystream, run against the ciphertext this time. The keystream cancels itself and the plaintext comes back.
               </>
             ) : decrypted ? (
               decoded.valid ? (
                 <>
-                  The keystream cancelled, and Bob has the original TLV bytes back. The decoded record is below.
+                  The keystream cancelled out, and Bob has the original TLV bytes again. There's the decoded record below.
                 </>
               ) : (
                 <>
-                  Bytes decrypted, but they don't decode as a valid TLV record. (The XOR worked; the source bytes weren't a real onion hop payload.)
+                  The bytes decrypted, but they don't decode as a valid TLV record. (The XOR did its job, these source bytes just weren't a real onion hop payload.)
                 </>
               )
             ) : !cipherValid ? (
               <>
-                Paste 46 hex characters above to populate the ciphertext row, then click <strong style={{ color: BOB_HOP }}>Decrypt</strong>.
+                First, paste 46 hex characters above to fill the ciphertext row, then click <strong style={{ color: BOB_HOP }}>Decrypt</strong>.
               </>
             ) : (
               <>
-                Ciphertext loaded. Click <strong style={{ color: BOB_HOP }}>Decrypt</strong> to apply the same XOR, XOR is its own inverse, so the plaintext will fall right back out.
+                Ciphertext's loaded. Click <strong style={{ color: BOB_HOP }}>Decrypt</strong> to run the same XOR. Since XOR is its own inverse, the plaintext falls right back out.
               </>
             )
           }
@@ -993,7 +993,7 @@ function BobTab(props: {
                   letterSpacing: "0.02em",
                 }}
               >
-                ✗ Decrypted bytes don't decode as a valid TLV record. The XOR ran fine; the source bytes just weren't a real Sphinx hop payload. Try Alice's ciphertext.
+                ✗ These decrypted bytes don't decode as a valid TLV record. The XOR ran fine, the source bytes just weren't a real Sphinx hop payload. Try Alice's ciphertext.
               </div>
             )}
           </div>
@@ -1163,6 +1163,7 @@ function ProtocolMessageCard({
             width: 8,
             height: 8,
             background: "#b8860b",
+            borderRadius: "50%",
             display: "inline-block",
           }}
         />

@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Tok, MathLine } from "./mathTokens";
-import { HatchOverlay, singleHatchBackground } from "./encryptionHatch";
+import { HatchOverlay } from "./encryptionHatch";
 import { MorphBox } from "./morph";
 import { StepCaption } from "./StepCaption";
 
@@ -39,14 +40,21 @@ const HOP_COLORS: Record<HopId, { stroke: string; fill: string }> = {
 };
 
 const NODE_X_PCT: Record<HopId, number> = {
-  alice: 20,
-  bob: 40,
-  charlie: 60,
-  dave: 80,
+  alice: 12,
+  bob: 38,
+  charlie: 62,
+  dave: 88,
 };
 
-// Decrypted-hop payload palette (neutral gray, deliberately not Alice's gold).
-const PROCESSED = { stroke: "#94a3b8", fill: "#f1f5f9", accent: "#475569" };
+// Focus treatment. There is no per-item color coding and no special "active"
+// accent color anymore. The active hop's packet items sit in the foreground at
+// full strength (ink border, cream fill, a soft drop shadow); every other item
+// recedes to a uniform muted gray at reduced opacity.
+const FOCUS_BORDER = "#0f172a"; // ink, foreground
+const FOCUS_BG = "#fffdf5"; // cream, foreground
+const DIM_BORDER = "#cbd5e1"; // slate-300, receded
+const DIM_BG = "#f8fafc"; // slate-50, receded
+const FOCUS_SHADOW = "0 4px 14px rgba(15,23,42,0.18)";
 
 const HOP_PAYLOADS = [
   {
@@ -56,6 +64,13 @@ const HOP_PAYLOADS = [
     pubLabel: "E_Bob",
     privLabel: "e_Bob",
     ciphertext: "c4 9a f7 8b ... 81",
+    // Plaintext revealed once this hop decrypts. Mirrors the slices in
+    // EncryptedSliceReveal so the two visuals tell a consistent story.
+    fields: [
+      { key: "next_hop", value: "Charlie" },
+      { key: "amt_to_forward", value: "10,002 sat" },
+      { key: "outgoing_cltv", value: "block 220" },
+    ],
   },
   {
     forHop: "charlie" as const,
@@ -64,6 +79,11 @@ const HOP_PAYLOADS = [
     pubLabel: "E_Charlie",
     privLabel: "e_Charlie",
     ciphertext: "7e 1b 24 a3 ... 5a",
+    fields: [
+      { key: "next_hop", value: "Dave" },
+      { key: "amt_to_forward", value: "10,000 sat" },
+      { key: "outgoing_cltv", value: "block 180" },
+    ],
   },
   {
     forHop: "dave" as const,
@@ -72,18 +92,23 @@ const HOP_PAYLOADS = [
     pubLabel: "E_Dave",
     privLabel: "e_Dave",
     ciphertext: "9f 4c 03 d7 ... 03",
+    fields: [
+      { key: "final_amt", value: "10,000 sat" },
+      { key: "final_cltv", value: "block 180" },
+      { key: "payment_hash", value: "0xa3f1...e9c4" },
+    ],
   },
 ];
 
 const TOTAL_STEPS = 6;
 
 const STEP_CAPTIONS: Record<number, string> = {
-  0: "Alice generates a fresh ephemeral keypair for every hop and packs all three pubkeys into the packet, alongside their encrypted slices. Hover the chip under Alice to see the three keypairs she has to keep around.",
-  1: "Bob receives the packet. He uses his own private key against E_Bob from his hop payload to derive ss_AB and decrypts his slice. The other two hop payloads (Charlie's and Dave's) are still in the packet and are still pubkeys he doesn't need.",
-  2: "Bob's hop payload is now processed. He forwards the packet on to Charlie. Notice the packet still carries E_Charlie and E_Dave: the structure didn't shrink, the cost didn't go away.",
-  3: "Charlie does the same with his hop payload: ECDH between his node private key and E_Charlie produces ss_AC, and Charlie decrypts his slice.",
-  4: "Charlie's hop payload is processed. The packet keeps moving with E_Dave still in it.",
-  5: "Dave finishes the route. ECDH between his node private key and E_Dave produces ss_AD and he decrypts his slice. The math worked, but every packet carried three pubkeys, and Alice had to manage three keypairs the whole time.",
+  0: "So this time, Alice makes a fresh ephemeral keypair for *every* hop, and packs all three pubkeys into the packet next to their encrypted slices. Hover the chip under Alice to see the three keypairs she's now stuck holding onto.",
+  1: "Bob gets the packet. He runs his own private key against E_Bob from his hop payload to derive ss_AB, then decrypts his slice. Charlie's and Dave's hop payloads are still riding along, and they're still pubkeys Bob has no use for.",
+  2: "Bob's done with his hop payload, so he forwards the packet to Charlie. Notice it still carries E_Charlie and E_Dave. The packet didn't shrink, and that cost didn't go anywhere.",
+  3: "Now Charlie does the same with his hop payload. ECDH between his node private key and E_Charlie gives him ss_AC, and he decrypts his slice.",
+  4: "Charlie's hop payload is handled, and the packet keeps moving with E_Dave still tucked inside.",
+  5: "Finally, Dave wraps up the route. ECDH between his node private key and E_Dave gives him ss_AD, and he decrypts his slice. The math all worked, but here's the catch: every packet hauled three pubkeys, and Alice had to babysit three keypairs the entire time.",
 };
 
 const STEP_TITLES: Record<number, string> = {
@@ -111,11 +136,16 @@ function activeHopAt(step: number): HopId {
   return "dave";
 }
 
-function highlightedAt(step: number, hop: "bob" | "charlie" | "dave"): boolean {
-  if (hop === "bob" && step === 1) return true;
-  if (hop === "charlie" && step === 3) return true;
-  if (hop === "dave" && step === 5) return true;
-  return false;
+// The active hop's items are in focus (foreground); every other item is dimmed.
+// Step 0 is Alice's build beat, where nothing is dimmed: the whole freshly
+// packed packet shows at full strength.
+function focusFor(
+  forHop: "bob" | "charlie" | "dave",
+  step: number,
+): { focused: boolean; dimmed: boolean } {
+  const focused = activeHopAt(step) === forHop;
+  const dimmed = step !== 0 && !focused;
+  return { focused, dimmed };
 }
 
 function isProcessed(forHop: "bob" | "charlie" | "dave", step: number): boolean {
@@ -176,11 +206,31 @@ function LockTile({ tint }: { tint: string }) {
 // Hover chip pinned under Alice's circle. Hovering it pops a list of the
 // three keypairs she has to persist for the payment.
 function AliceKeysChip() {
-  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  const chipRef = useRef<HTMLDivElement>(null);
+  const POPOVER_W = 240;
+
+  function show() {
+    const el = chipRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const halfW = POPOVER_W / 2;
+    let x = rect.left + rect.width / 2;
+    // Clamp horizontally so the centered popover never runs off-screen.
+    if (x - halfW < 8) x = halfW + 8;
+    if (x + halfW > window.innerWidth - 8) x = window.innerWidth - halfW - 8;
+    const y = rect.bottom + 8;
+    setPos({ x, y });
+  }
+  function hide() {
+    setPos(null);
+  }
+
   return (
     <div
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
+      ref={chipRef}
+      onMouseEnter={show}
+      onMouseLeave={hide}
       style={{ position: "relative", display: "inline-block", cursor: "help" }}
     >
       <div
@@ -196,14 +246,16 @@ function AliceKeysChip() {
         <LockTile tint={HOP_COLORS.alice.stroke} />
         <span style={{ fontWeight: 700 }}>3 keypairs persisted</span>
       </div>
-      {open && (
+      {pos &&
+        typeof document !== "undefined" &&
+        createPortal(
         <div
-          className="absolute z-50"
+          className="fixed z-[9999]"
           style={{
-            top: "calc(100% + 8px)",
-            left: "50%",
+            top: pos.y,
+            left: pos.x,
             transform: "translateX(-50%)",
-            minWidth: 220,
+            width: POPOVER_W,
           }}
         >
           <div
@@ -248,10 +300,11 @@ function AliceKeysChip() {
               }}
             >
               Errors come back encrypted with these shared secrets, so she
-              can't discard them mid-payment.
+              can't toss them out mid-payment.
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
@@ -259,34 +312,14 @@ function AliceKeysChip() {
 
 export function NaivePacketDiagram() {
   const [step, setStep] = useState(0);
-  const [playing, setPlaying] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    if (!playing) return;
-    timerRef.current = setTimeout(() => {
-      setStep((s) => {
-        if (s + 1 >= TOTAL_STEPS) {
-          setPlaying(false);
-          return s;
-        }
-        return s + 1;
-      });
-    }, 2200);
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, [playing, step]);
-
-  function play() {
-    if (step >= TOTAL_STEPS - 1) setStep(0);
-    setPlaying(true);
+  function back() {
+    setStep((s) => Math.max(0, s - 1));
   }
-  function pause() {
-    setPlaying(false);
+  function next() {
+    setStep((s) => Math.min(TOTAL_STEPS - 1, s + 1));
   }
   function reset() {
-    setPlaying(false);
     setStep(0);
   }
 
@@ -318,12 +351,16 @@ export function NaivePacketDiagram() {
         </div>
       </div>
 
+      {/* Stage wrapped in an overflow-x container so the packet + ECDH panel
+          (and the per-hop drift) scroll horizontally on narrow viewports
+          rather than colliding. */}
+      <div className="overflow-x-auto">
       <div
         className="bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-6"
-        style={{ minHeight: 600 }}
+        style={{ minHeight: 770, minWidth: 760 }}
       >
         {/* Hop track */}
-        <div className="relative mb-10" style={{ height: 110 }}>
+        <div className="relative mb-6" style={{ height: 110 }}>
           {[0, 1, 2].map((i) => {
             const startPct =
               NODE_X_PCT[(["alice", "bob", "charlie"] as HopId[])[i]];
@@ -334,9 +371,9 @@ export function NaivePacketDiagram() {
                 key={i}
                 className="absolute pointer-events-none"
                 style={{
-                  top: 29,
-                  left: `calc(${startPct}% + 32px)`,
-                  width: `calc(${endPct - startPct}% - 64px)`,
+                  top: 32,
+                  left: `calc(${startPct}% + 34px)`,
+                  width: `calc(${endPct - startPct}% - 68px)`,
                   borderTop: "1.5px dashed #475569",
                 }}
               />
@@ -367,8 +404,8 @@ export function NaivePacketDiagram() {
                 <div
                   className="rounded-full flex items-center justify-center transition-all duration-500 relative"
                   style={{
-                    width: 60,
-                    height: 60,
+                    width: 64,
+                    height: 64,
                     background: hop.fill,
                     color: INK,
                     border: `${isActive ? 3 : 2}px solid ${hop.stroke}`,
@@ -457,43 +494,29 @@ export function NaivePacketDiagram() {
                 </div>
                 <div className="space-y-1">
                   {HOP_PAYLOADS.map((s) => {
-                    const processed = isProcessed(s.forHop, step);
-                    const isActiveEntry = highlightedAt(step, s.forHop);
-                    const borderColor = isActiveEntry
-                      ? "#b8860b"
-                      : processed
-                        ? PROCESSED.stroke
-                        : s.color.stroke;
-                    const background = isActiveEntry
-                      ? "#fef3c7"
-                      : processed
-                        ? PROCESSED.fill
-                        : s.color.fill;
-                    const labelColor = isActiveEntry
-                      ? "#b8860b"
-                      : processed
-                        ? PROCESSED.accent
-                        : s.color.stroke;
+                    const { focused, dimmed } = focusFor(s.forHop, step);
                     return (
                       <div
                         key={s.forHop}
                         className="border-[1.5px] px-1.5 py-1 flex items-center gap-1.5"
                         style={{
-                          borderColor,
-                          background,
+                          borderColor: dimmed ? DIM_BORDER : FOCUS_BORDER,
+                          background: dimmed ? DIM_BG : FOCUS_BG,
+                          opacity: dimmed ? 0.5 : 1,
+                          boxShadow: focused ? FOCUS_SHADOW : "none",
                           transition:
-                            "background 400ms ease-in-out, border-color 400ms ease-in-out",
+                            "background 400ms ease-in-out, border-color 400ms ease-in-out, opacity 400ms ease-in-out, box-shadow 400ms ease-in-out",
                         }}
                       >
                         <span
                           className="text-[10px] font-bold"
                           style={{
-                            color: labelColor,
+                            color: INK,
                             minWidth: 70,
                             fontFamily: '"JetBrains Mono", "Fira Code", monospace',
                           }}
                         >
-                          <Tok token={s.pubLabel} color={labelColor} />:
+                          <Tok token={s.pubLabel} color={INK} />:
                         </span>
                         <span
                           className="text-[10px]"
@@ -512,31 +535,22 @@ export function NaivePacketDiagram() {
               <div className="space-y-1.5">
                 {HOP_PAYLOADS.map((s) => {
                   const processed = isProcessed(s.forHop, step);
-                  const isActiveSlot = highlightedAt(step, s.forHop);
-                  const borderColor = isActiveSlot
-                    ? "#b8860b"
-                    : processed
-                      ? PROCESSED.stroke
-                      : s.color.stroke;
-                  const background = isActiveSlot
-                    ? "#fef3c7"
-                    : processed
-                      ? PROCESSED.fill
-                      : s.color.fill;
-                  const labelColor = isActiveSlot
-                    ? "#b8860b"
-                    : processed
-                      ? PROCESSED.accent
-                      : s.color.stroke;
+                  const { focused, dimmed } = focusFor(s.forHop, step);
+                  // Mini-labels and the lock glyph stay a uniform slate; the
+                  // container opacity is what dims them when this hop is not in
+                  // focus.
+                  const labelColor = SLATE;
                   return (
                     <div
                       key={s.forHop}
                       className="border-[1.5px] px-2 py-1.5 relative overflow-hidden"
                       style={{
-                        borderColor,
-                        background,
+                        borderColor: dimmed ? DIM_BORDER : FOCUS_BORDER,
+                        background: dimmed ? DIM_BG : FOCUS_BG,
+                        opacity: dimmed ? 0.5 : 1,
+                        boxShadow: focused ? FOCUS_SHADOW : "none",
                         transition:
-                          "background 400ms ease-in-out, border-color 400ms ease-in-out",
+                          "background 400ms ease-in-out, border-color 400ms ease-in-out, opacity 400ms ease-in-out, box-shadow 400ms ease-in-out",
                       }}
                     >
                       <motion.div
@@ -549,7 +563,7 @@ export function NaivePacketDiagram() {
                         <HatchOverlay
                           hops={[s.forHop]}
                           zIndex={1}
-                          stripeOpacity={0.45}
+                          stripeOpacity={0.16}
                         />
                       </motion.div>
                       <div
@@ -579,21 +593,32 @@ export function NaivePacketDiagram() {
                           {processed ? "✓ decrypted" : "encrypted"}
                         </span>
                       </div>
-                      <div
-                        className="text-[10px] leading-tight relative inline-block"
-                        style={{
-                          color: INK,
-                          letterSpacing: "0.04em",
-                          zIndex: 2,
-                          opacity: processed ? 0.95 : 1,
-                          background: processed
-                            ? "transparent"
-                            : "rgba(255,253,245,0.82)",
-                          padding: processed ? 0 : "1px 4px",
-                        }}
-                      >
-                        {processed ? "(plaintext payload)" : s.ciphertext}
-                      </div>
+                      {processed ? (
+                        <div
+                          className="text-[10px] leading-tight space-y-0.5 relative"
+                          style={{ color: INK, zIndex: 2 }}
+                        >
+                          {s.fields.map((f) => (
+                            <div key={f.key}>
+                              <span className="opacity-60">{f.key}:</span>{" "}
+                              <span className="font-bold">{f.value}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div
+                          className="text-[10px] leading-tight relative inline-block"
+                          style={{
+                            color: INK,
+                            letterSpacing: "0.04em",
+                            zIndex: 2,
+                            background: "rgba(255,253,245,0.82)",
+                            padding: "1px 4px",
+                          }}
+                        >
+                          {s.ciphertext}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -710,58 +735,7 @@ export function NaivePacketDiagram() {
           </AnimatePresence>
         </div>
 
-        {/* Legend: hatched = encrypted, solid = readable */}
-        <div
-          className="mt-5 flex items-center justify-center gap-5 text-[11px]"
-          style={{ color: SLATE }}
-        >
-          <span className="flex items-center gap-1.5">
-            <span
-              style={{
-                display: "inline-block",
-                width: 18,
-                height: 12,
-                border: `1.5px solid ${HOP_COLORS.bob.stroke}`,
-                backgroundColor: HOP_COLORS.bob.fill,
-                backgroundImage: singleHatchBackground("bob"),
-              }}
-            />
-            encrypted (hatched)
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span
-              style={{
-                display: "inline-block",
-                width: 18,
-                height: 12,
-                border: `1.5px solid ${HOP_COLORS.bob.stroke}`,
-                backgroundColor: HOP_COLORS.bob.fill,
-              }}
-            />
-            readable / in the clear (solid)
-          </span>
-        </div>
-
-        {/* Bottom callout: both costs scale with route length */}
-        <div
-          className="mt-6 mx-auto border-[1.5px] border-dashed px-4 py-3 flex items-start gap-2"
-          style={{
-            borderColor: "#a13a3a",
-            background: "#fff5f5",
-            maxWidth: 660,
-          }}
-        >
-          <span style={{ color: "#a13a3a", fontWeight: 700 }}>⚠</span>
-          <div className="text-[12px] leading-relaxed" style={{ color: INK }}>
-            <span className="font-bold">Both costs scale with route length.</span>{" "}
-            For an N-hop route, Alice persists N private keys and the packet
-            carries N ephemeral pubkeys. The next section shows how a single
-            session key reduces both to{" "}
-            <span className="font-bold">one</span>.
-          </div>
-        </div>
-
-        <div className="mx-auto" style={{ maxWidth: 660 }}>
+        <div className="mt-6 mx-auto" style={{ maxWidth: 660 }}>
           <StepCaption
             label={STEP_LABELS[step]}
             title={STEP_TITLES[step]}
@@ -770,21 +744,27 @@ export function NaivePacketDiagram() {
           />
         </div>
       </div>
+      </div>
 
       {/* Step controls */}
       <div className="px-4 py-3 border-t-[1.5px] border-foreground/30 bg-card">
         <div className="flex flex-col md:flex-row md:items-start md:gap-4">
           <div className="flex gap-1.5 items-center flex-wrap shrink-0">
             <button
-              onClick={playing ? pause : play}
-              className="px-3 py-1.5 border-[1.5px] border-black bg-black text-white font-bold text-xs tracking-[0.05em] uppercase hover:bg-[#b8860b] hover:border-[#b8860b] transition-colors"
-              data-testid="naive-packet-diagram-play"
+              onClick={back}
+              disabled={step <= 0}
+              className="px-3 py-1.5 border-[1.5px] border-foreground/40 bg-card text-foreground text-xs uppercase tracking-[0.05em] hover:bg-secondary transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-card"
+              data-testid="naive-packet-diagram-back"
             >
-              {playing
-                ? "❚❚ Pause"
-                : step >= TOTAL_STEPS - 1
-                  ? "↻ Replay"
-                  : "▶ Play"}
+              ← Back
+            </button>
+            <button
+              onClick={next}
+              disabled={step >= TOTAL_STEPS - 1}
+              className="px-3 py-1.5 border-[1.5px] border-foreground/40 bg-card text-foreground text-xs uppercase tracking-[0.05em] hover:bg-secondary transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-card"
+              data-testid="naive-packet-diagram-next"
+            >
+              Next →
             </button>
             <button
               onClick={reset}
@@ -797,7 +777,6 @@ export function NaivePacketDiagram() {
                 <button
                   key={i}
                   onClick={() => {
-                    setPlaying(false);
                     setStep(i);
                   }}
                   className="w-7 h-7 border-[1.5px] text-[10px] font-bold transition-colors"

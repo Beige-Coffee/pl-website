@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   CommitmentTxCard,
   type CommitmentOutput,
@@ -61,10 +62,10 @@ const HOP_PALETTE: Record<HopId, { stroke: string; fill: string }> = {
 type ChannelId = "ab" | "bc" | "cd";
 
 const NODE_X_PCT: Record<HopId, number> = {
-  alice: 20,
-  bob: 40,
-  charlie: 60,
-  dave: 80,
+  alice: 12,
+  bob: 38,
+  charlie: 62,
+  dave: 88,
 };
 
 const TOTAL_BEATS = 9;
@@ -72,15 +73,15 @@ const TOTAL_BEATS = 9;
 const PAYMENT_HASH = "0xa3f1...e9c4";
 
 const STEP_CAPTIONS: Record<number, string> = {
-  0: "Three channels along the path, each anchored by its own pair of commitment transactions. Bob and Charlie each hold two, one for each channel they sit between. Click play to watch a 10,000-sat payment travel from Alice to Dave.",
-  1: "Alice and Bob each add a new HTLC output to their commitments. The output is locked to payment_hash 0xa3f1...e9c4 and times out at block 240. Until the preimage shows up, that 10,002 sat is in limbo.",
-  2: "Bob extends the same conditional payment to Charlie. Bob and Charlie now each carry an HTLC output on their B↔C commitments, with a tighter CLTV of 220 (Bob's safety margin so he can resolve A↔B before C↔D times out).",
-  3: "Charlie extends the chain to Dave with a CLTV of 180 and an amount of 10,000 sat. The two-sat difference is Charlie's forwarding fee. The HTLC is now committed on every channel along the path.",
-  4: "Dave is the only one who knows the preimage, because he generated it for the invoice. Nothing on chain has happened yet, but he holds the key that unlocks every HTLC on the route.",
-  5: "Dave reveals the preimage to Charlie. The Charlie-Dave HTLC outputs dissolve and 10,000 sats flow into Dave's to_local. Atomic settlement, hop one of three.",
-  6: "Charlie passes the preimage back to Bob. The B↔C HTLC outputs dissolve and 10,002 sats migrate into Charlie's to_local on B↔C. Charlie has now collected his two-sat fee.",
-  7: "Bob hands the preimage back to Alice. The A↔B HTLC outputs dissolve and 10,002 sats land in Bob's to_local. Bob is back to even (zero fee), and the payment has fully cleared.",
-  8: "Settled state. Alice is down 10,002. Charlie is up 2 (his fee). Bob is flat. Dave is up 10,000. The same preimage that Dave revealed travelled all the way back along the path. Atomic, off-chain, in seconds.",
+  0: "Here are three channels along the path, each anchored by its own pair of commitment transactions. Notice Bob and Charlie each hold two, one for each channel they sit between. Let's send a 10,000-sat payment from Alice to Dave and watch what happens.",
+  1: "First, Alice and Bob each add a new HTLC output to their commitments. It's locked to payment_hash 0xa3f1...e9c4 and times out at block 240. Until the preimage shows up, that 10,002 sat is stuck in limbo.",
+  2: "Now Bob passes the same conditional payment on to Charlie. They each carry an HTLC output on their B↔C commitments, this time with a tighter CLTV of 220 (that's Bob's safety margin, so he can resolve A↔B before C↔D times out).",
+  3: "Then Charlie passes it on to Dave, with a CLTV of 180 and an amount of 10,000 sat. Where'd the other two sats go? That's Charlie's forwarding fee. The HTLC now sits on every channel along the path.",
+  4: "Dave's the only one who knows the preimage, since he made it for the invoice. Nothing's hit the chain yet, but that little secret is what every HTLC on the route is waiting on.",
+  5: "Now Dave hands the preimage to Charlie. The Charlie-Dave HTLC outputs dissolve and 10,000 sats slide into Dave's to_local. That's atomic settlement, one hop down, two to go.",
+  6: "Charlie passes the preimage back to Bob. The B↔C HTLC outputs dissolve and 10,002 sats slide into Charlie's to_local on B↔C. So Charlie's just pocketed his two-sat fee.",
+  7: "Bob hands the preimage back to Alice. The A↔B HTLC outputs dissolve and 10,002 sats land in Bob's to_local. Bob's back to even (zero fee), and the payment has fully cleared.",
+  8: "And we're settled. Alice is down 10,002, Charlie's up 2 (his fee), Bob's flat, and Dave's up 10,000. The same preimage Dave revealed travelled all the way back along the path. Atomic, off-chain, in seconds. Pretty slick, right?",
 };
 
 // ── Channel definitions with starting & ending balances ────────────────────
@@ -344,16 +345,6 @@ function subtitleFor(ch: ChannelDef, side: "left" | "right"): string {
   return `(holds ${other}'s signature)`;
 }
 
-function nodeIsActive(beat: number, id: HopId): boolean {
-  const ch = activeChannelAt(beat);
-  if (ch) {
-    const def = CHANNELS.find((c) => c.id === ch)!;
-    return id === def.leftId || id === def.rightId;
-  }
-  if (beat === 4) return id === "dave";
-  return false;
-}
-
 interface PinnedPopover {
   ownerLabel: string;
   subtitle: string;
@@ -364,8 +355,6 @@ interface PinnedPopover {
   y: number;
   pinned: boolean;
 }
-
-const BEAT_DURATION_MS = 2300;
 
 // "Value-flying" chip rendered during settlement beats. It mounts at the HTLC
 // row position and transitions up to the recipient's to_local row position
@@ -445,38 +434,7 @@ function defaultExpandedAt(beat: number): ChannelId {
 
 export function HtlcPropagationDiagram() {
   const [beat, setBeat] = useState(0);
-  const [playing, setPlaying] = useState(false);
   const [popover, setPopover] = useState<PinnedPopover | null>(null);
-  // User-clicked override on which channel is expanded. Reset to null on every
-  // beat change, so the animation drives focus while playing, but a manual
-  // click during a pause overrides until the next beat.
-  const [overrideExpanded, setOverrideExpanded] = useState<ChannelId | null>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    setOverrideExpanded(null);
-  }, [beat]);
-
-  // Auto-advance
-  useEffect(() => {
-    if (!playing) return;
-    if (popover && popover.pinned === false) {
-      // hover (non-pinned) pauses the timer entirely
-      return;
-    }
-    timerRef.current = setTimeout(() => {
-      setBeat((b) => {
-        if (b + 1 >= TOTAL_BEATS) {
-          setPlaying(false);
-          return b;
-        }
-        return b + 1;
-      });
-    }, BEAT_DURATION_MS);
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, [playing, beat, popover]);
 
   // Escape closes pinned popover
   useEffect(() => {
@@ -487,15 +445,10 @@ export function HtlcPropagationDiagram() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  function play() {
-    if (beat >= TOTAL_BEATS - 1) setBeat(0);
-    setPlaying(true);
-  }
-  function pause() { setPlaying(false); }
-  function reset() { setPlaying(false); setBeat(0); setPopover(null); }
+  function reset() { setBeat(0); setPopover(null); }
 
   const activeCh = activeChannelAt(beat);
-  const expandedId: ChannelId = overrideExpanded ?? defaultExpandedAt(beat);
+  const expandedId: ChannelId = defaultExpandedAt(beat);
   const expandedCh = CHANNELS.find((c) => c.id === expandedId)!;
 
   // Anchor a hover popover near the mouse, but clamped to viewport.
@@ -550,38 +503,49 @@ export function HtlcPropagationDiagram() {
 
       {/* Stage. Wrapped in an overflow-x container so that on viewports
           narrower than ~720px the layout scrolls horizontally rather than
-          collapsing. The two-tier layout (minimized capsules row + a single
-          expanded panel below) keeps the path geometry intact without
+          collapsing. The layout is the node row (live channel un-faded, with
+          an in-flight marker on its edge) above a single commitment-tx pair
+          for the current step, which keeps the path geometry intact without
           requiring 1500px+ of width as the original three-pair layout did. */}
       <div className="overflow-x-auto">
       <div
         className="relative bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-6"
-        style={{ minHeight: 460, minWidth: 720 }}
+        style={{ minHeight: 380, minWidth: 720 }}
       >
         {/* Hop track, same NODE_X_PCT layout as the sibling visuals. */}
         <div className="relative" style={{ height: 160 }}>
-          {/* Backbone dashes between circles. Circle radius is 38px (76px
-              diameter), so backbone center sits at y=38 and the dashes start
+          {/* Backbone dashes between circles. Circle radius is 32px (64px
+              diameter), so backbone center sits at y=32 and the dashes start
               just past each circle's edge. */}
           {[0, 1, 2].map((i) => {
             const startPct = NODE_X_PCT[(["alice", "bob", "charlie"] as HopId[])[i]];
             const endPct = NODE_X_PCT[(["bob", "charlie", "dave"] as HopId[])[i]];
+            const segCh = (["ab", "bc", "cd"] as ChannelId[])[i];
+            const segDim = activeCh !== null && segCh !== activeCh;
             return (
               <div
                 key={i}
-                className="absolute pointer-events-none"
+                className="absolute pointer-events-none transition-opacity duration-500"
                 style={{
-                  top: 38,
-                  left: `calc(${startPct}% + 40px)`,
-                  width: `calc(${endPct - startPct}% - 80px)`,
+                  top: 32,
+                  left: `calc(${startPct}% + 34px)`,
+                  width: `calc(${endPct - startPct}% - 68px)`,
                   borderTop: "1.5px dashed #475569",
+                  opacity: segDim ? 0.2 : 1,
                 }}
               />
             );
           })}
 
           {(["alice", "bob", "charlie", "dave"] as HopId[]).map((id) => {
-            const isActive = nodeIsActive(beat, id);
+            // Highlight the two endpoints of the channel whose commitment-tx
+            // pair is shown below; fade the other two. The shown channel is
+            // expandedCh, so the highlight always matches the txs on screen,
+            // including the steady-state beats (0, 4, 8) where no HTLC is
+            // mid-flight but a specific channel's txs are still displayed.
+            const isActive =
+              id === expandedCh.leftId || id === expandedCh.rightId;
+            const dim = !isActive;
             const label =
               id === "alice"
                 ? "Alice"
@@ -594,7 +558,7 @@ export function HtlcPropagationDiagram() {
               id === "alice"
                 ? "Sender"
                 : id === "dave"
-                  ? "Receiver"
+                  ? "Destination"
                   : "Forwarder";
             // Canonical hop palette (matches ForwarderPolicyMap +
             // ComputedRouteDiagram + RouteCalcExercise so chapter 1 and
@@ -615,14 +579,16 @@ export function HtlcPropagationDiagram() {
                   top: 0,
                   left: `${NODE_X_PCT[id]}%`,
                   transform: "translateX(-50%)",
-                  width: 76,
+                  width: 64,
+                  opacity: dim ? 0.32 : 1,
+                  transition: "opacity 500ms ease-out",
                 }}
               >
                 <div
                   className="rounded-full border-[2px] flex items-center justify-center transition-all duration-500"
                   style={{
-                    width: 76,
-                    height: 76,
+                    width: 64,
+                    height: 64,
                     background: palette.fill,
                     borderColor: isActive ? "#b8860b" : palette.stroke,
                     boxShadow: isActive
@@ -649,89 +615,50 @@ export function HtlcPropagationDiagram() {
               </div>
             );
           })}
-        </div>
 
-        {/* Tier 1: minimized channel capsules. Each is positioned between its
-            two nodes geometrically so the path-to-channel link reads at a
-            glance. Click any capsule to override which channel is shown in
-            the expanded panel below; the override clears on the next beat. */}
-        <div className="relative mt-3" style={{ height: 76 }}>
-          {CHANNELS.map((ch) => {
-            const leftPct = NODE_X_PCT[ch.leftId];
-            const rightPct = NODE_X_PCT[ch.rightId];
-            const centerPct = (leftPct + rightPct) / 2;
-            const isExpanded = ch.id === expandedId;
-            const isActive = activeCh === ch.id;
-            const hasHtlc = htlcStateAt(beat, ch.id) === "in-flight";
-            return (
-              <button
-                key={ch.id}
-                type="button"
-                onClick={() => setOverrideExpanded(ch.id)}
-                className="absolute text-left"
-                style={{
-                  left: `${centerPct}%`,
-                  transform: "translateX(-50%)",
-                  top: 0,
-                  width: 160,
-                }}
-                title={`Show ${ch.leftLabel}↔${ch.rightLabel} below`}
-              >
+          {/* HTLC-in-flight marker on the live edge. Replaces the old
+              channel-capsule row: the active channel reads from its two
+              un-faded nodes plus this marker sitting on the backbone between
+              them. */}
+          {htlcStateAt(beat, expandedCh.id) === "in-flight" &&
+            (() => {
+              const def = expandedCh;
+              const centerPct =
+                (NODE_X_PCT[def.leftId] + NODE_X_PCT[def.rightId]) / 2;
+              return (
                 <div
-                  className="border-[1.5px] px-2 py-1.5 flex flex-col items-center transition-all duration-300"
+                  className="absolute z-20 flex items-center gap-1 px-2 py-0.5 border-[1.5px] transition-all duration-300"
                   style={{
-                    borderColor: isActive
-                      ? "#b8860b"
-                      : isExpanded
-                        ? "#0f172a"
-                        : "#94a3b8",
-                    background: isActive
-                      ? "#fef3c7"
-                      : isExpanded
-                        ? "#fffdf5"
-                        : "rgba(255,253,245,0.5)",
-                    transform: isExpanded ? "scale(1.02)" : "scale(1)",
-                    boxShadow: isExpanded ? "0 0 0 2px rgba(15,23,42,0.08)" : "none",
-                    cursor: "pointer",
+                    top: 22,
+                    left: `${centerPct}%`,
+                    transform: "translateX(-50%)",
+                    background: "#fef3c7",
+                    borderColor: "#b8860b",
                     fontFamily: '"JetBrains Mono", "Fira Code", monospace',
+                    whiteSpace: "nowrap",
                   }}
                 >
-                  <div
-                    className="text-[10px] font-bold tracking-[0.05em] uppercase"
-                    style={{ color: "#0f172a" }}
+                  <div className="w-1.5 h-1.5" style={{ background: "#b8860b" }} />
+                  <span
+                    className="text-[8px] font-bold tracking-[0.08em] uppercase"
+                    style={{ color: "#b8860b" }}
                   >
-                    {ch.leftLabel} ↔ {ch.rightLabel}
-                  </div>
-                  <div
-                    className="text-[9px]"
-                    style={{ color: "#475569" }}
-                  >
-                    {ch.capacity.toLocaleString("en-US")} sats
-                  </div>
-                  {hasHtlc && (
-                    <div className="mt-0.5 flex items-center gap-1">
-                      <div
-                        className="w-1.5 h-1.5"
-                        style={{ background: "#b8860b" }}
-                      />
-                      <span
-                        className="text-[8px] font-bold tracking-[0.08em] uppercase"
-                        style={{ color: "#b8860b" }}
-                      >
-                        HTLC in flight
-                      </span>
-                    </div>
-                  )}
+                    HTLC in flight · {def.htlcAmount.toLocaleString("en-US")} sats
+                  </span>
                 </div>
-              </button>
-            );
-          })}
+              );
+            })()}
         </div>
+
+        {/* (The old channel-capsule selector row was removed. The live
+            channel now reads from the un-faded node pair + the in-flight
+            marker on the active edge above; the commitment-tx pair below
+            follows the current step.) */}
 
         {/* Tier 2: expanded panel for the focused channel. Shows the pair of
             commitment-tx thumbnails for whichever channel is currently
-            expanded (animation-driven default, overridable by click on a
-            minimized capsule above). Centered in the stage; remounted on
+            expanded (the active channel for the current step). Centered in
+            the stage; remounted on
             channel change via the React key so the AnimatedSats values reset
             cleanly between channels. */}
         <div className="mt-4 flex justify-center" key={expandedId}>
@@ -745,7 +672,7 @@ export function HtlcPropagationDiagram() {
             const leftSubtitle = subtitleFor(ch, "left");
             const rightSubtitle = subtitleFor(ch, "right");
             return (
-              <div className="flex flex-col items-center" style={{ width: 360 }}>
+              <div className="flex flex-col items-center" style={{ width: 460 }}>
                 <div
                   className="grid grid-cols-2 gap-2 p-2 relative w-full"
                   style={{
@@ -835,58 +762,73 @@ export function HtlcPropagationDiagram() {
       </div>
       </div>
 
-      {/* Floating popover */}
-      {popover && (
-        <div
-          className="fixed z-50"
-          style={{ left: popover.x, top: popover.y }}
-          onMouseEnter={() => {
-            // Hover into the popover keeps it open (only matters when not
-            // pinned; pinned popovers are unaffected anyway).
-          }}
-          onMouseLeave={() => {
-            if (!popover.pinned) closeHoverPopover();
-          }}
-        >
-          <div className="relative">
-            {popover.pinned && (
-              <>
-                <span
-                  className="absolute -top-2 left-2 px-1.5 py-0.5 text-[9px] font-bold tracking-[0.08em] uppercase border-[1.5px] z-10"
-                  style={{ background: "#b8860b", color: "#fffdf5", borderColor: "#b8860b" }}
-                >
-                  PINNED
-                </span>
-                <button
-                  onClick={() => setPopover(null)}
-                  className="absolute -top-2 -right-2 w-6 h-6 border-[1.5px] flex items-center justify-center text-xs font-bold z-10"
-                  style={{ background: "#fffdf5", color: "#0f172a", borderColor: "#0f172a" }}
-                  aria-label="Close pinned commitment tx"
-                >
-                  ×
-                </button>
-              </>
-            )}
-            <CommitmentTxCard
-              mode="full"
-              ownerLabel={popover.ownerLabel}
-              subtitle={popover.subtitle}
-              fundingTxid={popover.fundingTxid}
-              outputs={popover.outputs}
-            />
-          </div>
-        </div>
-      )}
+      {/* Floating popover. Portal-mounted to document.body so the new
+          overflow-x-auto stage wrapper can't clip it. Coordinates are already
+          viewport-relative (position: fixed) and clamped in the open/pin
+          handlers, so the on-screen position is unchanged by the portal. */}
+      {popover &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            className="fixed z-50"
+            style={{ left: popover.x, top: popover.y }}
+            onMouseEnter={() => {
+              // Hover into the popover keeps it open (only matters when not
+              // pinned; pinned popovers are unaffected anyway).
+            }}
+            onMouseLeave={() => {
+              if (!popover.pinned) closeHoverPopover();
+            }}
+          >
+            <div className="relative">
+              {popover.pinned && (
+                <>
+                  <span
+                    className="absolute -top-2 left-2 px-1.5 py-0.5 text-[9px] font-bold tracking-[0.08em] uppercase border-[1.5px] z-10"
+                    style={{ background: "#b8860b", color: "#fffdf5", borderColor: "#b8860b" }}
+                  >
+                    PINNED
+                  </span>
+                  <button
+                    onClick={() => setPopover(null)}
+                    className="absolute -top-2 -right-2 w-6 h-6 border-[1.5px] flex items-center justify-center text-xs font-bold z-10"
+                    style={{ background: "#fffdf5", color: "#0f172a", borderColor: "#0f172a" }}
+                    aria-label="Close pinned commitment tx"
+                  >
+                    ×
+                  </button>
+                </>
+              )}
+              <CommitmentTxCard
+                mode="full"
+                ownerLabel={popover.ownerLabel}
+                subtitle={popover.subtitle}
+                fundingTxid={popover.fundingTxid}
+                outputs={popover.outputs}
+              />
+            </div>
+          </div>,
+          document.body,
+        )}
 
       {/* Controls */}
       <div className="px-4 py-3 border-t-[1.5px] border-foreground/30 bg-card">
         <div className="flex gap-1.5 items-center flex-wrap shrink-0">
           <button
-            onClick={playing ? pause : play}
-            className="px-3 py-1.5 border-[1.5px] border-black bg-black text-white font-bold text-xs tracking-[0.05em] uppercase hover:bg-[#b8860b] hover:border-[#b8860b] transition-colors"
-            data-testid="htlc-propagation-play"
+            onClick={() => setBeat((b) => Math.max(0, b - 1))}
+            disabled={beat <= 0}
+            className="px-3 py-1.5 border-[1.5px] border-foreground/40 bg-card text-foreground text-xs uppercase tracking-[0.05em] hover:bg-secondary transition-colors disabled:opacity-40 disabled:pointer-events-none"
+            data-testid="htlc-propagation-back"
           >
-            {playing ? "❚❚ Pause" : beat >= TOTAL_BEATS - 1 ? "↻ Replay" : "▶ Play"}
+            ← Back
+          </button>
+          <button
+            onClick={() => setBeat((b) => Math.min(TOTAL_BEATS - 1, b + 1))}
+            disabled={beat >= TOTAL_BEATS - 1}
+            className="px-3 py-1.5 border-[1.5px] border-foreground/40 bg-card text-foreground text-xs uppercase tracking-[0.05em] hover:bg-secondary transition-colors disabled:opacity-40 disabled:pointer-events-none"
+            data-testid="htlc-propagation-next"
+          >
+            Next →
           </button>
           <button
             onClick={reset}
@@ -899,7 +841,6 @@ export function HtlcPropagationDiagram() {
               <button
                 key={i}
                 onClick={() => {
-                  setPlaying(false);
                   setBeat(i);
                 }}
                 className="w-7 h-7 border-[1.5px] text-[10px] font-bold transition-colors"

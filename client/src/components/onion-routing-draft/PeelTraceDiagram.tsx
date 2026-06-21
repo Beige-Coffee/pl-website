@@ -8,16 +8,16 @@
 // hop_payloads, advances the ephemeral pubkey, and ships to Charlie.
 //
 // Beats:
-//   1.  Receive  — packet arrives at Bob (HopTrack animation)
-//   2.  Parse    — envelope split into version | E_AB | hop_payloads | hmac
-//   3.  Derive   — ss_AB → mu_B + rho_B (KeyDerivationCard)
-//   4.  Verify   — HMAC(mu_B, hop_payloads ‖ AD) ?= received outer HMAC
-//   5.  Extend   — append 1,300 zero bytes (buffer becomes 2,600 B)
-//   6.  XOR      — chacha20(rho_B, 2,600) strips Bob's layer + reveals filler
-//   7.  Read     — Bob's hop payload at the front: bigsize | TLV | next_hmac
-//   8.  Lift     — slice bytes 60..1,360 as Charlie's hop_payloads
-//   9.  Advance  — bf_AB = SHA256(E_AB ‖ ss_AB); E_AC = bf_AB · E_AB
-//   10. Ship     — assemble + send 1,366-byte packet to Charlie
+//   1.  Receive  - packet arrives at Bob (HopTrack animation)
+//   2.  Parse    - envelope split into version | E_AB | hop_payloads | hmac
+//   3.  Derive   - ss_AB → mu_B + rho_B (KeyDerivationCard)
+//   4.  Verify   - HMAC(mu_B, hop_payloads ‖ AD) ?= received outer HMAC
+//   5.  Extend   - append 1,300 zero bytes (buffer becomes 2,600 B)
+//   6.  XOR      - chacha20(rho_B, 2,600) strips Bob's layer + reveals filler
+//   7.  Read     - Bob's hop payload at the front: bigsize | TLV | next_hmac
+//   8.  Lift     - slice bytes 60..1,360 as Charlie's hop_payloads
+//   9.  Advance  - bf_AB = SHA256(E_AB ‖ ss_AB); E_AC = bf_AB · E_AB
+//   10. Ship     - assemble + send 1,366-byte packet to Charlie
 //
 // Reuses primitives exported from WrapTraceDiagram (BufferRegion, SlotCell,
 // BufferHeader, SymbolRow) plus the shared viewport-clamped Tooltip,
@@ -25,7 +25,7 @@
 // explanation block rendered below the visual (§1.5).
 // ────────────────────────────────────────────────────────────────────────────
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Tooltip } from "./Tooltip";
 import { renderCaption } from "./captionMarkup";
 import { StepCaption } from "./StepCaption";
@@ -57,7 +57,6 @@ import {
   DISPLAY_BOB_PCT,
   DISPLAY_CHARLIE_PCT,
   DISPLAY_DAVE_PCT,
-  STEP_MS,
   // components
   BufferRegion,
   BufferHeader,
@@ -112,7 +111,7 @@ const BEATS: Beat[] = [
     subLabel: "RECEIVE",
     title: "Bob receives the 1,366-byte packet",
     caption:
-      "Alice's outermost packet lands at Bob. Same fixed size (1,366 bytes) as every other hop will see, so an observer can't tell where Bob is in the route. The bytes are still onion-encrypted; Bob has to peel one layer to read his own instructions.",
+      "Alice's outermost packet lands at Bob. It's the same fixed 1,366 bytes every hop sees, so a watcher can't tell where Bob sits in the route. The bytes are still onion-encrypted, so Bob has to peel one layer before he can read his own instructions.",
   },
   {
     step: 2,
@@ -120,7 +119,7 @@ const BEATS: Beat[] = [
     subLabel: "PARSE",
     title: "Parse: version || `E_AB` || `hop_payloads` || `outer_hmac`",
     caption:
-      "Bob splits the wire bytes into four fields: a 1-byte version (0x00), Alice's 33-byte ephemeral pubkey `E_AB`, the 1,300-byte `hop_payloads` blob (still encrypted), and the 32-byte outer HMAC tag. The HMAC was computed by Alice over `hop_payloads ‖ payment_hash` using Bob's `mu_B` key.",
+      "First, Bob splits the wire bytes into four fields: a 1-byte version (0x00), Alice's 33-byte ephemeral pubkey `E_AB`, the 1,300-byte `hop_payloads` blob (still encrypted), and the 32-byte outer HMAC tag. Alice computed that HMAC over `hop_payloads ‖ payment_hash` using Bob's `mu_B` key.",
     focus: "envelope",
   } as Beat,
   {
@@ -129,7 +128,7 @@ const BEATS: Beat[] = [
     subLabel: "DERIVE",
     title: "Derive `mu_B` and `rho_B` from `ss_AB`",
     caption:
-      "Bob performs ECDH between his node privkey and `E_AB` to get the same `ss_AB` Alice computed. From `ss_AB`, two HMACs produce the keys Bob needs: `mu_B = HMAC('mu', ss_AB)` for verifying the HMAC tag, and `rho_B = HMAC('rho', ss_AB)` for the 2,600-byte XOR keystream.",
+      "Now, Bob runs ECDH between his node privkey and `E_AB`, and out pops the same `ss_AB` Alice computed. From `ss_AB`, two HMACs give him the keys he needs: `mu_B = HMAC('mu', ss_AB)` to check the HMAC tag, and `rho_B = HMAC('rho', ss_AB)` for the 2,600-byte XOR keystream.",
   },
   {
     step: 4,
@@ -137,7 +136,7 @@ const BEATS: Beat[] = [
     subLabel: "VERIFY",
     title: "Verify `HMAC(mu_B, hop_payloads ‖ associated_data)`",
     caption:
-      "Bob recomputes `HMAC(mu_B, hop_payloads ‖ payment_hash)` and compares it byte-for-byte with the outer HMAC tag from the packet. If they don't match, Bob refuses to forward. Either someone tampered with `hop_payloads` or the onion was reattached to a different HTLC. If they match, the integrity check passes and Bob can decrypt.",
+      "Before he decrypts anything, Bob recomputes `HMAC(mu_B, hop_payloads ‖ payment_hash)` and checks it byte-for-byte against the outer HMAC tag. If they don't match, Bob won't forward. If they do match, then he's clear to decrypt.",
   },
   {
     step: 5,
@@ -145,7 +144,7 @@ const BEATS: Beat[] = [
     subLabel: "EXTEND",
     title: "Extend the buffer to 2,600 bytes",
     caption:
-      "Bob appends 1,300 zero bytes to the end of `hop_payloads`. This temporary buffer (encrypted half + zero tail) is exactly twice the wire size. The extension is what lets Bob's XOR generate the matching `filler` bytes for Charlie's view, the same bytes Alice precomputed at wrap time.",
+      "Next, Bob tacks 1,300 zero bytes onto the end of `hop_payloads`, making a scratch buffer exactly twice the wire size. Why 2,600? Because Bob XORs the whole buffer in one pass *before* he reads his own hop payload, he can't yet know how big it is, so he sizes the buffer for the largest possible payload to be safe. (Those trailing zeros, once XOR'd, also regenerate the exact `filler` bytes Alice baked in for Charlie's view, the bonus that makes the shift land correctly.)",
     focus: "trailing",
   } as Beat,
   {
@@ -154,7 +153,7 @@ const BEATS: Beat[] = [
     subLabel: "XOR",
     title: "XOR the 2,600-byte buffer with `rho_B`'s keystream",
     caption:
-      "Bob runs `chacha20(rho_B, 2600)` and XORs it over the whole buffer. The first 1,300 bytes have Bob's layer stripped. Bob's hop payload is now plaintext at the front. The last 1,300 bytes become the keystream itself (`0 ⊕ rho_B[1300:2600]`), which mathematically equals the trailing bytes Alice baked into Charlie's view at wrap time.",
+      "Now, Bob runs `chacha20(rho_B, 2600)` and XORs it across the whole buffer. The first 1,300 bytes lose Bob's layer, so his hop payload sits in plaintext at the front. The last 1,300 are just the keystream (`0 ⊕ rho_B[1300:2600]`), which lands on the exact trailing bytes Alice baked into Charlie's view. Pretty slick, right?",
   },
   {
     step: 7,
@@ -162,7 +161,7 @@ const BEATS: Beat[] = [
     subLabel: "READ",
     title: "Read Bob's hop payload at the front",
     caption:
-      "The leading bytes are now plaintext. Bob reads the bigsize length prefix (`0x1B` = 27 bytes of TLV records, making his hop payload 60 bytes with the prefix and HMAC), parses the TLV records (`amt_to_forward`, `outgoing_cltv_value`, `short_channel_id`), then reads the 32 bytes immediately after the TLVs. Those 32 bytes are `charlie_hmac`, the HMAC tag that will go in the outer HMAC field of Bob's outgoing packet.",
+      "The front bytes are plaintext now, so let's read them. Bob takes the bigsize length prefix (`0x1B` = 27 bytes of TLV records, which makes his hop payload 60 bytes with the prefix and HMAC), parses the TLV records (`amt_to_forward`, `outgoing_cltv_value`, `short_channel_id`), then grabs the 32 bytes right after. Those are `charlie_hmac`, the tag headed for the outer HMAC field of Bob's outgoing packet.",
     focus: "front",
   } as Beat,
   {
@@ -171,7 +170,7 @@ const BEATS: Beat[] = [
     subLabel: "LIFT",
     title: "Lift bytes 60..1,360 as Charlie's `hop_payloads`",
     caption:
-      "Bob slices the next 1,300 bytes (starting right after his own hop payload) out of the extended buffer. This is Charlie's `hop_payloads` (same fixed size as what Bob received), with Charlie's encrypted hop payload at the front, then Dave's, then padding, then the 60-byte filler-shaped tail that Alice precomputed.",
+      "Then, Bob slices out the next 1,300 bytes, starting right after his own hop payload. That's Charlie's `hop_payloads` (same fixed size Bob just received), with Charlie's encrypted hop payload up front, then Dave's, then padding, then the 60-byte filler-shaped tail Alice precomputed.",
     focus: "trailing",
   } as Beat,
   {
@@ -180,7 +179,7 @@ const BEATS: Beat[] = [
     subLabel: "ADVANCE",
     title: "Advance the ephemeral: `E_AC = bf_AB · E_AB`",
     caption:
-      "Bob computes the blinding factor `bf_AB = SHA256(E_AB ‖ ss_AB)`, then multiplies Alice's ephemeral pubkey by it to produce `E_AC`. Charlie will combine `E_AC` with his own node privkey to ECDH the same `ss_AC` Alice used. The blinding makes each hop's published ephemeral pubkey look unrelated to the others' on the wire.",
+      "Almost there. Bob computes the blinding factor `bf_AB = SHA256(E_AB ‖ ss_AB)`, then multiplies Alice's ephemeral pubkey by it to get `E_AC`. Charlie will pair `E_AC` with his own node privkey to ECDH the same `ss_AC` Alice used. That blinding step is *why* each hop's ephemeral pubkey looks unrelated on the wire.",
   },
   {
     step: 10,
@@ -188,7 +187,7 @@ const BEATS: Beat[] = [
     subLabel: "ASSEMBLE",
     title: "Assemble the 1,366-byte packet and ship it",
     caption:
-      "Bob assembles the outgoing packet: `0x00 || E_AC || charlie_hop_payloads || charlie_hmac`. Same fixed wire format Bob received, with the ephemeral pubkey advanced and the HMAC tag pulled from Bob's own hop payload. Bob hands the packet to Charlie over the BOLT 8 noise transport.",
+      "Finally, Bob assembles the outgoing packet: `0x00 || E_AC || charlie_hop_payloads || charlie_hmac`. It's the same fixed wire format he received, with the ephemeral pubkey advanced and the HMAC tag pulled from his own hop payload. Bob hands it to Charlie over the BOLT 8 noise transport. Nice.",
     focus: "envelope",
   } as Beat,
 ];
@@ -196,7 +195,7 @@ const BEATS: Beat[] = [
 // ── Region model (Bob's view) ─────────────────────────────────────────────
 //
 // Bob's view treats hop_payloads as an opaque encrypted blob. He doesn't
-// know who's downstream or what those bytes mean — they're just "encrypted
+// know who's downstream or what those bytes mean - they're just "encrypted
 // bytes I can't read." After XOR, only Bob's own 60-byte hop payload
 // becomes plaintext; the rest stays opaque to him.
 //
@@ -255,27 +254,10 @@ function extendedRegionsAfterXor(focusSlice = false): Region[] {
 
 export function PeelTraceDiagram() {
   const [step, setStep] = useState(1);
-  const [playing, setPlaying] = useState(false);
 
-  useEffect(() => {
-    if (!playing) return;
-    if (step >= TOTAL_BEATS) {
-      setPlaying(false);
-      return;
-    }
-    const t = setTimeout(() => setStep((s) => s + 1), STEP_MS);
-    return () => clearTimeout(t);
-  }, [playing, step]);
-
-  const play = () => {
-    if (step >= TOTAL_BEATS) setStep(1);
-    setPlaying(true);
-  };
-  const pause = () => setPlaying(false);
-  const reset = () => {
-    setStep(1);
-    setPlaying(false);
-  };
+  const back = () => setStep((s) => Math.max(1, s - 1));
+  const next = () => setStep((s) => Math.min(TOTAL_BEATS, s + 1));
+  const reset = () => setStep(1);
 
   const beat = BEATS[step - 1];
   const beatAccent = beat.iterLabel.includes("Dave")
@@ -323,10 +305,18 @@ export function PeelTraceDiagram() {
         <div className="flex flex-col md:flex-row md:items-start md:gap-4">
           <div className="flex gap-1.5 items-center flex-wrap shrink-0">
             <button
-              onClick={playing ? pause : play}
-              className="px-3 py-1.5 border-[1.5px] border-black bg-black text-white font-bold text-xs tracking-[0.05em] uppercase hover:bg-[#b8860b] hover:border-[#b8860b] transition-colors"
+              onClick={back}
+              disabled={step <= 1}
+              className="px-3 py-1.5 border-[1.5px] border-foreground/40 bg-card text-foreground text-xs uppercase tracking-[0.05em] hover:bg-secondary transition-colors disabled:opacity-40 disabled:pointer-events-none"
             >
-              {playing ? "❚❚ Pause" : step >= TOTAL_BEATS ? "↻ Replay" : "▶ Play"}
+              ← Back
+            </button>
+            <button
+              onClick={next}
+              disabled={step >= TOTAL_BEATS}
+              className="px-3 py-1.5 border-[1.5px] border-foreground/40 bg-card text-foreground text-xs uppercase tracking-[0.05em] hover:bg-secondary transition-colors disabled:opacity-40 disabled:pointer-events-none"
+            >
+              Next →
             </button>
             <button
               onClick={reset}
@@ -340,10 +330,7 @@ export function PeelTraceDiagram() {
                 return (
                   <button
                     key={n}
-                    onClick={() => {
-                      setPlaying(false);
-                      setStep(n);
-                    }}
+                    onClick={() => setStep(n)}
                     className="w-7 h-7 border-[1.5px] text-xs font-bold transition-colors"
                     style={{
                       background: step === n ? "#b8860b" : "#fffdf5",
@@ -379,7 +366,7 @@ function BeatBody({ step }: { step: number }) {
   // Full key-derivation card on the DERIVE beat (first introduction).
   if (step === 3) return <KeyDerivationPanel step={step} />;
   // On subsequent beats that USE the derived keys, show only the compact
-  // KeyHoverIcon — top-right of the operation. Hover/click expands the
+  // KeyHoverIcon - top-right of the operation. Hover/click expands the
   // full card. See onion-routing-key-disclosure-pattern memory.
   if (step === 4)
     return (
@@ -483,7 +470,7 @@ function EnvelopeView({ mode }: { mode: "incoming" | "outgoing" }) {
 }
 
 function outgoingRegions1300(): Region[] {
-  // From Bob's view, the outgoing hop_payloads is opaque — he doesn't see
+  // From Bob's view, the outgoing hop_payloads is opaque - he doesn't see
   // the structure he just sliced out, just a 1,300-byte encrypted blob
   // that Charlie will peel next.
   return [
@@ -697,7 +684,7 @@ function ParseVerifyMorphView({ step }: { step: number }) {
         className="border-[1.5px] flex items-stretch relative overflow-hidden"
         style={{ background: "#fffdf5", borderColor: INK }}
       >
-        {/* HEADER flank (collapses on beat 4 — width AND height, so the row
+        {/* HEADER flank (collapses on beat 4 - width AND height, so the row
             hugs the compact bar instead of stretching to the flank's full
             height and reading as a box-inside-a-box). */}
         <MorphBox
@@ -775,7 +762,7 @@ function ParseVerifyMorphView({ step }: { step: number }) {
           ))}
         </MorphBox>
 
-        {/* OUTER HMAC flank (collapses on beat 4 — width AND height, same as
+        {/* OUTER HMAC flank (collapses on beat 4 - width AND height, same as
             the HEADER flank, so the row hugs the 42px bar). */}
         <MorphBox
           key="hmac-flank"
@@ -896,7 +883,7 @@ function ParseVerifyMorphView({ step }: { step: number }) {
 
 // Shared per-step key-derivation props. Beat 3 (DERIVE) renders the full
 // KeyDerivationCard so the student sees the source's origin once; beats 4
-// (VERIFY) and 6 (XOR) render a compact KeyHoverIcon — the full content is
+// (VERIFY) and 6 (XOR) render a compact KeyHoverIcon - the full content is
 // only one hover away. See onion-routing-key-disclosure-pattern memory for
 // the rationale.
 function keyDerivationProps(step: number) {

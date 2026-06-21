@@ -9,7 +9,7 @@ import { MathLine } from "./mathTokens";
 //   • `code`     →  monospace pill, content routed through MathLine for
 //                   LaTeX-style subscripts and italic single-letter vars
 //   • *italic*   →  <em> (visually italic, or upright if the caption is
-//                   already italic-styled — both read as "emphasized")
+//                   already italic-styled - both read as "emphasized")
 //
 // Use this in any visual that renders captions/descriptions to text. Keeps
 // caption authoring as plain strings while letting protocol identifiers

@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { Tooltip } from "./Tooltip";
-import { LAYER_ANGLES } from "./encryptionHatch";
+import { HatchOverlay } from "./encryptionHatch";
 import { StepCaption } from "./StepCaption";
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -81,7 +81,7 @@ const SLICES: Slice[] = [
     forHop: "dave",
     fields: [
       { key: "final_amt", value: "10,000 sat" },
-      { key: "final_cltv", value: "block 140" },
+      { key: "final_cltv", value: "block 180" },
       { key: "payment_hash", value: "0xa3f1...e9c4" },
     ],
     cipher: [
@@ -102,12 +102,12 @@ const SLICES: Slice[] = [
 const TOTAL_STEPS = 6;
 
 const STEP_CAPTIONS: Record<number, string> = {
-  0: "Alice now encrypts each per-hop slice with that hop's own key. The slices are still in the message, but they're locked. Without the right key, every slice looks like noise.",
-  1: "The message arrives at Bob. He runs his key against the stack and only his slice unlocks. Charlie's and Dave's slices are right there too, but Bob can't read them, different keys, different locks.",
-  2: "Bob peels his slice off and forwards Charlie's and Dave's encrypted slices onward. Bob never learned anything about Dave or the final amount, because those slices stayed sealed while passing through him.",
-  3: "Charlie runs his key. His slice unlocks; Dave's stays encrypted. Charlie still can't see who the destination is or what they'll receive.",
-  4: "Charlie peels his slice off and forwards Dave's encrypted slice on alone. Each forwarder consumed only what their own key opened.",
-  5: "Dave decrypts the final slice with his key and accepts the HTLC. Privacy preserved: Bob never saw past himself, Charlie never saw past himself, and only Dave learned the final details.",
+  0: "So, Alice locks each per-hop slice with that hop's own public key. The slices still ride along in the message, but they're sealed, and only the matching private key can open one. Without it, a slice is just *noise*.",
+  1: "The message reaches Bob. He tries his private key against the whole stack, and only his slice opens. Charlie's and Dave's are sitting right there, but Bob can't read them. Different keys, different locks.",
+  2: "Now Bob peels off his slice and passes Charlie's and Dave's sealed slices along. Did Bob learn anything about Dave or the final amount? Nope. Those slices stayed shut while they rode through him.",
+  3: "Charlie tries his private key. His slice opens, Dave's stays sealed. So Charlie still has no idea who the destination is or what they'll get.",
+  4: "Then Charlie peels off his slice and sends Dave's sealed slice on by itself. Each forwarder only ever opened what its own private key could.",
+  5: "Finally, Dave opens the last slice with his private key and accepts the HTLC. Nice. Bob never saw past himself, Charlie never saw past himself, and only Dave learned the *final* details.",
 };
 
 function activeHopAt(step: number): HopId {
@@ -137,10 +137,10 @@ function isUnlockingNow(forHop: ForwarderId, step: number): boolean {
 }
 
 const NODE_X_PCT: Record<HopId, number> = {
-  alice: 20,
-  bob: 40,
-  charlie: 60,
-  dave: 80,
+  alice: 12,
+  bob: 38,
+  charlie: 62,
+  dave: 88,
 };
 
 // Pixel-art key glyph rendered in the hop's key color. Sized large enough to
@@ -173,34 +173,40 @@ function KeyTile({ color, lit }: { color: string; lit: boolean }) {
 
 export function EncryptedSliceReveal() {
   const [step, setStep] = useState(0);
-  const [playing, setPlaying] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    if (!playing) return;
-    timerRef.current = setTimeout(() => {
-      setStep((s) => {
-        if (s + 1 >= TOTAL_STEPS) {
-          setPlaying(false);
-          return s;
-        }
-        return s + 1;
-      });
-    }, 1900);
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, [playing, step]);
-
-  function play() {
-    if (step >= TOTAL_STEPS - 1) setStep(0);
-    setPlaying(true);
-  }
-  function pause() { setPlaying(false); }
-  function reset() { setPlaying(false); setStep(0); }
+  function back() { setStep((s) => Math.max(0, s - 1)); }
+  function next() { setStep((s) => Math.min(TOTAL_STEPS - 1, s + 1)); }
+  function reset() { setStep(0); }
 
   const active = activeHopAt(step);
-  const messageLeftPct = NODE_X_PCT[active];
+
+  // The 290px message card slides under the active node. We compute its `left`
+  // as a plain pixel number against the measured stage width, on purpose: the
+  // `left` transition only animates reliably between plain `px` values, and a
+  // bare `calc(pct% - 145px)` goes negative at Alice (leftmost) and clips off
+  // the stage edge. Measuring lets us center exactly under the node (matching
+  // the node's own `pct%` positioning inside the padded content box) and clamp
+  // so the card never clips at Alice or Dave. Mirrors PlaintextMessageTear.
+  const MSG_W = 290;
+  const EDGE = 16; // matches the stage's `px-4` horizontal padding
+  const stageRef = useRef<HTMLDivElement>(null);
+  const [stageW, setStageW] = useState(0);
+  useLayoutEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    const measure = () => setStageW(el.clientWidth);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  let messageLeft = EDGE; // pre-measure fallback (Alice's resting spot)
+  if (stageW > 0) {
+    const contentW = stageW - 2 * EDGE; // node `%` is relative to this inner box
+    const nodeCenter = EDGE + (NODE_X_PCT[active] / 100) * contentW;
+    const ideal = nodeCenter - MSG_W / 2;
+    messageLeft = Math.max(EDGE, Math.min(stageW - MSG_W - EDGE, ideal));
+  }
 
   return (
     <div
@@ -219,7 +225,7 @@ export function EncryptedSliceReveal() {
       </div>
 
       {/* Stage */}
-      <div className="relative bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-6" style={{ minHeight: 520 }}>
+      <div ref={stageRef} className="relative bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-6" style={{ minHeight: 520 }}>
         {/* Hop track */}
         <div className="relative" style={{ height: 144 }}>
           {[0, 1, 2].map((i) => {
@@ -230,9 +236,9 @@ export function EncryptedSliceReveal() {
                 key={i}
                 className="absolute pointer-events-none"
                 style={{
-                  top: 29,
-                  left: `calc(${startPct}% + 32px)`,
-                  width: `calc(${endPct - startPct}% - 64px)`,
+                  top: 31,
+                  left: `calc(${startPct}% + 34px)`,
+                  width: `calc(${endPct - startPct}% - 68px)`,
                   borderTop: "1.5px dashed #475569",
                 }}
               />
@@ -258,8 +264,8 @@ export function EncryptedSliceReveal() {
                 <div
                   className="rounded-full flex items-center justify-center transition-all duration-500"
                   style={{
-                    width: 60,
-                    height: 60,
+                    width: 64,
+                    height: 64,
                     background: hop.fill,
                     color: "#0f172a",
                     border: `${isActive ? 3 : 2}px solid ${hop.stroke}`,
@@ -292,9 +298,9 @@ export function EncryptedSliceReveal() {
                           {label}'s public key
                         </div>
                         <div>
-                          The node-identity public key Alice used to encrypt
-                          this hop's slice. {label} uses the matching private
-                          key to decrypt.
+                          This is the node-identity public key Alice used to
+                          lock this hop's slice. {label} opens it with the
+                          matching private key.
                         </div>
                       </>
                     }
@@ -314,8 +320,8 @@ export function EncryptedSliceReveal() {
           className="absolute"
           style={{
             top: 168,
-            left: `calc(${messageLeftPct}% - 145px)`,
-            width: 290,
+            left: messageLeft,
+            width: MSG_W,
             transition: "left 1.3s cubic-bezier(0.4, 0.0, 0.2, 1)",
           }}
         >
@@ -376,9 +382,9 @@ export function EncryptedSliceReveal() {
                               {s.forHop.charAt(0).toUpperCase() + s.forHop.slice(1)}'s public key
                             </div>
                             <div>
-                              Alice encrypted this slice to {s.forHop}'s
+                              Alice locked this slice to {s.forHop}'s
                               node-identity public key. Only {s.forHop} can
-                              decrypt it, using the matching private key.
+                              open it, using the matching private key.
                             </div>
                           </>
                         }
@@ -430,30 +436,19 @@ export function EncryptedSliceReveal() {
                           </div>
                         ))}
                       </div>
-                      {/* Locked-spec encryption hatch: per-hop angle so
-                          this intro visual already trains "vertical = Bob's
-                          encryption", "diagonal = Charlie", "horizontal =
-                          Dave" before students hit the layered chapters. */}
+                      {/* Locked-spec encryption hatch via the shared
+                          HatchOverlay: per-hop angle so this intro visual
+                          already trains "vertical = Bob's encryption",
+                          "diagonal = Charlie", "horizontal = Dave" before
+                          students hit the layered chapters. */}
                       <div
                         className="absolute inset-0 pointer-events-none"
                         style={{
                           opacity: decrypted ? 0 : 1,
-                          background: color,
-                          mixBlendMode: "normal",
                           transition: "opacity 600ms ease-in-out",
                         }}
                       >
-                        <div
-                          className="absolute inset-0"
-                          style={{ background: color, opacity: 0.08 }}
-                        />
-                        <div
-                          className="absolute inset-0"
-                          style={{
-                            backgroundImage: `repeating-linear-gradient(${LAYER_ANGLES[s.forHop]}deg, ${color} 0px, ${color} 2.5px, transparent 2.5px, transparent 11px)`,
-                            opacity: 0.6,
-                          }}
-                        />
+                        <HatchOverlay hops={[s.forHop]} />
                       </div>
                     </div>
                   </div>
@@ -478,11 +473,20 @@ export function EncryptedSliceReveal() {
       <div className="px-4 py-3 border-t-[1.5px] border-foreground/30 bg-card">
         <div className="flex gap-1.5 items-center flex-wrap shrink-0">
           <button
-            onClick={playing ? pause : play}
-            className="px-3 py-1.5 border-[1.5px] border-black bg-black text-white font-bold text-xs tracking-[0.05em] uppercase hover:bg-[#b8860b] hover:border-[#b8860b] transition-colors"
-            data-testid="encrypted-slice-reveal-play"
+            onClick={back}
+            disabled={step === 0}
+            className="px-3 py-1.5 border-[1.5px] border-foreground/40 bg-card text-foreground text-xs uppercase tracking-[0.05em] hover:bg-secondary transition-colors disabled:opacity-40 disabled:pointer-events-none"
+            data-testid="encrypted-slice-reveal-back"
           >
-            {playing ? "❚❚ Pause" : step >= TOTAL_STEPS - 1 ? "↻ Replay" : "▶ Play"}
+            ← Back
+          </button>
+          <button
+            onClick={next}
+            disabled={step >= TOTAL_STEPS - 1}
+            className="px-3 py-1.5 border-[1.5px] border-foreground/40 bg-card text-foreground text-xs uppercase tracking-[0.05em] hover:bg-secondary transition-colors disabled:opacity-40 disabled:pointer-events-none"
+            data-testid="encrypted-slice-reveal-next"
+          >
+            Next →
           </button>
           <button
             onClick={reset}
@@ -494,7 +498,7 @@ export function EncryptedSliceReveal() {
             {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
               <button
                 key={i}
-                onClick={() => { setPlaying(false); setStep(i); }}
+                onClick={() => setStep(i)}
                 className="w-7 h-7 border-[1.5px] text-[10px] font-bold transition-colors"
                 style={{
                   background: step === i ? "#b8860b" : step > i ? "#fef3c7" : "#fffdf5",

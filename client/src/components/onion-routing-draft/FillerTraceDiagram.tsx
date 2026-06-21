@@ -100,7 +100,7 @@ const STEPS: StepDef[] = [
     iterLabel: "Iteration 1 of 2 (Bob)",
     title: "Empty filler",
     caption:
-      "We grow the filler one forwarder at a time, in route order. Bob first, then Charlie. Dave is the final hop, so he doesn't shift anything and contributes no filler.",
+      "So, we'll grow the filler one forwarder at a time, in route order. Bob first, then Charlie. Dave's the final hop, so he doesn't shift anything and adds no filler.",
   },
   {
     beat: 2,
@@ -108,7 +108,7 @@ const STEPS: StepDef[] = [
     iterLabel: "Iteration 1 of 2 (Bob)",
     title: "Append Bob's 60 zero bytes",
     caption:
-      "Bob's hop payload is 60 bytes wide (a small intermediate-hop TLV plus the 32-byte HMAC). We tack 60 zeros onto the empty filler. They're placeholders for Bob's keystream extension to XOR into.",
+      "Bob's hop payload is 60 bytes wide (a small intermediate-hop TLV plus the 32-byte HMAC). We'll tack 60 zeros onto the empty filler. They're just placeholders for Bob's keystream extension to XOR into.",
   },
   {
     beat: 3,
@@ -116,7 +116,7 @@ const STEPS: StepDef[] = [
     iterLabel: "Iteration 1 of 2 (Bob)",
     title: "Bob's keystream (1,360 bytes)",
     caption:
-      "Generate Bob's `rho` keystream extended past the 1,300-byte boundary: `ROUTING_INFO_SIZE + 60 = 1,360 bytes`. The extra 60 bytes past 1,300 are what Bob's shift would virtually XOR into the trailing region of Charlie's view.",
+      "Now, we'll generate Bob's `rho` keystream extended past the 1,300-byte boundary: `ROUTING_INFO_SIZE + 60 = 1,360 bytes`. Those extra 60 bytes past 1,300 are what Bob's shift would virtually XOR into the trailing region of Charlie's view.",
   },
   {
     beat: 4,
@@ -124,7 +124,7 @@ const STEPS: StepDef[] = [
     iterLabel: "Iteration 1 of 2 (Bob)",
     title: "Slice the trailing 60 bytes",
     caption:
-      "Take just the last `len(filler)` = 60 bytes of Bob's keystream, the part past the 1,300 boundary.",
+      "Then, we'll keep just the last `len(filler)` = 60 bytes of Bob's keystream, the part that spills past the 1,300 boundary.",
   },
   {
     beat: 5,
@@ -132,7 +132,7 @@ const STEPS: StepDef[] = [
     iterLabel: "Iteration 1 of 2 (Bob)",
     title: "XOR → Bob's filler",
     caption:
-      "XOR the 60 zeros against the 60-byte keystream slice. The result is 60 bytes that visually carry Bob's encryption layer (zeros XOR keystream = keystream itself). When Charlie peels his layer downstream, this region will land at the byte offsets where Charlie's HMAC was computed.",
+      "Now we'll XOR the 60 zeros against the 60-byte keystream slice. Since zeros XOR keystream is just the keystream itself, the result is 60 bytes carrying Bob's encryption layer. When Charlie peels downstream, this region lands at the byte offsets where Charlie's HMAC was computed.",
   },
   // ── Iteration 2 (Charlie) ────────────────────────────────────────────────
   {
@@ -141,7 +141,7 @@ const STEPS: StepDef[] = [
     iterLabel: "Iteration 2 of 2 (Charlie)",
     title: "Append Charlie's 80 zero bytes",
     caption:
-      "Charlie's hop payload is 80 bytes wide, different from Bob's, because hop payloads vary. Tack 80 fresh zero bytes onto the END of the filler. Filler is now 140 bytes: 60 in Bob's encryption layer, plus 80 fresh zeros for Charlie's iteration.",
+      "Charlie's hop payload is 80 bytes wide, different from Bob's, since hop payloads vary. We'll tack 80 fresh zeros onto the END of the filler. It's now 140 bytes: 60 in Bob's encryption layer, plus 80 fresh zeros for Charlie's iteration.",
   },
   {
     beat: 7,
@@ -149,7 +149,7 @@ const STEPS: StepDef[] = [
     iterLabel: "Iteration 2 of 2 (Charlie)",
     title: "Charlie's keystream (1,380 bytes)",
     caption:
-      "Generate Charlie's `rho` keystream extended past 1,300: `ROUTING_INFO_SIZE + 80 = 1,380 bytes`.",
+      "Same idea as before: we'll generate Charlie's `rho` keystream extended past 1,300: `ROUTING_INFO_SIZE + 80 = 1,380 bytes`.",
   },
   {
     beat: 8,
@@ -157,7 +157,7 @@ const STEPS: StepDef[] = [
     iterLabel: "Iteration 2 of 2 (Charlie)",
     title: "Slice the trailing 140 bytes",
     caption:
-      "Take the last `len(filler)` = 140 bytes of Charlie's keystream. Notice the chunk reaches BACK into Charlie's regular 1,300 region by 60 bytes. That's exactly where Bob's filler bytes will sit at the time Charlie peels.",
+      "Now keep the last `len(filler)` = 140 bytes of Charlie's keystream. Notice it overlaps Charlie's regular 1,300 region by 60 bytes. That's *exactly* where Bob's filler bytes will sit when Charlie peels.",
   },
   {
     beat: 9,
@@ -165,7 +165,7 @@ const STEPS: StepDef[] = [
     iterLabel: "Iteration 2 of 2 (Charlie)",
     title: "XOR → Final filler (140 bytes)",
     caption:
-      "XOR the 140-byte filler against Charlie's 140-byte keystream slice. The leading 60 bytes pick up Charlie's hatch on top of Bob's (crosshatch, the same look the rest of the chapter uses for nested encryption). The trailing 80 bytes go from zero to Charlie-encrypted.",
+      "Now XOR the 140-byte filler against Charlie's 140-byte slice. The leading 60 bytes pick up Charlie's layer on top of Bob's (two stacked layers now). The trailing 80 go from zero to Charlie-encrypted.",
   },
   // ── Wrap journey (chapter 8 preview) ─────────────────────────────────────
   {
@@ -174,15 +174,15 @@ const STEPS: StepDef[] = [
     iterLabel: "Wrap preview · chapter 8",
     title: "Initialize buffer with pad-key noise",
     caption:
-      "Before any wrapping, Alice fills the 1,300-byte hop_payloads buffer with pseudorandom bytes from a special 'pad-key' chacha20 keystream. This makes the buffer look encrypted from the start. Even on short routes the destination's view has no detectable trailing structure.",
+      "Before any wrapping, Alice fills the 1,300-byte hop_payloads buffer with pseudorandom bytes from a special 'pad-key' chacha20 keystream. Why? So the buffer looks encrypted from the start. Even on short routes, the destination's view has no telltale trailing structure.",
   },
   {
     beat: 11,
     hop: "wrap",
     iterLabel: "Wrap preview · chapter 8",
-    title: "Wrap Dave's layer · splice the filler",
+    title: "Wrap Dave's layer · write in the filler",
     caption:
-      "Iteration 1 (innermost, Dave). Alice writes Dave's hop payload at the front, XORs the entire buffer with Dave's `rho` keystream, then OVERWRITES the trailing 140 bytes with the filler we just computed. The filler lands at the trailing positions exactly once, on the innermost iteration only.",
+      "Iteration 1 (innermost, Dave). Alice writes Dave's hop payload at the front, XORs the whole buffer with Dave's `rho` keystream, then OVERWRITES the trailing 140 bytes with the filler we just built. The filler gets written in exactly once, on this innermost iteration only.",
   },
   {
     beat: 12,
@@ -190,7 +190,7 @@ const STEPS: StepDef[] = [
     iterLabel: "Wrap preview · chapter 8",
     title: "Wrap Charlie's layer",
     caption:
-      "Iteration 2. Alice shifts the buffer right by Charlie's hop-payload size (80 bytes), writes Charlie's hop payload at the front, then XORs the entire buffer with Charlie's `rho` keystream. Charlie's hop payload now carries 1 layer (Charlie). Dave's hop payload, which was already wrapped, picks up Charlie's hatch on top of Dave's: 2 layers.",
+      "Iteration 2. Alice shifts the buffer right by Charlie's hop-payload size (80 bytes), writes Charlie's hop payload at the front, then XORs the whole buffer with Charlie's `rho` keystream. Charlie's hop payload now carries 1 layer. Dave's, already wrapped once, picks up Charlie's layer on top: 2 layers.",
   },
   {
     beat: 13,
@@ -198,7 +198,7 @@ const STEPS: StepDef[] = [
     iterLabel: "Wrap preview · chapter 8",
     title: "Wrap Bob's layer",
     caption:
-      "Iteration 3 (outermost). Alice shifts right by Bob's hop-payload size (60 bytes), writes Bob's hop payload, then XORs with Bob's `rho` keystream. After this final iteration the buffer is fully wrapped: Bob's hop payload has 1 layer, Charlie's has 2, Dave's has 3.",
+      "Iteration 3 (outermost). Alice shifts right by Bob's hop-payload size (60 bytes), writes Bob's hop payload, then XORs with Bob's `rho` keystream. And that's it: the buffer is fully wrapped now, Bob's hop payload at 1 layer, Charlie's at 2, Dave's at 3.",
   },
   {
     beat: 14,
@@ -206,12 +206,11 @@ const STEPS: StepDef[] = [
     iterLabel: "Wrap preview · chapter 8",
     title: "Attach envelope → 1,366-byte packet",
     caption:
-      "Alice attaches the 66-byte envelope: a 1-byte version (`0x00`), her 33-byte ephemeral pubkey for Bob (`E_AB`), and the outer 32-byte HMAC. The 1,366-byte Sphinx packet is ready for Bob.",
+      "Finally, Alice attaches the 66-byte envelope: a 1-byte version (`0x00`), her 33-byte ephemeral pubkey for Bob (`E_AB`), and the outer 32-byte HMAC. The 1,366-byte Sphinx packet is ready for Bob.",
   },
 ];
 
 const TOTAL_BEATS = STEPS.length;
-const STEP_MS = 2400;
 
 // ── Hover tooltip ──────────────────────────────────────────────────────────
 
@@ -284,27 +283,10 @@ function HoverTooltip({
 
 export function FillerTraceDiagram() {
   const [step, setStep] = useState(1);
-  const [playing, setPlaying] = useState(false);
 
-  useEffect(() => {
-    if (!playing) return;
-    if (step >= TOTAL_BEATS) {
-      setPlaying(false);
-      return;
-    }
-    const t = setTimeout(() => setStep((s) => s + 1), STEP_MS);
-    return () => clearTimeout(t);
-  }, [playing, step]);
-
-  const play = () => {
-    if (step >= TOTAL_BEATS) setStep(1);
-    setPlaying(true);
-  };
-  const pause = () => setPlaying(false);
-  const reset = () => {
-    setStep(1);
-    setPlaying(false);
-  };
+  const back = () => setStep((s) => Math.max(1, s - 1));
+  const next = () => setStep((s) => Math.min(TOTAL_BEATS, s + 1));
+  const reset = () => setStep(1);
 
   const def = STEPS[step - 1];
   // Accent the description block by the active hop's encryption color, falling
@@ -351,14 +333,18 @@ export function FillerTraceDiagram() {
         <div className="flex flex-col md:flex-row md:items-start md:gap-4">
           <div className="flex gap-1.5 items-center flex-wrap shrink-0">
             <button
-              onClick={playing ? pause : play}
-              className="px-3 py-1.5 border-[1.5px] border-black bg-black text-white font-bold text-xs tracking-[0.05em] uppercase hover:bg-[#b8860b] hover:border-[#b8860b] transition-colors"
+              onClick={back}
+              disabled={step <= 1}
+              className="px-3 py-1.5 border-[1.5px] border-foreground/40 bg-card text-foreground text-xs uppercase tracking-[0.05em] hover:bg-secondary transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-card"
             >
-              {playing
-                ? "❚❚ Pause"
-                : step >= TOTAL_BEATS
-                  ? "↻ Replay"
-                  : "▶ Play"}
+              ← Back
+            </button>
+            <button
+              onClick={next}
+              disabled={step >= TOTAL_BEATS}
+              className="px-3 py-1.5 border-[1.5px] border-foreground/40 bg-card text-foreground text-xs uppercase tracking-[0.05em] hover:bg-secondary transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-card"
+            >
+              Next →
             </button>
             <button
               onClick={reset}
@@ -372,10 +358,7 @@ export function FillerTraceDiagram() {
                 return (
                   <button
                     key={n}
-                    onClick={() => {
-                      setPlaying(false);
-                      setStep(n);
-                    }}
+                    onClick={() => setStep(n)}
                     className="w-7 h-7 border-[1.5px] text-xs font-bold transition-colors"
                     style={{
                       background: step === n ? "#b8860b" : "#fffdf5",
@@ -1010,15 +993,11 @@ function PadKeyInitView() {
         <span>byte 0</span>
         <span>byte 1,299</span>
       </div>
-      <div className="mt-3 text-[11px]" style={{ color: NEUTRAL_TEXT, fontStyle: "italic" }}>
-        The 140-byte filler we just computed sits in memory, ready for Alice
-        to splice during the innermost wrap (next step).
-      </div>
     </div>
   );
 }
 
-// ── Wrap preview (beats 11-14) — single persistent morphing bar ─────────────
+// ── Wrap preview (beats 11-14) - single persistent morphing bar ─────────────
 //
 // Beats 11-14 used to be four unrelated components (DaveWrapView /
 // CharlieWrapView / BobWrapView / FinalPacketView), so advancing 11→12→13→14
@@ -1031,7 +1010,7 @@ function PadKeyInitView() {
 //   • phase "splice" (beat 11): Dave's hop payload at the FRONT, the
 //     Dave-encrypted middle, and the freshly spliced filler at the trailing
 //     positions. Dave sits at the front here, so this layout cannot width-morph
-//     into the shifted layout — we crossfade it (CrossfadeSwap) into:
+//     into the shifted layout - we crossfade it (CrossfadeSwap) into:
 //   • phase "shifted" (beats 12, 13, 14): the post-shift layout
 //     [Bob | Charlie | Dave | tail]. Beats 12→13→14 are the SAME elements, so
 //     their region widths + hatch layers tween smoothly. Bob's hop payload
@@ -1093,7 +1072,7 @@ function WrapPreviewHeader({ step }: { step: number }) {
               <span>
                 After this wrap the buffer holds Dave's hop payload (encrypted by
                 Dave's <code style={{ fontFamily: MONO }}>rho</code>) at the front, the
-                Dave-encrypted middle, and the spliced filler at the trailing positions.
+                Dave-encrypted middle, and the filler written into the trailing positions.
               </span>
             }
           >
@@ -1156,15 +1135,6 @@ function WrapPreviewFooter({ step }: { step: number }) {
           <span>byte 0</span>
           <span>byte {(FULL_PACKET_BYTES - 1).toLocaleString()}</span>
         </div>
-        <div
-          className="mt-3 text-[11px]"
-          style={{ color: NEUTRAL_TEXT, fontStyle: "italic" }}
-        >
-          Alice sends this 1,366-byte packet to Bob. The chapter ahead will
-          walk through Bob's peel and forward, and the filler bytes we just
-          built will land at exactly the trailing positions Charlie's HMAC
-          verification expects.
-        </div>
       </>
     );
   }
@@ -1211,7 +1181,7 @@ function WrapPreviewBar({ step }: { step: number }) {
           re-parenting it, keeping the bar one reconciled element. */}
       <PacketChrome visible={isPacket} />
 
-      {/* The inner region row — the actual hop_payloads bar. Same element on
+      {/* The inner region row - the actual hop_payloads bar. Same element on
           every beat 11-14. The splice <-> shifted change crossfades its content;
           within the shifted phase widths + hatch layers tween. */}
       <div
@@ -1235,16 +1205,6 @@ function WrapPreviewBar({ step }: { step: number }) {
         </CrossfadeSwap>
       </div>
 
-      {isPacket && (
-        <div className="text-center mt-1.5">
-          <span
-            className="text-[9px]"
-            style={{ fontFamily: MONO, color: NEUTRAL_TEXT, fontStyle: "italic" }}
-          >
-            hop_payloads · 1,300 bytes
-          </span>
-        </div>
-      )}
     </MorphBox>
   );
 }
@@ -1358,7 +1318,7 @@ function SpliceRegionRow() {
 // in this phase renders the SAME keyed cells + tail in the same order, React
 // reconciles them and their widths + hatch layers tween between beats.
 //   • beat 12: Bob absent (width 0), Charlie 1 layer, Dave 2 layers.
-//   • beat 13: Bob grows in (1 layer), Charlie 2, Dave 3 — buffer fully wrapped.
+//   • beat 13: Bob grows in (1 layer), Charlie 2, Dave 3 - buffer fully wrapped.
 //   • beat 14: same layers as 13; widths expand to the packet payload-area
 //     proportions (region 50%, padding 50%) as the envelope fades in.
 function ShiftedRegionRow({ step }: { step: number }) {
@@ -1398,7 +1358,7 @@ function ShiftedRegionRow({ step }: { step: number }) {
         layers={daveLayers}
         label="DAVE"
       />
-      {/* Tail / padding region — persists across 12-14; its label crossfades
+      {/* Tail / padding region - persists across 12-14; its label crossfades
           ("residue" while wrapping, "padding" once it reads as the packet). */}
       <div
         key="tail"

@@ -17,7 +17,6 @@ import { StepCaption } from "./StepCaption";
 
 const INK = "#0f172a";
 const SLATE = "#475569";
-const CREAM_STAGE = "#fefdfb";
 const CREAM_CARD = "#fffdf5";
 const SHARED = "#b8860b";
 const MONO = '"JetBrains Mono", "Fira Code", monospace';
@@ -27,28 +26,45 @@ type Mode = "abstract" | "concrete";
 interface ModeValues {
   a: string;
   b: string;
+  G: string;
   A: string;
   B: string;
+  // Compact label for the public-key chip that flies to the center during the
+  // exchange step. The full derivation (e.g. "A = 3 · 7 = 21") lives on the
+  // party card; the chip only needs the key + its value so the two chips don't
+  // collide when they meet in the middle.
+  chipA: string;
+  chipB: string;
   shared: string;
   sharedHash: string;
+  sharedSecret: string;
 }
 
 const VALUES: Record<Mode, ModeValues> = {
   abstract: {
     a: "a",
     b: "b",
+    G: "G",
     A: "A = a · G",
     B: "B = b · G",
+    chipA: "A = a · G",
+    chipB: "B = b · G",
     shared: "ab · G",
     sharedHash: "SHA256(ab · G)",
+    sharedSecret: "32-byte shared secret",
   },
   concrete: {
     a: "3",
     b: "5",
-    A: "A = 3 · G",
-    B: "B = 5 · G",
-    shared: "15 · G",
-    sharedHash: "SHA256(15 · G)",
+    G: "7",
+    A: "A = 3 · 7 = 21",
+    B: "B = 5 · 7 = 35",
+    chipA: "A = 21",
+    chipB: "B = 35",
+    shared: "105",
+    sharedHash: "SHA256(105)",
+    // Real SHA256 of the shared point 105, truncated for display.
+    sharedSecret: "0x1253e937…0155e860",
   },
 };
 
@@ -57,23 +73,23 @@ const VALUES: Record<Mode, ModeValues> = {
 function tooltips(mode: Mode) {
   if (mode === "abstract") {
     return {
-      a: "Alice's private key. A 256-bit random number she generates locally and never shares.",
-      A: "Alice's public key, computed as a · G. Safe to share. Recovering a from A requires solving the discrete log problem.",
-      b: "Bob's private key. A 256-bit random number he generates locally and never shares.",
-      B: "Bob's public key, computed as b · G. Safe to share.",
-      G: "The generator point. A fixed point on the elliptic curve known to everyone.",
+      a: "Alice's private key. A 256-bit random number she rolls locally and never shares.",
+      A: "Alice's public key, which is just a · G. Safe to hand out, since recovering a from A means solving the discrete log problem (good luck!).",
+      b: "Bob's private key. A 256-bit random number he rolls locally and never shares.",
+      B: "Bob's public key, which is just b · G. Safe to hand out.",
+      G: "The generator point. A fixed point on the elliptic curve that everyone knows.",
       shared:
-        "The shared point. Both parties arrive at it without ever sending it. An eavesdropper sees A and B but can't combine them into ab · G without a private key.",
+        "The shared point. Both sides land on it without ever sending it. An eavesdropper sees A and B, but with no private key, can't fold them into ab · G.",
     };
   }
   return {
     a: "Alice's private number. In real ECDH this would be 256 bits of randomness, not 3.",
-    A: "Alice's public key, computed as 3 · G.",
+    A: "Alice's public key, 3 · 7 = 21. Safe to publish.",
     b: "Bob's private number. In real ECDH this would be 256 bits of randomness, not 5.",
-    B: "Bob's public key, computed as 5 · G.",
-    G: "The generator point. A fixed, well-known point on the elliptic curve.",
+    B: "Bob's public key, 5 · 7 = 35. Safe to publish.",
+    G: "The generator. Everyone shares the same one. We're using 7 as a stand-in for the fixed, well-known point on a real curve.",
     shared:
-      "The shared point. Both reach 15 · G because 3 · 5 = 5 · 3, and neither had to send it. Each derived it independently.",
+      "The shared point. Both reach 105 because 3 · 5 = 5 · 3, and neither had to send it. Each one worked it out on its own.",
   };
 }
 
@@ -196,7 +212,7 @@ function ModeToggle({ mode, onChange }: { mode: Mode; onChange: (m: Mode) => voi
         Mode
       </span>
       <Btn value="abstract" label="Abstract" />
-      <Btn value="concrete" label="Concrete (a=3, b=5)" />
+      <Btn value="concrete" label="Concrete (a=3, b=5, G=7)" />
     </div>
   );
 }
@@ -294,7 +310,7 @@ function PartyColumn({
             className="text-[10px] italic"
             style={{ color: SLATE, fontFamily: "ui-sans-serif, system-ui, sans-serif" }}
           >
-            (waiting for the other side's public key)
+            (waiting on the other side's public key...)
           </div>
         )}
       </div>
@@ -306,10 +322,17 @@ function PartyColumn({
 
 const TOTAL_STEPS = 3;
 
-const STEP_CAPTIONS: Record<number, string> = {
-  0: "Each party generates a private key (a 256-bit random number) and derives a public key from it. Private keys never leave their owner; public keys can be shared safely.",
-  1: "Alice and Bob exchange public keys. The two values now visible in the center are everything an eavesdropper would see on the wire. Without one of the private keys, that's not enough to compute ab · G.",
-  2: "Watch as each public key flies into the opposite party's calculation. Alice combines her private key with B; Bob combines his with A. Both arrive at the same shared point because scalar multiplication commutes. The hash of that point becomes a 32-byte symmetric key.",
+const STEP_CAPTIONS: Record<Mode, Record<number, string>> = {
+  abstract: {
+    0: "First, each party rolls a private key (a 256-bit random number) and derives a public key from it. The private key never leaves its owner. The public key, you can hand out freely.",
+    1: "Now Alice and Bob trade public keys. Those two values in the center are all an eavesdropper gets to see. Without one of the private keys, that's just not enough to reach ab · G.",
+    2: "Watch what happens as each public key flies into the other side's math. Alice mixes her private key with B, Bob mixes his with A, and they land on the *same* shared point because scalar multiplication commutes. Hash that point and you've got a 32-byte symmetric key.",
+  },
+  concrete: {
+    0: "Here we plug in tiny stand-ins: Alice's private key is 3, Bob's is 5, and the generator G is 7. (Real keys are 256-bit random numbers, but small ones keep the arithmetic easy to follow.) Each public key is just the private key times G, so Alice publishes 3 · 7 = 21 and Bob publishes 5 · 7 = 35.",
+    1: "Alice and Bob swap public keys, so 21 and 35 are the values that travel across the wire. Notice that neither private number, 3 or 5, ever leaves home.",
+    2: "Now each side folds in its own private number. Alice computes 3 · 35 = 105, Bob computes 5 · 21 = 105, and they land on the *same* 105 because 3 · 5 = 5 · 3. Hash that shared number and both ends hold the identical 32-byte key. (With real 256-bit keys, someone who sees 21 and 35 still cannot work back to 3 or 5. That is the discrete log problem doing the heavy lifting.)",
+  },
 };
 
 const STEP_TITLES: Record<number, string> = {
@@ -380,7 +403,7 @@ export function EcdhRecapDiagram() {
   const bTok = <V info={t.b}>{v.b}</V>;
   const ATok = <V info={t.A}>{v.A}</V>;
   const BTok = <V info={t.B}>{v.B}</V>;
-  const GTok = <V info={t.G}>G</V>;
+  const GTok = <V info={t.G}>{v.G}</V>;
   const sharedInline = <V info={t.shared}>{v.shared}</V>;
 
   // Compute box contents.
@@ -427,8 +450,8 @@ export function EcdhRecapDiagram() {
       {/* Stage */}
       <div className="overflow-x-auto">
         <div
-          className="relative px-4 py-6"
-          style={{ background: CREAM_STAGE, minHeight: 380, minWidth: 760 }}
+          className="relative px-4 py-6 bg-[#fefdfb] dark:bg-[#0b1220]"
+          style={{ minHeight: 380, minWidth: 760 }}
         >
           <div className="flex items-stretch justify-center gap-4">
             <PartyColumn
@@ -481,7 +504,7 @@ export function EcdhRecapDiagram() {
                     zIndex: 5,
                   }}
                 >
-                  {v.A}
+                  {v.chipA}
                 </div>
                 {/* Bob's public key chip */}
                 <div
@@ -505,7 +528,7 @@ export function EcdhRecapDiagram() {
                     zIndex: 5,
                   }}
                 >
-                  {v.B}
+                  {v.chipB}
                 </div>
               </div>
 
@@ -548,10 +571,30 @@ export function EcdhRecapDiagram() {
                 >
                   {v.sharedHash}
                 </div>
-                <div className="text-[10px] leading-snug mt-0.5" style={{ color: INK }}>
-                  <span style={{ fontWeight: 700 }}>→</span>{" "}
-                  <span className="italic">32-byte shared secret</span>
-                </div>
+                {mode === "concrete" ? (
+                  <>
+                    <div
+                      className="text-[10px] leading-snug mt-0.5"
+                      style={{ color: INK, fontFamily: MONO }}
+                    >
+                      <span style={{ fontWeight: 700 }}>→</span> {v.sharedSecret}
+                    </div>
+                    <div
+                      className="text-[9px] leading-snug mt-0.5 italic"
+                      style={{
+                        color: SLATE,
+                        fontFamily: "ui-sans-serif, system-ui, sans-serif",
+                      }}
+                    >
+                      32-byte shared secret
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-[10px] leading-snug mt-0.5" style={{ color: INK }}>
+                    <span style={{ fontWeight: 700 }}>→</span>{" "}
+                    <span className="italic">{v.sharedSecret}</span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -569,7 +612,7 @@ export function EcdhRecapDiagram() {
           <StepCaption
             label={STEP_LABELS[step]}
             title={STEP_TITLES[step]}
-            caption={`${STEP_CAPTIONS[step]} Hover any value above for a refresher.`}
+            caption={`${STEP_CAPTIONS[mode][step]} Hover any value above for a refresher.`}
             accentColor={SHARED}
           />
         </div>

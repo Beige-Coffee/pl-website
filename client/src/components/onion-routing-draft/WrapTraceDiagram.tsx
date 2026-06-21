@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { HatchOverlay, LAYER_COLORS, type ForwarderId } from "./encryptionHatch";
 import { SlotSubCell } from "./SlotSubCell";
 import { renderCaption } from "./captionMarkup";
@@ -129,7 +129,7 @@ const BEATS: Beat[] = [
     subLabel: "INITIALIZE",
     title: "Fill the buffer with `pad_key` noise",
     caption:
-      "Before any wrapping, Alice fills the 1,300-byte `hop_payloads` buffer with `chacha20(pad_key, 1300)`, where `pad_key = HMAC('pad', session_key)`. Starting with pseudo-random noise hides 'this packet was built for a short route' from the destination's view.",
+      "First, before any wrapping, Alice fills the 1,300-byte `hop_payloads` buffer with `chacha20(pad_key, 1300)`, where `pad_key = HMAC('pad', session_key)`. Why start with noise? So the destination can't tell 'this packet was built for a short route' from what's left over.",
   },
   {
     step: 2,
@@ -137,7 +137,7 @@ const BEATS: Beat[] = [
     subLabel: "SHIFT",
     title: "Right-shift by 100 bytes",
     caption:
-      "Drop the last 100 bytes of the buffer off the right and prepend 100 empty placeholder bytes at the front. This makes room for Dave's hop payload (100 bytes: bigsize + TLV + HMAC). Total length stays at 1,300.",
+      "Now we make room for Dave. Drop the last 100 bytes off the right and prepend 100 empty placeholder bytes at the front. That's exactly the size of Dave's hop payload (bigsize + TLV + HMAC), and the total stays at 1,300.",
   },
   {
     step: 3,
@@ -145,7 +145,7 @@ const BEATS: Beat[] = [
     subLabel: "WRITE",
     title: "Write Dave's hop payload at the front",
     caption:
-      "Write Dave's bigsize-prefixed TLV records (amt_to_forward, outgoing_cltv_value, payment_data) followed by a 32-byte all-zero HMAC. The zeros are Dave's destination signal — he's the final hop, so there's no inner layer for his HMAC to commit to.",
+      "Now we write Dave's bigsize-prefixed TLV records (amt_to_forward, outgoing_cltv_value, payment_data), then a 32-byte all-zero HMAC. Those zeros are how Dave knows he's the *destination*. He's the final hop, so there's no inner layer for his HMAC to commit to.",
     focus: "front",
   } as Beat,
   {
@@ -154,7 +154,7 @@ const BEATS: Beat[] = [
     subLabel: "ENCRYPT",
     title: "XOR with `rho_D` over the whole 1,300 bytes",
     caption:
-      "Generate `chacha20(rho_D, 1300)` and XOR it onto the entire buffer. Dave's hop payload and the pad-noise tail both pick up Dave's encryption layer in a single pass.",
+      "Now we encrypt. Generate `chacha20(rho_D, 1300)` and XOR it onto the whole buffer. In a single pass, Dave's hop payload and the pad-noise tail both pick up Dave's encryption layer.",
   },
   {
     step: 5,
@@ -162,7 +162,7 @@ const BEATS: Beat[] = [
     subLabel: "FILLER OVERLAY",
     title: "Overwrite the trailing 140 bytes with filler",
     caption:
-      "Only on the innermost iteration: overwrite the last 140 bytes (`len(filler)`) with the filler we built in chapter 7. The filler carries Bob+Charlie hatches — it's exactly the bytes that, after each forwarder peels, will land at the trailing positions Charlie's and Dave's HMACs were computed over.",
+      "Here's the one step we only do on the innermost iteration. We overwrite the last 140 bytes (`len(filler)`) with the filler we built back in chapter 7. It already carries Bob's and Charlie's encryption layers, and these are the very bytes that, after each forwarder peels, land right where Charlie's and Dave's HMACs were computed over.",
     focus: "trailing",
   } as Beat,
   {
@@ -171,7 +171,7 @@ const BEATS: Beat[] = [
     subLabel: "HMAC",
     title: "Compute `dave_hmac`",
     caption:
-      "`dave_hmac = HMAC(mu_D, buffer || associated_data)`. The `associated_data` (32-byte `payment_hash`) binds the onion to a specific HTLC. Save `dave_hmac` as `next_hmac` for Charlie's iteration.",
+      "Now we tag it: `dave_hmac = HMAC(mu_D, buffer || associated_data)`. That `associated_data` (the 32-byte `payment_hash`) ties the onion to one specific HTLC. We hold onto `dave_hmac` as `next_hmac`, ready for Charlie's iteration.",
   },
   {
     step: 7,
@@ -179,7 +179,7 @@ const BEATS: Beat[] = [
     subLabel: "SHIFT + WRITE",
     title: "Right-shift by 80 and write Charlie's hop payload",
     caption:
-      "Drop the last 80 bytes (the Charlie-only tail of the filler) off the right; prepend 80 bytes of placeholder at the front. Write Charlie's TLV records + `dave_hmac` (the value we just computed) into the placeholder. The Bob+Charlie portion of the filler stays in the trailing 60 bytes.",
+      "Same steps, one layer out. Drop the last 80 bytes off the right (the Charlie-only tail of the filler), prepend 80 bytes of placeholder, and write Charlie's TLV records plus `dave_hmac` (the value we just computed) into it. The Bob+Charlie portion of the filler stays put in the trailing 60 bytes.",
     focus: "front",
   } as Beat,
   {
@@ -188,7 +188,7 @@ const BEATS: Beat[] = [
     subLabel: "ENCRYPT",
     title: "XOR with `rho_C` over the whole 1,300 bytes",
     caption:
-      "Generate `chacha20(rho_C, 1300)` and XOR. Charlie's hop payload picks up its first encryption layer. Dave's hop payload, already wearing Dave's hatch, picks up Charlie's hatch on top → 2 layers. The middle padding goes from 1 layer to 2.",
+      "Now generate `chacha20(rho_C, 1300)` and XOR again. Charlie's hop payload gets its first encryption layer. Dave's, already wrapped in its own layer, picks up Charlie's on top, so it's at 2 layers now. The middle padding goes from 1 layer to 2.",
   },
   {
     step: 9,
@@ -196,7 +196,7 @@ const BEATS: Beat[] = [
     subLabel: "HMAC",
     title: "Compute `charlie_hmac`",
     caption:
-      "`charlie_hmac = HMAC(mu_C, buffer || associated_data)`. Save it as `next_hmac` for Bob's iteration. Bob's hop payload doesn't exist yet, so this is the value that will sit in Bob's HMAC field.",
+      "Then we tag again: `charlie_hmac = HMAC(mu_C, buffer || associated_data)`. We save it as `next_hmac` for Bob's iteration. Bob's hop payload doesn't exist yet, so this is exactly the value that'll end up sitting in Bob's HMAC field.",
   },
   {
     step: 10,
@@ -204,7 +204,7 @@ const BEATS: Beat[] = [
     subLabel: "SHIFT + WRITE",
     title: "Right-shift by 60 and write Bob's hop payload",
     caption:
-      "Drop the last 60 bytes off the right (the Bob+Charlie filler residue, which has done its job already). Prepend a 60-byte placeholder. Write Bob's TLV records + `charlie_hmac` into it.",
+      "Last hop, last time through. Drop the last 60 bytes off the right (the Bob+Charlie filler residue, which has done its job by now), prepend a 60-byte placeholder, and write Bob's TLV records plus `charlie_hmac` into it.",
     focus: "front",
   } as Beat,
   {
@@ -213,7 +213,7 @@ const BEATS: Beat[] = [
     subLabel: "ENCRYPT",
     title: "XOR with `rho_B` over the whole 1,300 bytes",
     caption:
-      "Final encryption layer. After this XOR, Bob's hop payload has 1 layer (Bob), Charlie's has 2 (Bob + Charlie), Dave's has 3 (Bob + Charlie + Dave). The trailing padding has 3 layers too — that's the privacy property in action: every region looks equally encrypted on the wire.",
+      "Now the final encryption layer. After this XOR, Bob's hop payload has 1 layer (Bob), Charlie's has 2 (Bob + Charlie), Dave's has 3 (Bob + Charlie + Dave), and the trailing padding has 3 too. There's the privacy property at work: on the wire, *every* region looks equally encrypted.",
   },
   {
     step: 12,
@@ -221,7 +221,7 @@ const BEATS: Beat[] = [
     subLabel: "HMAC",
     title: "Compute `bob_hmac`",
     caption:
-      "`bob_hmac = HMAC(mu_B, buffer || associated_data)`. This is the value that goes in the packet's outer `hmac` field. Bob will verify it first thing when the packet arrives, before doing any decryption.",
+      "One more tag: `bob_hmac = HMAC(mu_B, buffer || associated_data)`. This one's special, since it goes in the packet's outer `hmac` field. When the packet lands, Bob checks it first thing, before he decrypts anything.",
   },
   {
     step: 13,
@@ -229,7 +229,7 @@ const BEATS: Beat[] = [
     subLabel: "ASSEMBLE",
     title: "Attach the envelope → 1,366-byte Sphinx packet",
     caption:
-      "Prepend the 1-byte version (`0x00`) and the 33-byte ephemeral pubkey `E_AB`; append the 32-byte `bob_hmac`. Total: 1 + 33 + 1,300 + 32 = 1,366 bytes. Ready to ship to Bob.",
+      "Finally, we wrap the envelope around it. Prepend the 1-byte version (`0x00`) and the 33-byte ephemeral pubkey `E_AB`, then append the 32-byte `bob_hmac`. That's 1 + 33 + 1,300 + 32 = 1,366 bytes, ready to ship to Bob. Nice.",
     focus: "envelope",
   } as Beat,
 ];
@@ -262,7 +262,7 @@ function regionsForBeat(step: number, focus?: FocusKind): Region[] {
   const padPct = DISPLAY_BOB_PCT + DISPLAY_CHARLIE_PCT + DISPLAY_DAVE_PCT + DISPLAY_FILLER_PCT;
   const fullPadPct = 100;
 
-  // Beat 1 — pad-init: one big padding-init region.
+  // Beat 1 - pad-init: one big padding-init region.
   if (step === 1) {
     return [
       {
@@ -275,7 +275,7 @@ function regionsForBeat(step: number, focus?: FocusKind): Region[] {
     ];
   }
 
-  // Beat 2 — Dave shift: empty placeholder at front, padding behind.
+  // Beat 2 - Dave shift: empty placeholder at front, padding behind.
   if (step === 2) {
     return [
       {
@@ -295,7 +295,7 @@ function regionsForBeat(step: number, focus?: FocusKind): Region[] {
     ];
   }
 
-  // Beat 3 — Dave write: slot at front (no encryption yet).
+  // Beat 3 - Dave write: slot at front (no encryption yet).
   if (step === 3) {
     return [
       {
@@ -315,7 +315,7 @@ function regionsForBeat(step: number, focus?: FocusKind): Region[] {
     ];
   }
 
-  // Beat 4 — Dave XOR: entire buffer picks up Dave's hatch.
+  // Beat 4 - Dave XOR: entire buffer picks up Dave's hatch.
   if (step === 4) {
     return [
       {
@@ -334,7 +334,7 @@ function regionsForBeat(step: number, focus?: FocusKind): Region[] {
     ];
   }
 
-  // Beat 5 — Dave filler overlay: trailing 140 bytes (display 14%) become
+  // Beat 5 - Dave filler overlay: trailing 140 bytes (display 14%) become
   // filler (Bob+Charlie hatch). Padding middle still wears Dave hatch.
   if (step === 5) {
     return [
@@ -362,13 +362,13 @@ function regionsForBeat(step: number, focus?: FocusKind): Region[] {
     ];
   }
 
-  // Beat 6 — Dave HMAC: same layout as beat 5; no buffer change. HMAC chip
+  // Beat 6 - Dave HMAC: same layout as beat 5; no buffer change. HMAC chip
   // surfaces separately.
   if (step === 6) {
     return regionsForBeat(5).map((r) => ({ ...r, isFocus: false }));
   }
 
-  // Beat 7 — Charlie shift+write: prepend 80-byte slot, last 80 of buffer
+  // Beat 7 - Charlie shift+write: prepend 80-byte slot, last 80 of buffer
   // (the Charlie-only tail of the filler = 80B of the 140B filler) drops off.
   // Layout becomes:
   //   Charlie-empty/slot | Dave slot (Dave hatch) | padding-enc (Dave) |
@@ -413,7 +413,7 @@ function regionsForBeat(step: number, focus?: FocusKind): Region[] {
     ];
   }
 
-  // Beat 8 — Charlie XOR: every region picks up Charlie's hatch.
+  // Beat 8 - Charlie XOR: every region picks up Charlie's hatch.
   // The filler residue's Bob+Charlie already includes Charlie; we dedupe so
   // the hatch overlay doesn't draw Charlie twice.
   if (step === 8) {
@@ -453,12 +453,12 @@ function regionsForBeat(step: number, focus?: FocusKind): Region[] {
     ];
   }
 
-  // Beat 9 — Charlie HMAC: same layout, HMAC chip surfaces.
+  // Beat 9 - Charlie HMAC: same layout, HMAC chip surfaces.
   if (step === 9) {
     return regionsForBeat(8).map((r) => ({ ...r, isFocus: false }));
   }
 
-  // Beat 10 — Bob shift+write: prepend 60-byte slot; the trailing 60B
+  // Beat 10 - Bob shift+write: prepend 60-byte slot; the trailing 60B
   // filler residue drops off entirely.
   if (step === 10) {
     return [
@@ -493,7 +493,7 @@ function regionsForBeat(step: number, focus?: FocusKind): Region[] {
     ];
   }
 
-  // Beat 11 — Bob XOR: every region picks up Bob's hatch.
+  // Beat 11 - Bob XOR: every region picks up Bob's hatch.
   if (step === 11) {
     return [
       {
@@ -526,7 +526,7 @@ function regionsForBeat(step: number, focus?: FocusKind): Region[] {
     ];
   }
 
-  // Beats 12, 13 — same buffer layout as beat 11. Beat 12 surfaces bob_hmac,
+  // Beats 12, 13 - same buffer layout as beat 11. Beat 12 surfaces bob_hmac,
   // beat 13 shows the assembled envelope.
   return regionsForBeat(11).map((r) => ({ ...r, isFocus: false }));
 }
@@ -599,27 +599,10 @@ export function HoverTooltip({
 
 export function WrapTraceDiagram() {
   const [step, setStep] = useState(1);
-  const [playing, setPlaying] = useState(false);
 
-  useEffect(() => {
-    if (!playing) return;
-    if (step >= TOTAL_BEATS) {
-      setPlaying(false);
-      return;
-    }
-    const t = setTimeout(() => setStep((s) => s + 1), STEP_MS);
-    return () => clearTimeout(t);
-  }, [playing, step]);
-
-  const play = () => {
-    if (step >= TOTAL_BEATS) setStep(1);
-    setPlaying(true);
-  };
-  const pause = () => setPlaying(false);
-  const reset = () => {
-    setStep(1);
-    setPlaying(false);
-  };
+  const back = () => setStep((s) => Math.max(1, s - 1));
+  const next = () => setStep((s) => Math.min(TOTAL_BEATS, s + 1));
+  const reset = () => setStep(1);
 
   const beat = BEATS[step - 1];
   const regions = regionsForBeat(step, beat.focus);
@@ -687,10 +670,26 @@ export function WrapTraceDiagram() {
         <div className="flex flex-col md:flex-row md:items-start md:gap-4">
           <div className="flex gap-1.5 items-center flex-wrap shrink-0">
             <button
-              onClick={playing ? pause : play}
-              className="px-3 py-1.5 border-[1.5px] border-black bg-black text-white font-bold text-xs tracking-[0.05em] uppercase hover:bg-[#b8860b] hover:border-[#b8860b] transition-colors"
+              onClick={back}
+              disabled={step <= 1}
+              className="px-3 py-1.5 border-[1.5px] border-foreground/40 bg-card text-foreground text-xs uppercase tracking-[0.05em] hover:bg-secondary transition-colors"
+              style={{
+                opacity: step <= 1 ? 0.4 : 1,
+                cursor: step <= 1 ? "not-allowed" : "pointer",
+              }}
             >
-              {playing ? "❚❚ Pause" : step >= TOTAL_BEATS ? "↻ Replay" : "▶ Play"}
+              ← Back
+            </button>
+            <button
+              onClick={next}
+              disabled={step >= TOTAL_BEATS}
+              className="px-3 py-1.5 border-[1.5px] border-foreground/40 bg-card text-foreground text-xs uppercase tracking-[0.05em] hover:bg-secondary transition-colors"
+              style={{
+                opacity: step >= TOTAL_BEATS ? 0.4 : 1,
+                cursor: step >= TOTAL_BEATS ? "not-allowed" : "pointer",
+              }}
+            >
+              Next →
             </button>
             <button
               onClick={reset}
@@ -704,10 +703,7 @@ export function WrapTraceDiagram() {
                 return (
                   <button
                     key={n}
-                    onClick={() => {
-                      setPlaying(false);
-                      setStep(n);
-                    }}
+                    onClick={() => setStep(n)}
                     className="w-7 h-7 border-[1.5px] text-xs font-bold transition-colors"
                     style={{
                       background: step === n ? "#b8860b" : "#fffdf5",
@@ -851,10 +847,10 @@ export function Buffer({
   regions: Region[];
   focusKind?: FocusKind;
   /** Small "← carried from step N" tag rendered above the buffer header.
-   * Signals visual continuity between beats — the gold-bordered buffer here
+   * Signals visual continuity between beats - the gold-bordered buffer here
    * is the same running state shown in the prior beat. */
   carryFrom?: string;
-  /** Render hop payloads as block+hatch (no byte cells) — used on HMAC beats. */
+  /** Render hop payloads as block+hatch (no byte cells) - used on HMAC beats. */
   compact?: boolean;
 }) {
   return (
@@ -1024,7 +1020,7 @@ export function BufferRegion({
           label={
             <span>
               {renderCaption(
-                "These are the `filler` bytes Alice precomputed back in chapter 7. After each forwarder XORs away its layer and shifts the buffer, these trailing bytes land *exactly* on the positions every downstream HMAC was computed over, so every forwarder's integrity check still passes.",
+                "Remember the `filler` bytes Alice precomputed back in chapter 7? Here they are. After each forwarder XORs away its layer and shifts the buffer, these trailing bytes land *exactly* where every downstream HMAC was computed over, so each forwarder's integrity check still passes.",
               )}
             </span>
           }
@@ -1456,7 +1452,7 @@ function isHmacStep(step: number): boolean {
 // Small "← carries forward from step N" tag, shown above the running buffer
 // on beats where the buffer state is inherited from the prior beat.
 function carryForwardLabel(step: number): string | undefined {
-  // Step 1 (pad-init) is the first state — nothing to carry from.
+  // Step 1 (pad-init) is the first state - nothing to carry from.
   // Step 13 (envelope) uses its own layout.
   // XOR steps label their own bars internally.
   if (step === 1 || step === 13 || isXorStep(step)) return undefined;
@@ -1497,7 +1493,7 @@ function WrapMorphView({ step }: { step: number }) {
         )}
       </div>
 
-      {/* The single persistent bar — same element in both steps, height animates. */}
+      {/* The single persistent bar - same element in both steps, height animates. */}
       <MorphBox
         key="bar"
         initial={{ height: isXor ? 42 : 78, opacity: isXor ? 0.55 : 1, borderColor: isXor ? INK : FOCUS_GOLD }}
@@ -1816,7 +1812,7 @@ function HmacView({ step }: { step: number }) {
           label={
             <span>
               {renderCaption(
-                "`AD` is the `associated_data`: the 32-byte `payment_hash`. Folding it into the HMAC binds this onion to one specific HTLC, so a packet can't be replayed against a different payment.",
+                "So what's `AD`? It's the `associated_data`, the 32-byte `payment_hash`. Folding it into the HMAC ties this onion to one specific HTLC, so nobody can replay the packet against a different payment.",
               )}
             </span>
           }

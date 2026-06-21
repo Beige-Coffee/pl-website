@@ -8,10 +8,11 @@ import { ChannelUpdateCard } from "./ChannelUpdateCard";
 // rendering pattern as LightningNetworkDiagram, but with three new behaviors:
 //   1. Hover any node to see a floating popover of that node's channel_update
 //      records (one per outgoing channel).
-//   2. Three canonical routes are highlighted in their hop colors:
-//        Route A, gold  , Alice → Hazel → Dave
-//        Route B, teal  , Alice → Frank → Greg → Dave
-//        Route C, orange, Alice → Bob → Charlie → Dave
+//   2. Three canonical routes are highlighted in dedicated route colors
+//      (kept distinct from every character's identity color):
+//        Route A, violet , Alice → Hazel → Dave
+//        Route B, orange , Alice → Frank → Greg → Dave
+//        Route C, magenta, Alice → Bob → Charlie → Dave
 //   3. Ambient gossip animation: every few seconds a random background node
 //      "broadcasts" a channel_announcement or channel_update, the relevant
 //      edge flashes gold, and a small gossip card pops up next to the node.
@@ -47,10 +48,11 @@ const HOP_COLORS: Record<string, HopColor> = {
 };
 const BG_COLOR: HopColor = { stroke: "#94a3b8", fill: "#f1f5f9" };
 
-// Route highlight edge colors
-const ROUTE_A_COLOR = "#b8860b"; // gold
-const ROUTE_B_COLOR = "#2d7a7a"; // teal
-const ROUTE_C_COLOR = "#a32d6b"; // magenta-rose (distinct from gold)
+// Route highlight edge colors (distinct from every character stroke so the
+// route lines never read as a hop's identity color).
+const ROUTE_A_COLOR = "#5a3fb8"; // blue-violet
+const ROUTE_B_COLOR = "#e07b00"; // orange
+const ROUTE_C_COLOR = "#a32d6b"; // magenta-rose
 
 // ── Data ──────────────────────────────────────────────────────────────────
 
@@ -614,22 +616,14 @@ export function ForwarderPolicyMap() {
             </circle>
           </g>
 
-          {/* 3. Background nodes */}
+          {/* 3. Background nodes. These are anonymous graph filler, not part
+              of the lesson, so they are inert: no hover popover, no pointer
+              cursor. Only the named cast (Alice, Bob, Charlie, Dave, Frank,
+              Greg, Hazel) is hoverable. */}
           {allNodes
             .filter((n): n is BgNode => !n.named)
             .map((n) => (
-              <g
-                key={n.id}
-                style={{ cursor: "pointer" }}
-                onMouseEnter={(e) => openHover(n.id, e)}
-                onMouseLeave={closeHover}
-                onMouseMove={(e) => {
-                  if (hover && hover.nodeId === n.id) {
-                    // Re-anchor the popover to follow gentle hover movement.
-                    openHover(n.id, e);
-                  }
-                }}
-              >
+              <g key={n.id}>
                 <circle
                   cx={n.x}
                   cy={n.y}
@@ -731,7 +725,7 @@ export function ForwarderPolicyMap() {
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    background: "#ffffff",
+                    background: "#fffdf5",
                     color: INK,
                     border: `1.5px solid ${INK}`,
                     borderRadius: 999,
@@ -780,8 +774,8 @@ export function ForwarderPolicyMap() {
             color: INK,
           }}
         >
-          <LegendRow color={ROUTE_A_COLOR} label="Route A · via Hazel (gold)" />
-          <LegendRow color={ROUTE_B_COLOR} label="Route B · via Frank+Greg (teal)" />
+          <LegendRow color={ROUTE_A_COLOR} label="Route A · via Hazel (violet)" />
+          <LegendRow color={ROUTE_B_COLOR} label="Route B · via Frank+Greg (orange)" />
           <LegendRow color={ROUTE_C_COLOR} label="Route C · via Bob+Charlie (magenta)" />
         </div>
 
@@ -818,7 +812,7 @@ export function ForwarderPolicyMap() {
               className="border-[1.5px]"
               style={{
                 borderColor: INK,
-                background: "#ffffff",
+                background: "#fffdf5",
                 boxShadow: "0 8px 30px rgba(0,0,0,0.25)",
                 fontFamily: "ui-sans-serif, system-ui, sans-serif",
               }}
@@ -827,7 +821,7 @@ export function ForwarderPolicyMap() {
                 className="px-3 py-2.5 border-b-[1.5px] flex items-center"
                 style={{
                   borderColor: INK,
-                  background: "#ffffff",
+                  background: "#fffdf5",
                   color: INK,
                 }}
               >

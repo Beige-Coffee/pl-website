@@ -820,7 +820,6 @@ export interface ErrorChromeProps {
   title: string;
   totalBeats: number;
   step: number;
-  playing: boolean;
   /** Prose explanation for the current beat, rendered in the StepCaption block. */
   caption: string;
   /** MONO step/iteration label for the StepCaption header (e.g. "CHARLIE WRAPS"). */
@@ -831,7 +830,6 @@ export interface ErrorChromeProps {
   accentColor: string;
   /** Optional color-matched chip shown at the right of the StepCaption header. */
   chip?: ReactNode;
-  onPlayPause: () => void;
   onReset: () => void;
   onStep: (i: number) => void;
   /** Inner minWidth for the horizontally-scrolling stage. */
@@ -846,19 +844,18 @@ export function ErrorChrome({
   title,
   totalBeats,
   step,
-  playing,
   caption,
   stepLabel,
   stepTitle,
   accentColor,
   chip,
-  onPlayPause,
   onReset,
   onStep,
   stageMinWidth,
   children,
   stageMinHeight = 360,
 }: ErrorChromeProps) {
+  const atFirst = step <= 0;
   const atEnd = step >= totalBeats - 1;
   return (
     <div
@@ -901,10 +898,18 @@ export function ErrorChrome({
         <div className="flex flex-col md:flex-row md:items-start md:gap-4">
           <div className="flex gap-1.5 items-center flex-wrap shrink-0">
             <button
-              onClick={onPlayPause}
-              className="px-3 py-1.5 border-[1.5px] border-black bg-black text-white font-bold text-xs tracking-[0.05em] uppercase hover:bg-[#b8860b] hover:border-[#b8860b] transition-colors"
+              onClick={() => onStep(Math.max(0, step - 1))}
+              disabled={atFirst}
+              className="px-3 py-1.5 border-[1.5px] border-foreground/40 bg-card text-foreground text-xs uppercase tracking-[0.05em] hover:bg-secondary transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-card"
             >
-              {playing ? "❚❚ Pause" : atEnd ? "↻ Replay" : "▶ Play"}
+              ← Back
+            </button>
+            <button
+              onClick={() => onStep(Math.min(totalBeats - 1, step + 1))}
+              disabled={atEnd}
+              className="px-3 py-1.5 border-[1.5px] border-foreground/40 bg-card text-foreground text-xs uppercase tracking-[0.05em] hover:bg-secondary transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-card"
+            >
+              Next →
             </button>
             <button
               onClick={onReset}

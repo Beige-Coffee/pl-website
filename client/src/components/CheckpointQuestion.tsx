@@ -23,34 +23,64 @@ interface CheckpointQuestionProps {
   onOpenProfile?: () => void;
 }
 
-// Render inline markup: backtick code spans become <code>, and <m>...</m>
-// tokens render with proper math typography (italic base + HTML subscripts)
-// via the shared renderMath helper.
-function renderInlineCode(text: string, dark: boolean): React.ReactNode {
-  const parts = text.split(/(`[^`]+`|<m>[^<]+<\/m>)/g);
+// Render the small markup subset used in checkpoint question/option/explanation
+// text. Inline: `code` or <code> -> monospace pill; <m>token</m> -> math
+// typography (via renderMath); <strong>/**bold** -> bold; <em>/*italic* ->
+// italic (bold/italic may nest other inline markup). Block: blank lines become
+// paragraphs and single newlines become <br>. Multiplication is written with
+// "·" throughout this content, so "*" is unambiguously an italic delimiter.
+const codePillClass = (dark: boolean) =>
+  `rounded px-1 py-0.5 font-mono text-[0.9em] ${dark ? "bg-white/10" : "bg-black/[0.06]"}`;
+
+function renderInlineMarkup(text: string, dark: boolean): React.ReactNode {
+  const parts = text.split(
+    /(`[^`]+`|<m>[^<]+<\/m>|<code>[\s\S]*?<\/code>|<strong>[\s\S]*?<\/strong>|<em>[\s\S]*?<\/em>|\*\*[\s\S]+?\*\*|\*[^*\n]+\*)/g,
+  );
   if (parts.length === 1) return text;
   return parts.map((part, i) => {
-    if (part.startsWith("`") && part.endsWith("`")) {
-      const code = part.slice(1, -1);
+    if (!part) return null;
+    if (part.startsWith("`") && part.endsWith("`"))
+      return <code key={i} className={codePillClass(dark)}>{part.slice(1, -1)}</code>;
+    if (part.startsWith("<code>") && part.endsWith("</code>"))
+      return <code key={i} className={codePillClass(dark)}>{part.slice(6, -7)}</code>;
+    if (part.startsWith("<m>") && part.endsWith("</m>"))
       return (
-        <code
-          key={i}
-          className={`rounded px-1 py-0.5 font-mono text-[0.9em] ${dark ? "bg-white/10" : "bg-black/[0.06]"}`}
-        >
-          {code}
-        </code>
-      );
-    }
-    if (part.startsWith("<m>") && part.endsWith("</m>")) {
-      const token = part.slice(3, -4);
-      return (
-        <span key={i} className="font-mono text-[0.95em] font-semibold">
-          {renderMath(token)}
+        <span key={i} className="font-mono text-[1.05em] font-medium">
+          {renderMath(part.slice(3, -4))}
         </span>
       );
-    }
+    if (part.startsWith("<strong>") && part.endsWith("</strong>"))
+      return <strong key={i}>{renderInlineMarkup(part.slice(8, -9), dark)}</strong>;
+    if (part.startsWith("**") && part.endsWith("**"))
+      return <strong key={i}>{renderInlineMarkup(part.slice(2, -2), dark)}</strong>;
+    if (part.startsWith("<em>") && part.endsWith("</em>"))
+      return <em key={i}>{renderInlineMarkup(part.slice(4, -5), dark)}</em>;
+    if (part.startsWith("*") && part.endsWith("*"))
+      return <em key={i}>{renderInlineMarkup(part.slice(1, -1), dark)}</em>;
     return part;
   });
+}
+
+function renderTextLines(block: string, dark: boolean): React.ReactNode {
+  const lines = block.split("\n");
+  if (lines.length === 1) return renderInlineMarkup(block, dark);
+  return lines.map((line, li) => (
+    <React.Fragment key={li}>
+      {li > 0 && <br />}
+      {renderInlineMarkup(line, dark)}
+    </React.Fragment>
+  ));
+}
+
+// Entry point kept under the original name so existing call sites are unchanged.
+function renderInlineCode(text: string, dark: boolean): React.ReactNode {
+  const paragraphs = text.split(/\n{2,}/);
+  if (paragraphs.length === 1) return renderTextLines(paragraphs[0], dark);
+  return paragraphs.map((p, pi) => (
+    <span key={pi} className={pi === 0 ? "block" : "block mt-2"}>
+      {renderTextLines(p, dark)}
+    </span>
+  ));
 }
 
 export default function CheckpointQuestion({

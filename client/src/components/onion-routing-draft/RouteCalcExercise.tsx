@@ -490,7 +490,7 @@ export function RouteCalcExercise({ headerless }: RouteCalcExerciseProps = {}) {
                 hop.role === "sender"
                   ? "Sender"
                   : hop.role === "receiver"
-                    ? "Receiver"
+                    ? "Destination"
                     : "Forwarder";
               return (
                 <div
@@ -851,11 +851,11 @@ function RoutePickerPanel({
         className="text-[12px] font-bold tracking-[0.08em] uppercase mb-3"
         style={{ color: INK }}
       >
-        Pick the cheapest route
+        Pick the cheapest route Alice can use
       </div>
       <div className="flex flex-wrap gap-2">
         <RouteChoiceButton
-          label="Route A, 1,300 sats"
+          label="Route A, 900 sats"
           selected={choice === "a"}
           isCorrect={false}
           finalized={choice !== null}
@@ -885,17 +885,21 @@ function RoutePickerPanel({
         >
           {choice === "c" && (
             <span>
-              <strong style={{ color: GREEN }}>✓ Correct.</strong> Route C is
-              the cheapest at 1,225 sats, 75 sats less than Route A and 777
-              sats less than Route B. It's also the same path Alice picked back
-              in chapter 1: through Bob and Charlie. The fee total wins on
-              policy, not hop count.
+              <strong style={{ color: GREEN }}>✓ Correct.</strong> Route A is
+              cheaper on fees (900 sats), but its 1,018-block CLTV delta blows
+              past Alice's 200-block ceiling, so her wallet won't touch it.
+              Among the routes Alice can actually use, Route C wins at 1,225
+              sats, 777 sats less than Route B. It's also the same path she
+              picked back in chapter 1: through Bob and Charlie.
             </span>
           )}
           {choice === "a" && (
             <span>
-              <strong style={{ color: RED }}>✗ Not quite.</strong> Route A
-              costs 1,300 sats, 75 sats more than Route C (Bob → Charlie).
+              <strong style={{ color: RED }}>✗ Not quite.</strong> Route A is
+              the cheapest on fees (900 sats), but Hazel's 1,000-block
+              cltv_expiry_delta pushes the total CLTV to 1,018 blocks, way over
+              Alice's 200-block ceiling, so she can't use it. Pick the cheapest
+              route that fits the ceiling.
             </span>
           )}
           {choice === "b" && (

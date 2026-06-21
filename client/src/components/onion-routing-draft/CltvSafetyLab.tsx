@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { StepCaption } from "./StepCaption";
 
 // ────────────────────────────────────────────────────────────────────────────
 // CltvSafetyLab (DRAFT), editable HTLC expiries + sequential preimage walk
@@ -14,9 +15,14 @@ import { useMemo, useState } from "react";
 // the way it does.
 // ────────────────────────────────────────────────────────────────────────────
 
-const START_BLOCK = 100;
 const DEFAULT_EXPIRY = 140;
-const MIN_EXPIRY = START_BLOCK + 1;
+// Earliest block an editable HTLC expiry may be set to.
+const MIN_EXPIRY = 101;
+// Fixed claim latency: we assume each on-chain claim takes 1 block to confirm.
+// Not student-adjustable, it's a stated assumption, so the timeline reads
+// cleanly (reveal, then claim, then claim) instead of giving readers a dial
+// that overlaps with the expiry knobs.
+const CLAIM_LATENCY = 1;
 const MAX_EXPIRY = 300;
 
 const DAVE_AMOUNT = 10_000;
@@ -41,10 +47,10 @@ type NodeId = "alice" | "bob" | "charlie" | "dave";
 type ContractStatus = "active" | "claimed" | "expired";
 
 const NODE_X_PCT: Record<NodeId, number> = {
-  alice: 14,
+  alice: 12,
   bob: 38,
   charlie: 62,
-  dave: 86,
+  dave: 88,
 };
 
 interface Sim {
@@ -111,11 +117,11 @@ interface StepView {
 function viewAtStep(sim: Sim, step: number): StepView {
   if (step === 0) {
     return {
-      block: START_BLOCK,
+      block: sim.daveRevealsAt - 2,
       preimageHolder: "dave",
       abStatus: "active", bcStatus: "active", cdStatus: "active",
       nodeOk: { alice: "neutral", bob: "neutral", charlie: "neutral", dave: "neutral" },
-      caption: `Setup. Block ${START_BLOCK}. All three HTLCs are committed. Dave holds the preimage from his invoice. Watch what happens as time advances and each hop tries to pass the preimage upstream.`,
+      caption: `We've skipped ahead to block ${sim.daveRevealsAt - 2}. The three HTLCs were committed earlier in the payment, and Dave's been sitting on the preimage from his invoice the whole time. Nothing interesting happens until the deadlines get close, so let's pick it up right before they do...`,
     };
   }
   if (step === 1) {
@@ -126,7 +132,7 @@ function viewAtStep(sim: Sim, step: number): StepView {
       bcStatus: "active",
       cdStatus: "claimed",
       nodeOk: { alice: "neutral", bob: "neutral", charlie: "neutral", dave: "ok" },
-      caption: `Block ${sim.daveRevealsAt}. Just before his HTLC expires, Dave reveals the preimage on-chain to claim Charlie's payment. Dave gets ${DAVE_AMOUNT.toLocaleString("en-US")} sats. Charlie sees the preimage in Dave's claim transaction and now holds it.`,
+      caption: `Block ${sim.daveRevealsAt}, just before his HTLC expires, Dave reveals the preimage on-chain to claim Charlie's payment. He pockets ${DAVE_AMOUNT.toLocaleString("en-US")} sats. And look, Charlie sees that preimage in Dave's claim transaction, so now Charlie holds it too.`,
     };
   }
   if (step === 2) {
@@ -138,7 +144,7 @@ function viewAtStep(sim: Sim, step: number): StepView {
         bcStatus: "claimed",
         cdStatus: "claimed",
         nodeOk: { alice: "neutral", bob: "neutral", charlie: "ok", dave: "ok" },
-        caption: `Block ${sim.charlieClaimsBobAt}. Charlie broadcasts his claim against Bob's HTLC, revealing the preimage in the process. The claim confirms before block ${sim.expiryBC}. Charlie collects ${BOB_TO_CHARLIE.toLocaleString("en-US")} sats. Bob now holds the preimage.`,
+        caption: `Block ${sim.charlieClaimsBobAt}, and Charlie broadcasts his claim against Bob's HTLC, revealing the preimage as he does. It confirms before block ${sim.expiryBC}, so Charlie collects ${BOB_TO_CHARLIE.toLocaleString("en-US")} sats. Now Bob's the one holding the preimage.`,
       };
     }
     return {
@@ -148,7 +154,7 @@ function viewAtStep(sim: Sim, step: number): StepView {
       bcStatus: "expired",
       cdStatus: "claimed",
       nodeOk: { alice: "neutral", bob: "neutral", charlie: "burned", dave: "ok" },
-      caption: `Block ${sim.charlieClaimsBobAt}. Charlie tried to claim Bob's HTLC, but it already expired at block ${sim.expiryBC}. Bob's HTLC times out and Bob refunds. Charlie is out ${DAVE_AMOUNT.toLocaleString("en-US")} sats, he paid Dave but couldn't recover from Bob.`,
+      caption: `Block ${sim.charlieClaimsBobAt}, and Charlie goes to claim Bob's HTLC, but it already expired back at block ${sim.expiryBC}. Ouch. Bob's HTLC times out and Bob gets refunded. Charlie's out ${DAVE_AMOUNT.toLocaleString("en-US")} sats, since he paid Dave but couldn't recover from Bob.`,
     };
   }
   if (step === 3) {
@@ -160,7 +166,7 @@ function viewAtStep(sim: Sim, step: number): StepView {
         bcStatus: "claimed",
         cdStatus: "claimed",
         nodeOk: { alice: "ok", bob: "ok", charlie: "ok", dave: "ok" },
-        caption: `Block ${sim.bobClaimsAliceAt}. Bob broadcasts his claim against Alice's HTLC. The claim confirms before block ${sim.expiryAB}. Bob collects ${ALICE_TO_BOB.toLocaleString("en-US")} sats and keeps a ${BOB_FEE}-sat fee. The route settled cleanly.`,
+        caption: `Block ${sim.bobClaimsAliceAt}, and Bob broadcasts his claim against Alice's HTLC. It confirms before block ${sim.expiryAB}, so Bob collects ${ALICE_TO_BOB.toLocaleString("en-US")} sats and keeps a ${BOB_FEE}-sat fee for his trouble. The whole route settled cleanly. Nice.`,
       };
     }
     if (sim.charlieClaimSucceeds) {
@@ -171,7 +177,7 @@ function viewAtStep(sim: Sim, step: number): StepView {
         bcStatus: "claimed",
         cdStatus: "claimed",
         nodeOk: { alice: "neutral", bob: "burned", charlie: "ok", dave: "ok" },
-        caption: `Block ${sim.bobClaimsAliceAt}. Bob has the preimage but Alice's HTLC already expired at block ${sim.expiryAB}. Alice's timeout fired and she clawed her funds back. Bob is out ${BOB_TO_CHARLIE.toLocaleString("en-US")} sats, he paid Charlie but couldn't recover from Alice.`,
+        caption: `Block ${sim.bobClaimsAliceAt}, and Bob has the preimage, but Alice's HTLC already expired at block ${sim.expiryAB}. Her timeout fired and she clawed her funds back. So Bob's out ${BOB_TO_CHARLIE.toLocaleString("en-US")} sats, since he paid Charlie but couldn't recover from Alice.`,
       };
     }
     // Both Charlie and Bob lost in step 2 (Charlie's claim failed earlier)
@@ -182,19 +188,19 @@ function viewAtStep(sim: Sim, step: number): StepView {
       bcStatus: "expired",
       cdStatus: "claimed",
       nodeOk: { alice: "neutral", bob: "neutral", charlie: "burned", dave: "ok" },
-      caption: `Block ${sim.bobClaimsAliceAt}. Alice's HTLC has also expired (block ${sim.expiryAB}). Bob never paid Charlie, so Bob is fine, and Alice gets refunded. Only Charlie is out of pocket.`,
+      caption: `Block ${sim.bobClaimsAliceAt}, and Alice's HTLC has expired too (block ${sim.expiryAB}). Bob never paid Charlie, so Bob's fine, and Alice gets refunded. Only Charlie is left out of pocket.`,
     };
   }
   // step 4, final summary
   let summary: string;
   if (sim.bobClaimSucceeds) {
-    summary = `Final state. Everyone settled cleanly. Charlie earned ${CHARLIE_FEE} sats, Bob earned ${BOB_FEE} sat, Alice paid ${ALICE_TO_BOB.toLocaleString("en-US")} sats to deliver ${DAVE_AMOUNT.toLocaleString("en-US")} to Dave. The CLTV margins gave each forwarder enough time to react.`;
+    summary = `And we're done. Everyone settled cleanly. Charlie earned ${CHARLIE_FEE} sats, Bob earned ${BOB_FEE} sat, and Alice paid ${ALICE_TO_BOB.toLocaleString("en-US")} sats to deliver ${DAVE_AMOUNT.toLocaleString("en-US")} to Dave. The CLTV margins gave each forwarder *enough time* to react.`;
   } else if (sim.charlieClaimSucceeds) {
     const slack = sim.expiryAB - sim.bobClaimsAliceAt;
-    summary = `Final state. Bob is out ${BOB_TO_CHARLIE.toLocaleString("en-US")} sats. His claim broadcast at block ${sim.bobClaimsAliceAt}, but Alice's HTLC expired at block ${sim.expiryAB} (${-slack + 1} block(s) too late). Try raising Alice→Bob's expiry to give Bob more slack.`;
+    summary = `And we're done, but Bob's out ${BOB_TO_CHARLIE.toLocaleString("en-US")} sats. His claim broadcast at block ${sim.bobClaimsAliceAt}, but Alice's HTLC expired at block ${sim.expiryAB}, so he missed it by ${-slack + 1} block(s). Try raising Alice→Bob's expiry to give Bob more slack.`;
   } else {
     const slack = sim.expiryBC - sim.charlieClaimsBobAt;
-    summary = `Final state. Charlie is out ${DAVE_AMOUNT.toLocaleString("en-US")} sats. His claim broadcast at block ${sim.charlieClaimsBobAt}, but Bob's HTLC to him expired at block ${sim.expiryBC} (${-slack + 1} block(s) too late). Try raising Bob→Charlie's expiry, or reducing the per-hop claim latency.`;
+    summary = `And we're done, but Charlie's out ${DAVE_AMOUNT.toLocaleString("en-US")} sats. His claim broadcast at block ${sim.charlieClaimsBobAt}, but Bob's HTLC to him expired at block ${sim.expiryBC}, so he missed it by ${-slack + 1} block(s). Try raising Bob→Charlie's expiry to give Charlie more slack.`;
   }
   return {
     block: Math.max(sim.expiryAB, sim.bobClaimsAliceAt) + 2,
@@ -220,14 +226,37 @@ export function CltvSafetyLab() {
   const [expiryAB, setExpiryAB] = useState(DEFAULT_EXPIRY);
   const [expiryBC, setExpiryBC] = useState(DEFAULT_EXPIRY);
   const [expiryCD, setExpiryCD] = useState(DEFAULT_EXPIRY);
-  const [blocksPerHop, setBlocksPerHop] = useState(1);
   const [step, setStep] = useState(0);
 
   const sim = useMemo(
-    () => simulate(expiryAB, expiryBC, expiryCD, blocksPerHop),
-    [expiryAB, expiryBC, expiryCD, blocksPerHop],
+    () => simulate(expiryAB, expiryBC, expiryCD, CLAIM_LATENCY),
+    [expiryAB, expiryBC, expiryCD],
   );
   const view = useMemo(() => viewAtStep(sim, step), [sim, step]);
+
+  // StepCaption accent + title track which hop acts on this step. Setup (0)
+  // and the final summary (4) use neutral amber/green; the three claim steps
+  // borrow the acting node's color.
+  const captionAccent =
+    step === 1
+      ? COLORS.dave.stroke
+      : step === 2
+        ? COLORS.charlie.stroke
+        : step === 3
+          ? COLORS.bob.stroke
+          : step >= TOTAL_STEPS - 1
+            ? GREEN
+            : AMBER;
+  const captionTitle =
+    step === 0
+      ? "Setup"
+      : step === 1
+        ? "Dave reveals the preimage"
+        : step === 2
+          ? "Charlie claims from Bob"
+          : step === 3
+            ? "Bob claims from Alice"
+            : "Final state";
 
   function clampExpiry(v: number, min: number) {
     return Math.max(min, Math.min(MAX_EXPIRY, v));
@@ -254,10 +283,6 @@ export function CltvSafetyLab() {
   function handleSetExpiryCD(v: number) {
     const next = clampExpiry(v, expiryBC);
     setExpiryCD(next);
-    setStep(0);
-  }
-  function handleSetBph(v: number) {
-    setBlocksPerHop(Math.max(1, Math.min(20, v)));
     setStep(0);
   }
 
@@ -338,12 +363,19 @@ export function CltvSafetyLab() {
             status={view.cdStatus}
           />
         </div>
+
+        <StepCaption
+          label={`STEP ${step + 1} OF ${TOTAL_STEPS}`}
+          title={captionTitle}
+          caption={view.caption}
+          accentColor={captionAccent}
+        />
       </div>
       </div>
 
-      {/* Footer: Reset + step buttons + caption + bph control */}
+      {/* Footer: Reset + step buttons + bph control (caption now lives in the
+          StepCaption block inside the stage above). */}
       <div className="px-4 py-3 border-t-[1.5px] border-foreground/30 bg-card">
-        <div className="flex flex-col md:flex-row md:items-start md:gap-4">
           <div className="flex gap-1.5 items-center flex-wrap shrink-0">
             <button
               onClick={() => setStep(0)}
@@ -375,53 +407,20 @@ export function CltvSafetyLab() {
               {step >= TOTAL_STEPS - 1 ? "Done" : "Next →"}
             </button>
           </div>
-          <div
-            className="mt-3 md:mt-0 text-sm leading-relaxed flex-1 max-w-3xl"
-            style={{ color: INK }}
-          >
-            {view.caption}
-          </div>
-        </div>
 
-        {/* Blocks-per-hop control */}
+        {/* Fixed claim-latency assumption (not a dial). */}
         <div className="mt-3 pt-3 border-t-[1px] border-foreground/15 flex items-center gap-2 flex-wrap">
           <span
             className="text-[10px] tracking-[0.06em] uppercase opacity-60 shrink-0"
             style={{ color: INK }}
           >
-            blocks per hop (claim latency, applies to every hop)
+            assume each on-chain claim takes 1 block to confirm
           </span>
-          <input
-            type="number"
-            min={1}
-            max={20}
-            value={blocksPerHop}
-            onChange={(e) => {
-              const n = parseInt(e.target.value, 10);
-              if (Number.isNaN(n)) return;
-              handleSetBph(n);
-            }}
-            className="w-14 border-[1.5px] px-1 py-0.5 text-[11px] font-bold tabular-nums"
-            style={{
-              borderColor: INK,
-              background: "#fffdf5",
-              color: INK,
-              fontFamily: '"JetBrains Mono", "Fira Code", monospace',
-            }}
-          />
-          <input
-            type="range"
-            min={1}
-            max={20}
-            value={blocksPerHop}
-            onChange={(e) => handleSetBph(parseInt(e.target.value, 10))}
-            style={{ flex: 1, maxWidth: 200, accentColor: AMBER }}
-          />
           <span
             className="text-[10px] italic opacity-60 shrink-0"
             style={{ color: SLATE }}
           >
-            Charlie claims at block {sim.charlieClaimsBobAt}, Bob at block{" "}
+            so Charlie claims at block {sim.charlieClaimsBobAt}, Bob at block{" "}
             {sim.bobClaimsAliceAt}
           </span>
         </div>
@@ -445,9 +444,9 @@ function NodeRow({ view }: { view: StepView }) {
             key={i}
             className="absolute pointer-events-none"
             style={{
-              top: 38,
-              left: `calc(${startPct}% + 36px)`,
-              width: `calc(${endPct - startPct}% - 72px)`,
+              top: 32,
+              left: `calc(${startPct}% + 34px)`,
+              width: `calc(${endPct - startPct}% - 68px)`,
               borderTop: "1.5px dashed #475569",
             }}
           />
@@ -485,7 +484,7 @@ function NodeRow({ view }: { view: StepView }) {
           id === "alice"
             ? "Sender"
             : id === "dave"
-              ? "Receiver"
+              ? "Destination"
               : "Forwarder";
         const status = view.nodeOk[id];
         return (
@@ -501,8 +500,8 @@ function NodeRow({ view }: { view: StepView }) {
             <div
               className="rounded-full border-[2px] flex items-center justify-center transition-all duration-400 relative"
               style={{
-                width: 76,
-                height: 76,
+                width: 64,
+                height: 64,
                 background:
                   status === "burned" ? "#fde0e0" : COLORS[id].fill,
                 borderColor:

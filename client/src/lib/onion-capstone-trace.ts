@@ -1,5 +1,5 @@
 /**
- * Onion Capstone — step-through trace engine.
+ * Onion Capstone - step-through trace engine.
  *
  * Runs the student's OWN solutions (assembled from their saved exercise code)
  * through a fixed Alice -> Bob -> Charlie -> Dave payment, capturing a
@@ -318,6 +318,7 @@ def _beat(actor, kind, text):
 builder = OnionPacketBuilder(SESSION_KEY, [BOB_PUB, CHARLIE_PUB, DAVE_PUB])
 _actor[0] = "alice"
 sys.settrace(_global)
+builder.derive_shared_secrets()
 packet = builder.build(PAYLOADS, PAYMENT_HASH)
 _beat("alice", "built", "Alice built the 1,366-byte onion packet")
 

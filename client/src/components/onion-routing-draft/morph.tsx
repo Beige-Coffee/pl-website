@@ -6,13 +6,13 @@ import type { CSSProperties, ReactNode } from "react";
 //
 // The rule: a component morphs between steps ONLY if it is the SAME React
 // element across the step change (React reconciles it → its box can transition).
-// These helpers standardize that. They do NOT make a remounting element morph —
+// These helpers standardize that. They do NOT make a remounting element morph -
 // you must render the consecutive steps from one step-switching component and
 // give the shared element a stable `key`. Reference: WrapMorphView in
 // WrapTraceDiagram.
 // ────────────────────────────────────────────────────────────────────────────
 
-/** Canonical morph timing. ~450ms easeInOut — distinct from the auto-play beat
+/** Canonical morph timing. ~450ms easeInOut - distinct from the auto-play beat
  *  duration (§10). */
 export const MORPH_MS = 450;
 export const MORPH_TRANSITION = { duration: MORPH_MS / 1000, ease: "easeInOut" } as const;

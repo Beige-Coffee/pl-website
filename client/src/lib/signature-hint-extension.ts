@@ -1,65 +1,20 @@
 /**
- * CodeMirror extension for auto-showing function signature hints.
+ * CodeMirror extension: hover a function name to see its signature + param docs.
  *
- * When the user types `(` after a function name, a tooltip appears above
- * showing the function's parameter signature and a one-line description.
- * Dismisses when the cursor moves before the `(`, past the matching `)`,
- * or on Escape.
- *
- * Uses EditorView.updateListener with explicit loop prevention.
- * Dispatching from updateListener is supported by CM6:
- * "It is possible to dispatch new transactions from an update listener."
+ * This is HOVER-ONLY by design. It shows the tooltip while the mouse is directly
+ * over a known function name, and hides as soon as the pointer moves away. It is
+ * deliberately NOT tied to the cursor/selection: an earlier version showed the
+ * hint whenever the caret sat inside a call's parens, which felt like it "stayed
+ * up" whenever you were editing near the code.
  */
 
-import {
-  StateField,
-  StateEffect,
-  type Extension,
-} from "@codemirror/state";
+import { type Extension } from "@codemirror/state";
 import {
   EditorView,
-  showTooltip,
-  keymap,
+  hoverTooltip,
   type Tooltip,
 } from "@codemirror/view";
 import { lookupSignature, isPythonKeyword, type SignatureInfo } from "./signature-hints";
-import { getPythonSignature } from "./pyodide-runner";
-
-// ─── State ────────────────────────────────────────────────────────────────────
-
-interface HintState {
-  tooltip: Tooltip | null;
-  parenPos: number; // Position of the `(` character in the current doc
-  funcName: string;
-}
-
-const EMPTY_STATE: HintState = { tooltip: null, parenPos: -1, funcName: "" };
-
-const setHint = StateEffect.define<HintState>();
-const clearHint = StateEffect.define<void>();
-
-const hintField = StateField.define<HintState>({
-  create: () => EMPTY_STATE,
-  update(value, tr) {
-    for (const e of tr.effects) {
-      if (e.is(setHint)) return e.value;
-      if (e.is(clearHint)) return EMPTY_STATE;
-    }
-    // If doc changed, map the paren position so it tracks correctly
-    if (tr.docChanged && value.tooltip) {
-      const newParenPos = tr.changes.mapPos(value.parenPos, 1);
-      const cursorPos = tr.state.selection.main.head;
-      const lineStart = tr.state.doc.lineAt(cursorPos).from;
-      return {
-        ...value,
-        parenPos: newParenPos,
-        tooltip: { ...value.tooltip, pos: lineStart },
-      };
-    }
-    return value;
-  },
-  provide: (f) => showTooltip.from(f, (val) => val.tooltip),
-});
 
 // ─── Tooltip DOM ──────────────────────────────────────────────────────────────
 
@@ -107,7 +62,7 @@ function createTooltipDOM(info: SignatureInfo): Tooltip["create"] {
 
         const pDesc = document.createElement("span");
         pDesc.className = "cm-sig-hint-param-desc";
-        pDesc.textContent = " \u2014 " + p.description;
+        pDesc.textContent = ": " + p.description;
 
         row.appendChild(pName);
         row.appendChild(pDesc);
@@ -117,146 +72,46 @@ function createTooltipDOM(info: SignatureInfo): Tooltip["create"] {
       dom.appendChild(paramsDiv);
     }
 
-    return { dom, offset: { x: 0, y: -8 } };
+    return { dom };
   };
 }
 
-// ─── Extract Function Name ────────────────────────────────────────────────────
-
-const FUNC_NAME_RE = /([\w.]+)\s*$/;
-
-function extractFuncName(text: string): string | null {
-  const m = text.match(FUNC_NAME_RE);
-  if (!m) return null;
-  const name = m[1];
-  if (isPythonKeyword(name)) return null;
-  if (name.endsWith(".")) return null;
-  return name;
-}
-
-// ─── Scan Backward for Unclosed `(` ───────────────────────────────────────────
-
-/**
- * Scan backward from the cursor to find the nearest unclosed `(`.
- * Returns the offset within `text` of the `(`, or -1 if not found.
- */
-function findUnclosedParen(text: string): number {
-  let depth = 0;
-  for (let i = text.length - 1; i >= 0; i--) {
-    if (text[i] === ")") depth++;
-    else if (text[i] === "(") {
-      if (depth === 0) return i; // unclosed!
-      depth--;
-    }
-  }
-  return -1;
-}
-
-// ─── Update Listener ──────────────────────────────────────────────────────────
+// ─── Hover tooltip ────────────────────────────────────────────────────────────
 //
-// On every update (doc change, selection change), scan backward from the cursor
-// to find if it sits inside a function call `func(...)`. If so, show the hint.
-// If not, dismiss it. This makes the hint persistent while typing args.
+// On hover, find the identifier under the pointer. If it's a known function,
+// anchor the signature tooltip to that word. CodeMirror's hoverTooltip handles
+// the show-on-hover / hide-on-leave lifecycle for us.
 
-const SCAN_LIMIT = 500; // chars before cursor to scan
+const WORD_CHAR = /[A-Za-z0-9_]/;
 
-const sigHintListener = EditorView.updateListener.of((update) => {
-  // ── Loop guard: skip updates caused by our own effects ────────────
-  for (const tr of update.transactions) {
-    for (const e of tr.effects) {
-      if (e.is(setHint) || e.is(clearHint)) return;
-    }
-  }
+const sigHover = hoverTooltip(
+  (view, pos) => {
+    const line = view.state.doc.lineAt(pos);
+    const text = line.text;
+    const rel = pos - line.from;
 
-  // Only re-evaluate when something changed
-  if (!update.docChanged && !update.selectionSet) return;
+    // Expand to the full identifier under the pointer.
+    let start = rel;
+    let end = rel;
+    while (start > 0 && WORD_CHAR.test(text[start - 1])) start--;
+    while (end < text.length && WORD_CHAR.test(text[end])) end++;
+    if (start === end) return null; // pointer is not over a word
 
-  const view = update.view;
-  const state = update.state;
-  const hint = state.field(hintField);
-  const cursorPos = state.selection.main.head;
+    const word = text.slice(start, end);
+    if (isPythonKeyword(word)) return null;
 
-  // ── Scan backward from cursor for an unclosed `(` ─────────────────
-  const scanStart = Math.max(0, cursorPos - SCAN_LIMIT);
-  const textBeforeCursor = state.doc.sliceString(scanStart, cursorPos);
-  const parenOffset = findUnclosedParen(textBeforeCursor);
+    const info = lookupSignature(word);
+    if (!info) return null;
 
-  if (parenOffset >= 0) {
-    const absParenPos = scanStart + parenOffset;
-    // Extract the function name from text before the `(`
-    const textBeforeParen = textBeforeCursor.slice(0, parenOffset);
-    const funcName = extractFuncName(textBeforeParen);
-
-    if (funcName) {
-      // Already showing the same hint — do nothing
-      if (hint.tooltip && hint.funcName === funcName && hint.parenPos === absParenPos) {
-        return;
-      }
-
-      // Try static registry (synchronous)
-      const info = lookupSignature(funcName);
-      if (info) {
-        const lineStart = state.doc.lineAt(cursorPos).from;
-        view.dispatch({
-          effects: setHint.of({
-            tooltip: {
-              pos: lineStart,
-              above: true,
-              create: createTooltipDOM(info),
-            },
-            parenPos: absParenPos,
-            funcName,
-          }),
-        });
-        return;
-      }
-
-      // Fall back to Pyodide introspection (async)
-      getPythonSignature(funcName).then((pyInfo) => {
-        if (!pyInfo) return;
-        const current = view.state.field(hintField);
-        // Don't overwrite a hint that's already showing
-        if (current.tooltip) return;
-        const cursor = view.state.selection.main.head;
-        if (cursor <= absParenPos) return;
-        const pyLineStart = view.state.doc.lineAt(cursor).from;
-        view.dispatch({
-          effects: setHint.of({
-            tooltip: {
-              pos: pyLineStart,
-              above: true,
-              create: createTooltipDOM(pyInfo),
-            },
-            parenPos: absParenPos,
-            funcName,
-          }),
-        });
-      });
-      return;
-    }
-  }
-
-  // ── Not inside a known function call — dismiss if hint is showing ──
-  if (hint.tooltip) {
-    view.dispatch({ effects: clearHint.of(undefined) });
-  }
-});
-
-// ─── Keymap: Escape to Dismiss ────────────────────────────────────────────────
-
-const hintKeymap = keymap.of([
-  {
-    key: "Escape",
-    run: (view) => {
-      const state = view.state.field(hintField);
-      if (state.tooltip) {
-        view.dispatch({ effects: clearHint.of(undefined) });
-        return true;
-      }
-      return false;
-    },
+    return {
+      pos: line.from + start,
+      end: line.from + end,
+      above: true,
+      create: createTooltipDOM(info),
+    };
   },
-]);
+  { hoverTime: 300 },
+);
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 
@@ -272,7 +127,6 @@ const hintTheme = EditorView.baseTheme({
     backgroundColor: "#1e1e2e",
     color: "#d4d4d4",
     boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
-    transform: "translateY(-1.5em)",
   },
   ".cm-sig-hint-sig": {
     fontFamily: "monospace",
@@ -343,9 +197,9 @@ const hintTheme = EditorView.baseTheme({
 // ─── Export ───────────────────────────────────────────────────────────────────
 
 /**
- * CodeMirror extension that shows function signature hints when `(` is typed.
- * Add to the extensions array after `autocompletion()`.
+ * CodeMirror extension that shows a function's signature + parameter docs when
+ * you HOVER over its name. Add it to the extensions array after autocompletion().
  */
 export function signatureHints(): Extension {
-  return [hintField, sigHintListener, hintKeymap, hintTheme];
+  return [sigHover, hintTheme];
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { MathLine } from "./mathTokens";
 import { MorphBox } from "./morph";
@@ -45,13 +45,12 @@ import {
 // ────────────────────────────────────────────────────────────────────────────
 
 const TOTAL_BEATS = 4;
-const STEP_MS = 2300;
 
 const CAPTIONS: Record<number, string> = {
-  0: "You've received 292 bytes of opaque encrypted data on the return HTLC. You don't know which hop failed yet. You'll find out by trial-decrypting layer by layer, in the same order the hops wrapped on the way back.",
-  1: "Iteration `i=0`: try Bob's keys first, since his layer is outermost. XOR with `ammag_B`, then check `HMAC(um_B, peeled[32:])` against `peeled[:32]`. It doesn't match: Bob isn't the failing hop, so his `um` can't authenticate this error. Keep peeling.",
-  2: "Iteration `i=1`: try Charlie's keys. XOR with `ammag_C`, then check `HMAC(um_C, peeled[32:])`. It matches. Charlie generated this error, and the packet is now fully decrypted, still 292 bytes.",
-  3: "Parse the payload. The first two bytes are a u16 giving `failure_len`; the next `failure_len` bytes are the failure message itself. You now know which hop failed and why, so you can retry on a different route or surface the failure to your wallet.",
+  0: "So, 292 bytes of opaque encrypted data just came back on the return HTLC. Which hop failed? You don't know yet. You'll find out by trial-decrypting layer by layer, in the same order the hops wrapped on the way back.",
+  1: "Iteration `i=0`: try Bob first, since his layer is outermost. XOR with `ammag_B`, then check `HMAC(um_B, peeled[32:])` against `peeled[:32]`. No match. Bob isn't the failing hop, so his `um` can't authenticate this error. Keep peeling...",
+  2: "Iteration `i=1`: now try Charlie. XOR with `ammag_C`, then check `HMAC(um_C, peeled[32:])`. It matches. Charlie made this error, and the packet is fully decrypted now, still 292 bytes.",
+  3: "Finally, parse the payload. The first two bytes are a u16 giving `failure_len`, and the next `failure_len` bytes are the failure message itself. Now you know *which* hop failed and why, so you can retry on a different route or surface it to your wallet.",
 };
 
 // Per-beat StepCaption header label + title (the short verdict that used to sit
@@ -104,32 +103,11 @@ const STAGE_MIN_WIDTH = 640;
 
 export function ErrorUnwrapDiagram() {
   const [step, setStep] = useState(0);
-  const [playing, setPlaying] = useState(false);
 
-  useEffect(() => {
-    if (!playing) return;
-    if (step >= TOTAL_BEATS - 1) {
-      setPlaying(false);
-      return;
-    }
-    const t = setTimeout(() => setStep((s) => s + 1), STEP_MS);
-    return () => clearTimeout(t);
-  }, [playing, step]);
-
-  const onPlayPause = () => {
-    if (playing) {
-      setPlaying(false);
-      return;
-    }
-    if (step >= TOTAL_BEATS - 1) setStep(0);
-    setPlaying(true);
-  };
   const onReset = () => {
     setStep(0);
-    setPlaying(false);
   };
   const onStep = (i: number) => {
-    setPlaying(false);
     setStep(i);
   };
 
@@ -143,12 +121,10 @@ export function ErrorUnwrapDiagram() {
       title="Alice peels the error"
       totalBeats={TOTAL_BEATS}
       step={step}
-      playing={playing}
       caption={CAPTIONS[step]}
       stepLabel={STEP_LABELS[step]}
       stepTitle={STEP_TITLES[step]}
       accentColor={accentFor(step)}
-      onPlayPause={onPlayPause}
       onReset={onReset}
       onStep={onStep}
       stageMinWidth={STAGE_MIN_WIDTH}

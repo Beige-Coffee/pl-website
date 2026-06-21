@@ -5,7 +5,7 @@ import type { HopId } from "../../lib/onion-capstone-trace";
 import type { BufferSegment, Scene, StageState } from "../../lib/onion-capstone-scenes";
 
 // ────────────────────────────────────────────────────────────────────────────
-// CapstoneStage — the capstone lab's visual stage.
+// CapstoneStage - the capstone lab's visual stage.
 //
 // Renders one Scene (from onion-capstone-scenes.ts) in the chapter 7-10
 // diagram grammar: the 1,300-byte buffer bar with hop-payload subcells
@@ -24,6 +24,11 @@ export const HOP_FILL: Record<HopId, string> = { alice: "#fef3c7", bob: "#dbeafe
 export const HOP_STROKE: Record<HopId, string> = { alice: "#b8860b", bob: "#3b6aa0", charlie: "#2d7a7a", dave: "#7b4b8a" };
 const HOP_LABEL: Record<HopId, string> = { alice: "Alice", bob: "Bob", charlie: "Charlie", dave: "Dave" };
 const ROUTE: HopId[] = ["alice", "bob", "charlie", "dave"];
+// Hop-payload subcell facts: byte count, BigSize LEN prefix (size-33), and the
+// HMAC target ("for <NextHop>"; the destination's HMAC is "none").
+const HOP_BYTES: Record<ForwarderId, number> = { bob: 60, charlie: 80, dave: 100 };
+const HOP_LEN_HEX: Record<ForwarderId, string> = { bob: "0x1B", charlie: "0x2F", dave: "0x43" };
+const HOP_HMAC_TARGET: Record<ForwarderId, string> = { bob: "for Charlie", charlie: "for Dave", dave: "none" };
 const NODE_X_PCT: Record<HopId, number> = { alice: 12, bob: 38, charlie: 62, dave: 88 };
 
 export interface StageChip {
@@ -98,11 +103,14 @@ function SegmentBody({ seg }: { seg: BufferSegment }) {
   if (showSubcells) {
     const hop = seg.hop as ForwarderId;
     const c = HOP_STROKE[hop];
+    const lenHex = HOP_LEN_HEX[hop];
+    const payloadLabel = `${HOP_LABEL[hop]} · ${HOP_BYTES[hop]} B`;
+    const hmacLabel = HOP_HMAC_TARGET[hop];
     return (
       <div style={{ display: "flex", height: "100%", position: "relative", zIndex: 2 }}>
-        <SlotSubCell section="len" style={{ flex: "0 0 22%", borderRight: `1px dashed ${c}88`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: MONO, fontSize: 8.5, color: c }}>LEN</SlotSubCell>
-        <SlotSubCell section="tlv" style={{ flex: 1, borderRight: `1px dashed ${c}88`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: MONO, fontSize: 8.5, color: c, overflow: "hidden" }}>TLV</SlotSubCell>
-        <SlotSubCell section="hmac" style={{ flex: "0 0 30%", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: MONO, fontSize: 8.5, color: c, overflow: "hidden" }}>HMAC</SlotSubCell>
+        <SlotSubCell section="len" style={{ flex: "0 0 22%", borderRight: `1px dashed ${c}88`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: MONO, fontSize: 8.5, color: c }}>{lenHex}</SlotSubCell>
+        <SlotSubCell section="tlv" style={{ flex: 1, borderRight: `1px dashed ${c}88`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: MONO, fontSize: 8.5, color: c, overflow: "hidden" }}>{payloadLabel}</SlotSubCell>
+        <SlotSubCell section="hmac" style={{ flex: "0 0 30%", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: MONO, fontSize: 8.5, color: c, overflow: "hidden" }}>{hmacLabel}</SlotSubCell>
       </div>
     );
   }
@@ -118,7 +126,7 @@ function SegmentBody({ seg }: { seg: BufferSegment }) {
 function BufferBar({ segments }: { segments: BufferSegment[] }) {
   return (
     <div>
-      <div style={{ display: "flex", height: 46, border: `1.5px solid ${INK}`, borderRadius: 3, overflow: "hidden", background: "#fffdf5" }}>
+      <div style={{ display: "flex", height: 46, border: `1.5px solid ${INK}`, overflow: "hidden", background: "#fffdf5" }}>
         {segments.map((seg, i) => (
           <div
             key={seg.key}

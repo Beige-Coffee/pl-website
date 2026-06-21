@@ -73,6 +73,9 @@ const ERROR_RED = "#a13a3a";
 const NEXT_HOP_LABEL: Record<ForwarderId, string> = { bob: "for Charlie", charlie: "for Dave", dave: "none" };
 // Per-hop payload size (bytes) shown on the payload cell. Canonical 60/80/100.
 const HOP_PAYLOAD_BYTES: Record<ForwarderId, number> = { bob: 60, charlie: 80, dave: 100 };
+// bigsize LEN prefix = TLV payload bytes (hop payload total minus the 1-byte prefix
+// and the 32-byte HMAC): Bob(60)->0x1B, Charlie(80)->0x2F, Dave(100)->0x43.
+const LEN_HEX: Record<ForwarderId, string> = { bob: "0x1B", charlie: "0x2F", dave: "0x43" };
 const NEXT_HOP_COLOR: Record<ForwarderId, string> = { bob: HOP_KEY_COLORS.charlie, charlie: HOP_KEY_COLORS.dave, dave: SLATE };
 
 // ── State per step ──────────────────────────────────────────────────────────
@@ -108,10 +111,10 @@ const STRATEGIES: StrategyDef[] = [
       { holder: "charlie", fromHop: "bob", hopPayloads: ["charlie", "dave"], gapFill: "zeros", outerKey: "charlie", hmacResult: "fail" },
     ],
     captions: [
-      "Alice has just built the packet: three encrypted hop payloads at the front, then encrypted padding filling the rest of the 1,300-byte field, plus the header and Bob's HMAC. Total: 1,366 bytes.",
-      "Bob received the packet. He's about to peel his hop payload off the front.",
-      "Bob peels his hop payload off the front, and everything else, the remaining payloads and the padding, shifts forward. That opens a 60-byte gap at the back (60 = the payload he removed). In this strategy he fills the gap with zeros to keep the packet at 1,366 bytes, then forwards to Charlie.",
-      "Before doing anything, Charlie recomputes his HMAC over the bytes he received. Hover the HMAC tag: Alice computed it over the filler she'd precomputed for the back, but Bob's gap is zeros. They differ, so Charlie rejects with `invalid_onion_hmac`.",
+      "Alice just built the packet. Three encrypted hop payloads up front, then encrypted padding filling out the rest of the 1,300-byte field, plus the header and Bob's HMAC. 1,366 bytes in all.",
+      "Bob's got the packet now, and he's about to peel his hop payload off the front.",
+      "Bob peels his hop payload off the front, and everything else (the remaining payloads and the padding) slides forward. That leaves a 60-byte gap at the back (60 = the payload he removed). Here he packs the gap with zeros to hold the packet at 1,366 bytes, then forwards to Charlie.",
+      "First, Charlie recomputes his HMAC over the bytes he got. Hover the HMAC tag. Alice computed it over filler she'd set up for the back, but Bob's gap is *zeros*. They don't match, so Charlie bails with `invalid_onion_hmac`.",
     ],
   },
   {
@@ -125,10 +128,10 @@ const STRATEGIES: StrategyDef[] = [
       { holder: "charlie", fromHop: "bob", hopPayloads: ["charlie", "dave"], gapFill: "random", outerKey: "charlie", hmacResult: "fail" },
     ],
     captions: [
-      "Same starting packet as before: payloads up front, encrypted padding behind them, 1,366 bytes total.",
-      "Bob received the packet, about to peel his hop payload off the front.",
-      "Same shift forward, opening the same 60-byte back gap. This time Bob fills it with random-looking bytes. They look like ciphertext, no tell-tale zero pattern, and the packet is still 1,366 bytes.",
-      "Charlie recomputes his HMAC over what he received. Hover the HMAC tag: Alice computed it over her precomputed filler, and random bytes aren't that filler. Mismatch, rejected with `invalid_onion_hmac`.",
+      "Same starting packet as before. Payloads up front, encrypted padding behind them, 1,366 bytes total.",
+      "Bob's got the packet, about to peel his hop payload off the front.",
+      "Same slide forward, same 60-byte gap at the back. This time Bob fills it with random-looking bytes. They pass for ciphertext (no tell-tale zero pattern), and the packet's still 1,366 bytes.",
+      "Now Charlie recomputes his HMAC over what he got. Hover the HMAC tag. Alice computed it over her precomputed filler, and random bytes just aren't that filler. Mismatch, rejected with `invalid_onion_hmac`.",
     ],
   },
   {
@@ -142,10 +145,10 @@ const STRATEGIES: StrategyDef[] = [
       { holder: "charlie", fromHop: "bob", hopPayloads: ["charlie", "dave"], gapFill: "filler", outerKey: "charlie", hmacResult: "pass" },
     ],
     captions: [
-      "Same starting packet. The difference is invisible here but crucial: the bytes at the very back are a block Alice precomputed, the filler, set up to survive each peel.",
-      "Bob received the 1,366-byte packet, about to peel.",
-      "Same shift, same 60-byte back gap. But here the bytes that land in the gap are exactly the filler Alice precomputed, which equals what Bob's own keystream produces during the peel. Still 1,366 bytes, forwarded to Charlie.",
-      "Charlie recomputes his HMAC. Hover the HMAC tag: Alice computed it over this exact filler, and the gap holds that same filler. They match, the HMAC verifies, and Charlie forwards to Dave. This is the one fill that reproduces the bytes the HMAC already committed to.",
+      "Same starting packet. The difference is invisible here, but it matters. The bytes at the very back are a block Alice precomputed, the filler, set up to survive each peel.",
+      "Bob's got the 1,366-byte packet, about to peel.",
+      "Same slide, same 60-byte gap at the back. But here the bytes that land in the gap are exactly the filler Alice precomputed, which equals what Bob's own keystream spits out during the peel. Still 1,366 bytes, forwarded to Charlie.",
+      "Now Charlie recomputes his HMAC. Hover the HMAC tag. Alice computed it over this exact filler, and the gap holds that same filler. They match, the HMAC verifies, and Charlie forwards to Dave. Nice. This is the one fill that reproduces the bytes the HMAC already committed to.",
     ],
   },
 ];
@@ -155,20 +158,14 @@ const TOTAL_BEATS = 4;
 export function PaddingStrategyDiagram() {
   const [strategy, setStrategy] = useState<Strategy>("zeros");
   const [step, setStep] = useState(0);
-  const [playing, setPlaying] = useState(false);
   const [comparing, setComparing] = useState(false);
 
-  useEffect(() => { setStep(0); setPlaying(false); setComparing(false); }, [strategy]);
+  useEffect(() => { setStep(0); setComparing(false); }, [strategy]);
   useEffect(() => { setComparing(false); }, [step]);
-  useEffect(() => {
-    if (!playing) return;
-    if (step >= TOTAL_BEATS - 1) { setPlaying(false); return; }
-    const t = setTimeout(() => setStep((s) => s + 1), 2400);
-    return () => clearTimeout(t);
-  }, [playing, step]);
 
-  const play = () => { if (step >= TOTAL_BEATS - 1) setStep(0); setPlaying(true); };
-  const reset = () => { setStep(0); setPlaying(false); };
+  const reset = () => { setStep(0); };
+  const back = () => setStep((s) => Math.max(0, s - 1));
+  const next = () => setStep((s) => Math.min(TOTAL_BEATS - 1, s + 1));
 
   const strategyDef = STRATEGIES.find((s) => s.id === strategy)!;
   const state = strategyDef.steps[step];
@@ -217,10 +214,8 @@ export function PaddingStrategyDiagram() {
       <div className="px-4 py-3 border-t-[1.5px] border-foreground/30 bg-card">
         <div className="flex flex-col md:flex-row md:items-start md:gap-4">
           <div className="flex gap-1.5 items-center flex-wrap shrink-0">
-            <button onClick={playing ? () => setPlaying(false) : play}
-              className="px-3 py-1.5 border-[1.5px] border-black bg-black text-white font-bold text-xs tracking-[0.05em] uppercase hover:bg-[#b8860b] hover:border-[#b8860b] transition-colors">
-              {playing ? "❚❚ Pause" : step >= TOTAL_BEATS - 1 ? "↻ Replay" : "▶ Play"}
-            </button>
+            <button onClick={back} disabled={step === 0} style={{ opacity: step === 0 ? 0.4 : 1, cursor: step === 0 ? "default" : "pointer" }} className="px-3 py-1.5 border-[1.5px] border-foreground/40 bg-card text-foreground text-xs uppercase tracking-[0.05em] hover:bg-secondary transition-colors">← Back</button>
+            <button onClick={next} disabled={step === TOTAL_BEATS - 1} style={{ opacity: step === TOTAL_BEATS - 1 ? 0.4 : 1, cursor: step === TOTAL_BEATS - 1 ? "default" : "pointer" }} className="px-3 py-1.5 border-[1.5px] border-foreground/40 bg-card text-foreground text-xs uppercase tracking-[0.05em] hover:bg-secondary transition-colors">Next →</button>
             <button onClick={reset} className="px-3 py-1.5 border-[1.5px] border-foreground/40 bg-card text-foreground text-xs uppercase tracking-[0.05em] hover:bg-secondary transition-colors">Reset</button>
             <div className="ml-1 flex gap-1">
               {Array.from({ length: TOTAL_BEATS }, (_, i) => (
@@ -351,7 +346,7 @@ function DetailedOnionPacket({ state, comparing, setComparing }: { state: StepSt
               cursor: atCheck ? "pointer" : "default", transition: "all 300ms" }}
             data-testid="padding-strategy-hmac-tag">
             <span className="text-[10px] font-bold uppercase tracking-[0.06em] leading-tight" style={{ fontFamily: MONO }}>HMAC</span>
-            <span className="text-[10px] font-bold leading-tight mt-0.5" style={{ fontFamily: MONO, color: atCheck ? verdictColor : outerColor }}>→ {HOP_LABEL[state.outerKey]}</span>
+            <span className="text-[10px] font-bold leading-tight mt-0.5" style={{ fontFamily: MONO, color: atCheck ? verdictColor : outerColor }}>for {HOP_LABEL[state.outerKey]}</span>
             <span className="text-[8.5px] font-normal opacity-60 leading-tight mt-0.5" style={{ fontFamily: MONO }}>32 B</span>
             {atCheck && (
               <span className="text-[7.5px] font-bold leading-tight mt-1.5 uppercase tracking-[0.03em] whitespace-pre-line" style={{ color: verdictColor, fontFamily: MONO }}>
@@ -387,7 +382,7 @@ function HopPayloadCell({ forwarder, layers, dim }: { forwarder: ForwarderId; la
   const fill = HOP_FILL[forwarder];
   return (
     <div className="relative flex" style={{ flexGrow: 2.4, flexBasis: 0, minWidth: 116, borderRight: `1.5px solid ${color}`, opacity: dim ? 0.3 : 1, transition: "opacity 300ms, flex-grow 450ms ease-in-out, flex-basis 450ms ease-in-out" }}>
-      <SlotSubCell section="len" style={{ width: 24, flexShrink: 0, background: fill, borderRight: `1px dashed ${color}90`, fontSize: 8.5, fontFamily: MONO, color: SLATE, display: "flex", alignItems: "center", justifyContent: "center", letterSpacing: "0.05em", textTransform: "uppercase", fontWeight: 700 }}>len</SlotSubCell>
+      <SlotSubCell section="len" style={{ width: 24, flexShrink: 0, background: fill, borderRight: `1px dashed ${color}90`, fontSize: 8.5, fontFamily: MONO, color: SLATE, display: "flex", alignItems: "center", justifyContent: "center", letterSpacing: "0.05em", textTransform: "uppercase", fontWeight: 700 }}>{LEN_HEX[forwarder]}</SlotSubCell>
       <SlotSubCell section="tlv" className="flex-1 relative flex flex-col items-center justify-center text-center" style={{ background: fill, minWidth: 0 }}>
         <div className="relative text-[9.5px] font-bold uppercase tracking-[0.04em]" style={{ color, fontFamily: MONO }}>{HOP_LABEL[forwarder]}</div>
         <div className="relative text-[8.5px] mt-0.5 opacity-70" style={{ color: SLATE, fontFamily: MONO }}>{HOP_PAYLOAD_BYTES[forwarder]} B</div>

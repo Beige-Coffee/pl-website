@@ -1,5 +1,5 @@
 import { Link, Route, Switch, useLocation } from "wouter";
-import { useEffect, useLayoutEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState, useCallback, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
@@ -10,7 +10,6 @@ import LoginModal from "../components/LoginModal";
 import ProfileDropdown from "../components/ProfileDropdown";
 import FeedbackWidget from "../components/FeedbackWidget";
 import CheckpointQuestion from "../components/CheckpointQuestion";
-import CheckpointGroup from "../components/CheckpointGroup";
 import CodeExercise from "../components/CodeExercise";
 import Scratchpad from "../components/Scratchpad";
 import { CollapsibleItem, CollapsibleGroup } from "../components/CollapsibleSection";
@@ -22,7 +21,6 @@ import { getOnionRoutingDraftExerciseGroupContext as getOnionRoutingExerciseGrou
 import { Tok as MathTok } from "../components/onion-routing-draft/mathTokens";
 import { GlossaryTerm } from "../components/onion-routing-draft/GlossaryTerm";
 import { resolveGlossary } from "../components/onion-routing-draft/glossary";
-import { NetworkTopologyDiagram } from "../components/onion-routing-draft/NetworkTopologyDiagram";
 import { KdfPipelineDiagram } from "../components/onion-routing-draft/KdfPipelineDiagram";
 import { FillerTraceDiagram } from "../components/onion-routing-draft/FillerTraceDiagram";
 import { ForwarderPeelDiagram } from "../components/onion-routing-draft/ForwarderPeelDiagram";
@@ -64,8 +62,6 @@ const CUSTOM_BLOCK_TAGS = new Set([
   "code-intro",
   "code-outro",
   "checkpoint",
-  "checkpoint-group",
-  "network-topology",
   "route-comparison",
   "kdf-pipeline",
   "payload-shrink",
@@ -148,10 +144,10 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
     question:
       "When Alice encrypts a single hop's layer during onion construction, which bytes get XOR'd with that hop's keystream?",
     options: [
-      "Only the hop payload Alice just wrote for that hop",
-      "Only the hop payloads, not the surrounding padding",
-      "The entire 1,300-byte payload buffer",
-      "Just the packet header (version + ephemeral pubkey)",
+      "Only this hop's own slice (the hop payload Alice just wrote)",
+      "All the hop-payload slices written so far, but not the leftover padding",
+      "The entire 1,300-byte payload buffer (every hop payload plus all the padding)",
+      "Only the packet header (version + ephemeral pubkey), not the payload",
     ],
     answer: 2,
     explanation:
@@ -182,19 +178,6 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
     answer: 2,
     explanation:
       "Decryption mirrors encryption exactly. Alice applied Bob's keystream to the whole buffer during construction; Bob has to apply the same keystream to the whole buffer to undo it. Bob's hop payload had only one encryption layer (Bob's), so it comes off completely and his hop payload is now plaintext. Charlie's and Dave's hop payloads had two and three layers respectively; each loses one, leaving them still encrypted. The padding loses one layer too. This symmetry is what makes Sphinx work: every hop runs the exact same operation Alice did during their iteration of the build.",
-  },
-  "cp-101-destination-signal-draft": {
-    question:
-      "How does each forwarder know whether they're a relay (forward the packet) or the destination (claim the payment)?",
-    options: [
-      "They check a 'destination' flag bit in the packet header",
-      "They count the remaining payload bytes and compare to a known route length",
-      "After decrypting their hop payload, they check whether the hop payload's HMAC field is 32 zero bytes",
-      "They look themselves up in the network gossip graph and see if any further channels exist on the route",
-    ],
-    answer: 2,
-    explanation:
-      "Every hop payload ends with a 32-byte HMAC field. For relay hops, this field contains the next hop's HMAC (charlie_hmac in Bob's hop payload, dave_hmac in Charlie's). For the destination, Alice fills the field with all zeros, there is no next hop to commit to. So each hop's algorithm is: decrypt my hop payload, read the HMAC field; if it's all zeros, I'm the destination and I claim the payment. Otherwise the field is the outer HMAC for the next forwarder, so I shift the buffer left by my hop payload size and forward it.",
   },
   "cp-101-tamper-detection-draft": {
     question:
@@ -250,22 +233,22 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
     options: [
       "The extra keystream derives a backup mu key in case the primary HMAC verification fails on first attempt",
       "ChaCha20 requires a minimum of 2,600 bytes per call to operate efficiently; a smaller call falls back to AES",
-      "The trailing portion fills the gap when Bob shifts inner contents forward, matching what Alice baked into the filler",
+      "Bob XORs the whole buffer in one pass before he reads his own payload, so he can't yet know how big it is; he sizes the keystream for the largest possible payload (twice the routing-info size) to be safe",
       "The first 1,300 bytes decrypt the inbound packet; the next 1,300 bytes encrypt Bob's outgoing packet by XOR-ing onto the next ephemeral pubkey",
     ],
     answer: 2,
-    explanation: "When Bob shifts the inner contents forward (to remove his hop payload from the front of the buffer), a gap opens up at the end. Those gap bytes have to be the bytes that Alice's chapter-7 filler computation arranged for. The filler was constructed to match the trailing portion of each hop's rho keystream extended past 1,300 bytes. By generating 2,600 bytes of keystream and XOR-ing it across a 2,600-byte working buffer, Bob applies that exact extension naturally: the front 1,300 decrypts his inbound bytes, the trailing 1,300 produces the bytes-of-keystream-XORed-with-zeros that match what Alice baked in.",
+    explanation: "Bob applies the keystream to the entire buffer in a single XOR pass BEFORE he parses his hop payload's length, so at XOR time he doesn't yet know how many bytes his own payload occupies. To stay safe, he sizes the buffer and keystream for the largest possible payload: 2x the routing-info size, or 2,600 bytes. (Bonus, and this is the elegant part: after he reads his payload and shifts the inner contents forward, the trailing bytes (the zero-padding XOR'd with that extended keystream) regenerate the exact filler Alice precomputed back in chapter 7, so the next hop's HMAC over the forwarded buffer still verifies.) The distractors are wrong: there's no backup mu key; ChaCha20 has no 2,600-byte minimum; and the trailing keystream isn't XOR'd onto the ephemeral pubkey (that key is advanced separately via the blinding factor).",
   },
   "cp-peel-next-hmac-draft": {
     question: "After Bob XORs his `rho_B` keystream over the extended buffer, he parses the bigsize-prefixed TLV records at the front, then reads the 32 bytes that come right after the TLVs. What's in those 32 bytes, and where do they go in the packet Bob forwards to Charlie?",
     options: [
-      "It's `bob_hmac` — the same tag Bob just verified, kept as a checksum for Bob's audit log of forwarded packets",
-      "It's `charlie_hmac` — the HMAC tag Bob writes into the outer HMAC field of the packet he forwards",
+      "It's `bob_hmac`, the same tag Bob just verified, kept as a checksum for Bob's audit log of forwarded packets",
+      "It's `charlie_hmac`, the HMAC tag Bob writes into the outer HMAC field of the packet he forwards",
       "It's an encrypted next_hmac placeholder that Bob first decrypts with `um_B` before writing it into the outgoing packet",
-      "It's `E_AC` — the advanced ephemeral pubkey, derived from those bytes and placed in the next packet's header",
+      "It's `E_AC`, the advanced ephemeral pubkey, derived from those bytes and placed in the next packet's header",
     ],
     answer: 1,
-    explanation: "Each hop payload is laid out as `bigsize_LEN || TLV records || next_hmac (32 B)`. During wrap, Alice wrote each hop's `next_hmac` field from the HMAC her loop computed on the *prior* (inner) iteration. So in Bob's hop payload, the 32 bytes after the TLVs are exactly `charlie_hmac` — the HMAC of Charlie's encrypted layer, computed during Alice's Charlie iteration.\n\nWhen Bob assembles his outgoing packet, those 32 bytes are written verbatim into the outer HMAC field. That's how the HMAC chain advances by one hop: Alice committed to `charlie_hmac` inside Bob's hop payload, Bob just lifts it into the wire field, and Charlie will compare it against the HMAC he recomputes from `mu_C` over his own hop_payloads. No `um` key is involved — `um` is used in the return-error path, not for forwarding (option 3). Option 4 confuses fields: the new ephemeral pubkey is derived from `E_AB` and `ss_AB`, not from a 32-byte region inside the buffer.",
+    explanation: "Each hop payload is laid out as `bigsize_LEN || TLV records || next_hmac (32 B)`. During wrap, Alice wrote each hop's `next_hmac` field from the HMAC her loop computed on the *prior* (inner) iteration. So in Bob's hop payload, the 32 bytes after the TLVs are exactly `charlie_hmac`, the HMAC of Charlie's encrypted layer, computed during Alice's Charlie iteration.\n\nWhen Bob assembles his outgoing packet, those 32 bytes are written verbatim into the outer HMAC field. That's how the HMAC chain advances by one hop: Alice committed to `charlie_hmac` inside Bob's hop payload, Bob just lifts it into the wire field, and Charlie will compare it against the HMAC he recomputes from `mu_C` over his own hop_payloads. No `um` key is involved. `um` is used in the return-error path, not for forwarding (option 3). Option 4 confuses fields: the new ephemeral pubkey is derived from `E_AB` and `ss_AB`, not from a 32-byte region inside the buffer.",
   },
   // ── Chapter 8: Wrapping Layer-by-Layer ───────────────────────────────────
   "cp-build-reverse-order-draft": {
@@ -292,7 +275,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
   },
   // ── Chapter 7: Filler Construction ───────────────────────────────────────
   "cp-filler-shared-keystream-draft": {
-    question: "Alice's filler is just bytes she precomputes ahead of time, in her own kitchen, that turn out to be <em>exactly</em> what Bob's peel produces at the back of his forwarded packet. How is this possible?",
+    question: "Alice's filler is just bytes she precomputes herself, before the payment is ever sent, that turn out to be <em>exactly</em> what Bob's peel produces at the back of his forwarded packet. How is this possible?",
     options: [
       "Alice runs Bob's exact code on her side, simulating every byte he will touch in advance",
       "Alice and Bob derive the same <code>rho_B</code> keystream from <code>ss_AB</code>, so same key + same zeros + same XOR = same result",
@@ -303,27 +286,27 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
     explanation: "This is the whole reason the filler trick works. Filler isn't a trick for hiding values from Bob; it's Alice <em>recreating</em> bytes Bob will produce. Because Alice and Bob share an ECDH secret <code>ss_AB</code>, they both derive the same <code>rho_B</code> key, and thus generate the same ChaCha20 keystream. Alice can take that keystream, XOR it into zeros (or her growing filler), and produce the exact byte pattern Bob will later create when he XORs his keystream over his extended buffer. Without the shared secret, this would require Alice to literally run Bob's code; with it, she just runs the same primitive locally.",
   },
   "cp-filler-reach-back-draft": {
-    question: "In step 3 of the filler algorithm, Alice XORs the <strong>last <code>s_B + s_C</code> bytes</strong> of Charlie's <code>rho</code> keystream into the filler, not just the last <code>s_C</code>. The <code>s_B + s_C</code>-byte slice reaches <em>back</em> into Charlie's regular 1,300-byte keystream region by <code>s_B</code> bytes. Why is the reach-back necessary?",
+    question: "In step 3 of the filler algorithm, Alice XORs the <strong>last <code>s_B + s_C</code> bytes</strong> of Charlie's <code>rho</code> keystream into the filler, not just the last <code>s_C</code>. The <code>s_B + s_C</code>-byte slice overlaps Charlie's regular 1,300-byte keystream region by <code>s_B</code> bytes. Why is this overlap necessary?",
     options: [
       "Without it, Charlie's keystream wouldn't cover the full 1,300-byte <code>hop_payloads</code> field plus the trailing extension",
-      "The reach-back compensates for an off-by-one error in Python's negative slice indexing that would otherwise misalign by one byte",
+      "The overlap compensates for an off-by-one error in Python's negative slice indexing that would otherwise misalign by one byte",
       "Bob's filler bytes sit at those <code>s_B</code> positions when Charlie peels, so Charlie's XOR has to stack his layer onto Bob's bytes too",
-      "The reach-back is what authenticates Charlie's HMAC; without it, HMAC verification would fail at Charlie",
+      "The overlap is what authenticates Charlie's HMAC; without it, HMAC verification would fail at Charlie",
     ],
     answer: 2,
-    explanation: "When Charlie peels, he XORs his <code>rho_C</code> keystream over the <em>entire</em> 1,300 + <code>s_C</code> extended buffer, including the positions where Bob's filler bytes are already sitting. So Alice has to pre-bake Charlie's keystream into those positions too, otherwise Charlie's XOR will scramble Bob's bytes and the next hop's HMAC over the forwarded buffer won't match what Alice computed during construction. The reach-back doesn't extend the keystream's length (it's the same <code>1300 + s_C</code> stream as always); it's about where Alice slices from so that her precomputed filler accounts for Charlie's encryption layer landing on top of Bob's bytes.",
+    explanation: "When Charlie peels, he XORs his <code>rho_C</code> keystream over the <em>entire</em> 1,300 + <code>s_C</code> extended buffer, including the positions where Bob's filler bytes are already sitting. So Alice has to pre-bake Charlie's keystream into those positions too, otherwise Charlie's XOR will scramble Bob's bytes and the next hop's HMAC over the forwarded buffer won't match what Alice computed during construction. The overlap doesn't extend the keystream's length (it's the same <code>1300 + s_C</code> stream as always); it's about where Alice slices from so that her precomputed filler accounts for Charlie's encryption layer landing on top of Bob's bytes.",
   },
   // ── Chapter 7: The Fixed-Size Packet & Filler ────────────────────────────
   "cp-payload-shrink-leak-draft": {
-    question: "Charlie is a middle forwarder in this 3-hop route. He receives a packet that's ~936 bytes, smaller than the 1,366 bytes Alice originally constructed but larger than what Dave will eventually see. From the byte count alone, what is Charlie able to infer that he shouldn't? Select all that apply.",
+    question: "Charlie is a middle forwarder in this 3-hop route. He receives a 246-byte packet, smaller than the 306 bytes Alice originally constructed but larger than what Dave will eventually see. From the byte count alone, what is Charlie able to infer that he shouldn't? Select all that apply.",
     options: [
       "The number of hops remaining downstream of him, based on how much buffer is left",
       "The number of hops upstream of him (how many forwarders have already peeled the packet)",
       "The total amount being forwarded across the route, from the smaller buffer he received",
       "The sender's identity, recovered from the packet header's leading public key bytes",
     ],
-    answer: [0, 1],
-    explanation: "Charlie can read both leaks at once. (1) He sees ~936 bytes still on the wire and knows hop payloads are roughly equal-sized, so he counts how many remain inside the packet (himself plus one downstream hop). (2) He compares 936 against the maximum unpeeled packet size (1,366 bytes) and works out that exactly one forwarder has already peeled, putting him at position 2 in the route. Either reading lands him in the same spot. Encryption hides the *contents* of each hop payload, not the byte count on the wire, which is exactly the privacy property from chapter 3 falling apart. The other options aren't size-derivable: amount, sender identity, and payment hash all live encrypted inside hop payloads and don't shift the byte count. Sphinx fixes both leaks by padding every packet to exactly 1,366 bytes regardless of route length, and the filler construction in this chapter is what makes that padding work without breaking each hop's HMAC verification.",
+    answer: [0],
+    explanation: "Only the first option is right, and the trick is which direction the size leaks. A shrinking onion strips each hop's payload off the front and forwards what's left, so the bytes Charlie holds are the fixed envelope (1-byte version, 33-byte ephemeral pubkey, 32-byte HMAC) plus his own payload plus every payload still bound for hops after him. That leftover grows with how much route remains, and all of those bytes sit in his buffer for him to measure, so he can count the hops downstream of him (himself plus one more). That reveals his distance from the destination, which is exactly the chapter 3 privacy property breaking down. What he cannot do is count the hops upstream of him, and that is the tempting wrong answer. To work out that exactly one forwarder came before him, Charlie would need the packet's original size and then subtract, but he never receives it. The 306-byte figure is narrated to you, the reader; it never travels on the wire. The bytes Bob already peeled are simply gone, with no count field and no residue left behind. In fact the same 246-byte packet is byte-for-byte identical in two different worlds: one where Bob peeled a layer before Charlie, and one where Alice just built a 246-byte packet and handed it straight to Charlie for a two-hop tail. A number that looks the same whether zero or one forwarder came before him cannot reveal how many did. (Recovering an upstream count takes a passive observer watching Alice's own link, not a lone forwarder reading its byte count.) The other options are not size-derivable either: the amount and the sender's identity ride encrypted inside the hop payloads (and the header's key is a fresh per-packet blinded ephemeral key, not Alice's identity key), so neither shifts the byte count. The takeaway: leftover size leaks how far you are from the destination, never how far you are from the sender. Sphinx kills the leak by padding every packet to exactly 1,366 bytes regardless of route length, and the filler construction in this chapter is what makes that padding survive each hop's HMAC verification.",
   },
   // ── Chapter 6: Key Derivation ────────────────────────────────────────────
   "cp-key-separation-draft": {
@@ -350,7 +333,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
   },
   // ── Chapter 4: Shared Secrets per Hop ────────────────────────────────────
   "cp-node-key-ecdh-draft": {
-    question: "Reusing Alice's node-identity key as the ECDH input has multiple consequences. Some are visible in the animation above, others fall out of the design when you think it through. Select all the real problems with this approach.",
+    question: "Reusing Alice's node-identity key as the ECDH input causes several problems. Some are visible in the animation above, and others you have to reason through yourself. Select all the real ones.",
     options: [
       "Every forwarder can match the pubkey in the packet against the public gossip graph and identify Alice as the sender.",
       "Two of Alice's payments would carry the same pubkey, letting an observer link them to the same sender.",
@@ -377,7 +360,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
     question: "Bob has derived <m>ss_AB</m> and computed <m>bf_AB</m>. He's about to forward the onion to Charlie. Which of the following best describes what Bob does to the ephemeral key field in the outgoing packet, and why Charlie ends up deriving the same <m>ss_AC</m> Alice precomputed?",
     options: [
       "Bob appends <m>E_AC</m> after <m>E_AB</m>, so Charlie can scan for his own key. It works because Charlie tries each pubkey until ECDH yields a value that decrypts his slice.",
-      "Bob *replaces* <m>E_AB</m> with <m>E_AC</m> (computed as <m>bf_AB</m> · <m>E_AB</m>). Charlie ECDHs against <m>E_AC</m> and lands on the same <m>ss_AC</m> Alice precomputed.",
+      "Bob replaces <m>E_AB</m> with <m>E_AC</m> (computed as <m>bf_AB</m> · <m>E_AB</m>). Charlie ECDHs against <m>E_AC</m> and lands on the same <m>ss_AC</m> Alice precomputed.",
       "Bob signs <m>E_AC</m> with his node private key and embeds the signature in the packet. Charlie verifies it against `bob_pubkey` before trusting <m>E_AC</m>.",
       "Bob leaves <m>E_AB</m> in the field; Charlie derives <m>E_AC</m> himself by recomputing the chain from his own position in the route using gossip data.",
     ],
@@ -387,7 +370,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
   },
   // ── Chapter 2: Pathfinding 101 ───────────────────────────────────────────
   "cp-channel-update-direction-draft": {
-    question: "A single payment channel between two nodes can have up to two `channel_update`s on the gossip network. Why?",
+    question: "At any given moment, a single payment channel between two nodes can have up to two `channel_update`s live on the gossip network at once. Why does a single channel produce two separate `channel_update`s?",
     options: [
       "Both sides cosign one shared `channel_update` at channel open, then re-sign it together whenever policy changes, producing two versions over the channel's lifetime.",
       "Each direction of the channel has its own forwarding policy, and each side publishes the `channel_update` for the direction it owns.",
@@ -400,13 +383,13 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
   "cp-cheapest-route-draft": {
     question: "You've now computed all three routes. Alice wants the lowest fee, but her wallet enforces `max_total_cltv_expiry_delta = 200`. Which route should she send through?",
     options: [
-      "Route A: direct via Hazel (1,300 sats fee). It's the cheapest on fees, and a single forwarder is the simplest path.",
-      "Route B: through Frank and Greg (2,002 sats fee). The most expensive route, but well within the CLTV ceiling.",
-      "Route C: through Bob and Charlie (1,225 sats fee). The cheapest route that also fits under the CLTV ceiling.",
+      "Route A: direct via Hazel. It's the cheapest on fees, and a single forwarder is the simplest path.",
+      "Route B: through Frank and Greg. The most expensive route, but well within the CLTV ceiling.",
+      "Route C: through Bob and Charlie. The cheapest route that also fits under the CLTV ceiling.",
       "Either Route B or Route C. Once Route A is filtered out, picking between the survivors is a judgment call.",
     ],
     answer: 2,
-    explanation: "The right move is **filter, then minimize**. Route A looks tempting at 1,300 sats, but Hazel's `cltv_expiry_delta = 1000` pushes the total accumulated CLTV to 1,018 blocks, which blows past Alice's 200-block ceiling, so her wallet refuses to lock her funds for that long. Route A drops out before fees are even compared. Among the survivors, Route B totals 60 blocks of CLTV at 2,002 sats, and Route C totals 53 blocks of CLTV at 1,225 sats. Route C is both cheaper *and* lower CLTV, so it wins on every axis that matters. This filter-then-optimize pattern is what real Lightning pathfinders do: they apply hard constraints (CLTV ceiling, HTLC min/max amounts, channel capacity) up front, then minimize a cost function over what's left. Route C is also the same path Alice picked back in chapter 1: Alice → Bob → Charlie → Dave.",
+    explanation: "The right move is **filter, then minimize**. Route A is the cheapest on fees at just 900 sats, which is exactly what makes it tempting, but Hazel's `cltv_expiry_delta = 1000` pushes the total accumulated CLTV to 1,018 blocks, which blows past Alice's 200-block ceiling, so her wallet refuses to lock her funds for that long. The cheapest route drops out before fees even matter. Among the survivors, Route B totals 60 blocks of CLTV at 2,002 sats, and Route C totals 53 blocks of CLTV at 1,225 sats, so Route C is both cheaper *and* lower CLTV than B. This filter-then-optimize pattern is what real Lightning pathfinders do: they apply hard constraints (CLTV ceiling, HTLC min/max amounts, channel capacity) up front, then minimize a cost function over what's left. Route C is also the same path Alice picked back in chapter 1: Alice → Bob → Charlie → Dave.",
   },
   // ── Intro: Naive plaintext routing leak (Draft) ──────────────────────────
   "cp-naive-plaintext-leak-draft": {
@@ -565,7 +548,7 @@ export const CHAPTER_REQUIREMENTS: Record<string, {
 }> = {
   "a-lightning-payment": { checkpoints: [], exercises: [] },
   "pathfinding-101": { checkpoints: ["cp-channel-update-direction-draft", "cp-cheapest-route-draft"], exercises: [] },
-  "privacy-problem": { checkpoints: ["cp-naive-plaintext-leak-draft", "cp-still-vulnerable-draft"], exercises: [] },
+  "privacy-problem": { checkpoints: ["cp-naive-plaintext-leak-draft", "km-privacy-rubric-draft", "cp-still-vulnerable-draft"], exercises: [] },
   "shared-secrets": { checkpoints: ["cp-node-key-ecdh-draft", "cp-naive-shared-secrets-draft", "cp-blinding-public-draft"], exercises: ["exercise-derive-shared-secrets-draft"] },
   "onion-routing-101": {
     checkpoints: [
@@ -573,7 +556,6 @@ export const CHAPTER_REQUIREMENTS: Record<string, {
       "cp-101-encrypt-buffer-scope-draft",
       "cp-101-dave-layer-count-draft",
       "cp-101-decrypt-buffer-scope-draft",
-      "cp-101-destination-signal-draft",
       "cp-101-tamper-detection-draft",
     ],
     exercises: [],
@@ -647,6 +629,12 @@ By the end, you'll have written a Sphinx packet builder and a forwarder that the
 >
 > This tutorial rewards you with real bitcoin for completing checkpoint quizzes and coding exercises. Sign in first, then click the profile icon in the top-right to set up a Lightning Address for automatic payouts.`;
 }
+
+// Per-exercise reference diagrams, surfaced via the popup icon next to "SEND
+// TO SANDBOX" so students can consult the relevant visual while coding.
+const EXERCISE_REFERENCE_DIAGRAMS: Record<string, ReactNode> = {
+  "exercise-derive-shared-secrets-draft": <BlindingFactorDiagram />,
+};
 
 function ChapterContent({
   chapter,
@@ -814,7 +802,9 @@ function ChapterContent({
             const tok = String(
               Array.isArray(children) ? children.join("") : children ?? ""
             );
-            const mathEl = <MathTok token={tok} />;
+            // weight 500 (not the default 700): prose math reads lighter and
+            // the subscripts (ss_AB, E_AC) are easier to make out.
+            const mathEl = <MathTok token={tok} weight={500} />;
             // Make subscripted math symbols glossary-aware too (ss_AB, E_AC, rho_B).
             // `wash` adds the gold tint here (math tokens have no pill of their own).
             return resolveGlossary(tok) ? (
@@ -871,48 +861,6 @@ function ChapterContent({
                   pubkey={pubkey}
                   alreadyCompleted={isCompleted}
                   claimInfo={completedCheckpoints.find(c => c.checkpointId === cpId) || null}
-                  onLoginRequest={onLoginRequest}
-                  onCompleted={onCheckpointCompleted}
-                />
-              </CollapsibleItem>
-            );
-          },
-          "checkpoint-group": ({ id, ids }: any) => {
-            const groupId = String(id || "");
-            const questionIds = String(ids || "").split(",").map((s: string) => s.trim()).filter(Boolean);
-            // Filter out any multi-select questions, CheckpointGroup's
-            // grouped reward UI only supports single-answer questions today.
-            const groupQuestions = questionIds
-              .map((qid: string) => {
-                const cpData = CHECKPOINT_QUESTIONS[qid];
-                if (!cpData) return null;
-                if (Array.isArray(cpData.answer)) return null;
-                return { id: qid, ...cpData, answer: cpData.answer as number };
-              })
-              .filter(Boolean) as Array<{ id: string; question: string; options: string[]; answer: number; explanation: string }>;
-            if (groupQuestions.length === 0) return null;
-            const isGroupCompleted = completedCheckpoints.some(c => c.checkpointId === groupId);
-            return (
-              <CollapsibleItem
-                title="Checkpoint Quiz"
-                completed={isGroupCompleted}
-                theme={theme}
-                subtitleLabel={isGroupCompleted ? undefined : "EARN 21 SATS"}
-                subtitle={isGroupCompleted ? undefined : `Answer all ${groupQuestions.length} questions correctly to claim your reward.`}
-                storageKey={`pl-collapse-cpg-draft-${groupId}`}
-              >
-                <CheckpointGroup
-                  groupId={groupId}
-                  questions={groupQuestions}
-                  rewardSats={21}
-                  theme={theme}
-                  authenticated={authenticated}
-                  sessionToken={sessionToken}
-                  lightningAddress={lightningAddress}
-                  emailVerified={emailVerified}
-                  pubkey={pubkey}
-                  alreadyCompleted={isGroupCompleted}
-                  claimInfo={completedCheckpoints.find(c => c.checkpointId === groupId) || null}
                   onLoginRequest={onLoginRequest}
                   onCompleted={onCheckpointCompleted}
                 />
@@ -985,6 +933,7 @@ function ChapterContent({
                         starterCode: ONION_ROUTING_EXERCISES[fe.id]?.starterCode ?? "",
                       }))}
                       tutorialType="onion-routing"
+                      referenceDiagram={EXERCISE_REFERENCE_DIAGRAMS[ex.id]}
                     />
                   </CollapsibleItem>
                 </div>
@@ -1049,6 +998,7 @@ function ChapterContent({
                             starterCode: ONION_ROUTING_EXERCISES[fe.id]?.starterCode ?? "",
                           }))}
                           tutorialType="onion-routing"
+                          referenceDiagram={EXERCISE_REFERENCE_DIAGRAMS[ex.id]}
                         />
                       </CollapsibleItem>
                     );
@@ -1056,9 +1006,6 @@ function ChapterContent({
                 </CollapsibleGroup>
               </div>
             );
-          },
-          "network-topology": () => {
-            return <NetworkTopologyDiagram />;
           },
           "route-comparison": () => {
             return <RouteComparisonDiagram />;
@@ -1142,7 +1089,7 @@ function ChapterContent({
             return <OperationsLifecycleDiagram showKeys />;
           },
           "python-snippet": ({ id }: any) => {
-            return <PythonSnippet id={id} />;
+            return <PythonSnippet id={id} dark={theme === "dark"} />;
           },
           "spec-formula": ({ source, children }: any) => {
             return <SpecFormula source={source}>{children}</SpecFormula>;
@@ -1154,14 +1101,26 @@ function ChapterContent({
             return <ForwarderPolicyMap />;
           },
           "knowledge-matrix": () => {
-            return <KnowledgeMatrix />;
+            const kmId = "km-privacy-rubric-draft";
+            const isCompleted = completedCheckpoints.some(c => c.checkpointId === kmId);
+            return (
+              <KnowledgeMatrix
+                checkpointId={kmId}
+                theme={theme}
+                authenticated={authenticated}
+                sessionToken={sessionToken}
+                lightningAddress={lightningAddress}
+                emailVerified={emailVerified}
+                pubkey={pubkey}
+                alreadyCompleted={isCompleted}
+                claimInfo={completedCheckpoints.find(c => c.checkpointId === kmId) || null}
+                onLoginRequest={onLoginRequest}
+                onCompleted={onCheckpointCompleted}
+              />
+            );
           },
           "code-outro": ({ text }: any) => {
             return <p className="mt-4 opacity-80">{text}</p>;
-          },
-          "code-exercise": () => {
-            // Individual code-exercise tags are handled by code-intro
-            return null;
           },
         } as any}
       >
@@ -1547,7 +1506,7 @@ function OnionRoutingDraftTutorialShell({ activeId }: { activeId: string }) {
                   >
                     {section.toUpperCase()}
                     {totalInSection > 0 && (
-                      <span className={`text-[11px] font-pixel ${completedInSection === totalInSection ? (theme === "dark" ? "text-green-400" : "text-green-600") : "opacity-50"}`}>
+                      <span className={`text-[11px] font-pixel ${completedInSection === totalInSection ? (theme === "dark" ? "text-[#FFD700]" : "text-[#b8860b]") : "opacity-50"}`}>
                         {completedInSection}/{totalInSection}
                       </span>
                     )}
@@ -1561,6 +1520,21 @@ function OnionRoutingDraftTutorialShell({ activeId }: { activeId: string }) {
                         const isActive = c.id === activeId;
                         const isComplete = chapterCompletion[c.id] === "complete";
                         const showIcon = c.id !== "pay-it-forward";
+                        // Per-chapter badges: one "?" per quiz question, one
+                        // "</>" per coding exercise (matches the Noise course).
+                        const reqs = CHAPTER_REQUIREMENTS[c.id];
+                        const hasBadges =
+                          !!reqs && (reqs.checkpoints.length > 0 || reqs.exercises.length > 0);
+                        const badgeCompleted = new Set(
+                          auth.completedCheckpoints.map((cp) => cp.checkpointId),
+                        );
+                        const badgeDim = theme === "dark" ? "text-slate-600" : "text-foreground/25";
+                        const badgeLit = theme === "dark" ? "text-[#FFD700]" : "text-[#b8860b]";
+                        const badgeTooltipClass = `font-pixel text-sm px-3 py-1.5 border-2 rounded-none ${
+                          theme === "dark"
+                            ? "bg-[#0f1930] text-slate-200 border-[#2a3552]"
+                            : "bg-card text-foreground border-border pixel-shadow"
+                        }`;
                         return (
                           <button
                             key={c.id}
@@ -1576,8 +1550,8 @@ function OnionRoutingDraftTutorialShell({ activeId }: { activeId: string }) {
                                 <span className={`w-7 h-7 shrink-0 rounded-full flex items-center justify-center text-base font-extrabold leading-none ${
                                   isComplete
                                     ? theme === "dark"
-                                      ? "bg-green-500 text-white"
-                                      : "bg-green-600 text-white"
+                                      ? "bg-[#FFD700] text-white"
+                                      : "bg-[#b8860b] text-white"
                                     : theme === "dark" ? "border-2 border-[#2a3552]" : "border-2 border-border"
                                 }`}>
                                   {isComplete && "\u2713"}
@@ -1592,6 +1566,30 @@ function OnionRoutingDraftTutorialShell({ activeId }: { activeId: string }) {
                                 <span style={{ opacity: 0.3, margin: "0 0.4em" }}>·</span>
                                 {c.title}
                               </div>
+                              {hasBadges && (
+                                <span className="flex items-center gap-1.5 shrink-0 ml-1">
+                                  {reqs!.checkpoints.map((cpId) => (
+                                    <Tooltip key={cpId} delayDuration={200}>
+                                      <TooltipTrigger asChild>
+                                        <span className={`font-pixel text-[13px] leading-none cursor-default ${badgeCompleted.has(cpId) ? badgeLit : badgeDim}`}>?</span>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="bottom" className={badgeTooltipClass}>
+                                        {badgeCompleted.has(cpId) ? "Quiz complete" : "Quiz question"}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ))}
+                                  {reqs!.exercises.map((exId) => (
+                                    <Tooltip key={exId} delayDuration={200}>
+                                      <TooltipTrigger asChild>
+                                        <span className={`font-mono text-[13px] leading-none font-bold cursor-default ${badgeCompleted.has(exId) ? badgeLit : badgeDim}`}>&lt;/&gt;</span>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="bottom" className={badgeTooltipClass}>
+                                        {badgeCompleted.has(exId) ? "Exercise complete" : "Coding exercise"}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ))}
+                                </span>
+                              )}
                             </div>
                           </button>
                         );

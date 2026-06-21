@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { HoverTip, Tok as TokBase, Code as CodeBase, Op as OpBase, Fn as FnBase } from "./mathTokens";
+import { StepCaption } from "./StepCaption";
 
 // ────────────────────────────────────────────────────────────────────────────
 // BlindingFactorDiagram (DRAFT)
@@ -16,21 +17,16 @@ import { HoverTip, Tok as TokBase, Code as CodeBase, Op as OpBase, Fn as FnBase 
 
 const INK = "#0f172a";
 const SLATE = "#475569";
-const CREAM_STAGE = "#fefdfb";
 const CREAM_CARD = "#fffdf5";
 const GOLD = "#b8860b";
 const GOLD_FILL = "#fef3c7";
 
 type HopKey = "bob" | "charlie" | "dave";
 
-// Per-hop colors. Charlie's fill is locally lightened from the canonical
-// #ccece8 to #d8efe9 so all three hops have matching perceived luminance
-// (~231 on the 0-255 scale). The canonical Charlie #ccece8 is darker by
-// ~5 luminance points, which reads as "more saturated than Bob and Dave"
-// when the three cells sit side-by-side at equal widths in this matrix.
+// Per-hop colors, matching the canonical character palette.
 const HOP_COLORS: Record<HopKey, { stroke: string; fill: string; soft: string }> = {
   bob: { stroke: "#3b6aa0", fill: "#dbeafe", soft: "#eff6ff" },
-  charlie: { stroke: "#2d7a7a", fill: "#d8efe9", soft: "#ecfdf5" },
+  charlie: { stroke: "#2d7a7a", fill: "#ccece8", soft: "#ecfdf5" },
   dave: { stroke: "#7b4b8a", fill: "#ede1f3", soft: "#faf5ff" },
 };
 
@@ -130,10 +126,9 @@ function buildCells(): Array<Array<CellSpec | null>> {
       ),
       caption: (
         <>
-          Bob: Alice generates a random 32-byte <Code token="sessionkey" />.
-          This is the seed that the rest of the chain unfolds from. Bob's
-          ephemeral private key is the session key itself; subsequent hops
-          derive theirs by blinding.
+          First, Alice rolls a random 32-byte <Code token="sessionkey" />. This
+          is the seed the whole chain grows from. For Bob, the ephemeral private
+          key just *is* the session key. Every later hop blinds its way to one.
         </>
       ),
     },
@@ -146,10 +141,10 @@ function buildCells(): Array<Array<CellSpec | null>> {
       ),
       caption: (
         <>
-          Bob: multiply <Code token="e_AB" /> by the curve generator{" "}
+          Now, multiply <Code token="e_AB" /> by the curve generator{" "}
           <Code token="G" /> to get Bob's ephemeral public key{" "}
-          <Code token="E_AB" />. This is the only ephemeral pubkey that ever
-          travels in the packet.
+          <Code token="E_AB" />. Here's the neat part: this is the *only*
+          ephemeral pubkey that ever rides along in the packet.
         </>
       ),
     },
@@ -164,9 +159,9 @@ function buildCells(): Array<Array<CellSpec | null>> {
       ),
       caption: (
         <>
-          Bob: ECDH between <Code token="e_AB" /> and Bob's node pubkey{" "}
-          <Code token="B" />. Only Alice and Bob can derive this shared secret{" "}
-          <Code token="ss_AB" />.
+          Next, ECDH between <Code token="e_AB" /> and Bob's node pubkey{" "}
+          <Code token="B" />. Only Alice and Bob can land on this shared secret{" "}
+          <Code token="ss_AB" />, and that's exactly what we want.
         </>
       ),
     },
@@ -181,9 +176,9 @@ function buildCells(): Array<Array<CellSpec | null>> {
       ),
       caption: (
         <>
-          Bob: hash <Code token="E_AB" /> with <Code token="ss_AB" /> to
-          produce a blinding factor <Code token="bf_AB" />. Charlie will need
-          this to derive his own session-key-equivalent.
+          Then, hash <Code token="E_AB" /> with <Code token="ss_AB" /> to get a
+          blinding factor <Code token="bf_AB" />. Charlie will need this to spin
+          up his own session-key-equivalent.
         </>
       ),
     },
@@ -198,9 +193,9 @@ function buildCells(): Array<Array<CellSpec | null>> {
       ),
       caption: (
         <>
-          Charlie: multiply <Code token="bf_AB" /> by <Code token="e_AB" /> to
-          derive Charlie's session-key-equivalent <Code token="e_AC" />. The
-          blue arrows trace where each value came from in Bob's column.
+          Now, multiply <Code token="bf_AB" /> by <Code token="e_AB" /> and you
+          get Charlie's session-key-equivalent <Code token="e_AC" />. The blue
+          arrows show where each value came from in Bob's column.
         </>
       ),
     },
@@ -213,8 +208,9 @@ function buildCells(): Array<Array<CellSpec | null>> {
       ),
       caption: (
         <>
-          Charlie: multiply <Code token="e_AC" /> by <Code token="G" /> to get
-          Charlie's ephemeral public key <Code token="E_AC" />.
+          Same move as before: multiply <Code token="e_AC" /> by{" "}
+          <Code token="G" /> to get Charlie's ephemeral public key{" "}
+          <Code token="E_AC" />.
         </>
       ),
     },
@@ -229,8 +225,8 @@ function buildCells(): Array<Array<CellSpec | null>> {
       ),
       caption: (
         <>
-          Charlie: ECDH between <Code token="e_AC" /> and Charlie's node pubkey{" "}
-          <Code token="C" /> produces the shared secret <Code token="ss_AC" />.
+          Then, ECDH between <Code token="e_AC" /> and Charlie's node pubkey{" "}
+          <Code token="C" /> hands us the shared secret <Code token="ss_AC" />.
         </>
       ),
     },
@@ -245,8 +241,8 @@ function buildCells(): Array<Array<CellSpec | null>> {
       ),
       caption: (
         <>
-          Charlie: hash <Code token="E_AC" /> with <Code token="ss_AC" /> to
-          produce a blinding factor <Code token="bf_AC" /> for Dave's column.
+          Finally, hash <Code token="E_AC" /> with <Code token="ss_AC" /> for a
+          blinding factor <Code token="bf_AC" /> that seeds Dave's column.
         </>
       ),
     },
@@ -261,9 +257,9 @@ function buildCells(): Array<Array<CellSpec | null>> {
       ),
       caption: (
         <>
-          Dave: multiply <Code token="bf_AC" /> by <Code token="e_AC" /> to
-          derive Dave's session-key-equivalent <Code token="e_AD" />. The teal
-          arrows trace where each value came from in Charlie's column.
+          Same blinding step, one hop down: multiply <Code token="bf_AC" /> by{" "}
+          <Code token="e_AC" /> for Dave's session-key-equivalent{" "}
+          <Code token="e_AD" />. The teal arrows trace it back to Charlie.
         </>
       ),
     },
@@ -276,8 +272,8 @@ function buildCells(): Array<Array<CellSpec | null>> {
       ),
       caption: (
         <>
-          Dave: multiply <Code token="e_AD" /> by <Code token="G" /> to get
-          Dave's ephemeral public key <Code token="E_AD" />.
+          And once more, multiply <Code token="e_AD" /> by <Code token="G" /> to
+          get Dave's ephemeral public key <Code token="E_AD" />.
         </>
       ),
     },
@@ -292,9 +288,9 @@ function buildCells(): Array<Array<CellSpec | null>> {
       ),
       caption: (
         <>
-          Dave: ECDH between <Code token="e_AD" /> and Dave's node pubkey{" "}
-          <Code token="D" /> produces <Code token="ss_AD" />. The chain ends
-          here, no blinding factor needed.
+          Last one: ECDH between <Code token="e_AD" /> and Dave's node pubkey{" "}
+          <Code token="D" /> gives <Code token="ss_AD" />. Dave's the
+          destination, so the chain stops here. No blinding factor needed.
         </>
       ),
     },
@@ -325,15 +321,14 @@ const HOP_INFO: Record<HopKey, string> = {
   bob: "Bob, the first forwarder on Alice's route. The session key directly seeds his column.",
   charlie:
     "Charlie, the second forwarder. His column starts from Bob's blinding factor, not the session key.",
-  dave: "Dave, the final hop (the receiver). His column starts from Charlie's blinding factor and skips step 4 (no successor).",
+  dave: "Dave, the final hop (the destination). His column starts from Charlie's blinding factor and skips step 4 (no successor).",
 };
 
 const INTRO_CAPTION: ReactNode = (
   <>
-    Click step 1 to walk Bob's column. Each hop's chain depends on the previous
-    hop finishing first, so cells reveal in dependency order: Bob fully, then
-    Charlie, then Dave. Hover any token in the formulas or captions for an
-    explanation.
+    Hit Next to walk Bob's column. Each hop's chain leans on the one before it,
+    so we'll reveal cells in dependency order: Bob first, then Charlie, then
+    Dave. Hover any token in the formulas or captions and we'll explain it.
   </>
 );
 
@@ -537,13 +532,9 @@ function arrowPath(
 
 export function BlindingFactorDiagram() {
   const [subStep, setSubStep] = useState(0);
-  const [targetSubStep, setTargetSubStep] = useState(0);
-  const [playing, setPlaying] = useState(false);
   const [pulseCellIdx, setPulseCellIdx] = useState<number | null>(null);
   const [cellRects, setCellRects] = useState<CellRectMap>({});
   const [containerSize, setContainerSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
-  const stepTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const playTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
   const cellRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
@@ -597,65 +588,32 @@ export function BlindingFactorDiagram() {
   }, [subStep, measure]);
 
   useEffect(() => {
-    if (subStep >= targetSubStep) return;
-    stepTimerRef.current = setTimeout(() => {
-      setSubStep((s) => {
-        const next = s + 1;
-        if (next === 5) setPulseCellIdx(4);
-        else if (next === 9) setPulseCellIdx(8);
-        else setPulseCellIdx(null);
-        return next;
-      });
-    }, 650);
-    return () => {
-      if (stepTimerRef.current) clearTimeout(stepTimerRef.current);
-    };
-  }, [subStep, targetSubStep]);
-
-  useEffect(() => {
     if (pulseCellIdx === null) return;
     const t = setTimeout(() => setPulseCellIdx(null), 800);
     return () => clearTimeout(t);
   }, [pulseCellIdx]);
 
-  // When playing, auto-advance the target all the way through.
-  useEffect(() => {
-    if (!playing) return;
-    if (subStep >= TOTAL_SUB_STEPS) {
-      setPlaying(false);
-      return;
-    }
-    if (targetSubStep < TOTAL_SUB_STEPS) {
-      setTargetSubStep(TOTAL_SUB_STEPS);
-    }
-  }, [playing, subStep, targetSubStep]);
+  function goToStep(idx: number) {
+    setSubStep(idx);
+    if (idx === 5) setPulseCellIdx(4);
+    else if (idx === 9) setPulseCellIdx(8);
+    else setPulseCellIdx(null);
+  }
 
   function setMilestone(idx: number) {
-    setPlaying(false);
-    if (stepTimerRef.current) {
-      clearTimeout(stepTimerRef.current);
-      stepTimerRef.current = null;
-    }
-    setSubStep(idx);
-    setTargetSubStep(idx);
-    setPulseCellIdx(null);
+    goToStep(idx);
   }
 
-  function play() {
-    if (subStep >= TOTAL_SUB_STEPS) {
-      setSubStep(0);
-      setTargetSubStep(0);
-    }
-    setPlaying(true);
+  function back() {
+    if (subStep <= 0) return;
+    goToStep(subStep - 1);
   }
-  function pause() {
-    setPlaying(false);
+  function next() {
+    if (subStep >= TOTAL_SUB_STEPS) return;
+    goToStep(subStep + 1);
   }
   function reset() {
-    setPlaying(false);
-    setSubStep(0);
-    setTargetSubStep(0);
-    setPulseCellIdx(null);
+    goToStep(0);
   }
 
 
@@ -674,6 +632,22 @@ export function BlindingFactorDiagram() {
     if (found) caption = found.caption;
   }
 
+  // Active hop drives the StepCaption accent: Bob (1-4), Charlie (5-8),
+  // Dave (9-11). The intro (step 0) uses gold.
+  const activeHop: HopKey | null =
+    subStep === 0 ? null : subStep <= 4 ? "bob" : subStep <= 8 ? "charlie" : "dave";
+  const captionAccent = activeHop ? HOP_COLORS[activeHop].stroke : GOLD;
+  const captionLabel =
+    subStep === 0 ? "GET STARTED" : `STEP ${subStep} OF ${TOTAL_SUB_STEPS}`;
+  const captionTitle =
+    activeHop === "bob"
+      ? "Bob's column"
+      : activeHop === "charlie"
+        ? "Charlie's column"
+        : activeHop === "dave"
+          ? "Dave's column"
+          : "The ephemeral key chain";
+
   return (
     <div
       className="my-8 border-[1.5px] border-foreground/40 bg-card overflow-hidden"
@@ -689,7 +663,7 @@ export function BlindingFactorDiagram() {
         </div>
       </div>
 
-      <div className="px-4 py-5" style={{ background: CREAM_STAGE }}>
+      <div className="px-4 py-5 bg-[#fefdfb] dark:bg-[#0b1220]">
         {/* Hop circles */}
         <div
           className="grid items-center mb-4"
@@ -867,22 +841,33 @@ export function BlindingFactorDiagram() {
             </svg>
           )}
         </div>
+
+        <StepCaption
+          label={captionLabel}
+          title={captionTitle}
+          caption={caption}
+          accentColor={captionAccent}
+        />
       </div>
 
       <div className="px-4 py-3 border-t-[1.5px] border-foreground/30 bg-card">
-        <div className="flex flex-col gap-3">
-          {/* Controls row */}
-          <div className="flex gap-1.5 items-center flex-wrap">
-            <button
-              onClick={playing ? pause : play}
-              className="px-3 py-1.5 border-[1.5px] border-black bg-black text-white font-bold text-xs tracking-[0.05em] uppercase hover:bg-[#b8860b] hover:border-[#b8860b] transition-colors"
-              data-testid="blinding-factor-diagram-play"
+        {/* Controls row (caption now lives in the StepCaption block above) */}
+        <div className="flex gap-1.5 items-center flex-wrap">
+          <button
+              onClick={back}
+              disabled={subStep <= 0}
+              className="px-3 py-1.5 border-[1.5px] border-foreground/40 bg-card text-foreground text-xs uppercase tracking-[0.05em] hover:bg-secondary transition-colors disabled:opacity-40 disabled:pointer-events-none"
+              data-testid="blinding-factor-diagram-back"
             >
-              {playing
-                ? "❚❚ Pause"
-                : subStep >= TOTAL_SUB_STEPS
-                  ? "↻ Replay"
-                  : "▶ Play"}
+              ← Back
+            </button>
+            <button
+              onClick={next}
+              disabled={subStep >= TOTAL_SUB_STEPS}
+              className="px-3 py-1.5 border-[1.5px] border-foreground/40 bg-card text-foreground text-xs uppercase tracking-[0.05em] hover:bg-secondary transition-colors disabled:opacity-40 disabled:pointer-events-none"
+              data-testid="blinding-factor-diagram-next"
+            >
+              Next →
             </button>
             <button
               onClick={reset}
@@ -902,7 +887,7 @@ export function BlindingFactorDiagram() {
                   <button
                     key={i}
                     onClick={() => setMilestone(targetIdx)}
-                    className="w-6 h-6 border-[1.5px] text-[10px] font-bold transition-colors"
+                    className="w-7 h-7 border-[1.5px] text-[10px] font-bold transition-colors"
                     style={{
                       background: current ? GOLD : reached ? GOLD_FILL : CREAM_CARD,
                       borderColor: current ? GOLD : INK,
@@ -917,11 +902,8 @@ export function BlindingFactorDiagram() {
               })}
             </div>
           </div>
-          {/* Caption row, full width below the controls */}
-          <div className="text-sm leading-relaxed">{caption}</div>
         </div>
       </div>
-    </div>
   );
 }
 

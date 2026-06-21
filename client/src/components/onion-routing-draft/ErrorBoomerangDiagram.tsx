@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   KeyHoverIcon,
   type KeyDerivationCardProps,
@@ -38,14 +38,13 @@ import {
 // ────────────────────────────────────────────────────────────────────────────
 
 const TOTAL_BEATS = 5;
-const STEP_MS = 2200;
 
 const CAPTIONS: Record<number, string> = {
-  0: "Charlie has decided to fail this payment with `temporary_channel_failure`. He needs to get that failure back to Alice without leaking anything to Bob on the way. The error will travel backward along the route, the mirror image of the forward onion.",
-  1: "Charlie builds the unencrypted error packet: a 32-byte HMAC (computed with his `um_charlie` key over the payload) followed by the 260-byte length-prefixed payload. That's 292 bytes, and it stays 292 bytes the whole way back.",
-  2: "Charlie XORs the 292-byte packet with his `ammag_charlie` keystream and sends it upstream to Bob. Notice the packet doesn't grow: encryption is an in-place XOR, so the crosshatch appears over the same bytes.",
-  3: "Bob doesn't try to read what he received (he has no `ammag_charlie`). He just XORs the same 292 bytes with his own `ammag_bob`, adding a second layer. Two angles now crosshatch over the identical footprint, and he ships it to you (Alice).",
-  4: "You receive 292 bytes wrapped in Bob's layer (outermost) over Charlie's (innermost). The packet never changed size. Next you'll peel the layers in route order, checking each hop's HMAC until one verifies, in the trial-decrypt visual below.",
+  0: "So, Charlie's decided to fail this payment with `temporary_channel_failure`. Now he has to get that news back to you without tipping off Bob along the way. The error travels backward, a mirror of the forward onion.",
+  1: "First, Charlie builds the plaintext error packet: a 32-byte HMAC (computed with his `um_charlie` key over the payload) plus the 260-byte length-prefixed payload. That's 292 bytes, and it stays 292 the whole way back.",
+  2: "Now Charlie XORs the 292-byte packet with his `ammag_charlie` keystream and sends it up to Bob. Notice the packet doesn't grow. Encryption is an in-place XOR, so the crosshatch just lands over the same bytes.",
+  3: "Bob can't read what he got (he has no `ammag_charlie`), and he doesn't try. He just XORs the same 292 bytes with his own `ammag_bob`, a second layer. Two angles crosshatch the *same* footprint, and off it goes to you.",
+  4: "It reaches you: 292 bytes, Bob's layer on the outside, Charlie's underneath. Never changed size. Next, you'll peel the layers in route order and check each hop's HMAC until one verifies, in the trial-decrypt visual below.",
 };
 
 // Per-beat StepCaption header label + title (the short verdict the
@@ -62,7 +61,7 @@ const STEP_TITLES: Record<number, string> = {
   1: "Build the 292-byte error packet",
   2: "Charlie wraps with `ammag_charlie`",
   3: "Bob adds his `ammag_bob` layer",
-  4: "The error reaches you, still 292 bytes",
+  4: "It reaches you, still 292 bytes",
 };
 
 // Accent color for the StepCaption block. Color-matched to the acting hop, with
@@ -92,32 +91,11 @@ const STAGE_MIN_WIDTH = 640;
 
 export function ErrorBoomerangDiagram() {
   const [step, setStep] = useState(0);
-  const [playing, setPlaying] = useState(false);
 
-  useEffect(() => {
-    if (!playing) return;
-    if (step >= TOTAL_BEATS - 1) {
-      setPlaying(false);
-      return;
-    }
-    const t = setTimeout(() => setStep((s) => s + 1), STEP_MS);
-    return () => clearTimeout(t);
-  }, [playing, step]);
-
-  const onPlayPause = () => {
-    if (playing) {
-      setPlaying(false);
-      return;
-    }
-    if (step >= TOTAL_BEATS - 1) setStep(0);
-    setPlaying(true);
-  };
   const onReset = () => {
     setStep(0);
-    setPlaying(false);
   };
   const onStep = (i: number) => {
-    setPlaying(false);
     setStep(i);
   };
 
@@ -130,12 +108,10 @@ export function ErrorBoomerangDiagram() {
       title="Error onion wraps backward"
       totalBeats={TOTAL_BEATS}
       step={step}
-      playing={playing}
       caption={CAPTIONS[step]}
       stepLabel={STEP_LABELS[step]}
       stepTitle={STEP_TITLES[step]}
       accentColor={accentFor(step)}
-      onPlayPause={onPlayPause}
       onReset={onReset}
       onStep={onStep}
       stageMinWidth={STAGE_MIN_WIDTH}
@@ -262,8 +238,8 @@ function BoomerangKeyZone({ step }: { step: number }) {
             ✓ delivered
           </span>
           <span style={{ color: INK }}>
-            Two ammag layers, one fixed-size packet. Hover a badge to recall
-            either key.
+            Two ammag layers, still one fixed-size packet. Hover a badge to
+            recall either key.
           </span>
         </div>
       </div>

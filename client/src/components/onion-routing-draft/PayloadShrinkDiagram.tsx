@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Tok } from "./mathTokens";
 import { SlotSubCell } from "./SlotSubCell";
 import { HatchOverlay, LAYER_ANGLES, LAYER_COLORS } from "./encryptionHatch";
@@ -59,6 +59,9 @@ const EPH_PUBKEY_TOKEN: Record<ForwarderId, string> = {
 // Realistic per-hop payload sizes (bigsize LEN + TLV + 32-byte HMAC), matching
 // the 60/80/100 used throughout the rest of the chapter.
 const SLOT_BYTES: Record<ForwarderId, number> = { bob: 60, charlie: 80, dave: 100 };
+// bigsize LEN prefix = TLV payload bytes (hop payload total minus the 1-byte
+// prefix and the 32-byte HMAC): Bob(60)->0x1B, Charlie(80)->0x2F, Dave(100)->0x43.
+const LEN_HEX: Record<ForwarderId, string> = { bob: "0x1B", charlie: "0x2F", dave: "0x43" };
 
 const HOPS: HopId[] = ["alice", "bob", "charlie", "dave"];
 const NODE_X_PCT: Record<HopId, number> = {
@@ -134,37 +137,20 @@ const STATE_BY_STEP: State[] = [
 ];
 
 const STEP_CAPTIONS: Record<number, string> = {
-  0: "Without a fixed size, Alice just stacks the three encrypted hop payloads (60, 80, and 100 bytes) behind a fixed 66-byte envelope (version + ephemeral pubkey + HMAC), so this packet is 306 bytes. Click play to watch it travel, and shrink.",
-  1: "Bob received the packet and decrypted his hop payload off the front. He forwards what's left to Charlie: 246 bytes. The packet has visibly shrunk.",
-  2: "Charlie does the same: peels his 80-byte hop payload and forwards what's left. The packet is down to 166 bytes, just Dave's hop payload inside the envelope.",
-  3: "Dave's packet held just his own hop payload (166 bytes on the wire). He decrypts it, reads the payment_data and final amount, and claims the HTLC, the onion is fully unwrapped with nothing left to forward. And notice the real problem this whole section is about: the byte count shrank at every hop, so anyone watching the wire could tell exactly where each forwarder sits in the route.",
+  0: "So, without a fixed size, Alice just stacks the three encrypted hop payloads (60, 80, and 100 bytes) behind a 66-byte envelope (version + ephemeral pubkey + HMAC). That's 306 bytes. Now let's watch what happens as it travels...",
+  1: "Bob's peeled his hop payload off the front and forwards what's left to Charlie: 246 bytes. See how the packet already shrank?",
+  2: "Charlie does the same, peels his 80-byte hop payload and sends on the rest. We're down to 166 bytes now, just Dave's hop payload inside the envelope.",
+  3: "Dave's packet was only his own hop payload (166 bytes on the wire). He decrypts it, reads the payment_data and final amount, and claims the HTLC. The onion's empty. But here's the problem this whole section is about: the byte count *shrank at every hop*, so anyone watching the wire could tell exactly where each forwarder sits in the route. Ouch.",
 };
 
 const TOTAL_BEATS = 4;
 
 export function PayloadShrinkDiagram() {
   const [step, setStep] = useState(0);
-  const [playing, setPlaying] = useState(false);
 
-  useEffect(() => {
-    if (!playing) return;
-    if (step >= TOTAL_BEATS - 1) {
-      setPlaying(false);
-      return;
-    }
-    const t = setTimeout(() => setStep((s) => s + 1), 2400);
-    return () => clearTimeout(t);
-  }, [playing, step]);
-
-  const play = () => {
-    if (step >= TOTAL_BEATS - 1) setStep(0);
-    setPlaying(true);
-  };
-  const pause = () => setPlaying(false);
-  const reset = () => {
-    setStep(0);
-    setPlaying(false);
-  };
+  const back = () => setStep((s) => Math.max(0, s - 1));
+  const next = () => setStep((s) => Math.min(TOTAL_BEATS - 1, s + 1));
+  const reset = () => setStep(0);
 
   const state = STATE_BY_STEP[step];
 
@@ -242,14 +228,18 @@ export function PayloadShrinkDiagram() {
         <div className="flex flex-col md:flex-row md:items-start md:gap-4">
           <div className="flex gap-1.5 items-center flex-wrap shrink-0">
             <button
-              onClick={playing ? pause : play}
-              className="px-3 py-1.5 border-[1.5px] border-black bg-black text-white font-bold text-xs tracking-[0.05em] uppercase hover:bg-[#b8860b] hover:border-[#b8860b] transition-colors"
+              onClick={back}
+              disabled={step === 0}
+              className="px-3 py-1.5 border-[1.5px] border-foreground/40 bg-card text-foreground text-xs uppercase tracking-[0.05em] hover:bg-secondary transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-card"
             >
-              {playing
-                ? "❚❚ Pause"
-                : step >= TOTAL_BEATS - 1
-                  ? "↻ Replay"
-                  : "▶ Play"}
+              ← Back
+            </button>
+            <button
+              onClick={next}
+              disabled={step === TOTAL_BEATS - 1}
+              className="px-3 py-1.5 border-[1.5px] border-foreground/40 bg-card text-foreground text-xs uppercase tracking-[0.05em] hover:bg-secondary transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-card"
+            >
+              Next →
             </button>
             <button
               onClick={reset}
@@ -786,7 +776,7 @@ function BufferPayloadInner({ state }: { state: State }) {
                       fontWeight: 700,
                     }}
                   >
-                    len
+                    {LEN_HEX[forwarder]}
                   </SlotSubCell>
 
                   {/* TLV payload sub-cell, no per-hop payload hatch; the layered

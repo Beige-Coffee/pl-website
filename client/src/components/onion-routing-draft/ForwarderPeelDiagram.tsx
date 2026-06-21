@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { HatchOverlay, LAYER_COLORS, type ForwarderId } from "./encryptionHatch";
 import { KeyDerivationCard } from "./KeyDerivationCard";
 import { StepCaption } from "./StepCaption";
@@ -17,10 +17,12 @@ import { StepCaption } from "./StepCaption";
 //   1. Bob receives the 1,366-byte packet from Alice.
 //   2. Bob derives his per-hop keys (rho_B, mu_B) via ECDH on E_AB.
 //   3. Bob verifies the outer HMAC (green ✓ badge at Bob's node).
-//   4. Bob extends `hop_payloads` with 60 zero bytes (1,300 → 1,360) and
-//      generates a matching 1,360-byte `rho_B` keystream. (BOLT 4 actually
-//      uses 2 × ROUTING_INFO_SIZE = 2,600 bytes for safety; the extra is
-//      just discarded after the slice.)
+//      4. Bob extends `hop_payloads` with 1,300 zero bytes (1,300 →
+//      2 × ROUTING_INFO_SIZE = 2,600) and generates a matching 2,600-byte
+//      `rho_B` keystream via chacha20(rho_B, 2600). The visual below zooms
+//      in on the meaningful first 1,360 bytes (Bob's 60-byte hop payload +
+//      the 1,300 that become Charlie's view); the trailing 1,240 bytes are
+//      discarded after the slice.
 //   5. Bob XORs the extended buffer with the keystream in a single pass.
 //      The XOR simultaneously: (a) decrypts Bob's hop payload (first 60
 //      bytes → plaintext), (b) peels one encryption layer off the rest of
@@ -79,48 +81,47 @@ const STEPS: StepDef[] = [
     step: 1,
     title: "Bob receives the packet",
     caption:
-      "Alice ships the 1,366-byte onion to Bob. The hop_payloads field is fully wrapped: Bob's hop payload has 1 encryption layer, Charlie's has 2, Dave's has 3, and the padding has 3.",
+      "Alice sends the 1,366-byte onion to Bob. Right now the hop_payloads field is fully wrapped: Bob's hop payload has 1 encryption layer, Charlie's has 2, Dave's has 3, and the padding has 3.",
   },
   {
     step: 2,
     title: "Bob derives his per-hop keys",
     caption:
-      "Bob computes `ss_AB = ECDH(node_priv_B, E_AB)` from the ephemeral pubkey in the header. From that shared secret he derives `rho_B = HMAC('rho', ss_AB)` and `mu_B = HMAC('mu', ss_AB)`. He'll use `mu_B` next to verify, then `rho_B` for the single XOR pass.",
+      "First, Bob computes `ss_AB = ECDH(node_priv_B, E_AB)` from the ephemeral pubkey in the header. From that shared secret he derives `rho_B = HMAC('rho', ss_AB)` and `mu_B = HMAC('mu', ss_AB)`. He'll reach for `mu_B` next to verify, then `rho_B` for the single XOR pass.",
   },
   {
     step: 3,
     title: "Bob verifies the outer HMAC",
     caption:
-      "Bob recomputes `HMAC-SHA256(mu_B, hop_payloads ‖ associated_data)` and compares it against the HMAC field. They match (Alice baked it that way). Bob now knows the packet is authentic and unmodified.",
+      "Now Bob recomputes `HMAC-SHA256(mu_B, hop_payloads ‖ associated_data)` and checks it against the HMAC field. Do they match? They do (Alice set it up that way), so Bob knows the packet is authentic and untouched.",
   },
   {
     step: 4,
     title: "Bob extends the buffer and generates a matching keystream",
     caption:
-      "Bob appends 60 zero bytes to `hop_payloads`, extending it from 1,300 to 1,360 bytes. He also generates a 1,360-byte `rho_B` keystream — same length, ready to XOR against the extended buffer. (BOLT 4 actually generates `2 × ROUTING_INFO_SIZE = 2,600` bytes of keystream for safety; the extra is just discarded after the slice.)",
+      "Next, Bob tacks 1,300 zero bytes onto `hop_payloads`, growing it from 1,300 to `2 × ROUTING_INFO_SIZE = 2,600` bytes. He also generates a matching 2,600-byte `rho_B` keystream from `chacha20(rho_B, 2600)`, ready to XOR against the extended buffer. (The diagram below zooms in on the first 1,360 bytes that matter: Bob's 60-byte hop payload plus the 1,300 that become Charlie's view. The other 1,240 get thrown away after the slice.)",
   },
   {
     step: 5,
-    title: "Bob XORs the extended buffer with the keystream — one pass",
+    title: "Bob XORs the extended buffer with the keystream (one pass)",
     caption:
-      "A single XOR over the 1,360-byte buffer simultaneously: (a) decrypts Bob's hop payload at the front (60 bytes → plaintext), (b) peels one encryption layer off the downstream payloads and padding, and (c) produces 60 new bytes at the back (from `zeros ⊕ rho_B[1,300..1,359]`). One operation, three effects.",
+      "Now watch what that single XOR pass does all at once. It runs over the whole 2,600-byte buffer (we're zoomed in on the first 1,360 here, the part Bob lifts for Charlie) and in one go it (a) decrypts Bob's hop payload at the front (60 bytes → plaintext), (b) peels one encryption layer off the downstream payloads and padding, and (c) generates the 60 new padding bytes at the back of Charlie's view (from `zeros ⊕ rho_B[1,300..1,359]`). Pretty slick, right?",
   },
   {
     step: 6,
-    title: "Bob slices off his hop payload — the rest is Charlie's hop_payloads",
+    title: "Bob slices off his hop payload; the rest is Charlie's hop_payloads",
     caption:
-      "Bob drops the first 60 bytes from the XOR result (his plaintext hop payload, including `charlie_hmac` lifted from the TLV). What remains is exactly 1,300 bytes: Charlie's hop payload at the front, then Dave's, then the encrypted padding, and the last 60 bytes are the new ones the XOR produced. Those 60 bytes are exactly what Alice's filler precomputed.",
+      "Then Bob lops off the first 60 bytes of the XOR result (his plaintext hop payload, including `charlie_hmac` lifted from the TLV). What's left is exactly 1,300 bytes: Charlie's hop payload up front, then Dave's, then the encrypted padding, and the last 60 are the new ones the XOR made. Those 60 are *exactly* what Alice's filler precomputed.",
   },
   {
     step: 7,
     title: "Bob swaps the envelope and ships to Charlie",
     caption:
-      "Bob swaps the ephemeral pubkey (`E_AB → E_AC`, derived by blinding) and the outer HMAC (`bob_hmac → charlie_hmac`, extracted from his decrypted TLV). The 1,366-byte packet ships to Charlie, who recomputes his HMAC over what arrived. It matches the field Bob just installed, so Charlie accepts and the chain continues.",
+      "Finally, Bob swaps the ephemeral pubkey (`E_AB → E_AC`, derived by blinding) and the outer HMAC (`bob_hmac → charlie_hmac`, pulled from his decrypted TLV). The 1,366-byte packet heads to Charlie, who recomputes his HMAC over what arrived. It matches the field Bob just set, so Charlie accepts and the chain keeps going.",
   },
 ];
 
 const TOTAL_STEPS = STEPS.length;
-const STEP_MS = 2700;
 
 // ── Focus per step (which packet regions are bright vs dimmed) ───────────
 
@@ -458,7 +459,7 @@ function packetStateFor(step: number): PacketState {
 
   // Step 5: single XOR has executed. Bob's slot is plaintext, downstream
   // and padding each lost one encryption layer. The new 60 trailing bytes
-  // live in the SidePanel's result row, not in the main packet — they
+  // live in the SidePanel's result row, not in the main packet - they
   // join the main packet at step 6 when the slice happens.
   if (step === 5) {
     return {
@@ -477,7 +478,7 @@ function packetStateFor(step: number): PacketState {
 
   // Step 6: Bob's slot has been sliced off. The remaining 1,300 bytes
   // (Charlie's hop_payloads) is the shifted view. The 60 new SPLICED
-  // bytes appear at the back — this is where the result row's trailing
+  // bytes appear at the back - this is where the result row's trailing
   // bytes "land" in the canonical packet view.
   if (step === 6) {
     return {
@@ -511,26 +512,9 @@ function packetStateFor(step: number): PacketState {
 
 export function ForwarderPeelDiagram() {
   const [step, setStep] = useState(1);
-  const [playing, setPlaying] = useState(false);
 
-  useEffect(() => {
-    if (!playing) return;
-    if (step >= TOTAL_STEPS) {
-      setPlaying(false);
-      return;
-    }
-    const t = setTimeout(() => setStep((s) => s + 1), STEP_MS);
-    return () => clearTimeout(t);
-  }, [playing, step]);
-
-  const play = () => {
-    if (step >= TOTAL_STEPS) setStep(1);
-    setPlaying(true);
-  };
-  const pause = () => setPlaying(false);
   const reset = () => {
     setStep(1);
-    setPlaying(false);
   };
 
   const def = STEPS[step - 1];
@@ -581,14 +565,18 @@ export function ForwarderPeelDiagram() {
         <div className="flex flex-col md:flex-row md:items-start md:gap-4">
           <div className="flex gap-1.5 items-center flex-wrap shrink-0">
             <button
-              onClick={playing ? pause : play}
-              className="px-3 py-1.5 border-[1.5px] border-black bg-black text-white font-bold text-xs tracking-[0.05em] uppercase hover:bg-[#b8860b] hover:border-[#b8860b] transition-colors"
+              onClick={() => setStep((s) => Math.max(1, s - 1))}
+              disabled={step <= 1}
+              className="px-3 py-1.5 border-[1.5px] border-foreground/40 bg-card text-foreground text-xs uppercase tracking-[0.05em] hover:bg-secondary transition-colors disabled:opacity-40 disabled:cursor-default disabled:hover:bg-card"
             >
-              {playing
-                ? "❚❚ Pause"
-                : step >= TOTAL_STEPS
-                  ? "↻ Replay"
-                  : "▶ Play"}
+              ← Back
+            </button>
+            <button
+              onClick={() => setStep((s) => Math.min(TOTAL_STEPS, s + 1))}
+              disabled={step >= TOTAL_STEPS}
+              className="px-3 py-1.5 border-[1.5px] border-foreground/40 bg-card text-foreground text-xs uppercase tracking-[0.05em] hover:bg-secondary transition-colors disabled:opacity-40 disabled:cursor-default disabled:hover:bg-card"
+            >
+              Next →
             </button>
             <button
               onClick={reset}
@@ -603,7 +591,6 @@ export function ForwarderPeelDiagram() {
                   <button
                     key={n}
                     onClick={() => {
-                      setPlaying(false);
                       setStep(n);
                     }}
                     className="w-7 h-7 border-[1.5px] text-xs font-bold transition-colors"
@@ -686,7 +673,7 @@ function KeyDerivationCallout({ step }: { step: number }) {
 // Vertical line with an upward arrowhead at the top. Used to visually
 // connect a sub-element (callout, side panel) up to the corresponding
 // region of the main packet above. targetXPct is the horizontal position
-// (% from left of the parent) where the arrow lives — match it to the
+// (% from left of the parent) where the arrow lives - match it to the
 // x-coordinate of the target region in the main packet. The arrow fills
 // the full height of its parent container, so callers control vertical
 // reach by sizing the container.
@@ -753,8 +740,8 @@ function ConnectorArrow({
 // 90° bend → vertical up to SPLICED → arrowhead at the top.
 //
 // X coordinates (as viewBox units, scaled to wrapper width):
-//   - 694 = 69.4% — Row 3's right edge (320px row centered in side panel)
-//   - 840 = 84%   — SPLICED region center in packet
+//   - 694 = 69.4% - Row 3's right edge (320px row centered in side panel)
+//   - 840 = 84%   - SPLICED region center in packet
 //
 // Y coordinates (in a viewBox 1000×400, where SVG top is -30 above this
 // wrapper, so y=0 is just above the packet's bottom edge):
@@ -827,7 +814,7 @@ function SpliceArrowZone({
           whiteSpace: "nowrap",
         }}
       >
-        splice into trailing
+        write into trailing
       </div>
     </div>
   );
@@ -885,8 +872,8 @@ function DecryptedSlotCallout({ step }: { step: number }) {
           <DecryptedSubCell
             title="LEN"
             width={64}
-            value="0x40"
-            subValue="64 bytes"
+            value="0x1B"
+            subValue="27 B TLV"
           />
           <DecryptedSubCell
             title="ROUTING"
@@ -1422,7 +1409,7 @@ function TrailingGap({
           lineHeight: 1.15,
         }}
       >
-        {kind === "placeholder" ? "placeholder" : "spliced"}
+        {kind === "placeholder" ? "placeholder" : "written"}
       </span>
       {kind === "placeholder" && (
         <span
@@ -1472,7 +1459,7 @@ function SidePanel({ step }: { step: number }) {
       >
         {step === 4
           ? "Bob's preparation: extended buffer + keystream"
-          : "Bob's single XOR pass (1,360 bytes)"}
+          : "Bob's single XOR pass (first 1,360 of 2,600 bytes)"}
       </div>
 
       <UnifiedXorPanel step={step} />
@@ -1492,13 +1479,13 @@ function UnifiedXorPanel({ step }: { step: number }) {
   return (
     <div className="flex flex-col items-stretch gap-1.5 mt-1">
       <ExtendedBufferRow
-        label="extended buffer (hop_payloads + 60 zero bytes)"
+        label="extended buffer, first 1,360 of 2,600 B (hop_payloads + zero pad)"
         layout="pre-xor"
         dim={showResult}
       />
       <BigSym>⊕</BigSym>
       <ExtendedBufferRow
-        label="Bob's rho_B keystream (1,360 bytes)"
+        label="Bob's rho_B keystream, first 1,360 of 2,600 bytes"
         layout="keystream"
         dim={showResult}
       />
@@ -1515,11 +1502,11 @@ function UnifiedXorPanel({ step }: { step: number }) {
             className="text-[10.5px] text-center mt-2 px-3 leading-snug"
             style={{ fontFamily: SANS, color: INK }}
           >
-            One pass, two ends: Bob's hop payload{" "}
+            So in a single pass, Bob's hop payload{" "}
             <strong style={{ color: SUCCESS_GREEN }}>decrypts at the front</strong>{" "}
             while{" "}
             <strong style={{ color: FOCUS_GOLD }}>60 brand-new encrypted padding bytes</strong>{" "}
-            are created at the back, from the same XOR.
+            appear at the back.
           </div>
         </>
       )}
@@ -1528,10 +1515,10 @@ function UnifiedXorPanel({ step }: { step: number }) {
 }
 
 // A single 1,360-byte buffer bar that renders in one of three modes:
-//   • "pre-xor"   — Bob's slot (1 layer encrypted), Charlie's (2), Dave's (3),
+//   • "pre-xor"   - Bob's slot (1 layer encrypted), Charlie's (2), Dave's (3),
 //                    padding (3 layers), trailing 60 zeros.
-//   • "keystream" — solid Bob hatch across the entire bar.
-//   • "post-xor"  — Bob's slot decrypted (plaintext, no hatch), Charlie (1
+//   • "keystream" - solid Bob hatch across the entire bar.
+//   • "post-xor"  - Bob's slot decrypted (plaintext, no hatch), Charlie (1
 //                    layer), Dave (2), padding (2), trailing 60 with Bob hatch
 //                    (the new bytes from `0 ⊕ rho_B[1300..1359]`).
 function ExtendedBufferRow({
@@ -1583,7 +1570,7 @@ function ExtendedBufferRow({
         }}
       >
         {layout === "keystream" ? (
-          // Whole bar is the keystream — Bob hatch across all 1,360 bytes.
+          // Whole bar is the keystream - Bob hatch across all 1,360 bytes.
           <div className="relative" style={{ width: "100%" }}>
             <HatchOverlay hops={["bob"]} zIndex={1} />
           </div>
@@ -1763,7 +1750,7 @@ function KeystreamRow({ showSlice }: { showSlice: boolean }) {
           className="text-[10px]"
           style={{ fontFamily: MONO, color: NEUTRAL_TEXT }}
         >
-          {BOB_KEYSTREAM_LEN.toLocaleString()} bytes
+          first {BOB_KEYSTREAM_LEN.toLocaleString()} of 2,600 bytes
         </span>
       </div>
       <div className="relative" style={{ height: 32 }}>
@@ -1840,7 +1827,7 @@ function KeystreamRow({ showSlice }: { showSlice: boolean }) {
 }
 
 // L-shaped connector line from the keystream slice down to Row 1's right
-// edge (the keystream-operand row of the XOR equation). No arrowhead —
+// edge (the keystream-operand row of the XOR equation). No arrowhead -
 // it's a connection indicator, not a directional arrow. Path goes:
 // vertical down from slice center (~89% X) → 90° bend → horizontal left
 // to Row 1's right edge (~69.4% X).
@@ -1910,7 +1897,7 @@ function XorEquation({ handoff }: { handoff: boolean }) {
       <EqRow
         title={
           handoff
-            ? "60 encrypted bytes · spliced into the packet"
+            ? "60 encrypted bytes · written into the packet"
             : "60 encrypted bytes"
         }
         widthPx={rowWidth}

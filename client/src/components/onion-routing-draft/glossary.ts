@@ -258,6 +258,69 @@ const ENTRIES: Record<string, GlossaryEntry> = {
       "The gossip message a node broadcasts to advertise a channel's forwarding policy: its base fee, fee rate, and `cltv_expiry_delta`.",
     chapter: "2",
   },
+  channel_announcement: {
+    render: "code",
+    category: "protocol field",
+    definition:
+      "The gossip message that announces a new channel to the whole network. It carries the `short_channel_id` plus both owners' node and bitcoin keys and signatures, proving the two nodes really control the on-chain funding output.",
+    chapter: "2",
+  },
+  chain_hash: {
+    render: "code",
+    category: "protocol field",
+    definition:
+      "A 32-byte hash identifying which chain a channel lives on (for example, Bitcoin mainnet versus testnet), so gossip from one network can't be mistaken for another.",
+    chapter: "2",
+  },
+  timestamp: {
+    render: "code",
+    category: "protocol field",
+    definition:
+      "When a `channel_update` was issued. Peers keep only the newest update per channel direction, so a higher timestamp wins.",
+    chapter: "2",
+  },
+  channel_flags: {
+    render: "code",
+    category: "protocol field",
+    definition:
+      "A bitfield on a `channel_update`: bit 0 says which side of the channel is publishing (node 1 or node 2), and bit 1 is the disable flag that marks the channel temporarily unusable.",
+    chapter: "2",
+  },
+  htlc_minimum_msat: {
+    render: "code",
+    category: "protocol field",
+    definition:
+      "The smallest HTLC (in millisatoshis) a forwarder will relay over this channel. Offer less and it won't forward.",
+    chapter: "2",
+  },
+  htlc_maximum_msat: {
+    render: "code",
+    category: "protocol field",
+    definition:
+      "The largest single HTLC (in millisatoshis) a forwarder will relay over this channel, bounded by its capacity and its own limit.",
+    chapter: "2",
+  },
+  base_fee: {
+    render: "code",
+    category: "protocol field",
+    definition:
+      "Shorthand for `fee_base_msat`: the flat per-HTLC fee a forwarder charges, advertised in its `channel_update`.",
+    chapter: "2",
+  },
+  ppm: {
+    render: "code",
+    category: "protocol field",
+    definition:
+      "Shorthand for `fee_proportional_millionths`: the rate fee, in millionths of the forwarded amount.",
+    chapter: "2",
+  },
+  fee_rate: {
+    render: "code",
+    category: "protocol field",
+    definition:
+      "Shorthand for `fee_proportional_millionths`: the rate fee, in millionths of the forwarded amount.",
+    chapter: "2",
+  },
   ROUTING_INFO_SIZE: {
     render: "code",
     category: "protocol field",
@@ -327,6 +390,20 @@ const ENTRIES: Record<string, GlossaryEntry> = {
     definition:
       "A failure code a forwarder returns when the onion's HMAC does not verify, meaning the bytes were tampered with or the onion was re-attached to a different HTLC.",
     chapter: "7",
+  },
+  fee_insufficient: {
+    render: "code",
+    category: "protocol field",
+    definition:
+      "Returned by a forwarder when the fee paid (incoming amount minus outgoing amount) is below what its `channel_update` advertises; the HTLC is failed back.",
+    chapter: "10",
+  },
+  incorrect_cltv_expiry: {
+    render: "code",
+    category: "protocol field",
+    definition:
+      "Returned by a forwarder when the outgoing `cltv_expiry` does not satisfy its required `cltv_expiry_delta` cushion; the HTLC is failed back.",
+    chapter: "10",
   },
 
   // ── Concepts ──
@@ -601,6 +678,14 @@ export function resolveGlossary(raw: string): GlossaryHit | null {
 
   const exact = ENTRIES[t];
   if (exact) return { term: t, entry: exact };
+
+  // Plural of a multi-word base term: "blinding factors" -> "blinding factor".
+  // Only multi-word entries (those with a space) take this path, so single-token
+  // identifiers like `hop_payloads` are unaffected (they already match exactly).
+  if (t.endsWith("s") && t.includes(" ")) {
+    const singular = ENTRIES[t.slice(0, -1)];
+    if (singular) return { term: t, entry: singular };
+  }
 
   // Subscripted family: base_SUFFIX  (rho_B, ss_AD, E_AC, mu_i, bf_AB, s_B, ...)
   const m = t.match(/^([A-Za-z]+)_[A-Za-z0-9]+$/);

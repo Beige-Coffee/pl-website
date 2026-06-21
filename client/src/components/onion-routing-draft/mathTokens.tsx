@@ -139,7 +139,7 @@ export function renderMath(token: string): ReactNode {
 // as-is.
 //
 // We deliberately keep the SPELLED-OUT NAMES (mu, rho, etc.) instead of
-// substituting Greek glyphs (μ, ρ) — the names are how the curriculum
+// substituting Greek glyphs (μ, ρ), the names are how the curriculum
 // introduces these keys, so showing the symbol before the symbol is
 // taught risks confusing newer readers.
 
@@ -265,7 +265,7 @@ function tokenizeMathLine(text: string): LineTok[] {
         if (isMathBase(base)) {
           out.push({ kind: "math", base, sub });
         } else {
-          // snake_case identifier — keep intact
+          // snake_case identifier - keep intact
           out.push({ kind: "ident", text: word });
         }
       }
@@ -286,7 +286,7 @@ function tokenizeMathLine(text: string): LineTok[] {
       continue;
     }
 
-    // anything else (e.g., a literal · without surrounding spaces) — raw
+    // anything else (e.g., a literal · without surrounding spaces) - raw
     out.push({ kind: "raw", text: c });
     i++;
   }
@@ -313,7 +313,7 @@ export function MathLine({
   className?: string;
   /**
    * When true, MathLine inherits font-family, color, weight, and size from
-   * its parent — only the math typography (subscripts, italic single-letter
+   * its parent - only the math typography (subscripts, italic single-letter
    * bases, operator spacing) is applied. Use for math inside headings and
    * inside backtick-styled code pills where the parent already provides
    * font styling. Defaults to false (headline-style formula in MONO).

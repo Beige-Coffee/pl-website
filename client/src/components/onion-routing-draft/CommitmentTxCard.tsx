@@ -299,8 +299,40 @@ export function CommitmentTxCard(props: CommitmentTxCardProps) {
             {ownerLabel}
           </span>
         </div>
-        {/* Outputs (max 3 rendered) */}
-        <div className="p-1.5 space-y-1">
+        {/* Brief transaction frame. version / locktime / the single funding
+            input are shown faint so the OUTPUTS section is the clear focus;
+            hover the card for the full transaction (inputs, witness, scripts). */}
+        <div
+          className="px-2 pt-1.5 pb-1 text-[8.5px] leading-tight"
+          style={{
+            fontFamily: '"JetBrains Mono", "Fira Code", monospace',
+            color: SLATE,
+          }}
+        >
+          <div className="flex gap-2.5">
+            <span>
+              version <span style={{ color: INK, fontWeight: 700 }}>2</span>
+            </span>
+            <span>
+              locktime <span style={{ color: INK, fontWeight: 700 }}>0x20…</span>
+            </span>
+          </div>
+          <div className="mt-0.5">
+            inputs <span style={{ color: INK, fontWeight: 700 }}>1</span>
+            <span className="opacity-70"> · funding 2-of-2</span>
+          </div>
+        </div>
+
+        {/* OUTPUTS, the detailed part of the transaction. */}
+        <div className="px-2">
+          <div
+            className="text-[8px] uppercase tracking-[0.08em] font-bold"
+            style={{ color: INK, opacity: 0.55 }}
+          >
+            outputs
+          </div>
+        </div>
+        <div className="px-1.5 pt-1 pb-1.5 space-y-1">
           {outputs.slice(0, 3).map((o, i) => (
             <div
               key={`${o.role}-${i}`}
@@ -315,6 +347,14 @@ export function CommitmentTxCard(props: CommitmentTxCardProps) {
               <OutputRowThumbnail o={o} />
             </div>
           ))}
+        </div>
+
+        {/* Hover affordance */}
+        <div
+          className="px-2 pb-1.5 text-[8px] italic text-center"
+          style={{ color: SLATE, opacity: 0.85 }}
+        >
+          hover for the full transaction
         </div>
       </div>
     );
@@ -401,10 +441,11 @@ function CommitmentTxCardFullView({
             <span className="font-bold">2</span>
           </div>
         </Tooltip>
-        <Tooltip label="Absolute locktime in blocks. 0 means the transaction is valid immediately (when broadcast). Lightning commitment transactions use 0 here because their timing is driven by the sequence field on each input, not by a global locktime.">
+        <Tooltip label="Not a real timelock here. A Lightning commitment tx hides its commitment number across locktime and sequence: the upper 8 bits are 0x20 and the lower 24 bits carry the lower half of the obscured commitment number, the 48-bit count XORed with the lower 48 bits of SHA256(payment_basepoint_open || payment_basepoint_accept). That lets a node recognize which state was broadcast without leaking the channel's payment count to outside observers.">
           <div>
             <span className="opacity-60">locktime:</span>{" "}
-            <span className="font-bold">0</span>
+            <span className="font-bold">0x20</span>
+            <span style={{ color: "#7b4b8a", fontWeight: 700 }}>‖&lt;commit_lo&gt;</span>
           </div>
         </Tooltip>
       </div>
@@ -445,10 +486,11 @@ function CommitmentTxCardFullView({
               <span className="font-bold">(empty)</span>
             </div>
           </Tooltip>
-          <Tooltip label="The sequence number. With version 2, the high bit (0x80000000) signals 'no relative timelock' on this input. Commitment-tx outputs (not inputs) carry the BIP 68 timelocks via their own scripts.">
+          <Tooltip label="The other half of the hidden commitment number: the upper 8 bits are 0x80 and the lower 24 bits carry the upper half of the obscured commitment number (locktime holds the lower half). The 0x80 high byte also leaves BIP 68 relative-timelock disabled on this input; the per-output to_self_delay lives in the output scripts instead.">
             <div>
               <span className="opacity-60">sequence:</span>{" "}
-              <span className="font-bold">0x80000000</span>
+              <span className="font-bold">0x80</span>
+              <span style={{ color: "#7b4b8a", fontWeight: 700 }}>‖&lt;commit_hi&gt;</span>
             </div>
           </Tooltip>
         </div>

@@ -5,6 +5,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import { Tok } from "./mathTokens";
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -187,43 +188,46 @@ function HoverTip({
       >
         {children}
       </div>
-      {hovered && (
-        <div
-          role="tooltip"
-          style={{
-            position: "fixed",
-            left: pos.x,
-            top: pos.above ? undefined : pos.y,
-            bottom: pos.above ? window.innerHeight - pos.y : undefined,
-            width: TIP_WIDTH,
-            zIndex: 50,
-            padding: "10px 12px",
-            background: "#fffdf5",
-            color: "#0f172a",
-            fontSize: 11.5,
-            lineHeight: 1.5,
-            border: "1.5px solid #0f172a",
-            fontFamily: '"JetBrains Mono", "Fira Code", monospace',
-            pointerEvents: "none",
-          }}
-        >
+      {hovered &&
+        typeof document !== "undefined" &&
+        createPortal(
           <div
+            role="tooltip"
             style={{
-              fontWeight: 700,
-              letterSpacing: "0.04em",
-              textTransform: "uppercase",
-              color: "#b8860b",
-              fontSize: 10,
-              marginBottom: 4,
+              position: "fixed",
+              left: pos.x,
+              top: pos.above ? undefined : pos.y,
+              bottom: pos.above ? window.innerHeight - pos.y : undefined,
+              width: TIP_WIDTH,
+              zIndex: 9999,
+              padding: "10px 12px",
+              background: "#fffdf5",
+              color: "#0f172a",
+              fontSize: 11.5,
+              lineHeight: 1.5,
+              border: "1.5px solid #0f172a",
+              fontFamily: '"JetBrains Mono", "Fira Code", monospace',
+              pointerEvents: "none",
             }}
           >
-            {tip.title}
-          </div>
-          <div style={{ fontFamily: "ui-sans-serif, system-ui, sans-serif" }}>
-            {tip.body}
-          </div>
-        </div>
-      )}
+            <div
+              style={{
+                fontWeight: 700,
+                letterSpacing: "0.04em",
+                textTransform: "uppercase",
+                color: "#b8860b",
+                fontSize: 10,
+                marginBottom: 4,
+              }}
+            >
+              {tip.title}
+            </div>
+            <div style={{ fontFamily: "ui-sans-serif, system-ui, sans-serif" }}>
+              {tip.body}
+            </div>
+          </div>,
+          document.body,
+        )}
     </>
   );
 }
@@ -463,7 +467,7 @@ export function OnionPacketAnatomyDiagram() {
 
   return (
     <div
-      className="my-6 border-[1.5px] border-foreground/40 bg-card overflow-hidden"
+      className="my-8 border-[1.5px] border-foreground/40 bg-card overflow-hidden"
       data-testid="onion-packet-anatomy"
       style={{ fontFamily: "ui-sans-serif, system-ui, sans-serif" }}
     >
@@ -476,7 +480,7 @@ export function OnionPacketAnatomyDiagram() {
       </div>
 
       {/* Stage */}
-      <div className="bg-[#fefdfb] px-4 py-5">
+      <div className="bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-5">
         <div className="overflow-x-auto">
           <div className="mx-auto" style={{ minWidth: 720, maxWidth: 880 }}>
             <div

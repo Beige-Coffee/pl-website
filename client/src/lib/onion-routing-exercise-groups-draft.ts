@@ -1,10 +1,10 @@
 // ─── Onion Routing Exercise Groups ──────────────────────────────────────────
 //
 // Groups the 9 onion-routing exercises into 4 logical Python "files":
-//   1. crypto/keys.py         — derive_keys (KeyMaterial dataclass)
-//   2. sphinx/builder.py      — OnionPacketBuilder class
-//   3. sphinx/forwarder.py    — OnionForwarder class + verify_hmac + check_forward
-//   4. sphinx/errors.py       — decrypt_error_onion
+//   1. crypto/keys.py         - derive_keys (KeyMaterial dataclass)
+//   2. sphinx/builder.py      - OnionPacketBuilder class
+//   3. sphinx/forwarder.py    - OnionForwarder class + verify_hmac + check_forward
+//   4. sphinx/errors.py       - decrypt_error_onion
 //
 // Key derivation is intentionally restated inline per group (hmac.new with the
 // label) rather than wired as a cross-group dependency on the student's
@@ -118,31 +118,6 @@ def scalar_mul(scalar_a_bytes, scalar_b_bytes):
 
 const BUILDER_SETUP = CURVE_HELPERS + `
 import hmac, hashlib
-
-class _OnionPacketBuilderBase:
-    """Hidden base providing one helper used by the build exercise.
-
-    _derive_build_keys() does pure HMAC-label key derivation — the same
-    pattern you wrote in the derive_keys exercise (chapter 6). It's packaged
-    here so the build loop stays focused on the conceptual moves (pad-init,
-    reverse loop, filler overlay, final assembly) instead of repeating
-    boilerplate.
-    """
-    def _derive_build_keys(self, payloads):
-        """Returns (rho_keys, mu_keys, pad_key, sizes) ready for the build loop.
-
-        Calls self.derive_shared_secrets() first, then derives rho_i and mu_i
-        for each hop from self.shared_secrets, derives pad_key from
-        self.session_key, and computes the hop-payload sizes list for the filler.
-        """
-        self.derive_shared_secrets()
-        rho_keys = [hmac.new(b"rho", ss, hashlib.sha256).digest()
-                    for ss in self.shared_secrets]
-        mu_keys = [hmac.new(b"mu", ss, hashlib.sha256).digest()
-                   for ss in self.shared_secrets]
-        pad_key = hmac.new(b"pad", self.session_key, hashlib.sha256).digest()
-        sizes = [len(p) + 32 for p in payloads[:-1]]
-        return rho_keys, mu_keys, pad_key, sizes
 `;
 // The forwarder group also needs the ForwardingPolicy container for the
 // fee/CLTV check exercise. It mirrors the BOLT 7 channel_update fields a hop
@@ -173,19 +148,16 @@ const BUILDER_PREAMBLE = `# Provided helpers (in scope at runtime):
 #   scalar_mul(a: bytes, b: bytes) -> bytes           # 32-byte scalars, mod n
 #   chacha20_keystream(key: bytes, length: int) -> bytes
 #   xor_bytes(a: bytes, b: bytes) -> bytes
+#   derive_keys(secret) -> KeyMaterial(rho, mu, um, pad, ammag)  # your chapter 6 function
 # Crypto reference: see Noise course /noise-tutorial/crypto-primitives
 #
-# OnionPacketBuilder inherits from _OnionPacketBuilderBase, which provides one
-# helper for the build exercise: self._derive_build_keys(payloads). It calls
-# self.derive_shared_secrets() for you (populating self.shared_secrets and
-# self.ephemeral_pubkeys), then returns (rho_keys, mu_keys, pad_key, sizes).
-# Note: sizes covers only the forwarder hops; rho_keys covers every hop, so
-# the filler call slices it (rho_keys[:-1]).
+# build() wires together the functions you wrote: derive_shared_secrets (this
+# class), derive_keys (chapter 6, available here), generate_filler, and wrap_hop.
 import hashlib, hmac
 
 ROUTING_INFO_SIZE = 1300  # BOLT 4 hop_payloads field length
 
-class OnionPacketBuilder(_OnionPacketBuilderBase):`;
+class OnionPacketBuilder:`;
 
 const FORWARDER_PREAMBLE = `# Provided helpers (in scope at runtime):
 #   privkey_to_pubkey(privkey: bytes) -> bytes        # 32 -> 33, compressed
@@ -291,7 +263,18 @@ export function getOnionRoutingDraftExerciseGroupContext(exerciseId: string): {
   const group = ONION_ROUTING_DRAFT_EXERCISE_GROUPS[entry.groupId];
   if (!group) return null;
 
-  const standaloneDeps = group.crossGroupDependencies.map(id => ({ id }));
+  // Per-exercise cross-group deps: a specific exercise can pull in another
+  // group's exercise as a standalone (module-level) dependency without exposing
+  // it to every exercise in the group. The build capstone calls the student's
+  // own derive_keys (chapter 6), so it needs derive_keys + KeyMaterial in scope;
+  // the earlier builder exercises must NOT show it (it would leak ch6 into ch4).
+  const perExerciseCrossGroup: Record<string, string[]> = {
+    "exercise-build-packet-draft": ["exercise-derive-keys-draft"],
+  };
+  const standaloneDeps = [
+    ...group.crossGroupDependencies,
+    ...(perExerciseCrossGroup[exerciseId] ?? []),
+  ].map(id => ({ id }));
 
   const priorInGroup = group.exerciseIds
     .slice(0, entry.orderIndex)

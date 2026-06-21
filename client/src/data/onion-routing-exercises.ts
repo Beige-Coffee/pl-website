@@ -316,7 +316,7 @@ def test_dave_failure_identified():
 
 def test_tampered_returns_none():
     """Random bytes of the right length but no valid HMAC anywhere."""
-    wrapped = bytes(288)  # all zeros — no hop's HMAC will verify
+    wrapped = bytes(288)  # all zeros - no hop's HMAC will verify
     idx, recovered = decrypt_error_onion(wrapped, HOP_KEYS)
     assert idx is None and recovered is None
 `,
@@ -354,7 +354,7 @@ def test_tampered_returns_none():
     title: "Process an Inbound Onion",
     description:
       "Implement OnionForwarder.process. Verify length/version, verify HMAC, peel the layer, parse the TLV, and return a ForwardInstruction (forwarder), FinalDelivery (destination), or Rejection (anything wrong). " +
-      "Use ProcessResult dataclasses provided in the preamble. Skip detailed fee/CLTV economic validation — return ForwardInstruction or FinalDelivery once the structure of the payload is parsed correctly.",
+      "Use ProcessResult dataclasses provided in the preamble. Skip detailed fee/CLTV economic validation, return ForwardInstruction or FinalDelivery once the structure of the payload is parsed correctly.",
     starterCode: `from dataclasses import dataclass
 
 @dataclass
@@ -637,7 +637,7 @@ DAVE_PUB  = privkey_to_pubkey(DAVE_PRIV)
 HOP_PUBKEYS = [BOB_PUB, CAROL_PUB, DAVE_PUB]
 HOP_PRIVKEYS = [BOB_PRIV, CAROL_PRIV, DAVE_PRIV]
 
-# Fixed TLV payloads — bigsize-prefixed: each is a 19/19/8-byte TLV, prefixed by a 1-byte length.
+# Fixed TLV payloads - bigsize-prefixed: each is a 19/19/8-byte TLV, prefixed by a 1-byte length.
 RAW_TLVS = [
     bytes.fromhex("0203989a900401b40608000000012345678920"),
     bytes.fromhex("0203989a900401b40608000000012345678921"),
@@ -931,7 +931,7 @@ CAROL_PUB = privkey_to_pubkey(CAROL_PRIV)
 DAVE_PUB  = privkey_to_pubkey(DAVE_PRIV)
 HOP_PUBKEYS = [BOB_PUB, CAROL_PUB, DAVE_PUB]
 
-# Each hop payload (TLV bytes — actual TLV correctness not enforced here, just length)
+# Each hop payload (TLV bytes - actual TLV correctness not enforced here, just length)
 PAYLOADS = [
     bytes.fromhex("0203989a900401b40608000000012345678920"),  # ~19 bytes
     bytes.fromhex("0203989a900401b40608000000012345678921"),  # ~19 bytes

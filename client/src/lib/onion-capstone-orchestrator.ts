@@ -2,7 +2,7 @@
  * Onion Capstone orchestrator.
  *
  * Connects the student's saved exercise code (localStorage) to the trace engine:
- *   1. Preflight — run all 9 live (draft) exercise suites; the capstone unlocks
+ *   1. Preflight - run all 9 live (draft) exercise suites; the capstone unlocks
  *      only if every one passes.
  *   2. Assemble the student's `sphinx/builder.py` and `sphinx/forwarder.py`
  *      from their saved code (the same assembly the per-exercise runner uses).
@@ -106,13 +106,16 @@ export async function runOnionCapstonePreflight(
 
 /**
  * Assemble the student's full class file (preamble + their methods) for one
- * group's last exercise. setupCode is intentionally omitted — the trace engine
+ * group's last exercise. setupCode is intentionally omitted - the trace engine
  * supplies the shared scaffolding, so each file is just the student's code.
  */
 function assembleStudentFile(lastExerciseId: string, getSaved: SavedGetter): string {
   const ctx = getCtx(lastExerciseId);
   return buildExerciseTestCode({
     preamble: ctx?.preamble,
+    // cross-group deps (e.g. build's derive_keys from ch6) must ride along as
+    // module-level code, same as the per-exercise test assembly does.
+    standaloneDeps: (ctx?.crossGroupExercises ?? []).map((e) => codeFor(e.id, getSaved)),
     priorInGroupDeps: (ctx?.priorInGroupExercises ?? []).map((e) => codeFor(e.id, getSaved)),
     currentCode: codeFor(lastExerciseId, getSaved),
   });
@@ -143,6 +146,14 @@ function solutionCode(id: string): string {
 
 /** SavedGetter returning the reference solutions in editable-range format. */
 export const demoGetSaved: SavedGetter = (id) => {
+  // derive_keys' editable region includes the provided KeyMaterial dataclass,
+  // but hints.code is only the function body. build's cross-group drop-in needs
+  // both, so reconstruct the full editable region (starter's KeyMaterial + the
+  // solution). Real students are unaffected - their saved code already has it.
+  if (id === "exercise-derive-keys-draft") {
+    const starter = EX[id]?.starterCode ?? "";
+    return starter.replace(/\n[ \t]*def derive_keys[\s\S]*$/, "\n") + solutionCode(id);
+  }
   switch (id) {
     case "exercise-derive-shared-secrets-draft":
     case "exercise-generate-filler-draft":

@@ -10,7 +10,7 @@ import { buildSceneTimeline, type Scene, type SceneFrame } from "../../lib/onion
 import { CapstoneStage, type StageChip } from "./CapstoneStage";
 
 // ────────────────────────────────────────────────────────────────────────────
-// OnionCapstoneLab — synced step-through capstone.
+// OnionCapstoneLab - synced step-through capstone.
 //
 // Layout (locked 2026-06-08): full-width visual stage on top (CapstoneStage,
 // chapter 7-10 diagram grammar, scenes driven by the trace's semantic events),
@@ -126,7 +126,7 @@ function Scope({ title, vars, defaultOpen }: { title: string; vars: Record<strin
       <div onClick={() => setOpen((o) => !o)} style={{ cursor: "pointer", color: "#858585", fontFamily: SANS, fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", margin: "2px 0 4px" }}>
         {open ? "▾" : "▸"} {title} <span style={{ color: "#5a5a5a" }}>({entries.length})</span>
       </div>
-      {open && (entries.length ? entries.map(([n, v]) => <VarRow key={n} name={n} v={v} />) : <div style={{ color: "#5a5a5a", fontFamily: MONO, fontSize: 11, marginLeft: 4 }}>—</div>)}
+      {open && (entries.length ? entries.map(([n, v]) => <VarRow key={n} name={n} v={v} />) : <div style={{ color: "#5a5a5a", fontFamily: MONO, fontSize: 11, marginLeft: 4 }}>-</div>)}
     </div>
   );
 }
@@ -247,7 +247,7 @@ export function OnionCapstoneLab({ injectedTrace, getSaved, demo }: OnionCapston
     <div className="my-8 border-[1.5px] border-foreground/40 bg-card overflow-hidden" data-testid="onion-capstone-lab" style={{ fontFamily: SANS }}>
       <div className="bg-black text-white px-4 py-2 flex items-center gap-2">
         <div className="w-1.5 h-1.5 rounded-full bg-[#b8860b]" />
-        <span className="text-sm font-bold tracking-[0.08em] uppercase">Onion Capstone — Step Through Your Code</span>
+        <span className="text-sm font-bold tracking-[0.08em] uppercase">Onion Capstone: Step Through Your Code</span>
       </div>
 
       <div className="bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-4">
@@ -281,8 +281,8 @@ export function OnionCapstoneLab({ injectedTrace, getSaved, demo }: OnionCapston
               {/* TOOLBAR: stepping + scene-tick scrubber */}
               <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "12px 0 12px", flexWrap: "wrap" }}>
                 <button onClick={stepBack} style={ctrlBtn} title="Previous line">◀ Back</button>
-                <button onClick={stepFwd} style={ctrlBtn} title="Step — next line (enters functions you call)">Step →</button>
-                <button onClick={stepOut} style={ctrlBtn} title="Step Out — finish this function and stop at its return">Step Out ↑</button>
+                <button onClick={stepFwd} style={ctrlBtn} title="Step: next line (enters functions you call)">Step →</button>
+                <button onClick={stepOut} style={ctrlBtn} title="Step Out: finish this function and stop at its return">Step Out ↑</button>
                 <span style={{ width: 1, alignSelf: "stretch", background: "#cbd5e1" }} />
                 <button onClick={sceneBack} style={ctrlBtn} title="Previous scene">⏮ Scene</button>
                 <button onClick={sceneFwd} style={ctrlBtn} title="Next scene">Scene ⏭</button>

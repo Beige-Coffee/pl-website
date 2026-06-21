@@ -1,5 +1,5 @@
 // ────────────────────────────────────────────────────────────────────────────
-// Encryption hatch — shared module
+// Encryption hatch - shared module
 //
 // Canonical source for the onion-encryption hatch styling. Locked spec:
 //   bob:     90°  (vertical stripes), color #3b6aa0
@@ -12,7 +12,7 @@
 //
 // When multiple hops' layers stack (e.g., Dave's slot still wraps Bob +
 // Charlie + Dave's encryption), the angles differ enough that the layers
-// crosshatch visibly — that's the visual signature of "this region is
+// crosshatch visibly - that's the visual signature of "this region is
 // inside several layers of encryption".
 //
 // Per the locked Encryption Hatch Spec (2026-05-09), every visual that

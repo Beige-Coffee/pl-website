@@ -1,5 +1,5 @@
 /**
- * Onion Capstone — scene timeline.
+ * Onion Capstone - scene timeline.
  *
  * Turns a capstone trace (line steps + semantic events) into:
  *   - `frames`: the stepping timeline (real line steps, plus synthetic frames
@@ -101,8 +101,8 @@ const INNER_OF: Record<ForwarderId, ForwarderId | null> = { dave: null, charlie:
 const PIN_LOCALS: Record<string, string[]> = {
   chain: ["e", "E", "ss", "b", "hop_pubkey", "self"],
   filler: ["filler", "stream", "chunk", "stream_len", "payload_sizes", "rho_keys", "i"],
-  build: ["buffer", "next_hmac", "filler", "pad_key", "sizes", "payloads", "i"],
-  wrap: ["buffer", "payload", "next_hmac", "hop_size", "shifted", "stream", "encrypted", "tag", "rho", "mu"],
+  build: ["buffer", "next_hmac", "filler", "pad_key", "keys", "hops", "k", "payload", "payloads"],
+  wrap: ["buffer", "payload", "next_hmac", "hop_size", "shifted", "stream", "encrypted", "tag", "rho", "mu", "filler"],
   verify: ["packet", "mu", "associated_data", "hop_payloads", "inbound_hmac", "expected"],
   peel: ["packet", "E_i", "hop_payloads", "ss", "rho", "work", "stream", "length", "header_len", "payload", "hop_size", "next_hmac", "next_hop_payloads", "b", "E_next", "next_packet"],
   policy: ["incoming_amount_msat", "incoming_cltv_expiry", "amt_to_forward", "outgoing_cltv_value", "required_fee", "policy"],
@@ -265,7 +265,7 @@ export function buildSceneTimeline(trace: CapstoneTraceResult): SceneTimeline {
       mode = "build";
       open({
         key: "begin", title: "Alice starts the build",
-        caption: "Your build() runs first. Alice holds the session key and the route's node public keys, and everything else gets derived from them.",
+        caption: "The shared secrets are ready. Now Alice assembles the packet: she wraps the hops from the inside out, deriving each hop's keys and laying in the filler as she goes.",
         stage: chainState(-1), pinLocals: PIN_LOCALS.build,
       });
       return;
@@ -327,7 +327,7 @@ export function buildSceneTimeline(trace: CapstoneTraceResult): SceneTimeline {
         key: `filler-${hop}`, title: `Filler · ${NAME[hop]}'s slice`,
         caption: fillerIdx === 1
           ? `Append ${B.bob} zero bytes, then XOR in the trailing slice of Bob's extended keystream (1,300 + ${B.bob} bytes long).`
-          : `Charlie's slice reaches back into his regular keystream region, stacking his layer onto Bob's bytes. Filler is now ${FILLER_B} bytes.`,
+          : `Charlie's slice overlaps his regular keystream region, stacking his layer onto Bob's bytes. Filler is now ${FILLER_B} bytes.`,
         stage: {
           packetAt: "alice", view: "buffer", bufferLabel: "filler (precomputed)",
           segments: [

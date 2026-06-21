@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { StepCaption } from "./StepCaption";
+import { Tooltip } from "./Tooltip";
 
 // ────────────────────────────────────────────────────────────────────────────
 // PlaintextMessageTear (DRAFT)
@@ -75,12 +76,12 @@ const SLICES: Slice[] = [
 const TOTAL_STEPS = 6;
 
 const STEP_CAPTIONS: Record<number, string> = {
-  0: "Alice's payment message carries a stack of per-hop slices in plaintext. She'll hand the whole stack to Bob, and each hop will peel off its own slice before forwarding the rest.",
-  1: "The message arrives at Bob. He reads the front slice: forward 10,002 sat to Charlie at CLTV 220. The slices for Charlie and Dave are still in plaintext beneath it, so Bob already learns the final amount, the payment hash, and that Dave is the destination.",
-  2: "Bob peels his slice off the stack and forwards only Charlie's and Dave's slices onward. The slice is gone from the wire, but Bob already saw every downstream field while it was passing through him.",
-  3: "Charlie reads his slice: forward 10,000 sat to Dave at CLTV 180. Like Bob, he can also see Dave's slice beneath, so the final amount and payment hash are visible to him too.",
-  4: "Charlie peels his slice off and forwards Dave's slice on alone. Each forwarder consumed its own slice before passing the rest along.",
-  5: "Dave reads the final slice and accepts the HTLC. Payment delivered. But every hop saw every downstream slice while it was passing through, so Bob learned the entire route. That's the privacy issue we have to solve.",
+  0: "So, Alice's payment message carries a stack of per-hop slices, all in plaintext. She'll hand the whole stack to Bob, and each forwarder will peel off its own slice before passing the rest along. Let's watch what happens...",
+  1: "Now the message lands at Bob. He reads the front slice: forward 10,002 sat to Charlie at CLTV 220. But notice Charlie's and Dave's slices are still sitting in plaintext underneath, so Bob *already* sees the final amount, the payment hash, and that Dave is where this is headed.",
+  2: "Bob peels his slice off and forwards just Charlie's and Dave's slices onward. The slice is off the wire now, but the damage is done. Bob saw every downstream field while the message passed through him.",
+  3: "Next, Charlie reads his slice: forward 10,000 sat to Dave at CLTV 180. And just like Bob, he can read Dave's slice underneath, so the final amount and payment hash are sitting right there for him too.",
+  4: "Charlie peels his slice off and sends Dave's slice on alone. Each forwarder took its own slice before passing the rest along.",
+  5: "Finally, Dave reads the last slice and accepts the HTLC. Payment delivered! But here's the catch: every hop saw every downstream slice on the way through, so Bob learned the whole route. That's the privacy problem we'll spend this course fixing.",
 };
 
 function activeHopAt(step: number): HopId {
@@ -129,42 +130,49 @@ function seenByAt(forHop: "bob" | "charlie" | "dave", step: number): string[] {
 // of the stage at the leftmost (Alice) or rightmost (Dave) positions, with a
 // little extra buffer so the message doesn't sit flush against the stage edge.
 const NODE_X_PCT: Record<HopId, number> = {
-  alice: 20,
-  bob: 40,
-  charlie: 60,
-  dave: 80,
+  alice: 12,
+  bob: 38,
+  charlie: 62,
+  dave: 88,
 };
 
 export function PlaintextMessageTear() {
   const [step, setStep] = useState(0);
-  const [playing, setPlaying] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    if (!playing) return;
-    timerRef.current = setTimeout(() => {
-      setStep((s) => {
-        if (s + 1 >= TOTAL_STEPS) {
-          setPlaying(false);
-          return s;
-        }
-        return s + 1;
-      });
-    }, 1700);
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, [playing, step]);
-
-  function play() {
-    if (step >= TOTAL_STEPS - 1) setStep(0);
-    setPlaying(true);
-  }
-  function pause() { setPlaying(false); }
-  function reset() { setPlaying(false); setStep(0); }
+  function back() { setStep((s) => Math.max(0, s - 1)); }
+  function next() { setStep((s) => Math.min(TOTAL_STEPS - 1, s + 1)); }
+  function reset() { setStep(0); }
 
   const active = activeHopAt(step);
-  const messageLeftPct = NODE_X_PCT[active];
+
+  // The 290px message card slides under the active node. We compute its `left`
+  // as a plain pixel number against the measured stage width, on purpose: the
+  // 1.2s `left` transition only animates reliably between plain `px` values.
+  // CSS `calc()`/`%`/`min()`/`max()` left values freeze at the start frame in
+  // Chrome (interpolation between non-plain-length values is flaky), which left
+  // the card stuck off-position. Measuring lets us both center exactly under the
+  // node (matching the node's own `pct%` positioning inside the padded content
+  // box) and clamp so the card never clips off the stage at Alice or Dave.
+  const MSG_W = 290;
+  const EDGE = 16; // matches the stage's `px-4` horizontal padding
+  const stageRef = useRef<HTMLDivElement>(null);
+  const [stageW, setStageW] = useState(0);
+  useLayoutEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    const measure = () => setStageW(el.clientWidth);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  let messageLeft = EDGE; // pre-measure fallback (Alice's resting spot)
+  if (stageW > 0) {
+    const contentW = stageW - 2 * EDGE; // node `%` is relative to this inner box
+    const nodeCenter = EDGE + (NODE_X_PCT[active] / 100) * contentW;
+    const ideal = nodeCenter - MSG_W / 2;
+    messageLeft = Math.max(EDGE, Math.min(stageW - MSG_W - EDGE, ideal));
+  }
 
   return (
     <div
@@ -183,12 +191,12 @@ export function PlaintextMessageTear() {
       </div>
 
       {/* Stage */}
-      <div className="relative bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-6" style={{ minHeight: 440 }}>
+      <div ref={stageRef} className="relative bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-6" style={{ minHeight: 440 }}>
         {/* Hop track */}
         <div className="relative" style={{ height: 88 }}>
           {/* Backbone dashes, HTML divs aligned to the vertical center of the
-              circular nodes (which are 60px tall, so center sits at y=30). The
-              segments start/end 30px out from each node's center to clear the
+              circular nodes (which are 64px tall, so center sits at y=32). The
+              segments start/end 32px out from each node's center to clear the
               circle's radius, plus a small visual buffer. */}
           {[0, 1, 2].map((i) => {
             const startPct = NODE_X_PCT[(["alice", "bob", "charlie"] as HopId[])[i]];
@@ -198,9 +206,9 @@ export function PlaintextMessageTear() {
                 key={i}
                 className="absolute pointer-events-none"
                 style={{
-                  top: 29,
-                  left: `calc(${startPct}% + 32px)`,
-                  width: `calc(${endPct - startPct}% - 64px)`,
+                  top: 31,
+                  left: `calc(${startPct}% + 34px)`,
+                  width: `calc(${endPct - startPct}% - 68px)`,
                   borderTop: "1.5px dashed #475569",
                 }}
               />
@@ -230,8 +238,8 @@ export function PlaintextMessageTear() {
                 <div
                   className="rounded-full flex items-center justify-center transition-all duration-500 relative"
                   style={{
-                    width: 60,
-                    height: 60,
+                    width: 64,
+                    height: 64,
                     background: hop.fill,
                     color: "#0f172a",
                     border: `${isActive ? 3 : 2}px solid ${hop.stroke}`,
@@ -250,12 +258,20 @@ export function PlaintextMessageTear() {
                     {label.charAt(0)}
                   </span>
                   {seen && !isActive && (
-                    <span
-                      className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-[#5a7a2f] text-white text-[10px] font-bold flex items-center justify-center border-[1.5px] border-[#fffdf5]"
-                      title="Already saw the entire payload"
+                    <Tooltip
+                      label={
+                        <div>
+                          {label} already saw the entire payload while the
+                          message was passing through.
+                        </div>
+                      }
                     >
-                      ✓
-                    </span>
+                      <span
+                        className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-[#5a7a2f] text-white text-[10px] font-bold flex items-center justify-center border-[1.5px] border-[#fffdf5]"
+                      >
+                        ✓
+                      </span>
+                    </Tooltip>
                   )}
                 </div>
                 <div
@@ -269,13 +285,16 @@ export function PlaintextMessageTear() {
           })}
         </div>
 
-        {/* The traveling message */}
+        {/* The traveling message. Centered under the active node
+            (`messageLeftPct% - 145px`, half the 290px width), but clamped so
+            the card never spills off the stage at the leftmost (Alice) or
+            rightmost (Dave) positions, where centering alone would clip it. */}
         <div
           className="absolute"
           style={{
             top: 112,
-            left: `calc(${messageLeftPct}% - 145px)`,
-            width: 290,
+            left: messageLeft,
+            width: MSG_W,
             transition: "left 1.2s cubic-bezier(0.4, 0.0, 0.2, 1)",
           }}
         >
@@ -370,11 +389,20 @@ export function PlaintextMessageTear() {
       <div className="px-4 py-3 border-t-[1.5px] border-foreground/30 bg-card">
         <div className="flex gap-1.5 items-center flex-wrap shrink-0">
           <button
-            onClick={playing ? pause : play}
-            className="px-3 py-1.5 border-[1.5px] border-black bg-black text-white font-bold text-xs tracking-[0.05em] uppercase hover:bg-[#b8860b] hover:border-[#b8860b] transition-colors"
-            data-testid="onion-message-tear-play"
+            onClick={back}
+            disabled={step <= 0}
+            className="px-3 py-1.5 border-[1.5px] border-foreground/40 bg-card text-foreground text-xs uppercase tracking-[0.05em] hover:bg-secondary transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-card"
+            data-testid="onion-message-tear-back"
           >
-            {playing ? "❚❚ Pause" : step >= TOTAL_STEPS - 1 ? "↻ Replay" : "▶ Play"}
+            ← Back
+          </button>
+          <button
+            onClick={next}
+            disabled={step >= TOTAL_STEPS - 1}
+            className="px-3 py-1.5 border-[1.5px] border-foreground/40 bg-card text-foreground text-xs uppercase tracking-[0.05em] hover:bg-secondary transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-card"
+            data-testid="onion-message-tear-next"
+          >
+            Next →
           </button>
           <button
             onClick={reset}
@@ -386,7 +414,7 @@ export function PlaintextMessageTear() {
             {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
               <button
                 key={i}
-                onClick={() => { setPlaying(false); setStep(i); }}
+                onClick={() => setStep(i)}
                 className="w-7 h-7 border-[1.5px] text-[10px] font-bold transition-colors"
                 style={{
                   background: step === i ? "#b8860b" : step > i ? "#fef3c7" : "#fffdf5",

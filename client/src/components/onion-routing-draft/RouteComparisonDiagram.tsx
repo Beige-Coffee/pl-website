@@ -32,7 +32,7 @@ const HOP_PALETTE = {
 
 const ROUTE_A: ComputedRouteDiagramProps = {
   title: "Route A · direct via Hazel",
-  subtitle: "1,300 sat fee, but 1,018-block CLTV exceeds Alice's 200-block ceiling",
+  subtitle: "900 sat fee (the cheapest of the three), but a 1,018-block CLTV delta exceeds Alice's 200-block ceiling",
   invoice: { amount: 400_000, minFinalCltvDelta: 18, paymentHash: "566..c62" },
   hops: [
     { id: "alice", name: "Alice", role: "sender",    color: HOP_PALETTE.alice },
@@ -40,24 +40,28 @@ const ROUTE_A: ComputedRouteDiagramProps = {
     { id: "dave",  name: "Dave",  role: "receiver",  color: HOP_PALETTE.dave  },
   ],
   channelUpdates: [
-    { atForwarderIndex: 0, baseFee: 100, feePpm: 3000, cltvDelta: 1000 },
+    { atForwarderIndex: 0, baseFee: 100, feePpm: 2000, cltvDelta: 1000 },
   ],
-  htlcAmounts:  [401_300, 400_000],
+  htlcAmounts:  [400_900, 400_000],
   htlcTimeouts: [1168, 168],
   feeCalculations: [
     {
       forwarderName: "Hazel",
       baseFee: 100,
-      feePpm: 3000,
+      feePpm: 2000,
       amount: 400_000,
-      calculation: "(3,000 / 1,000,000) × 400,000 = 1,200",
-      total: 1_300,
+      calculation: "(2,000 / 1,000,000) × 400,000 = 800",
+      total: 900,
     },
   ],
   timeoutCalculations: [
     { label: "HTLC Timeout (Alice → Hazel)", calculation: "150 + 18 + 1000", total: 1168 },
     { label: "HTLC Timeout (Hazel → Dave)",  calculation: "150 + 18",        total: 168 },
   ],
+  walkthrough: {
+    verdict:
+      "So Route A is the cheapest, just 900 sats. But look at that timeout: Hazel's cushion is a whopping 1,000 blocks, so Alice's HTLC would be locked up for over a thousand blocks. That blows right past her max_total_cltv_expiry_delta of 200. Cheapest fee, but Alice simply can't use it.",
+  },
 };
 
 const ROUTE_B: ComputedRouteDiagramProps = {
@@ -99,6 +103,10 @@ const ROUTE_B: ComputedRouteDiagramProps = {
     { label: "HTLC Timeout (Frank → Greg)",  calculation: "150 + 18 + 20",      total: 188 },
     { label: "HTLC Timeout (Greg → Dave)",   calculation: "150 + 18",           total: 168 },
   ],
+  walkthrough: {
+    verdict:
+      "Route B costs more, 2,002 sats across two forwarders. But every cltv_expiry_delta here is small, so the total timeout stays comfortably under Alice's 200-block ceiling. Not the cheapest, but the one Alice can actually route through.",
+  },
 };
 
 type Tab = "a" | "b" | "c";
@@ -162,12 +170,12 @@ export function RouteComparisonDiagram() {
       {/* Tab strip */}
       <div className="flex border-b-[1.5px] border-foreground/30 bg-card">
         <TabButton
-          label="Route A · via Hazel (cheapest, but CLTV too high)"
+          label="Route A · via Hazel"
           active={tab === "a"}
           onClick={() => setTab("a")}
         />
         <TabButton
-          label="Route B · via Frank and Greg (2,002 sats)"
+          label="Route B · via Frank and Greg"
           active={tab === "b"}
           onClick={() => setTab("b")}
         />
