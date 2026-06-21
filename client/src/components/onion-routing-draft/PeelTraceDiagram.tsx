@@ -99,7 +99,7 @@ function TipText({
 // incoming 1,300-byte half is one opaque encrypted blob. The right half
 // is the keystream extension.
 const BOB_HOP_PCT_2600 = 22;
-const OPAQUE_REST_PCT_2600 = 50 - BOB_HOP_PCT_2600; // 39
+const OPAQUE_REST_PCT_2600 = 50 - BOB_HOP_PCT_2600; // 28
 const KEYSTREAM_EXT_PCT_2600 = 50;
 
 // ── Beat definitions ──────────────────────────────────────────────────────

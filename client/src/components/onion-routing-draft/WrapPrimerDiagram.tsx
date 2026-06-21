@@ -912,8 +912,9 @@ function SlotCell({ hop }: { hop: ForwarderId }) {
   return (
     <div className="flex h-full" style={{ position: "relative" }}>
       {/* LEN, bigsize length prefix. Shown as the literal hex byte that
-          encodes (slot_inner_size). For hop payloads ≤252 bytes, that's a single
-          byte equal to (slot_size - 1). */}
+          encodes the payload length (excluding the LEN prefix and the trailing
+          32-byte HMAC). For hop payloads ≤252 bytes, that's a single
+          byte equal to (slot_size - 33). */}
       <SlotSubCell
         section="len"
         className="flex items-center justify-center"

@@ -5,14 +5,18 @@ import { Tooltip } from "./Tooltip";
 // ────────────────────────────────────────────────────────────────────────────
 // PlaintextMessageTear (DRAFT)
 //
-// Animated naive-routing visualization. The payment message rectangle
+// Animated NAIVE-routing visualization. The payment message rectangle
 // physically translates from Alice → Bob → Charlie → Dave. At each hop the
 // destination hop's slice highlights, is read, and then is *removed from the
-// payload* before the message moves on. This matches BOLT 4 Sphinx behavior:
-// a forwarding hop peels its own per-hop payload off and only the rest gets
-// passed on. The privacy leak in this naive design is that each hop sees every
-// downstream slice while it's still in the stack (Bob learns the whole route
-// from himself onward, including that Dave is the destination).
+// payload* before the message moves on, so the packet visibly shrinks as it
+// travels. This is a deliberately NAIVE teaching model, NOT real Sphinx. Real
+// BOLT 4 Sphinx does the opposite: a forwarding hop peels its own per-hop
+// payload off, then re-pads the packet with filler so the total length stays a
+// constant 1,300 bytes and never shrinks (bolt04.md:976-977). The constant
+// size is what keeps the route length hidden. The privacy leak in this naive
+// design is that each hop sees every downstream slice while it's still in the
+// stack (Bob learns the whole route from himself onward, including that Dave is
+// the destination).
 //
 // Visual style follows the Noise capstone:
 //   - Black section-header bar with white pixel-letter-spaced uppercase title.
@@ -123,6 +127,48 @@ function seenByAt(forHop: "bob" | "charlie" | "dave", step: number): string[] {
     if (step >= 5) out.push("dave");
   }
   return out;
+}
+
+// Per-hop tooltip text for a node's green "✓" badge. We invert the same
+// seenByAt() bookkeeping to ask, for a given hop, which slices it actually read
+// while the message passed through. This matters because each forwarder peels
+// its own slice off (isRemoved), so a hop never reads slices that were already
+// removed before it processed the message. Bob is the only hop who genuinely
+// saw the entire stack; Charlie reads after Bob's slice is already gone, so he
+// never saw Bob's slice.
+function seenPayloadDescription(hop: HopId, step: number): string {
+  if (hop === "alice") {
+    // Alice assembled every slice herself.
+    return "Alice assembled the entire payload herself, so she knows every slice and the whole route.";
+  }
+  // Which downstream slices did this hop read while it was on the wire?
+  const sawOwn = seenByAt(
+    hop as "bob" | "charlie" | "dave",
+    step,
+  ).includes(hop);
+  const sliceForHops: Array<"bob" | "charlie" | "dave"> = ["bob", "charlie", "dave"];
+  const seenSlices = sliceForHops.filter((forHop) =>
+    seenByAt(forHop, step).includes(hop),
+  );
+  const others = seenSlices.filter((forHop) => forHop !== hop);
+  const ownLabel = sawOwn ? `his own slice` : "";
+  const otherLabels = others.map((h) => `${h[0].toUpperCase()}${h.slice(1)}'s`);
+
+  // Bob processed the message while all three slices were still in the stack,
+  // so he saw the entire payload. Charlie/Dave read only what remained.
+  if (hop === "bob") {
+    return "Bob saw the entire payload (his own slice plus Charlie's and Dave's) while the message passed through, so he learned the final amount, the payment hash, and that Dave is the destination.";
+  }
+  if (otherLabels.length === 0) {
+    return `${hop[0].toUpperCase()}${hop.slice(1)} read only his own slice; the earlier hops' slices were already peeled off before the message reached him.`;
+  }
+  const parts = [ownLabel, ...otherLabels].filter(Boolean);
+  const joined =
+    parts.length > 1
+      ? `${parts.slice(0, -1).join(", ")} plus ${parts[parts.length - 1]}`
+      : parts[0];
+  const cap = `${hop[0].toUpperCase()}${hop.slice(1)}`;
+  return `${cap} saw the rest of the payload (${joined}), not the slices that earlier hops had already peeled off.`;
 }
 
 // Layout: the 4 nodes sit horizontally. The message anchors to the active hop.
@@ -261,8 +307,7 @@ export function PlaintextMessageTear() {
                     <Tooltip
                       label={
                         <div>
-                          {label} already saw the entire payload while the
-                          message was passing through.
+                          {seenPayloadDescription(id, step)}
                         </div>
                       }
                     >

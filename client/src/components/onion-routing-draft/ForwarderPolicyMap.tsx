@@ -109,7 +109,7 @@ interface ChannelUpdate {
 const NAMED_CHANNEL_UPDATES: ChannelUpdate[] = [
   // Hazel → Dave  (Route A's direct forwarder, punitive CLTV makes this
   // route fail Alice's max_total_cltv_expiry_delta ceiling)
-  { from: "hazel",   to: "dave",    baseFee: 100, feePpm: 3000, cltvDelta: 1000 },
+  { from: "hazel",   to: "dave",    baseFee: 100, feePpm: 2000, cltvDelta: 1000 },
   // Bob → Charlie → Dave  (Route C, the chapter-1 path)
   { from: "bob",     to: "charlie", baseFee: 15,  feePpm: 2000, cltvDelta: 20 },
   { from: "charlie", to: "dave",    baseFee: 10,  feePpm: 1000, cltvDelta: 15 },
@@ -299,7 +299,7 @@ export function ForwarderPolicyMap() {
 
   // Index every node's channel partners (undirected). A node may have channels
   // with counterparties even when it doesn't publish channel_updates of its
-  // own, e.g. Dave is a receiver, has channels with Bob/Eve/Greg, but doesn't
+  // own, e.g. Dave is a receiver, has channels with Charlie/Greg/Hazel, but doesn't
   // forward, so the channels are advertised by the other side. The popover
   // uses this to explain the asymmetry instead of just saying "no channels."
   const partnersByNode = useMemo(() => {
@@ -855,7 +855,7 @@ export function ForwarderPolicyMap() {
                 />
                 <Row
                   k="capacity"
-                  v={`${GOSSIP_ANNOUNCEMENT.capacity.toLocaleString()} sat`}
+                  v={`${GOSSIP_ANNOUNCEMENT.capacity.toLocaleString()} sat (derived from funding UTXO, not in the message)`}
                 />
               </div>
               <div

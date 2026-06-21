@@ -530,7 +530,7 @@ export function ErrorPacketBody({
         <LabelIsland borderColor={hmacColor} zIndex={6}>
           <FieldKicker>HMAC</FieldKicker>
           <FieldValue color={hmacColor}>32 B</FieldValue>
-          <FieldSub>um_{failingHop.charAt(0)}</FieldSub>
+          <FieldSub>um_{failingHop.charAt(0).toUpperCase()}</FieldSub>
         </LabelIsland>
       </SlotSubCell>
 

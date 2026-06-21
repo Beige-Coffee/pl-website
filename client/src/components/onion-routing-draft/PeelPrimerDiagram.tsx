@@ -1142,7 +1142,7 @@ function KeystreamXorRow({ hop }: { hop: ForwarderId }) {
         className="text-[10px] uppercase tracking-[0.06em] mb-1 text-center"
         style={{ fontFamily: MONO, color, fontWeight: 700 }}
       >
-        keystream · 1,300 B
+        keystream · front 1,300 B (full peel is 2,600, see ch 7)
       </div>
       <div
         className="border-[1.5px] relative overflow-hidden flex items-center justify-center"
@@ -1153,7 +1153,7 @@ function KeystreamXorRow({ hop }: { hop: ForwarderId }) {
           className="relative"
           style={{ zIndex: 2, background: "#fffdf5", padding: "1px 8px" }}
         >
-          <MathLine text={`chacha20(rho_${hop}, 1300)`} color={color} fontSize={11.5} />
+          <MathLine text={`chacha20(rho_${hop}, 2600)[:1300]`} color={color} fontSize={11.5} />
         </span>
       </div>
       <div className="flex items-center justify-center gap-1.5 mt-1 mb-0.5">

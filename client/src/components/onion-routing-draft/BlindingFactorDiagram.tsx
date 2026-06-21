@@ -61,7 +61,7 @@ const TOKEN_INFO: Record<string, string> = {
   SHA256:
     "Cryptographic hash function. Takes input bytes and produces a 32-byte deterministic output. Anyone with the same inputs gets the same output.",
   "·":
-    "Scalar multiplication on the elliptic curve. Multiplying a private number by G produces a public point.",
+    "Multiplication, used three ways here. Scalar times G gives a public point (e_AB · G). Scalar times a node's public point gives a shared secret via ECDH (e_AB · B). Scalar times scalar gives the next private scalar (bf_AB · e_AB).",
   "‖":
     "Concatenation. Joins the bytes of E with the bytes of ss to feed into SHA256.",
 };

@@ -18,7 +18,7 @@ import { StepCaption } from "./StepCaption";
 //
 // Animation rhythm matches PlaintextMessageTear and NodeKeyAttemptDiagram:
 // six steps total (setup → highlight at Bob → mark processed → highlight at
-// Charlie → mark processed → highlight at Dave). Hop payloads stay in the packet
+// Charlie → mark processed → highlight at Dave). Slices stay in the packet
 // after processing (they go neutral gray) so the visual never suggests the
 // packet shrinks. The point is structural: it always carries N pubkeys.
 //
@@ -104,10 +104,10 @@ const TOTAL_STEPS = 6;
 
 const STEP_CAPTIONS: Record<number, string> = {
   0: "So this time, Alice makes a fresh ephemeral keypair for *every* hop, and packs all three pubkeys into the packet next to their encrypted slices. Hover the chip under Alice to see the three keypairs she's now stuck holding onto.",
-  1: "Bob gets the packet. He runs his own private key against E_Bob from his hop payload to derive ss_AB, then decrypts his slice. Charlie's and Dave's hop payloads are still riding along, and they're still pubkeys Bob has no use for.",
-  2: "Bob's done with his hop payload, so he forwards the packet to Charlie. Notice it still carries E_Charlie and E_Dave. The packet didn't shrink, and that cost didn't go anywhere.",
-  3: "Now Charlie does the same with his hop payload. ECDH between his node private key and E_Charlie gives him ss_AC, and he decrypts his slice.",
-  4: "Charlie's hop payload is handled, and the packet keeps moving with E_Dave still tucked inside.",
+  1: "Bob gets the packet. He runs his own private key against E_Bob from his slice to derive ss_AB, then decrypts his slice. Charlie's and Dave's slices are still riding along, and they're still pubkeys Bob has no use for.",
+  2: "Bob's done with his slice, so he forwards the packet to Charlie. Notice it still carries E_Charlie and E_Dave. The packet didn't shrink, and that cost didn't go anywhere.",
+  3: "Now Charlie does the same with his slice. ECDH between his node private key and E_Charlie gives him ss_AC, and he decrypts his slice.",
+  4: "Charlie's slice is handled, and the packet keeps moving with E_Dave still tucked inside.",
   5: "Finally, Dave wraps up the route. ECDH between his node private key and E_Dave gives him ss_AD, and he decrypts his slice. The math all worked, but here's the catch: every packet hauled three pubkeys, and Alice had to babysit three keypairs the entire time.",
 };
 
@@ -578,7 +578,7 @@ export function NaivePacketDiagram() {
                             padding: processed ? 0 : "0 3px",
                           }}
                         >
-                          hop payload for {s.forHop}
+                          slice for {s.forHop}
                         </span>
                         <span
                           className="ml-auto normal-case tracking-normal flex items-center gap-1"
@@ -695,7 +695,7 @@ export function NaivePacketDiagram() {
                     className="text-[10px]"
                     style={{ color: SLATE }}
                   >
-                    (from this hop's hop payload)
+                    (from this hop's slice)
                   </span>
                 </div>
 

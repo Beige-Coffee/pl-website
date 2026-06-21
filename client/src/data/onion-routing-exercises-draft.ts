@@ -141,6 +141,21 @@ def test_keys_match_reference():
     assert out.pad == reference(b"pad", SS), "pad doesn't match HMAC-SHA256(b'pad', ss)"
     assert out.ammag == reference(b"ammag", SS), "ammag doesn't match HMAC-SHA256(b'ammag', ss)"
 
+def test_keys_match_official_bolt4_vector():
+    """Interoperability: BOLT 4's "Returning Errors" trace publishes the um and
+    ammag keys derived from the last hop's shared secret on its official 5-hop
+    route. Pinning these exact bytes catches a swapped-argument KDF that would
+    still pass the recipe-restatement check above (HMAC is not symmetric in its
+    key vs. message, so order matters)."""
+    BOLT4_SS = bytes.fromhex("b5756b9b542727dbafc6765a49488b023a725d631af688fc031217e90770c328")
+    out = derive_keys(BOLT4_SS)
+    assert out.um == bytes.fromhex(
+        "4da7f2923edce6c2d85987d1d9fa6d88023e6c3a9c3d20f07d3b10b61a78d646"
+    ), "um key must match the official BOLT 4 vector: HMAC-SHA256(key=b'um', msg=ss)"
+    assert out.ammag == bytes.fromhex(
+        "2f36bb8822e1f0d04c27b7d8bb7d7dd586e032a3218b8d414afbba6f169a4d68"
+    ), "ammag key must match the official BOLT 4 vector: HMAC-SHA256(key=b'ammag', msg=ss)"
+
 def test_keys_are_distinct():
     """Domain separation: every key should be different from every other key."""
     out = derive_keys(SS)
@@ -603,11 +618,16 @@ def test_fee_checked_before_cltv():
     assert result == "fee_insufficient", f"Fee must be checked before CLTV, got {result!r}"
 
 def test_proportional_only_policy():
-    """A zero base-fee, purely proportional policy still uses floor division."""
-    policy = ForwardingPolicy(fee_base_msat=0, fee_proportional_millionths=2500, cltv_expiry_delta=10)
-    amt = 4_000_000
-    required = 0 + (amt * 2500) // 1_000_000  # == 10_000
-    # Exactly covered -> safe.
+    """A zero base-fee, purely proportional policy must use floor division, not
+    rounding. The amount and ppm here are chosen so the exact product is
+    9,999,998,000 / 1,000,000 = 9999.998: floor gives 9999, while round() or
+    ceil() would give 10000. An implementation that rounds up would wrongly
+    reject the exactly-covered case below."""
+    policy = ForwardingPolicy(fee_base_msat=0, fee_proportional_millionths=2000, cltv_expiry_delta=10)
+    amt = 4_999_999
+    required = 0 + (amt * 2000) // 1_000_000  # 4_999_999 * 2000 // 1_000_000 == 9999
+    assert required == 9999, "floor division of the proportional fee must be 9999"
+    # Exactly covered -> safe (floor=9999; a round/ceil impl would demand 10000 and fail here).
     ok = check_forward(amt + required, OUTGOING_CLTV + 10, amt, OUTGOING_CLTV, policy)
     assert ok is None, f"Exact proportional fee must be accepted, got {ok!r}"
     # One msat short -> fail.
@@ -938,6 +958,12 @@ def test_matches_reference():
     ref_buf, ref_tag = reference_wrap_hop(INIT_BUFFER, PAYLOAD, NEXT_HMAC, RHO, MU, PAYMENT_HASH)
     assert new_buf == ref_buf, "Buffer doesn't match reference"
     assert tag == ref_tag, "HMAC doesn't match reference"
+    # Frozen anchor: pin the exact output for these fixed inputs so a bug shared
+    # by both this function and reference_wrap_hop above can't slip through.
+    EXPECTED_BUFFER_SHA256 = "d39f90dd163bae1b55db12ec67aa00fb5081871ebee50d9750d59ed5ce52d0e5"
+    EXPECTED_TAG_HEX = "d0c6c69969d1dd0a0ca955e105b2acb6506da05d318291aaa6edd0116f3e54b8"
+    assert hashlib.sha256(new_buf).hexdigest() == EXPECTED_BUFFER_SHA256, "Encrypted buffer must match the frozen wrap_hop anchor for these inputs"
+    assert tag.hex() == EXPECTED_TAG_HEX, "HMAC tag must match the frozen wrap_hop anchor for these inputs"
 
 def test_associated_data_changes_hmac_only():
     """Different payment_hash must produce a different HMAC but the same buffer."""
@@ -1332,7 +1358,7 @@ print(f"final filler ({len(filler)} bytes): {filler.hex()}")
 # Test vectors
 RHO_BOB   = bytes.fromhex("01" * 32)
 RHO_CHARLIE = bytes.fromhex("02" * 32)
-RHO_DAVE  = bytes.fromhex("03" * 32)
+RHO_X     = bytes.fromhex("03" * 32)
 
 def test_two_hop_filler_size():
     """For a 3-hop route (Bob, Charlie, Dave), filler covers Bob and Charlie's hop payloads."""
@@ -1356,13 +1382,13 @@ def test_one_hop_filler_size():
 def test_three_hop_filler_size():
     """For a 4-hop route (Bob, Charlie, X, Dave), filler covers three intermediate hops."""
     b = OnionPacketBuilder.__new__(OnionPacketBuilder)
-    out = b.generate_filler([RHO_BOB, RHO_CHARLIE, RHO_DAVE], [60, 70, 50])
+    out = b.generate_filler([RHO_BOB, RHO_CHARLIE, RHO_X], [60, 70, 50])
     assert len(out) == 60 + 70 + 50, f"Filler length must equal the sum of the forwarder hop-payload sizes (180), got {len(out)}"
 
 def test_three_hop_matches_reference():
     b = OnionPacketBuilder.__new__(OnionPacketBuilder)
     sizes = [60, 70, 50]
-    keys = [RHO_BOB, RHO_CHARLIE, RHO_DAVE]
+    keys = [RHO_BOB, RHO_CHARLIE, RHO_X]
     out = b.generate_filler(keys, sizes)
     expected = reference_generate_filler(keys, sizes)
     assert out == expected, "Filler bytes don't match the BOLT 4 reference for three forwarders; check that each iteration XORs the TRAILING len(filler) bytes of the extended keystream"
@@ -1430,7 +1456,7 @@ def test_matches_official_bolt4_filler():
     description:
       "Implement <code>OnionPacketBuilder.derive_shared_secrets</code>. Given Alice's <code>session_key</code> (32 bytes) and the route's hop pubkeys (33-byte compressed each), your task is to build the session secrets and ephemeral public keys for all hops in the route. As you build them, be sure to append them to the two internal lists: <code>self.ephemeral_pubkeys</code> and <code>self.shared_secrets</code>. " +
       "In case it's helpful, a pop-up icon can be found to the left of the 'SEND TO SANDBOX' button, which will show you a visual representation of what you need to complete with this function. " +
-      "Be sure to use the provided helpers: <code>privkey_to_pubkey</code>, <code>ecdh</code>, <code>point_mul_pubkey</code>, <code>scalar_mul</code>.",
+      "Be sure to use the provided helpers: <code>privkey_to_pubkey</code>, <code>ecdh</code>, <code>scalar_mul</code>.",
     starterCode: `    def __init__(self, session_key: bytes, hop_pubkeys: list[bytes]):
         """
         Args:

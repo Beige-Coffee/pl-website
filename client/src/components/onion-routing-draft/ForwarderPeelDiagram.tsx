@@ -6,7 +6,7 @@ import { StepCaption } from "./StepCaption";
 // ────────────────────────────────────────────────────────────────────────────
 // ForwarderPeelDiagram (rebuilt 2026-05-10 for BOLT 4 accuracy)
 //
-// 8-step walkthrough of what a forwarder (Bob) actually does when peeling
+// 7-step walkthrough of what a forwarder (Bob) actually does when peeling
 // an onion. Per BOLT 4 spec: the decryption AND the trailing-byte generation
 // happen in a SINGLE XOR pass over an extended buffer, not in two separate
 // operations. The earlier "decrypt → fill gap with zeros → XOR zeros against
@@ -17,7 +17,7 @@ import { StepCaption } from "./StepCaption";
 //   1. Bob receives the 1,366-byte packet from Alice.
 //   2. Bob derives his per-hop keys (rho_B, mu_B) via ECDH on E_AB.
 //   3. Bob verifies the outer HMAC (green ✓ badge at Bob's node).
-//      4. Bob extends `hop_payloads` with 1,300 zero bytes (1,300 →
+//   4. Bob extends `hop_payloads` with 1,300 zero bytes (1,300 →
 //      2 × ROUTING_INFO_SIZE = 2,600) and generates a matching 2,600-byte
 //      `rho_B` keystream via chacha20(rho_B, 2600). The visual below zooms
 //      in on the meaningful first 1,360 bytes (Bob's 60-byte hop payload +
@@ -28,11 +28,11 @@ import { StepCaption } from "./StepCaption";
 //      bytes → plaintext), (b) peels one encryption layer off the rest of
 //      the buffer, and (c) produces 60 new bytes at the back of the buffer
 //      from `zeros ⊕ rho_B[1,300..1,359]`.
-//   6. Bob slices off his hop payload from the front (60 bytes). Decrypted
-//      callout shows the LEN / TLV / HMAC contents.
-//   7. The remaining 1,300 bytes ARE Charlie's hop_payloads: shifted slot
-//      region + 2-layer padding + the 60 new trailing bytes from the XOR.
-//   8. Bob swaps the envelope (E_AB → E_AC, bob_hmac → charlie_hmac) and
+//   6. Bob slices off his hop payload from the front (60 bytes); the
+//      decrypted callout shows the LEN / TLV / HMAC contents. The remaining
+//      1,300 bytes ARE Charlie's hop_payloads: shifted slot region + 2-layer
+//      padding + the 60 new trailing bytes from the XOR.
+//   7. Bob swaps the envelope (E_AB → E_AC, bob_hmac → charlie_hmac) and
 //      ships to Charlie. Charlie receives, verifies his HMAC, and the
 //      chain continues (green ✓ at Charlie's node).
 //

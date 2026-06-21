@@ -50,7 +50,7 @@ const CAPTIONS: Record<number, string> = {
   0: "So, 292 bytes of opaque encrypted data just came back on the return HTLC. Which hop failed? You don't know yet. You'll find out by trial-decrypting layer by layer, in the same order the hops wrapped on the way back.",
   1: "Iteration `i=0`: try Bob first, since his layer is outermost. XOR with `ammag_B`, then check `HMAC(um_B, peeled[32:])` against `peeled[:32]`. No match. Bob isn't the failing hop, so his `um` can't authenticate this error. Keep peeling...",
   2: "Iteration `i=1`: now try Charlie. XOR with `ammag_C`, then check `HMAC(um_C, peeled[32:])`. It matches. Charlie made this error, and the packet is fully decrypted now, still 292 bytes.",
-  3: "Finally, parse the payload. The first two bytes are a u16 giving `failure_len`, and the next `failure_len` bytes are the failure message itself. Now you know *which* hop failed and why, so you can retry on a different route or surface it to your wallet.",
+  3: "Finally, parse the payload. The leading 32 bytes are the HMAC you just verified. The next two bytes (a u16 at offset 32) give `failure_len`, and the following `failure_len` bytes are the failure message itself. Now you know *which* hop failed and why, so you can retry on a different route or surface it to your wallet.",
 };
 
 // Per-beat StepCaption header label + title (the short verdict that used to sit

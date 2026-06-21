@@ -88,7 +88,7 @@ export function HmacChainDiagram() {
           <div className="text-center text-[11px] italic mt-1" style={{ color: SLATE }}>Hover a packet to isolate its HMAC relationships.</div>
           <StepCaption
             label="HMAC NESTING"
-            title="Each HMAC commits to the layer beneath it"
+            title="Each HMAC commits to its own payload and everything beneath it"
             caption="Each outer HMAC brackets the exact bytes it commits to, and the tag inside one packet is the next packet's outer HMAC, since they're the same value. That nesting is what keeps a malicious hop honest: if a forwarder alters any byte beneath its own layer, the next hop's recomputed HMAC won't match what's in the packet, so the packet gets dropped."
             accentColor="#b8860b"
           />

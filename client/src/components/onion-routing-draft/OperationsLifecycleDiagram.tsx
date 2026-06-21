@@ -21,8 +21,8 @@ import { LAYER_ANGLES, LAYER_COLORS, type ForwarderId } from "./encryptionHatch"
 //   1. Alice initializes the empty buffer.
 //   2. Alice encrypts the forward payload (and attaches the forward MAC).
 //   3. Bob authenticates the forward packet on receipt.
-//   4. Bob encrypts a return error after a downstream failure.
-//   5. Alice authenticates the return error.
+//   4. Bob authenticates a return error after a downstream failure.
+//   5. Bob encrypts the return error.
 //
 // Per the user's framing, the focus is on the *operations*. Keys (rho/mu/etc.)
 // haven't been named yet at this point in the chapter. Operation badges are
@@ -75,8 +75,9 @@ const HOP_PAYLOAD_BYTES: Record<ForwarderId, number> = {
   dave: 100,
 };
 // BigSize LEN prefix shown in the len sub-cell. The length encoded is the
-// TLV-payload size (payload total minus the 33-byte HMAC), so the canonical
-// 60/80/100-byte hop payloads encode size-33 = 27/47/67 = 0x1B/0x2F/0x43.
+// TLV-payload size (payload total minus the 1-byte bigsize prefix and the
+// 32-byte HMAC), so the canonical 60/80/100-byte hop payloads encode
+// size-33 = 27/47/67 = 0x1B/0x2F/0x43.
 const HOP_LEN_BIGSIZE: Record<ForwarderId, string> = {
   bob: "0x1B",
   charlie: "0x2F",
@@ -312,23 +313,23 @@ const STEPS: StepState[] = [
     packetType: "error",
     bytesVisible: true,
     forwardLayersVisible: false,
-    errorLayerVisible: true,
-    hasTag: false,
+    errorLayerVisible: false,
+    hasTag: true,
     verified: false,
     failureNote: true,
     forwardArrow: false,
     returnArrow: false,
     badgeColor: ACCENT_COLOR,
-    badgeLabel: "Encrypt the return error",
+    badgeLabel: "Authenticate the return error",
     caption:
-      "Ouch. Bob can't forward the payment (say his channel to Charlie is out of liquidity for the moment). So he writes a short error with the BOLT 4 failure code `temporary_channel_failure` (`0x1007`) and encrypts it with a different stream cipher.",
+      "Ouch. Bob can't forward the payment (say his channel to Charlie is out of liquidity for the moment). So he writes a short error with the BOLT 4 failure code `temporary_channel_failure` (`0x1007`), then computes a 32-byte authentication tag (`HMAC-SHA256`) over the error packet and prepends it to the front (unlike the forward onion's trailing tag).",
     keyedCaption:
-      "Ouch. Bob can't forward the payment (say his channel to Charlie is out of liquidity for the moment). So he writes a short error with the BOLT 4 failure code `temporary_channel_failure` (`0x1007`) and encrypts it with `ammag`.",
+      "Ouch. Bob can't forward the payment (say his channel to Charlie is out of liquidity for the moment). So he writes a short error with the BOLT 4 failure code `temporary_channel_failure` (`0x1007`), then computes a 32-byte authentication tag over the error packet with `um` and prepends it to the front (unlike the forward onion's trailing tag).",
     activeHop: "bob",
-    focus: "payload",
-    keyName: "ammag",
-    keyToken: "ammag_AB",
-    keyColor: "#5a7a2f",
+    focus: "hmac",
+    keyName: "um",
+    keyToken: "um_AB",
+    keyColor: "#2d7a7a",
   },
   {
     position: "bob",
@@ -342,16 +343,16 @@ const STEPS: StepState[] = [
     forwardArrow: false,
     returnArrow: false,
     badgeColor: ACCENT_COLOR,
-    badgeLabel: "Authenticate the return error",
+    badgeLabel: "Encrypt the return error",
     caption:
-      "Finally, Bob computes a 32-byte authentication tag (`HMAC-SHA256`) over the error packet and tacks it on the back. The error is sealed now, ready to ship back to Alice.",
+      "Finally, Bob encrypts the whole packet (tag included) with a different stream cipher. The error is sealed now, ready to ship back to Alice.",
     keyedCaption:
-      "Finally, Bob computes a 32-byte authentication tag over the error packet with `um` and tacks it on the back. The error is sealed now, ready to ship back to Alice.",
+      "Finally, Bob encrypts the whole packet (tag included) with `ammag`. The error is sealed now, ready to ship back to Alice.",
     activeHop: "bob",
-    focus: "hmac",
-    keyName: "um",
-    keyToken: "um_AB",
-    keyColor: "#2d7a7a",
+    focus: "payload",
+    keyName: "ammag",
+    keyToken: "ammag_AB",
+    keyColor: "#5a7a2f",
   },
 ];
 
@@ -369,8 +370,8 @@ const STEP_MS = 2400;
 // Step 4 has a multi-stage animation (mini-onion ships, exclamation pops up,
 // error packet fades in). Give it more time before auto-advancing.
 const STEP_4_MS = 4200;
-// Step 5 also has a chained animation: HMAC pulls in, then the error packet
-// flies back from Bob to Alice along the wire.
+// Step 5 also has a chained animation: the encryption wash sweeps the buffer,
+// then the error packet flies back from Bob to Alice along the wire.
 const STEP_5_MS = 3800;
 function stepDurationMs(step: number): number {
   if (step === 3) return STEP_4_MS;
@@ -1022,7 +1023,7 @@ function ErrorPayloadContents({ state }: { state: StepState }) {
           section="len"
           className="flex flex-col items-center justify-center"
           style={{
-            width: 28,
+            width: 46,
             flexShrink: 0,
             background: "#fde0e0",
             borderRight: `1px dashed ${ERROR_COLOR}80`,
@@ -1032,15 +1033,15 @@ function ErrorPayloadContents({ state }: { state: StepState }) {
           <div
             style={{
               fontFamily: MONO,
-              fontSize: 7.5,
+              fontSize: 7,
               color: "#475569",
-              letterSpacing: "0.08em",
+              letterSpacing: "0.02em",
               fontWeight: 700,
-              textTransform: "uppercase",
-              lineHeight: 1,
+              lineHeight: 1.1,
+              textAlign: "center",
             }}
           >
-            LEN
+            failure_len (u16)
           </div>
           <div
             style={{
@@ -1052,7 +1053,7 @@ function ErrorPayloadContents({ state }: { state: StepState }) {
               lineHeight: 1,
             }}
           >
-            0x02
+            0x0084
           </div>
         </SlotSubCell>
         <SlotSubCell
@@ -1128,7 +1129,7 @@ function ErrorPayloadContents({ state }: { state: StepState }) {
           }}
         >
           <div style={{ fontSize: 10, fontWeight: 700 }}>padding</div>
-          <div style={{ fontSize: 9 }}>~192 bytes</div>
+          <div style={{ fontSize: 9 }}>~124 bytes</div>
         </div>
       </div>
 

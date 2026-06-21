@@ -6,7 +6,8 @@ import { StepCaption } from "./StepCaption";
 //
 // Three editable expiry blocks (one per HTLC contract) and a "blocks per hop"
 // claim latency. Constraint: each upstream HTLC's expiry must be ≥ the next
-// downstream's. Defaults to all 140 (the broken same-expiry case).
+// downstream's (expiryAB ≥ expiryBC ≥ expiryCD). Defaults to a decreasing
+// 160 / 150 / 140 ladder (the working case, with safe CLTV margins).
 //
 // Step-through animates the preimage moving Dave → Charlie → Bob → Alice. At
 // each step, exactly one contract transitions: claimed (✓) if the claim made
@@ -223,8 +224,8 @@ const TOTAL_STEPS = 5;
 // ────────────────────────────────────────────────────────────────────────────
 
 export function CltvSafetyLab() {
-  const [expiryAB, setExpiryAB] = useState(DEFAULT_EXPIRY);
-  const [expiryBC, setExpiryBC] = useState(DEFAULT_EXPIRY);
+  const [expiryAB, setExpiryAB] = useState(160);
+  const [expiryBC, setExpiryBC] = useState(150);
   const [expiryCD, setExpiryCD] = useState(DEFAULT_EXPIRY);
   const [step, setStep] = useState(0);
 
@@ -261,27 +262,31 @@ export function CltvSafetyLab() {
   function clampExpiry(v: number, min: number) {
     return Math.max(min, Math.min(MAX_EXPIRY, v));
   }
-  // Setters enforce the constraint expiryAB ≤ expiryBC ≤ expiryCD: as you
-  // move left-to-right across the cards, expiries can only go up. Lower
-  // values are clamped to the previous card's value.
+  // Setters enforce the constraint expiryAB ≥ expiryBC ≥ expiryCD: expiries can
+  // only go DOWN as you move left-to-right across the cards. The sender's HTLC
+  // (Alice→Bob) carries the largest expiry, and each downstream card is clamped
+  // to AT MOST its left neighbour's value, so a forwarder always has time to
+  // claim its incoming HTLC after its outgoing one is claimed. AB is the anchor
+  // (floored at MIN_EXPIRY); lowering an upstream expiry pulls the downstream
+  // ones down with it.
   function handleSetExpiryAB(v: number) {
     const next = clampExpiry(v, MIN_EXPIRY);
     setExpiryAB(next);
-    // Cascade upward: BC and CD may need to rise to keep BC ≥ AB and CD ≥ BC.
-    if (expiryBC < next) {
+    // Cascade downward: BC and CD may need to drop to keep BC ≤ AB and CD ≤ BC.
+    if (expiryBC > next) {
       setExpiryBC(next);
-      if (expiryCD < next) setExpiryCD(next);
+      if (expiryCD > next) setExpiryCD(next);
     }
     setStep(0);
   }
   function handleSetExpiryBC(v: number) {
-    const next = clampExpiry(v, expiryAB);
+    const next = Math.min(clampExpiry(v, MIN_EXPIRY), expiryAB);
     setExpiryBC(next);
-    if (expiryCD < next) setExpiryCD(next);
+    if (expiryCD > next) setExpiryCD(next);
     setStep(0);
   }
   function handleSetExpiryCD(v: number) {
-    const next = clampExpiry(v, expiryBC);
+    const next = Math.min(clampExpiry(v, MIN_EXPIRY), expiryBC);
     setExpiryCD(next);
     setStep(0);
   }
@@ -337,6 +342,7 @@ export function CltvSafetyLab() {
             amount={ALICE_TO_BOB}
             expiry={expiryAB}
             minExpiry={MIN_EXPIRY}
+            maxExpiry={MAX_EXPIRY}
             onChange={handleSetExpiryAB}
             status={view.abStatus}
           />
@@ -347,7 +353,8 @@ export function CltvSafetyLab() {
             to="charlie"
             amount={BOB_TO_CHARLIE}
             expiry={expiryBC}
-            minExpiry={expiryAB}
+            minExpiry={MIN_EXPIRY}
+            maxExpiry={expiryAB}
             onChange={handleSetExpiryBC}
             status={view.bcStatus}
           />
@@ -358,7 +365,8 @@ export function CltvSafetyLab() {
             to="dave"
             amount={DAVE_AMOUNT}
             expiry={expiryCD}
-            minExpiry={expiryBC}
+            minExpiry={MIN_EXPIRY}
+            maxExpiry={expiryBC}
             onChange={handleSetExpiryCD}
             status={view.cdStatus}
           />
@@ -555,6 +563,7 @@ function ContractCard({
   amount,
   expiry,
   minExpiry,
+  maxExpiry,
   onChange,
   status,
 }: {
@@ -565,6 +574,7 @@ function ContractCard({
   amount: number;
   expiry: number;
   minExpiry: number;
+  maxExpiry: number;
   onChange: (v: number) => void;
   status: ContractStatus;
 }) {
@@ -649,7 +659,7 @@ function ContractCard({
             <input
               type="number"
               min={minExpiry}
-              max={MAX_EXPIRY}
+              max={maxExpiry}
               value={expiry}
               onChange={(e) => {
                 const n = parseInt(e.target.value, 10);
@@ -667,7 +677,7 @@ function ContractCard({
                 padding: "0 2px",
                 fontSize: 11,
               }}
-              title={`Editable. Must be ≥ ${minExpiry}.`}
+              title={`Editable. Must be between ${minExpiry} and ${maxExpiry}.`}
             />
             :
           </div>

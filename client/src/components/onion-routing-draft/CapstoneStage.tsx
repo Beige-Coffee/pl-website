@@ -26,8 +26,8 @@ const HOP_LABEL: Record<HopId, string> = { alice: "Alice", bob: "Bob", charlie: 
 const ROUTE: HopId[] = ["alice", "bob", "charlie", "dave"];
 // Hop-payload subcell facts: byte count, BigSize LEN prefix (size-33), and the
 // HMAC target ("for <NextHop>"; the destination's HMAC is "none").
-const HOP_BYTES: Record<ForwarderId, number> = { bob: 60, charlie: 80, dave: 100 };
-const HOP_LEN_HEX: Record<ForwarderId, string> = { bob: "0x1B", charlie: "0x2F", dave: "0x43" };
+const HOP_BYTES: Record<ForwarderId, number> = { bob: 59, charlie: 59, dave: 83 };
+const HOP_LEN_HEX: Record<ForwarderId, string> = { bob: "0x1A", charlie: "0x1A", dave: "0x32" };
 const HOP_HMAC_TARGET: Record<ForwarderId, string> = { bob: "for Charlie", charlie: "for Dave", dave: "none" };
 const NODE_X_PCT: Record<HopId, number> = { alice: 12, bob: 38, charlie: 62, dave: 88 };
 

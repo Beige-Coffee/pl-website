@@ -307,8 +307,11 @@ export function NodeKeyAttemptDiagram() {
               style={{ fontFamily: '"JetBrains Mono", "Fira Code", monospace' }}
             >
               <div className="text-[10px] leading-tight px-1 mb-2">
-                <span className="opacity-60">payment_hash:</span>{" "}
+                <span className="opacity-60">assoc_data:</span>{" "}
                 <span className="font-bold">0xa3f1...e9c4</span>
+                <div className="opacity-50 text-[9px] mt-0.5 normal-case tracking-normal">
+                  HTLC payment_hash, committed via HMAC (not carried in the packet)
+                </div>
               </div>
 
               {/* Sender public key field. Alice's static node pubkey. */}

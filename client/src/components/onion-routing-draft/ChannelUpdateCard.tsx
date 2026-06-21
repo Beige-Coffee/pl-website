@@ -1,7 +1,7 @@
 // ────────────────────────────────────────────────────────────────────────────
 // ChannelUpdateCard (DRAFT)
 //
-// Renders a small `channel_update` message box from BOLT 7. Visual: a 140px
+// Renders a small `channel_update` message box from BOLT 7. Visual: a 200px
 // wide cream rectangle with a 1.5px ink border, a JetBrains Mono title strip,
 // and three labeled rows for base_fee / fee_per_millionth / cltv_expiry_delta.
 // Designed to hover above each forwarding segment in ComputedRouteDiagram, so

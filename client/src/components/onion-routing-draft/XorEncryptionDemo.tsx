@@ -29,7 +29,6 @@ const KEYSTREAM = [
 ];
 const TOTAL_BYTES = KEYSTREAM.length;
 
-const SCID_BYTES = [0x00, 0x0a, 0xae, 0x60, 0x00, 0x00, 0x01, 0x00];
 const DEFAULT_SCID = "700000:1:0";
 
 // BOLT 7 short_channel_id: "block:tx:output", encoded as 8 bytes
@@ -63,6 +62,9 @@ function parseSCID(input: string): { bytes: number[] | null; valid: boolean } {
     valid: true,
   };
 }
+// Seed the default encoded bytes straight from DEFAULT_SCID so the literal
+// bytes can never drift from the human-readable scid.
+const SCID_BYTES = parseSCID(DEFAULT_SCID).bytes ?? [];
 const MAX_AMT = 1099511627775;
 const MAX_CLTV = 16777215;
 
@@ -970,7 +972,7 @@ function BobTab(props: {
                   />
                   <DecodedRow
                     typeByte="04"
-                    name="outgoing_cltv"
+                    name="outgoing_cltv_value"
                     value={`${decoded.cltv!.toLocaleString()} block`}
                     tint={REGION_TINT.cltvTlv}
                     border={REGION_BORDER.cltvTlv}

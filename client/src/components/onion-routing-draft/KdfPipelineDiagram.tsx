@@ -579,8 +579,9 @@ function OnionPacketDemo({
   // What state does the packet start/end in for each key?
   // - rho: bytes already in payload (from pad). Hatches sweep in. HMAC empty.
   // - mu: bytes + 3 hatches already there. HMAC tag fills in.
-  // - ammag: error packet bytes appear. Red hatch sweeps in. HMAC empty.
-  // - um: error bytes + red hatch already there. HMAC tag fills in.
+  // - um: error packet bytes appear (no red hatch yet). HMAC tag fills in over
+  //   the un-encrypted error (MAC-then-encrypt: um runs before ammag).
+  // - ammag: error bytes + tag already there. Red hatch sweeps in over them.
   // - pad: empty payload. Bytes fill in left to right. HMAC absent.
 
   return (
@@ -649,18 +650,17 @@ function DemoPacket({
 
   const accentColor = spec.color;
 
-  // Hatches state per key
+  // Hatches state per key (MAC-then-encrypt: um runs before ammag)
   // - rho: 3 hatches sweep in
   // - mu: 3 hatches already visible at start (rho's done)
-  // - ammag: 1 red hatch sweeps in
-  // - um: 1 red hatch already visible (ammag's done)
+  // - um: no red hatch yet (HMAC is taken over the un-encrypted error)
+  // - ammag: 1 red hatch sweeps in (over the already-tagged error)
   // - pad: no hatches at all
   const hatchSweep = keyName === "rho" || keyName === "ammag";
   const hatchesVisible =
     keyName === "rho" ||
     keyName === "mu" ||
-    keyName === "ammag" ||
-    keyName === "um";
+    keyName === "ammag";
 
   // Bytes state
   // - rho/mu: bytes visible immediately
@@ -991,7 +991,7 @@ function DemoLegend({ keyName, spec }: { keyName: KeyName; spec: KeySpec }) {
       text = "Bob (or any failing hop) wraps the error message with a ChaCha20 keystream derived from ammag. Watch the red encryption layer sweep in.";
       break;
     case "um":
-      text = "Bob runs HMAC-SHA256 with um over the encrypted error to produce the return-trip tag. Watch the tag fill in.";
+      text = "Bob runs HMAC-SHA256 with um over the error message (before the ammag layer is applied) to produce the return-trip tag. Watch the tag fill in.";
       break;
     case "pad":
       text = "Before any onion layers are applied, Alice pre-fills the 1,300-byte payload area with a ChaCha20 keystream derived from her session key. Watch the buffer fill from the left.";

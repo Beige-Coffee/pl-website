@@ -300,7 +300,7 @@ export function buildSceneTimeline(trace: CapstoneTraceResult): SceneTimeline {
       mode = "build";
       open({
         key: "chain-done", title: "Chain complete",
-        caption: "Three shared secrets from one session key. Each forwarder will re-derive its own secret from the single ephemeral key in the packet header.",
+        caption: "Three shared secrets from one session key. Each forwarder will re-derive its own secret from the ephemeral key in its own header, a different blinded E at each hop (E_AB at Bob, E_AC at Charlie, E_AD at Dave).",
         stage: { ...chainState(3), chain: FWD.map((hop) => ({ hop, state: "done" as const })) },
         pinned: [{ name: "secrets", value: "ss_AB · ss_AC · ss_AD" }], pinLocals: PIN_LOCALS.chain,
       });
