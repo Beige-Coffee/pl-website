@@ -587,7 +587,7 @@ export function RouteCalcExercise({
             <CalcRow label="HTLC Timeout">
               <FillableTimeoutCard
                 label="HTLC Timeout (Alice → Bob)"
-                expression="150 + 18 + 15 + 20"
+                expression="150 + 18 + 15 + 40"
                 cell={toAB}
                 expected={EXPECTED.timeoutAliceBob}
                 rowComplete={rowToAB}
