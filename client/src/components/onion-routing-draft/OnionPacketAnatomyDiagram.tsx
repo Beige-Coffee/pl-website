@@ -480,7 +480,7 @@ export function OnionPacketAnatomyDiagram() {
       </div>
 
       {/* Stage */}
-      <div className="bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-5">
+      <div className="bg-[#fefdfb] px-4 py-5">
         <div className="overflow-x-auto">
           <div className="mx-auto" style={{ minWidth: 720, maxWidth: 880 }}>
             <div

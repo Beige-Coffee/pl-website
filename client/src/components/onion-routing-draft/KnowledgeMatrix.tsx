@@ -302,7 +302,7 @@ export function KnowledgeMatrix({
       </div>
 
       {/* Stage */}
-      <div className="p-4 bg-[#fefdfb] dark:bg-[#0b1220]">
+      <div className="p-4 bg-[#fefdfb]">
         <p
           className="text-sm mb-3"
           style={{ color: SLATE, lineHeight: 1.55 }}

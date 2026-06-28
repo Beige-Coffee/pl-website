@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useReadableInDark } from "./useReadableInDark";
 import {
   ComputedRouteDiagram,
   type ComputedRouteDiagramProps,
@@ -151,8 +152,10 @@ function TabButton({ label, active, onClick }: TabButtonProps) {
 export function RouteComparisonDiagram() {
   const [tab, setTab] = useState<Tab>("a");
 
+  const rootRef = useReadableInDark();
   return (
     <div
+      ref={rootRef}
       className="my-8 border-[1.5px] border-foreground/40 bg-card overflow-hidden"
       data-testid="route-comparison-diagram"
       style={{ fontFamily: "ui-sans-serif, system-ui, sans-serif" }}

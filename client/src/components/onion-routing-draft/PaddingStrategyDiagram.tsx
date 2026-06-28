@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Tok } from "./mathTokens";
 import { SlotSubCell } from "./SlotSubCell";
-import { HatchOverlay, LAYER_ANGLES, LAYER_COLORS } from "./encryptionHatch";
+import { HatchOverlay } from "./encryptionHatch";
 import { StepCaption } from "./StepCaption";
 import { MorphBox, MORPH_TRANSITION } from "./morph";
 
@@ -196,7 +196,7 @@ export function PaddingStrategyDiagram() {
       </div>
 
       {/* Stage */}
-      <div className="relative bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-6" style={{ minHeight: 340 }}>
+      <div className="relative bg-[#fefdfb] px-4 py-6" style={{ minHeight: 340 }}>
         <div className="overflow-x-auto">
           <div className="mx-auto" style={{ minWidth: 620, maxWidth: 760 }}>
             <HopTrack state={state} />
@@ -287,9 +287,7 @@ function TravelingPacket({ state }: { state: StepState }) {
       <div className="border-[1.5px] flex" style={{ width: 110, height: 24, background: "#fffdf5", borderColor: INK, overflow: "hidden", boxShadow: "0 2px 6px rgba(15,23,42,0.18)" }}>
         <div style={{ flexBasis: 16, flexShrink: 0, background: `${tintColor}24`, borderRight: "1.5px solid #0f172a", transition: "background 600ms ease-out" }} />
         <div className="relative" style={{ flex: 1, overflow: "hidden", minWidth: 0 }}>
-          {state.hopPayloads.map((hop) => (
-            <div key={hop} className="absolute inset-0" style={{ backgroundImage: `repeating-linear-gradient(${LAYER_ANGLES[hop]}deg, ${LAYER_COLORS[hop]} 0px, ${LAYER_COLORS[hop]} 2.5px, transparent 2.5px, transparent 11px)` }} />
-          ))}
+          {state.hopPayloads.length > 0 && <HatchOverlay hops={state.hopPayloads} zIndex={0} />}
           {gapColor && <div className="absolute" style={{ top: 0, bottom: 0, right: 0, width: "20%", background: gapColor, borderLeft: "1.5px solid #0f172a" }} />}
         </div>
         <div style={{ flexBasis: 14, flexShrink: 0, background: `${tintColor}24`, borderLeft: "1.5px solid #0f172a" }} />

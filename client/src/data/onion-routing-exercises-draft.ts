@@ -234,7 +234,7 @@ def test_different_secrets_produce_different_keys():
     title: "Decrypt the Error Onion (Sender Side)",
     description:
       "Implement <code>decrypt_error_onion</code>. Given the wrapped error packet and a chain of <code>(um, ammag)</code> per-hop keys in route order, peel layers one at a time, identify which hop generated the error, and parse the BOLT 4 length-prefixed payload to recover the <code>failure_message</code>. " +
-      "One important detail: error packets are not all the same size. The sender pads <code>failuremsg + pad</code> to a fixed total so the packet size can't leak which error occurred. The spec minimum is 256 bytes (a 292-byte packet, which this chapter's example uses), but bigger failure messages get padded to a bigger total; the spec's own test vector pads to 1,024 (a 1,060-byte packet). Your function reads the lengths from the packet itself, so it handles both.",
+      "One important detail: error packets are not all the same size. The sender pads <code>failuremsg + pad</code> to a fixed total so the packet size can't leak which error occurred. The spec minimum is 256 bytes (a 292-byte packet, which this chapter's example uses), but bigger failure messages get padded to a bigger total. (A historical BOLT 4 test vector padded a larger message to 1,024, a 1,060-byte packet; current master publishes a 292-byte vector.) Your function reads the lengths from the packet itself, so it handles both.",
     sampleCode: `# Error-onion sandbox - build one layer, then peel it back off.
 #
 # The failing hop builds: hmac(32) || u16 failure_len || failure_msg ||
@@ -434,7 +434,7 @@ def test_official_bolt4_error_vector():
         "<strong>Goal:</strong> Alice's view of the return path. She has all the (um, ammag) keys; she just doesn't know which layer the failing hop wrapped with. Solution: try each layer in order until one's HMAC verifies, then parse the length prefix to recover the message." +
         "<br><br><strong>Order:</strong> peel from outermost to innermost, which is hop 0, hop 1, hop 2 (the first forwarder is the outermost wrapper because their wrap was applied most recently during the return trip)." +
         "<br><br><strong>Why parse the u16 length:</strong> failure messages can contain zero bytes (e.g., binary <code>channel_update</code> data attached to <code>temporary_channel_failure</code>). Stripping trailing zeros would corrupt those messages. The explicit u16 failure_len at the front of the decrypted payload tells us the exact byte boundary." +
-        "<br><br><strong>Why <code>len(wrapped_error)</code> instead of a constant:</strong> the sender pads <code>failuremsg + pad</code> to a fixed total so the size can't leak which error occurred, but that total is not always 256. Our worked example uses the 256-byte minimum (a 292-byte packet); the spec's own test vector pads a bigger message to 1,024 (a 1,060-byte packet). The structure is self-describing, so a decryptor that reads the lengths from the packet handles every size a real node might send." +
+        "<br><br><strong>Why <code>len(wrapped_error)</code> instead of a constant:</strong> the sender pads <code>failuremsg + pad</code> to a fixed total so the size can't leak which error occurred, but that total is not always 256. Our worked example uses the 256-byte minimum (a 292-byte packet); a historical BOLT 4 test vector padded a bigger message to 1,024 (a 1,060-byte packet), and that legacy vector is still hardcoded in our test fixture for interop. The structure is self-describing, so a decryptor that reads the lengths from the packet handles every size a real node might send." +
         "<br><br><strong>Why validate after the HMAC matches:</strong> the HMAC proves which hop authored the bytes, not that the bytes are well-formed. The two length fields must exactly tile the payload (<code>2 + failure_len + 2 + pad_len == len(payload)</code>); anything else is malformed and should be treated as a non-match.",
       steps:
         "<strong>Set up the working buffer.</strong> Start it at the received error packet; the loop below peels each layer off it in place, reassigning <code>wrapped</code> every pass:" +
@@ -460,7 +460,7 @@ def test_official_bolt4_error_vector():
         wrapped = xor_bytes(wrapped, chacha20_keystream(ammag, len(wrapped)))
         tag = wrapped[:32]
         payload = wrapped[32:]
-        if hmac.new(um, payload, hashlib.sha256).digest() == tag:
+        if hmac.compare_digest(hmac.new(um, payload, hashlib.sha256).digest(), tag):
             failure_len = int.from_bytes(payload[0:2], "big")
             if 2 + failure_len + 2 > len(payload):
                 continue
@@ -793,8 +793,8 @@ def test_proportional_only_policy():
     title: "Peel a Single Layer",
     description:
       "Implement <code>OnionForwarder.peel_layer</code>. Given a 1366-byte BOLT 4 onion packet and the forwarder's 32-byte node private key, return <code>(next_packet, payload_bytes, shared_secret)</code>. " +
-      "Note that hop payloads are bigsize-length-prefixed (as in BOLT 4), and you can use <code>parse_bigsize</code> to read the length. " +
-      "<b>For this exercise, we'll skip HMAC validation</b>, as it will be explored in more depth in the next chapter. Instead, this exercise will focus on the ECDH, the keystream-extended XOR, hop payload extraction, and ephemeral pubkey advancement.",
+      "Hop payloads are bigsize-length-prefixed (as in BOLT 4); use <code>parse_bigsize</code> to read the length. " +
+      "HMAC validation is skipped here (it is covered in chapter 10). This function covers the ECDH, the keystream-extended XOR, hop payload extraction, and ephemeral pubkey advancement.",
     sampleCode: `# Peel sandbox - run the building blocks of one hop in isolation.
 #
 # Peeling is: ECDH to recover ss -> derive rho -> XOR-decrypt the 1300-byte
@@ -982,8 +982,11 @@ def test_peels_the_official_bolt4_onion():
 `,
     hints: {
       conceptual:
-        "<strong>Goal:</strong> reverse the wrap_hop operation. Take a packet, derive the keys this hop needs, decrypt the buffer with an extended keystream, lift this hop's hop payload, and produce the packet to forward." +
-        "<br><br><strong>Why the extended keystream:</strong> when this hop strips its hop payload off the front and shifts the inner contents forward, the trailing positions must contain the extension of this hop's rho<sub>i</sub> keystream. That's exactly what was XORed into the corresponding filler bytes during construction. By generating 2x the routing info size, we cover both the decrypted hop_payloads AND the keystream-extension that fills the gap.",
+        "<strong>Goal:</strong> <code>peel_layer</code> is the inverse of <code>wrap_hop</code>. Take a 1366-byte packet, recover the key this hop shares with Alice, decrypt the routing region, read this hop's own hop payload off the front, and produce a fresh 1366-byte packet for the next hop, never changing its size. It returns <code>(next_packet, payload_bytes, shared_secret)</code>; the shared secret is handed back because the error path (chapter 11) needs it later." +
+        "<br><br><strong>Deriving this hop's key:</strong> the packet's leading 33 bytes are Alice's ephemeral pubkey for this hop. Run <code>ecdh</code> between this node's private key and that ephemeral key (then SHA256) to recover the same shared secret Alice used, and derive <code>rho</code> from it, the key that decrypts the routing region. Authenticating with <code>mu</code> is chapter 10's job, so <code>peel_layer</code> skips it." +
+        "<br><br><strong>Why the extended keystream:</strong> when this hop strips its hop payload off the front and shifts the inner contents forward, the trailing positions must contain the extension of this hop's rho<sub>i</sub> keystream. That's exactly what was XORed into the corresponding filler bytes during construction. Generating 2x the routing info size covers both the decrypted <code>hop_payloads</code> AND the keystream-extension that fills the gap." +
+        "<br><br><strong>What to read, and what to forward:</strong> after decrypting, the front holds this hop's hop payload (a bigsize length prefix, the TLV, then a 32-byte HMAC that authenticates the next hop's view). Lift the payload, take the next hop's 1,300-byte <code>hop_payloads</code>, and reassemble: version, the next ephemeral key, the next <code>hop_payloads</code>, and the next HMAC. An all-zero next HMAC means this hop is the destination." +
+        "<br><br><strong>Advancing the ephemeral key:</strong> each hop sees a different ephemeral key (Alice blinds it per hop so the packet can't be correlated). Compute the next one by blinding the current key with <code>SHA256(E_i || ss_i)</code>, so the downstream hop's ECDH lands on its own shared secret.",
       steps:
         "<em>Step numbers match chapter 9's walkthrough. Step 3 (HMAC verification) is chapter 10's exercise, so it's skipped here.</em>" +
         "<br><br><strong>1. Parse the packet:</strong>" +
@@ -1573,15 +1576,24 @@ print(f"final filler ({len(filler)} bytes): {filler.hex()}")
         # TODO: implement
         pass
 `,
-    testCode: `def reference_generate_filler(rho_keys, payload_sizes):
-    """Reference per BOLT 4 'Filler Generation'."""
-    filler = b""
-    for i in range(len(rho_keys)):
-        filler = filler + b"\\x00" * payload_sizes[i]
-        stream = chacha20_keystream(rho_keys[i], ROUTING_INFO_SIZE + payload_sizes[i])
-        chunk = stream[ROUTING_INFO_SIZE + payload_sizes[i] - len(filler):]
-        filler = xor_bytes(filler, chunk)
-    return filler
+    testCode: `# Frozen expected filler bytes for the fixed test vectors below. These were
+# computed once from the BOLT 4 'Filler Generation' algorithm and pasted here
+# so the tests pin a concrete value the student's code must reproduce, rather
+# than re-running the same algorithm in-test (which would pass any code that
+# matched a reference written the same wrong way).
+EXPECTED_TWO_HOP_FILLER = bytes.fromhex(
+    "aef669a9212bdaa64d12ed55a931699fdc37b2d54b475b49c9232493a33d83b8"
+    "c27af27fcb49ffe8cd968084b928ec5d56dcf0a885ef723b506322e3ece68121"
+    "1a2b35527ba67e16faf9508dc25fdbac88de7ba37bf028e3a8a91c9b48e1b560"
+    "4c93e03c155f9c8a0993446e1ec4c1d54d9fdeeff4217b94e1a4c0d66cda501e"
+    "c993")
+EXPECTED_THREE_HOP_FILLER = bytes.fromhex(
+    "71a2ef6775e71886ec2c223c52299554abc5c73583f5f105edae630df6e2b7ce"
+    "6a95079790786065da31cd3d73ca1d0518311d953372ad1726817204a57580a4"
+    "7bd55de6e86be8a13a805e8a0bbb258b823c7ca3fc03e13eb260daeba6aec597"
+    "a07df0d284112a26e67a48709f2c49c289a5d5c7d1d2c304993987dfadfe8cb6"
+    "d46de33e6e0169116cc6d859b1163839399ae3a0d74523d5497aaab2448d3924"
+    "d919556c7e1bf56e041d7f93652a11dd8c2e3b73")
 
 # Test vectors
 RHO_BOB   = bytes.fromhex("01" * 32)
@@ -1598,8 +1610,7 @@ def test_two_hop_filler_size():
 def test_two_hop_matches_reference():
     b = OnionPacketBuilder.__new__(OnionPacketBuilder)
     out = b.generate_filler([RHO_BOB, RHO_CHARLIE], [65, 65])
-    expected = reference_generate_filler([RHO_BOB, RHO_CHARLIE], [65, 65])
-    assert out == expected, "Filler bytes don't match the BOLT 4 reference"
+    assert out == EXPECTED_TWO_HOP_FILLER, "Filler bytes don't match the BOLT 4 reference"
 
 def test_one_hop_filler_size():
     """For a 2-hop route (Bob, Dave), filler covers only Bob."""
@@ -1618,8 +1629,7 @@ def test_three_hop_matches_reference():
     sizes = [60, 70, 50]
     keys = [RHO_BOB, RHO_CHARLIE, RHO_X]
     out = b.generate_filler(keys, sizes)
-    expected = reference_generate_filler(keys, sizes)
-    assert out == expected, "Filler bytes don't match the BOLT 4 reference for three forwarders; check that each iteration XORs the TRAILING len(filler) bytes of the extended keystream"
+    assert out == EXPECTED_THREE_HOP_FILLER, "Filler bytes don't match the BOLT 4 reference for three forwarders; check that each iteration XORs the TRAILING len(filler) bytes of the extended keystream"
 
 def test_empty_rho_keys_returns_empty():
     """A single-hop route (just the destination) has no filler."""
@@ -1683,9 +1693,9 @@ def test_matches_official_bolt4_filler():
     id: "exercise-derive-shared-secrets-draft",
     title: "Derive the Shared-Secret Chain",
     description:
-      "Implement <code>OnionPacketBuilder.derive_shared_secrets</code>. Given Alice's <code>session_key</code> (32 bytes) and the route's hop pubkeys (33-byte compressed each), your task is to build the session secrets and ephemeral public keys for all hops in the route. As you build them, be sure to append them to the two internal lists: <code>self.ephemeral_pubkeys</code> and <code>self.shared_secrets</code>. " +
-      "In case it's helpful, a pop-up icon can be found to the left of the 'SEND TO SANDBOX' button, which will show you a visual representation of what you need to complete with this function. " +
-      "Be sure to use the provided helpers: <code>privkey_to_pubkey</code>, <code>ecdh</code>, <code>scalar_mul</code>.",
+      "Implement <code>OnionPacketBuilder.derive_shared_secrets</code>. Given Alice's <code>session_key</code> (32 bytes) and the route's hop pubkeys (33-byte compressed each), build the session secrets and ephemeral public keys for every hop in the route, appending each to <code>self.ephemeral_pubkeys</code> and <code>self.shared_secrets</code>. " +
+      "The provided helpers are <code>privkey_to_pubkey</code>, <code>ecdh</code>, and <code>scalar_mul</code>. " +
+      "A pop-up icon beside the SEND TO SANDBOX button shows a visual of what this function builds.",
     sampleCode: `# Blinding-chain sandbox - walk the shared-secret chain by hand for 3 hops.
 #
 # One session key, advanced at each hop by a blinding factor b = SHA256(E || ss).
@@ -1735,7 +1745,6 @@ for i, hop_pub in enumerate(hop_pubkeys):
         Helpers available in scope:
           privkey_to_pubkey(privkey: bytes) -> bytes        # 32 -> 33
           ecdh(privkey: bytes, pubkey: bytes) -> bytes       # 32, 33 -> 32
-          point_mul_pubkey(pubkey: bytes, scalar: bytes) -> bytes   # 33, 32 -> 33
           scalar_mul(a: bytes, b: bytes) -> bytes            # 32, 32 -> 32 mod n
         """
         # TODO: implement
@@ -1755,19 +1764,21 @@ DAVE_PUB  = privkey_to_pubkey(DAVE_PRIV)
 HOP_PUBKEYS = [BOB_PUB, CHARLIE_PUB, DAVE_PUB]
 HOP_PRIVKEYS = [BOB_PRIV, CHARLIE_PRIV, DAVE_PRIV]
 
-def reference_chain(session_key, hop_pubkeys):
-    """Reference implementation used to cross-check the student's output."""
-    ss_list = []
-    ek_list = []
-    e = session_key
-    for pub in hop_pubkeys:
-        E = privkey_to_pubkey(e)
-        ss = ecdh(e, pub)
-        b = hashlib.sha256(E + ss).digest()
-        ss_list.append(ss)
-        ek_list.append(E)
-        e = scalar_mul(e, b)
-    return ss_list, ek_list
+# Frozen expected chain for the (SESSION_KEY, HOP_PUBKEYS) test vector above.
+# These were computed once from the blinding-chain algorithm and pasted here so
+# the test pins concrete bytes the student's code must reproduce, rather than
+# re-deriving the chain in-test (which would pass any code matching a reference
+# written the same wrong way).
+EXPECTED_SHARED_SECRETS = [
+    bytes.fromhex("04be53badd90d3c264965fe1f1857a06c0ab5e2f3092eeb36ebc12815a8e6fb4"),
+    bytes.fromhex("45dea8dfe6164f6042376a55c535fe84a48c0b04edd986af5278c6b13ef19756"),
+    bytes.fromhex("129e59695369b891e123a993b739242cf652c497b93e592f590783a0a576df7b"),
+]
+EXPECTED_EPHEMERAL_PUBKEYS = [
+    bytes.fromhex("02eec7245d6b7d2ccb30380bfbe2a3648cd7a942653f5aa340edcea1f283686619"),
+    bytes.fromhex("03b4cd0c5b3fc8d8ebaa75fa95fd3c9014fe66d311efe569fe27ee44c2443926c7"),
+    bytes.fromhex("0234f3455d01f828d2ecd685826384201db459663d62b44b845aec9d612032d28f"),
+]
 
 def test_returns_three_pairs():
     b = OnionPacketBuilder(SESSION_KEY, HOP_PUBKEYS)
@@ -1789,9 +1800,8 @@ def test_first_ephemeral_is_session_pubkey():
 def test_matches_reference_chain():
     b = OnionPacketBuilder(SESSION_KEY, HOP_PUBKEYS)
     b.derive_shared_secrets()
-    ref_ss, ref_ek = reference_chain(SESSION_KEY, HOP_PUBKEYS)
-    assert b.shared_secrets == ref_ss, "Shared secret chain doesn't match reference"
-    assert b.ephemeral_pubkeys == ref_ek, "Ephemeral pubkey chain doesn't match reference"
+    assert b.shared_secrets == EXPECTED_SHARED_SECRETS, "Shared secret chain doesn't match reference"
+    assert b.ephemeral_pubkeys == EXPECTED_EPHEMERAL_PUBKEYS, "Ephemeral pubkey chain doesn't match reference"
 
 def test_hops_can_recover_same_shared_secrets():
     """Each hop derives the same ss using its own privkey + the ephemeral pubkey."""

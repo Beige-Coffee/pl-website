@@ -30,6 +30,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { MathLine } from "./mathTokens";
+import { forceReadable } from "./useReadableInDark";
 
 const MONO = '"JetBrains Mono", "Fira Code", monospace';
 const SANS = "ui-sans-serif, system-ui, sans-serif";
@@ -269,6 +270,13 @@ export function KeyHoverIcon(
   }
 
   const visible = shown || pinned;
+
+  // The popover renders inside `.noise-md-dark`, whose cascade greys its formula
+  // and title text in dark mode (the card itself stays cream). Re-assert readable
+  // colors each time it is shown so the derivation stays legible.
+  useEffect(() => {
+    if (visible) forceReadable(popRef.current);
+  }, [visible]);
 
   // Dismiss a pinned popover on an outside click, on scroll (it is position:
   // fixed and can't track its anchor), or on Escape. Without this the popover

@@ -80,12 +80,12 @@ const SLICES: Slice[] = [
 const TOTAL_STEPS = 6;
 
 const STEP_CAPTIONS: Record<number, string> = {
-  0: "So, Alice's payment message carries a stack of per-hop slices, all in plaintext. She'll hand the whole stack to Bob, and each forwarder will peel off its own slice before passing the rest along. Let's watch what happens...",
-  1: "Now the message lands at Bob. He reads the front slice: forward 10,002 sat to Charlie at CLTV 220. But notice Charlie's and Dave's slices are still sitting in plaintext underneath, so Bob *already* sees the final amount, the payment hash, and that Dave is where this is headed.",
-  2: "Bob peels his slice off and forwards just Charlie's and Dave's slices onward. The slice is off the wire now, but the damage is done. Bob saw every downstream field while the message passed through him.",
-  3: "Next, Charlie reads his slice: forward 10,000 sat to Dave at CLTV 180. And just like Bob, he can read Dave's slice underneath, so the final amount and payment hash are sitting right there for him too.",
-  4: "Charlie peels his slice off and sends Dave's slice on alone. Each forwarder took its own slice before passing the rest along.",
-  5: "Finally, Dave reads the last slice and accepts the HTLC. Payment delivered! But here's the catch: every hop saw every downstream slice on the way through, so Bob learned the whole route. That's the privacy problem we'll spend this course fixing.",
+  0: "So, Alice's payment message carries a stack of per-hop payloads, all in plaintext. She'll hand the whole stack to Bob, and each forwarder will peel off its own hop payload before passing the rest along. Let's watch what happens...",
+  1: "Now the message lands at Bob. He reads the front hop payload: forward 10,002 sat to Charlie at CLTV 220. But notice Charlie's and Dave's hop payloads are still sitting in plaintext underneath, so Bob *already* sees the final amount, the payment hash, and that Dave is where this is headed.",
+  2: "Bob peels his hop payload off and forwards just Charlie's and Dave's hop payloads onward. The hop payload is off the wire now, but the damage is done. Bob saw every downstream field while the message passed through him.",
+  3: "Next, Charlie reads his hop payload: forward 10,000 sat to Dave at CLTV 180. And just like Bob, he can read Dave's hop payload underneath, so the final amount and payment hash are sitting right there for him too.",
+  4: "Charlie peels his hop payload off and sends Dave's hop payload on alone. Each forwarder took its own hop payload before passing the rest along.",
+  5: "Finally, Dave reads the last hop payload and accepts the HTLC. Payment delivered! But here's the catch: every hop saw every downstream hop payload on the way through, so Bob learned the whole route. That's the privacy problem we'll spend this course fixing.",
 };
 
 function activeHopAt(step: number): HopId {
@@ -139,7 +139,7 @@ function seenByAt(forHop: "bob" | "charlie" | "dave", step: number): string[] {
 function seenPayloadDescription(hop: HopId, step: number): string {
   if (hop === "alice") {
     // Alice assembled every slice herself.
-    return "Alice assembled the entire payload herself, so she knows every slice and the whole route.";
+    return "Alice assembled the entire payload herself, so she knows every hop payload and the whole route.";
   }
   // Which downstream slices did this hop read while it was on the wire?
   const sawOwn = seenByAt(
@@ -151,16 +151,16 @@ function seenPayloadDescription(hop: HopId, step: number): string {
     seenByAt(forHop, step).includes(hop),
   );
   const others = seenSlices.filter((forHop) => forHop !== hop);
-  const ownLabel = sawOwn ? `his own slice` : "";
+  const ownLabel = sawOwn ? `his own hop payload` : "";
   const otherLabels = others.map((h) => `${h[0].toUpperCase()}${h.slice(1)}'s`);
 
   // Bob processed the message while all three slices were still in the stack,
   // so he saw the entire payload. Charlie/Dave read only what remained.
   if (hop === "bob") {
-    return "Bob saw the entire payload (his own slice plus Charlie's and Dave's) while the message passed through, so he learned the final amount, the payment hash, and that Dave is the destination.";
+    return "Bob saw the entire payload (his own hop payload plus Charlie's and Dave's) while the message passed through, so he learned the final amount, the payment hash, and that Dave is the destination.";
   }
   if (otherLabels.length === 0) {
-    return `${hop[0].toUpperCase()}${hop.slice(1)} read only his own slice; the earlier hops' slices were already peeled off before the message reached him.`;
+    return `${hop[0].toUpperCase()}${hop.slice(1)} read only his own hop payload; the earlier hops' hop payloads were already peeled off before the message reached him.`;
   }
   const parts = [ownLabel, ...otherLabels].filter(Boolean);
   const joined =
@@ -168,7 +168,7 @@ function seenPayloadDescription(hop: HopId, step: number): string {
       ? `${parts.slice(0, -1).join(", ")} plus ${parts[parts.length - 1]}`
       : parts[0];
   const cap = `${hop[0].toUpperCase()}${hop.slice(1)}`;
-  return `${cap} saw the rest of the payload (${joined}), not the slices that earlier hops had already peeled off.`;
+  return `${cap} saw the rest of the payload (${joined}), not the hop payloads that earlier hops had already peeled off.`;
 }
 
 // Layout: the 4 nodes sit horizontally. The message anchors to the active hop.
@@ -237,7 +237,7 @@ export function PlaintextMessageTear() {
       </div>
 
       {/* Stage */}
-      <div ref={stageRef} className="relative bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-6" style={{ minHeight: 440 }}>
+      <div ref={stageRef} className="relative bg-[#fefdfb] px-4 py-6" style={{ minHeight: 440 }}>
         {/* Hop track */}
         <div className="relative" style={{ height: 88 }}>
           {/* Backbone dashes, HTML divs aligned to the vertical center of the
@@ -397,7 +397,7 @@ export function PlaintextMessageTear() {
                   }}
                 >
                   <div className="text-[9px] uppercase tracking-wider opacity-60 mb-0.5 flex items-center gap-1.5">
-                    <span>slice for {s.forHop}</span>
+                    <span>hop payload for {s.forHop}</span>
                     {seenBy.length > 0 && (
                       <span className="ml-auto inline-flex items-center gap-1 text-[#5a7a2f] normal-case tracking-normal">
                         ✓ seen by {seenBy.join(", ")}

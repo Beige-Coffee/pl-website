@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { Tooltip } from "./Tooltip";
 import { HatchOverlay } from "./encryptionHatch";
 import { StepCaption } from "./StepCaption";
+import { useReadableInDark } from "./useReadableInDark";
 
 // ────────────────────────────────────────────────────────────────────────────
 // EncryptedSliceReveal (DRAFT)
@@ -102,12 +103,12 @@ const SLICES: Slice[] = [
 const TOTAL_STEPS = 6;
 
 const STEP_CAPTIONS: Record<number, string> = {
-  0: "So, Alice locks each per-hop slice with that hop's own public key. The slices still ride along in the message, but they're sealed, and only the matching private key can open one. Without it, a slice is just *noise*.",
-  1: "The message reaches Bob. He tries his private key against the whole stack, and only his slice opens. Charlie's and Dave's are sitting right there, but Bob can't read them. Different keys, different locks.",
-  2: "Now Bob peels off his slice and passes Charlie's and Dave's sealed slices along. Did Bob learn anything about Dave or the final amount? Nope. Those slices stayed shut while they rode through him.",
-  3: "Charlie tries his private key. His slice opens, Dave's stays sealed. So Charlie still has no idea who the destination is or what they'll get.",
-  4: "Then Charlie peels off his slice and sends Dave's sealed slice on by itself. Each forwarder only ever opened what its own private key could.",
-  5: "Finally, Dave opens the last slice with his private key and accepts the HTLC. Nice. Bob never saw past himself, Charlie never saw past himself, and only Dave learned the *final* details.",
+  0: "So, Alice locks each per-hop payload with that hop's own public key. The hop payloads still ride along in the message, but they're sealed, and only the matching private key can open one. Without it, a hop payload is just *noise*.",
+  1: "The message reaches Bob. He tries his private key against the whole stack, and only his hop payload opens. Charlie's and Dave's are sitting right there, but Bob can't read them. Different keys, different locks.",
+  2: "Now Bob peels off his hop payload and passes Charlie's and Dave's sealed hop payloads along. Did Bob learn anything about Dave or the final amount? Nope. Those hop payloads stayed shut while they rode through him.",
+  3: "Charlie tries his private key. His hop payload opens, Dave's stays sealed. So Charlie still has no idea who the destination is or what they'll get.",
+  4: "Then Charlie peels off his hop payload and sends Dave's sealed hop payload on by itself. Each forwarder only ever opened what its own private key could.",
+  5: "Finally, Dave opens the last hop payload with his private key and accepts the HTLC. Nice. Bob never saw past himself, Charlie never saw past himself, and only Dave learned the *final* details.",
 };
 
 function activeHopAt(step: number): HopId {
@@ -208,8 +209,10 @@ export function EncryptedSliceReveal() {
     messageLeft = Math.max(EDGE, Math.min(stageW - MSG_W - EDGE, ideal));
   }
 
+  const rootRef = useReadableInDark();
   return (
     <div
+      ref={rootRef}
       className="my-8 border-[1.5px] border-foreground/40 bg-card overflow-hidden"
       data-testid="encrypted-slice-reveal"
       style={{ fontFamily: "ui-sans-serif, system-ui, sans-serif" }}
@@ -225,7 +228,7 @@ export function EncryptedSliceReveal() {
       </div>
 
       {/* Stage */}
-      <div ref={stageRef} className="relative bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-6" style={{ minHeight: 520 }}>
+      <div ref={stageRef} className="relative bg-[#fefdfb] px-4 py-6" style={{ minHeight: 520 }}>
         {/* Hop track */}
         <div className="relative" style={{ height: 144 }}>
           {[0, 1, 2].map((i) => {
@@ -299,7 +302,7 @@ export function EncryptedSliceReveal() {
                         </div>
                         <div>
                           This is the node-identity public key Alice used to
-                          lock this hop's slice. {label} opens it with the
+                          lock this hop's payload. {label} opens it with the
                           matching private key.
                         </div>
                       </>
@@ -374,7 +377,7 @@ export function EncryptedSliceReveal() {
                         next to their name so it's unambiguous which key opens
                         this slice. */}
                     <div className="text-[9px] uppercase tracking-wider mb-0.5 flex items-center gap-1.5 relative z-20">
-                      <span className="opacity-60">slice for {s.forHop}</span>
+                      <span className="opacity-60">hop payload for {s.forHop}</span>
                       <Tooltip
                         label={
                           <>
@@ -382,7 +385,7 @@ export function EncryptedSliceReveal() {
                               {s.forHop.charAt(0).toUpperCase() + s.forHop.slice(1)}'s public key
                             </div>
                             <div>
-                              Alice locked this slice to {s.forHop}'s
+                              Alice locked this hop payload to {s.forHop}'s
                               node-identity public key. Only {s.forHop} can
                               open it, using the matching private key.
                             </div>

@@ -412,7 +412,7 @@ export function XorEncryptionDemo() {
 
       {/* Stage */}
       <div
-        className="relative bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-5"
+        className="relative bg-[#fefdfb] px-4 py-5"
         style={{ minHeight: 420 }}
       >
         {tab === "alice" ? (

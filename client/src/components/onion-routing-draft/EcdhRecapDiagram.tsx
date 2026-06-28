@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { StepCaption } from "./StepCaption";
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -132,32 +133,35 @@ function HoverTip({ children, info }: { children: ReactNode; info: string }) {
       }}
     >
       {children}
-      {shown && (
-        <span
-          style={{
-            position: "fixed",
-            left: pos.x,
-            top: pos.above ? undefined : pos.y,
-            bottom: pos.above ? window.innerHeight - pos.y : undefined,
-            width: TIP_WIDTH,
-            zIndex: 50,
-            padding: "8px 10px",
-            background: "#fffdf5",
-            color: INK,
-            border: "1.5px solid #0f172a",
-            fontSize: 11,
-            lineHeight: 1.45,
-            fontFamily: "ui-sans-serif, system-ui, sans-serif",
-            fontWeight: 400,
-            letterSpacing: "0.01em",
-            whiteSpace: "normal",
-            boxShadow: "0 8px 30px rgba(0,0,0,0.25)",
-            pointerEvents: "none",
-          }}
-        >
-          {info}
-        </span>
-      )}
+      {shown &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <span
+            style={{
+              position: "fixed",
+              left: pos.x,
+              top: pos.above ? undefined : pos.y,
+              bottom: pos.above ? window.innerHeight - pos.y : undefined,
+              width: TIP_WIDTH,
+              zIndex: 9999,
+              padding: "8px 10px",
+              background: "#fffdf5",
+              color: INK,
+              border: "1.5px solid #0f172a",
+              fontSize: 11,
+              lineHeight: 1.45,
+              fontFamily: "ui-sans-serif, system-ui, sans-serif",
+              fontWeight: 400,
+              letterSpacing: "0.01em",
+              whiteSpace: "normal",
+              boxShadow: "0 8px 30px rgba(0,0,0,0.25)",
+              pointerEvents: "none",
+            }}
+          >
+            {info}
+          </span>,
+          document.body,
+        )}
     </span>
   );
 }
@@ -450,7 +454,7 @@ export function EcdhRecapDiagram() {
       {/* Stage */}
       <div className="overflow-x-auto">
         <div
-          className="relative px-4 py-6 bg-[#fefdfb] dark:bg-[#0b1220]"
+          className="relative px-4 py-6 bg-[#fefdfb]"
           style={{ minHeight: 380, minWidth: 760 }}
         >
           <div className="flex items-stretch justify-center gap-4">

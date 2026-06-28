@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { StepCaption } from "./StepCaption";
+import { useReadableInDark } from "./useReadableInDark";
 
 // ────────────────────────────────────────────────────────────────────────────
 // CltvSafetyLab (DRAFT), editable HTLC expiries + sequential preimage walk
@@ -291,8 +292,10 @@ export function CltvSafetyLab() {
     setStep(0);
   }
 
+  const rootRef = useReadableInDark();
   return (
     <div
+      ref={rootRef}
       className="my-8 border-[1.5px] border-foreground/40 bg-card overflow-hidden"
       data-testid="cltv-safety-lab"
       style={{ fontFamily: "ui-sans-serif, system-ui, sans-serif" }}
@@ -308,7 +311,7 @@ export function CltvSafetyLab() {
 
       <div className="overflow-x-auto">
       <div
-        className="relative bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-6"
+        className="relative bg-[#fefdfb] px-4 py-6"
         style={{ minWidth: 760, minHeight: 480 }}
       >
         {/* Block counter, prominent */}

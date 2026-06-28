@@ -515,7 +515,7 @@ const ENTRIES: Record<string, GlossaryEntry> = {
     render: "code",
     category: "protocol field",
     definition:
-      "A failure code a forwarder returns when the onion's HMAC does not verify, meaning the bytes were tampered with or the onion was re-attached to a different HTLC.",
+      "A failure code a forwarder returns when the onion's HMAC does not verify (the bytes were tampered with, or the onion was re-attached to a different HTLC). It is a BADONION + PERM code: a corrupted onion can't be wrapped in a normal error onion, so it comes back as an `update_fail_malformed_htlc`, which the upstream neighbor turns into a normal failure for the rest of the trip.",
     chapter: "7",
   },
   invalid_onion_version: {

@@ -282,7 +282,7 @@ export function PeelTraceDiagram() {
       </div>
 
       <div
-        className="relative bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-6"
+        className="relative bg-[#fefdfb] px-4 py-6"
         style={{ minHeight: 320 }}
       >
         <div className="overflow-x-auto">

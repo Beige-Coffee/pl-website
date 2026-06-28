@@ -356,7 +356,7 @@ export function NaivePacketDiagram() {
           rather than colliding. */}
       <div className="overflow-x-auto">
       <div
-        className="bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-6"
+        className="bg-[#fefdfb] px-4 py-6"
         style={{ minHeight: 770, minWidth: 760 }}
       >
         {/* Hop track */}

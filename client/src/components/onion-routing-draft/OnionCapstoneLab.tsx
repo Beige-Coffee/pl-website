@@ -234,7 +234,7 @@ function Scrubber({ segments, playheadPct, idx, max, onChange, dark }: {
         })}
       </div>
       <div style={{ position: "absolute", top: 1, left: `${playheadPct}%`, transform: "translateX(-50%)", width: 3, height: 14, background: P.text, border: `1px solid ${dark ? "#0b1220" : "#fff"}`, borderRadius: 2, pointerEvents: "none" }} aria-hidden />
-      <input className="cap-scrub" type="range" min={0} max={max} value={idx} onChange={(e) => onChange(Number(e.target.value))} style={{ position: "absolute", inset: 0, width: "100%", height: 16, cursor: "pointer" }} aria-label="Scrubber" />
+      <input className="cap-scrub" type="range" min={0} max={max} value={idx} onChange={(e) => onChange(Number(e.target.value))} style={{ position: "absolute", inset: 0, width: "100%", height: 16, cursor: "pointer" }} aria-label="Trace scrubber: drag to step through the run" aria-valuetext={`step ${idx + 1} of ${max + 1}`} />
     </div>
   );
 }

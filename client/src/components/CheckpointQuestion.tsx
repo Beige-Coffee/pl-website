@@ -430,7 +430,7 @@ export default function CheckpointQuestion({
 
       <div className={`text-[17px] md:text-[19px] font-semibold ${textColor} mb-4`}>{renderInlineCode(question, dark)}</div>
 
-      <div className="space-y-2 mb-4">
+      <div className="space-y-2 mb-4" role={isMulti ? "group" : "radiogroup"}>
         {options.map((opt, i) => {
           const isSelected = isMulti
             ? Array.isArray(selected) && selected.includes(i)
@@ -460,6 +460,8 @@ export default function CheckpointQuestion({
             <button
               key={i}
               type="button"
+              role={isMulti ? "checkbox" : "radio"}
+              aria-checked={isSelected}
               onClick={() => {
                 if (submitted) return;
                 let next: number | number[];

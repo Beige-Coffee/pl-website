@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useReadableInDark } from "./useReadableInDark";
 import {
   CommitmentTxCard,
   type CommitmentOutput,
@@ -485,8 +486,10 @@ export function HtlcPropagationDiagram() {
     setPopover({ ...props, x, y, pinned: true });
   }
 
+  const rootRef = useReadableInDark();
   return (
     <div
+      ref={rootRef}
       className="my-8 border-[1.5px] border-foreground/40 bg-card overflow-hidden"
       data-testid="htlc-propagation"
       style={{ fontFamily: "ui-sans-serif, system-ui, sans-serif" }}
@@ -509,7 +512,7 @@ export function HtlcPropagationDiagram() {
           requiring 1500px+ of width as the original three-pair layout did. */}
       <div className="overflow-x-auto">
       <div
-        className="relative bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-6"
+        className="relative bg-[#fefdfb] px-4 py-6"
         style={{ minHeight: 380, minWidth: 720 }}
       >
         {/* Hop track, same NODE_X_PCT layout as the sibling visuals. */}

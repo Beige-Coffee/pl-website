@@ -118,7 +118,7 @@ const BEATS: Beat[] = [
     subLabel: "PARSE",
     title: "Fields parsed",
     caption:
-      "Bob's hop payload is plaintext now, so he'll read his instructions. Here's that same 60-byte payload as raw data: the `1b` length prefix (bigsize for 27), the 27 bytes of TLV records, then the 32 HMAC bytes. Every record is just a type, a length, then that many bytes of value. Hover anything to decode it.)",
+      "Bob's hop payload is plaintext now, so he'll read his instructions. Here's that same 60-byte payload as raw data: the `1b` length prefix (bigsize for 27), the 27 bytes of TLV records, then the 32 HMAC bytes. Every record is just a type, a length, then that many bytes of value. Hover anything to decode it.",
   },
   {
     step: 6,
@@ -126,7 +126,7 @@ const BEATS: Beat[] = [
     subLabel: "BRANCH",
     title: "Bob is a forwarder",
     caption:
-      "Next, Bob will check to see what is responsibilities are. If a `short_channel_id` is present, then Bob is a *forwarder* and should send the onion onward, (which is what happens in this example!). On the other hand, if `payment_data` was present with no `short_channel_id`, then Bob would be the *destination*.",
+      "Next, Bob will check to see what his responsibilities are. If a `short_channel_id` is present, then Bob is a *forwarder* and should send the onion onward (which is what happens in this example!). On the other hand, if `payment_data` was present with no `short_channel_id`, then Bob would be the *destination*.",
   },
   {
     step: 7,
@@ -134,7 +134,7 @@ const BEATS: Beat[] = [
     subLabel: "CHECK",
     title: "Fees & timelocks OK",
     caption:
-      "Since Bob is forwarding, he'll needs to perform some checks on the incoming HTLC. For instance, does the incoming amount cover `amt_to_forward` plus his fee? Does the incoming `cltv_expiry` clear `outgoing_cltv_value` by at least his published delta? And is the outgoing CLTV still in the future? Hover *rejects?* on a row for its failure code.",
+      "Since Bob is forwarding, he needs to perform some checks on the incoming HTLC. For instance, does the incoming amount cover `amt_to_forward` plus his fee? Does the incoming `cltv_expiry` clear `outgoing_cltv_value` by at least his published delta? And is the outgoing CLTV still in the future? Hover *rejects?* on a row for its failure code.",
   },
   {
     step: 8,
@@ -142,7 +142,7 @@ const BEATS: Beat[] = [
     subLabel: "OUTCOME",
     title: "Forward it",
     caption:
-      "In summary, every peel will end in one of three ways. In this case, Bob has a `short_channel_id` and every check passed, so his outcome is to forward the HTLC. If Bob was the destination, then he would likely settle the payment by revealing the preimage. if anything had failed along the way, then he would reject the HTLC and build an error onion to send back to Alice. We'll get to that in chapter 11.",
+      "In summary, every peel will end in one of three ways. In this case, Bob has a `short_channel_id` and every check passed, so his outcome is to forward the HTLC. If Bob was the destination, then he would likely settle the payment by revealing the preimage. If anything had failed along the way, then he would reject the HTLC and build an error onion to send back to Alice. We'll get to that in chapter 11.",
   },
 ];
 
@@ -295,7 +295,7 @@ export function ValidationFlowDiagram() {
       </div>
 
       <div
-        className="relative bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-6"
+        className="relative bg-[#fefdfb] px-4 py-6"
         style={{ minHeight: 340 }}
       >
         <div className="overflow-x-auto">

@@ -476,7 +476,7 @@ export function ComputedRouteDiagram({
       {/* Stage */}
       <div className="overflow-x-auto">
         <div
-          className="relative bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-6"
+          className="relative bg-[#fefdfb] px-4 py-6"
           style={{ minWidth: minStageWidth }}
         >
           {/* Paper-invoice card pinned to the top-left of the stage. The card

@@ -70,7 +70,7 @@ export function HmacChainDiagram() {
         </span>
       </div>
 
-      <div className="relative bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-6">
+      <div className="relative bg-[#fefdfb] px-4 py-6">
         <div className="overflow-x-auto"><div className="mx-auto" style={{ minWidth: 720, maxWidth: 900 }}>
           <svg viewBox={`0 0 ${VB_W} ${VB_H}`} width="100%" style={{ display: "block" }} fontFamily={MONO}>
             <defs>

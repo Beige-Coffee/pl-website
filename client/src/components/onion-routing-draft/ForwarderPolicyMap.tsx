@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { ChannelUpdateCard } from "./ChannelUpdateCard";
+import { useReadableInDark } from "./useReadableInDark";
 
 // ────────────────────────────────────────────────────────────────────────────
 // ForwarderPolicyMap (DRAFT)
@@ -480,8 +481,10 @@ export function ForwarderPolicyMap() {
     return id; // bg node id, e.g. "bg-3"
   }
 
+  const rootRef = useReadableInDark();
   return (
     <div
+      ref={rootRef}
       className="my-8 border-[1.5px] border-foreground/40 bg-card overflow-hidden"
       data-testid="onion-forwarder-policy-map"
       style={{ fontFamily: "ui-sans-serif, system-ui, sans-serif" }}
@@ -498,7 +501,7 @@ export function ForwarderPolicyMap() {
 
       {/* Stage */}
       <div
-        className="relative bg-[#fefdfb] dark:bg-[#0b1220]"
+        className="relative bg-[#fefdfb]"
         style={{ minHeight: VIEWPORT_H }}
       >
         <svg

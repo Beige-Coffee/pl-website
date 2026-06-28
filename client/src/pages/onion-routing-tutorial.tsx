@@ -18,6 +18,7 @@ import { PanelStateContext, usePanelStateProvider } from "../hooks/use-panel-sta
 import { Tooltip, TooltipTrigger, TooltipContent } from "../components/ui/tooltip";
 import { ONION_ROUTING_EXERCISES_DRAFT as ONION_ROUTING_EXERCISES } from "../data/onion-routing-exercises-draft";
 import { getOnionRoutingDraftExerciseGroupContext as getOnionRoutingExerciseGroupContext } from "../lib/onion-routing-exercise-groups-draft";
+import { PayItForward } from "./noise-tutorial";
 import { Tok as MathTok } from "../components/onion-routing-draft/mathTokens";
 import { GlossaryTerm } from "../components/onion-routing-draft/GlossaryTerm";
 import { resolveGlossary } from "../components/onion-routing-draft/glossary";
@@ -1513,7 +1514,7 @@ function OnionRoutingDraftTutorialShell({ activeId }: { activeId: string }) {
       <div
         className="mx-auto w-full max-w-7xl grid gap-0"
         style={{
-          gridTemplateColumns: isMobile ? '1fr' : (sidebarCollapsed ? `60px minmax(0, 1fr)` : `360px minmax(0, 1fr)`),
+          gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : (sidebarCollapsed ? `60px minmax(0, 1fr)` : `360px minmax(0, 1fr)`),
         }}
       >
         {mobileNavOpen && (
@@ -1695,20 +1696,24 @@ function OnionRoutingDraftTutorialShell({ activeId }: { activeId: string }) {
             className="onion-article mx-auto w-full max-w-[1100px]"
             data-testid="container-article"
           >
-            <ChapterContent
-              chapter={active}
-              theme={theme}
-              authenticated={authenticated}
-              sessionToken={auth.sessionToken}
-              completedCheckpoints={auth.completedCheckpoints}
-              lightningAddress={auth.lightningAddress}
-              emailVerified={auth.emailVerified}
-              pubkey={auth.pubkey}
-              onLoginRequest={() => setShowLoginModal(true)}
-              onCheckpointCompleted={stableMarkCompleted}
-              getProgress={progress.getProgress}
-              saveProgress={progress.saveProgress}
-            />
+            {active.section === "Pay It Forward" ? (
+              <PayItForward theme={theme} />
+            ) : (
+              <ChapterContent
+                chapter={active}
+                theme={theme}
+                authenticated={authenticated}
+                sessionToken={auth.sessionToken}
+                completedCheckpoints={auth.completedCheckpoints}
+                lightningAddress={auth.lightningAddress}
+                emailVerified={auth.emailVerified}
+                pubkey={auth.pubkey}
+                onLoginRequest={() => setShowLoginModal(true)}
+                onCheckpointCompleted={stableMarkCompleted}
+                getProgress={progress.getProgress}
+                saveProgress={progress.saveProgress}
+              />
+            )}
 
             <div className={`mt-10 pt-6 border-t ${theme === "dark" ? "border-[#1f2a44]" : "border-border"} flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3`}>
               {prev ? (

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Tok } from "./mathTokens";
 import { SlotSubCell } from "./SlotSubCell";
-import { HatchOverlay, LAYER_ANGLES, LAYER_COLORS } from "./encryptionHatch";
+import { HatchOverlay } from "./encryptionHatch";
 import { StepCaption } from "./StepCaption";
 import { CrossfadeSwap } from "./morph";
 
@@ -172,7 +172,7 @@ export function PayloadShrinkDiagram() {
 
       {/* Stage */}
       <div
-        className="relative bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-6"
+        className="relative bg-[#fefdfb] px-4 py-6"
         style={{ minHeight: 340 }}
       >
         <div className="overflow-x-auto">
@@ -326,15 +326,7 @@ function TravelingPacket({ state }: { state: State }) {
           style={{ flex: 1, overflow: "hidden", minWidth: 0 }}
         >
           {state.hopPayloads.length === 0 ? null : (
-            state.hopPayloads.map((hop) => (
-              <div
-                key={hop}
-                className="absolute inset-0"
-                style={{
-                  backgroundImage: `repeating-linear-gradient(${LAYER_ANGLES[hop]}deg, ${LAYER_COLORS[hop]} 0px, ${LAYER_COLORS[hop]} 2.5px, transparent 2.5px, transparent 11px)`,
-                }}
-              />
-            ))
+            <HatchOverlay hops={state.hopPayloads} zIndex={0} />
           )}
         </div>
         {/* Mini HMAC */}

@@ -183,7 +183,7 @@ export function NodeKeyAttemptDiagram() {
       </div>
 
       <div
-        className="bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-6"
+        className="bg-[#fefdfb] px-4 py-6"
         style={{ minHeight: 540 }}
       >
         {/* Hop track */}

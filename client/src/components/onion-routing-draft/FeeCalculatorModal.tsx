@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { forceReadable } from "./useReadableInDark";
 
 // ────────────────────────────────────────────────────────────────────────────
 // FeeCalculatorModal (DRAFT)
@@ -139,6 +140,9 @@ export function FeeCalculatorModal({ open, onClose }: FeeCalculatorModalProps) {
   const total = base + feeRate;
   const fmt = (n: number) => n.toLocaleString("en-US");
 
+  useEffect(() => {
+    forceReadable(panelRef.current);
+  });
   return (
     <div
       ref={panelRef}

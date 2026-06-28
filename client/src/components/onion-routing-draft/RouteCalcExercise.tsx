@@ -276,7 +276,7 @@ export function RouteCalcExercise({ headerless }: RouteCalcExerciseProps = {}) {
       {/* Stage */}
       <div className="overflow-x-auto">
         <div
-          className="relative bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-6"
+          className="relative bg-[#fefdfb] px-4 py-6"
           style={{ minWidth: minStageWidth }}
         >
           {/* Invoice (static) */}

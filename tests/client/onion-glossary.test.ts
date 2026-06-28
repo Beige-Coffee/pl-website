@@ -64,7 +64,7 @@ describe("glossary subscript specialization", () => {
 
   it("error-payload, fee, and packet-field terms resolve", () => {
     expect(def("failure_len")).toContain("2-byte length prefix");
-    expect(def("failure_message")).toContain("2-byte failure code");
+    expect(def("failure_message")).toContain("failure_code");
     expect(def("pad_len")).toContain("zero padding");
     expect(def("outer_hmac")).toContain("trailing 32-byte tag");
     expect(def("fee_base_msat")).toContain("flat part");

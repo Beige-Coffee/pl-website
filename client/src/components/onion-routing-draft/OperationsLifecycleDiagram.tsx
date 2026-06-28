@@ -1467,8 +1467,8 @@ const KEY_ROLES = [
   "Padding",
   "Encrypt payload",
   "Authenticate payload",
-  "Encrypt error",
   "Authenticate error",
+  "Encrypt error",
 ];
 
 // A strip of the five distinct keys, one per operation. The current step's key
@@ -1638,7 +1638,7 @@ export function OperationsLifecycleDiagram({
       </div>
 
       <div
-        className="relative bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-6"
+        className="relative bg-[#fefdfb] px-4 py-6"
         style={{ minHeight: 340 }}
       >
         <div className="overflow-x-auto" style={{ paddingTop: 6 }}>

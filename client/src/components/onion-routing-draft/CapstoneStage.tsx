@@ -175,7 +175,8 @@ function BufferBar({ segments, dark }: { segments: BufferSegment[]; dark: boolea
             }}
           >
             <SegmentBody seg={seg} dark={dark} />
-            {seg.layers.length > 0 && <HatchOverlay hops={seg.layers} zIndex={3} stripeOpacity={0.45} />}
+            {/* buffer-context hatch is light (§5/§6) so the LEN/TLV/HMAC subcell text under it stays legible */}
+            {seg.layers.length > 0 && <HatchOverlay hops={seg.layers} zIndex={3} stripeOpacity={0.16} />}
           </div>
         ))}
       </div>
@@ -201,7 +202,7 @@ function KeystreamBar({ ks, dark }: { ks: NonNullable<StageState["keystream"]>; 
       <div style={{ height: 10, border: `1px solid ${color}`, borderRadius: 2, backgroundImage: ks.hop ? singleHatchBackground(ks.hop) : undefined, backgroundColor: ks.hop ? undefined : P.litBg, opacity: 0.85 }} />
       {/* the operation between the keystream (above) and the buffer (below) is a
           bytewise XOR; show the operator itself rather than ambiguous arrows */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 4, marginTop: 1, color }} title="bytewise XOR onto the buffer below">
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 4, marginTop: 1, color }}>
         <span style={{ fontFamily: MONO, fontSize: 14, fontWeight: 700, lineHeight: "14px" }}>⊕</span>
         <span style={{ fontFamily: MONO, fontSize: 9, letterSpacing: "0.08em" }}>XOR</span>
       </div>

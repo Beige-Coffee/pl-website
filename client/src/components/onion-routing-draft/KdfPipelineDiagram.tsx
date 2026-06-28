@@ -126,7 +126,7 @@ export function KdfPipelineDiagram() {
           clicked, the same stage swaps in the demo for that key with an X
           to close back to the flow chart. */}
       <div
-        className="relative bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-6"
+        className="relative bg-[#fefdfb] px-4 py-6"
         style={{ minHeight: 380 }}
       >
         {activeKey ? (

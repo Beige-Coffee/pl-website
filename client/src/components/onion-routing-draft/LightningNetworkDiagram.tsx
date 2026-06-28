@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import { useReadableInDark } from "./useReadableInDark";
 
 // ────────────────────────────────────────────────────────────────────────────
 // LightningNetworkDiagram (DRAFT)
@@ -161,8 +162,10 @@ export function LightningNetworkDiagram() {
   function zoomOut() { setZoom((z) => Math.max(MIN_ZOOM, z / 1.2)); }
   function reset() { setZoom(INITIAL_ZOOM); setPan(INITIAL_PAN); }
 
+  const rootRef = useReadableInDark();
   return (
     <div
+      ref={rootRef}
       className="my-8 border-[1.5px] border-foreground/40 bg-card overflow-hidden"
       data-testid="onion-lightning-network"
       style={{ fontFamily: "ui-sans-serif, system-ui, sans-serif" }}
@@ -178,7 +181,7 @@ export function LightningNetworkDiagram() {
       </div>
 
       {/* Viewport with overlay zoom controls */}
-      <div className="relative bg-[#fefdfb] dark:bg-[#0b1220]">
+      <div className="relative bg-[#fefdfb]">
         <svg
           viewBox={`${clampedPanX} ${clampedPanY} ${vbW} ${vbH}`}
           width={VIEWPORT_W}

@@ -663,7 +663,7 @@ export function BlindingFactorDiagram() {
         </div>
       </div>
 
-      <div className="px-4 py-5 bg-[#fefdfb] dark:bg-[#0b1220]">
+      <div className="px-4 py-5 bg-[#fefdfb]">
         {/* Hop circles */}
         <div
           className="grid items-center mb-4"

@@ -495,11 +495,15 @@ export function PythonSnippet({ id, dark = false }: { id: string; dark?: boolean
       </div>
 
       <div
-        className="relative bg-[#eef1f7] dark:bg-[#0b1220] px-4 py-3"
+        className="relative px-4 py-3"
         style={{
           fontFamily: MONO,
           fontSize: 16,
           lineHeight: 1.55,
+          // bg follows the app theme (the `dark` prop), matching the token
+          // colors below; using Tailwind's dark: here keyed it to the OS, not
+          // the in-app toggle, which desynced bg from tokens.
+          background: dark ? "#0b1220" : "#eef1f7",
           color: (dark ? DARK_COLOR : COLOR).default,
           letterSpacing: "0.005em",
         }}

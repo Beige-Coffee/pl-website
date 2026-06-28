@@ -42,7 +42,7 @@ const TOTAL_BEATS = 5;
 const CAPTIONS: Record<number, string> = {
   0: "Imagine Charlie's decided to fail this payment with `temporary_channel_failure`. Now he has to get that news back to Alice. The error travels backward, mirroring the forward onion.",
   1: "First, Charlie builds the plaintext error packet: a 32-byte HMAC (computed with his `um_charlie` key over the payload) plus the 260-byte length-prefixed payload. That's 292 bytes, and it stays 292 the whole way back.",
-  2: "Now Charlie XORs the 292-byte packet with his `ammag_charlie` keystream and sends it up to Bob. Notice the packet doesn't grow. Encryption is an in-place XOR, so the crosshatch just lands over the same bytes.",
+  2: "Now Charlie XORs the 292-byte packet with his `ammag_charlie` keystream and sends it up to Bob. Notice the packet doesn't grow. Encryption is an in-place XOR, so the new layer just lands over the same bytes.",
   3: "Bob can't read what he got (he has no `ammag_charlie`), and he doesn't try. He just XORs the same 292 bytes with his own `ammag_bob`, a second layer. Then off it goes to Alice.",
   4: "It reaches Alice: 292 bytes, Bob's layer on the outside, Charlie's underneath. Never changed size. Next, Alice will peel the layers in route order and check each hop's HMAC until one verifies.",
 };

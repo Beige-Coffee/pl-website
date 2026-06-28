@@ -214,6 +214,8 @@ const TOTAL_BEATS = STEPS.length;
 
 // ── Hover tooltip ──────────────────────────────────────────────────────────
 
+const TOOLTIP_WIDTH = 360;
+
 function HoverTooltip({
   children,
   content,
@@ -222,14 +224,23 @@ function HoverTooltip({
   content: ReactNode;
 }) {
   const [show, setShow] = useState(false);
-  const [pos, setPos] = useState({ x: 0, y: 0 });
+  const [pos, setPos] = useState({ x: 0, y: 0, flipped: false });
   const triggerRef = useRef<HTMLSpanElement>(null);
 
   function updatePos() {
     const el = triggerRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    setPos({ x: rect.left + rect.width / 2, y: rect.top });
+    const margin = 8;
+    const halfW = TOOLTIP_WIDTH / 2;
+    let x = rect.left + rect.width / 2;
+    if (x - halfW < margin) x = halfW + margin;
+    if (x + halfW > window.innerWidth - margin)
+      x = window.innerWidth - halfW - margin;
+    // Flip below when there isn't ~100px of headroom above.
+    const flipped = rect.top < 110;
+    const y = flipped ? rect.bottom + 8 : rect.top - 8;
+    setPos({ x, y, flipped });
   }
 
   return (
@@ -255,8 +266,10 @@ function HoverTooltip({
             style={{
               position: "fixed",
               left: pos.x,
-              top: pos.y - 8,
-              transform: "translate(-50%, -100%)",
+              top: pos.y,
+              transform: pos.flipped
+                ? "translate(-50%, 0)"
+                : "translate(-50%, -100%)",
               background: "#fffdf5",
               color: INK,
               fontFamily: SANS,
@@ -265,7 +278,7 @@ function HoverTooltip({
               padding: "12px 14px",
               border: "1.5px solid #0f172a",
               borderRadius: 4,
-              maxWidth: 360,
+              width: TOOLTIP_WIDTH,
               boxShadow: "0 8px 30px rgba(0,0,0,0.25)",
               zIndex: 9999,
               pointerEvents: "none",
@@ -312,7 +325,7 @@ export function FillerTraceDiagram() {
       </div>
 
       <div
-        className="relative bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-6"
+        className="relative bg-[#fefdfb] px-4 py-6"
         style={{ minHeight: 340 }}
       >
         <div className="overflow-x-auto">

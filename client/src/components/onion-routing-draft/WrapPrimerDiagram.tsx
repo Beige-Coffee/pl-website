@@ -238,7 +238,7 @@ export function WrapPrimerDiagram() {
 
       {/* Stage */}
       <div
-        className="relative bg-[#fefdfb] dark:bg-[#0b1220] px-4 py-6"
+        className="relative bg-[#fefdfb] px-4 py-6"
         style={{ minHeight: 360 }}
       >
         <div className="overflow-x-auto">
@@ -357,8 +357,8 @@ function HopTrack({ state }: { state: BuildState }) {
               <div
                 className="rounded-full flex items-center justify-center transition-all"
                 style={{
-                  width: 48,
-                  height: 48,
+                  width: 44,
+                  height: 44,
                   background: HOP_FILL[id],
                   border: `2px solid ${HOP_STROKE[id]}`,
                   boxShadow: isCurrent
