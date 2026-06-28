@@ -520,7 +520,7 @@ export default function Home() {
                         Onion Routing & Lightning Payments
                       </h2>
                       <p className="hidden md:block text-base text-foreground/70 mt-2" style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
-                        How Lightning routes payments across multiple hops using layered encryption, without any single node learning the full path.
+                        Learn how Lightning routes payments across multiple hops using layered encryption, without any single node learning the full path.
                       </p>
                     </div>
                   </div>
