@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChannelUpdateCard } from "./ChannelUpdateCard";
 import { FeeCalculatorModal } from "./FeeCalculatorModal";
 import { CheckpointRewardClaim } from "./CheckpointRewardClaim";
@@ -57,6 +57,55 @@ type CellState = {
 
 const empty = (): CellState => ({ value: "", blurred: false });
 
+// ── Answer persistence ─────────────────────────────────────────────────────
+// Save the student's entered values to localStorage so they survive a reload,
+// and restore them on mount. If the exercise is already completed but no local
+// values exist (e.g. a different browser), show the correct answers instead of
+// a blank grid.
+type PersistShape = {
+  htlcAmts: CellState[];
+  htlcTos: CellState[];
+  bobRate: CellState;
+  bobTotal: CellState;
+  charlieRate: CellState;
+  charlieTotal: CellState;
+  toAB: CellState;
+  toBC: CellState;
+  toCD: CellState;
+};
+
+const filledCell = (v: number): CellState => ({ value: String(v), blurred: true });
+
+function expectedFilled(): PersistShape {
+  return {
+    htlcAmts: EXPECTED.htlcAmounts.map(filledCell),
+    htlcTos: EXPECTED.htlcTimeouts.map(filledCell),
+    bobRate: filledCell(EXPECTED.bobFee.rate),
+    bobTotal: filledCell(EXPECTED.bobFee.total),
+    charlieRate: filledCell(EXPECTED.charlieFee.rate),
+    charlieTotal: filledCell(EXPECTED.charlieFee.total),
+    toAB: filledCell(EXPECTED.timeoutAliceBob),
+    toBC: filledCell(EXPECTED.timeoutBobCharlie),
+    toCD: filledCell(EXPECTED.timeoutCharlieDave),
+  };
+}
+
+function loadPersisted(key: string, completed: boolean): PersistShape | null {
+  try {
+    const raw =
+      typeof localStorage !== "undefined" ? localStorage.getItem(key) : null;
+    if (raw) {
+      const p = JSON.parse(raw);
+      if (p && Array.isArray(p.htlcAmts) && p.htlcAmts.length === 3) {
+        return p as PersistShape;
+      }
+    }
+  } catch {
+    /* ignore malformed storage */
+  }
+  return completed ? expectedFilled() : null;
+}
+
 interface CellInputProps {
   cell: CellState;
   expected: number;
@@ -80,17 +129,18 @@ function CellInput({
 }: CellInputProps) {
   const numeric = cell.value.trim() === "" ? null : Number(cell.value);
   const isCorrect = numeric === expected;
+  // Per-cell feedback: turn this cell green the moment ITS value is correct,
+  // rather than waiting for the whole row/section to be complete.
   const showRed =
-    !rowComplete &&
     !isCorrect &&
     cell.value.trim() !== "" &&
     (cell.blurred || rowAttempted);
 
   let borderColor = SLATE;
-  if (rowComplete) borderColor = GREEN;
+  if (isCorrect) borderColor = GREEN;
   else if (showRed) borderColor = RED;
 
-  const bg = rowComplete ? "#eaf2db" : "#fffdf5";
+  const bg = isCorrect ? "#eaf2db" : "#fffdf5";
 
   return (
     <input
@@ -142,24 +192,101 @@ export function RouteCalcExercise({
   headerless,
   reward,
 }: RouteCalcExerciseProps = {}) {
+  // Persisted answers: loaded once (from localStorage, or the correct answers
+  // if the exercise is already complete on this account).
+  const storageKey = `pl-route-calc-draft${
+    reward?.sessionToken ? `-${reward.sessionToken.slice(0, 10)}` : ""
+  }`;
+  const loadedRef = useRef<PersistShape | null | undefined>(undefined);
+  if (loadedRef.current === undefined) {
+    loadedRef.current = loadPersisted(
+      storageKey,
+      reward?.alreadyCompleted ?? false,
+    );
+  }
+  const loaded = loadedRef.current;
+
   // Cell state
-  const [htlcAmts, setHtlcAmts] = useState<CellState[]>([
-    empty(),
-    empty(),
-    empty(),
+  const [htlcAmts, setHtlcAmts] = useState<CellState[]>(
+    loaded?.htlcAmts ?? [empty(), empty(), empty()],
+  );
+  const [htlcTos, setHtlcTos] = useState<CellState[]>(
+    loaded?.htlcTos ?? [empty(), empty(), empty()],
+  );
+  const [bobRate, setBobRate] = useState<CellState>(loaded?.bobRate ?? empty());
+  const [bobTotal, setBobTotal] = useState<CellState>(
+    loaded?.bobTotal ?? empty(),
+  );
+  const [charlieRate, setCharlieRate] = useState<CellState>(
+    loaded?.charlieRate ?? empty(),
+  );
+  const [charlieTotal, setCharlieTotal] = useState<CellState>(
+    loaded?.charlieTotal ?? empty(),
+  );
+  const [toAB, setToAB] = useState<CellState>(loaded?.toAB ?? empty());
+  const [toBC, setToBC] = useState<CellState>(loaded?.toBC ?? empty());
+  const [toCD, setToCD] = useState<CellState>(loaded?.toCD ?? empty());
+
+  // Persist on every change.
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        storageKey,
+        JSON.stringify({
+          htlcAmts,
+          htlcTos,
+          bobRate,
+          bobTotal,
+          charlieRate,
+          charlieTotal,
+          toAB,
+          toBC,
+          toCD,
+        }),
+      );
+    } catch {
+      /* ignore */
+    }
+  }, [
+    storageKey,
+    htlcAmts,
+    htlcTos,
+    bobRate,
+    bobTotal,
+    charlieRate,
+    charlieTotal,
+    toAB,
+    toBC,
+    toCD,
   ]);
-  const [htlcTos, setHtlcTos] = useState<CellState[]>([
-    empty(),
-    empty(),
-    empty(),
-  ]);
-  const [bobRate, setBobRate] = useState<CellState>(empty());
-  const [bobTotal, setBobTotal] = useState<CellState>(empty());
-  const [charlieRate, setCharlieRate] = useState<CellState>(empty());
-  const [charlieTotal, setCharlieTotal] = useState<CellState>(empty());
-  const [toAB, setToAB] = useState<CellState>(empty());
-  const [toBC, setToBC] = useState<CellState>(empty());
-  const [toCD, setToCD] = useState<CellState>(empty());
+
+  // If completion status arrives after mount and the grid is still blank (e.g.
+  // a different browser), reveal the correct answers.
+  useEffect(() => {
+    if (!reward?.alreadyCompleted) return;
+    const isEmpty = [
+      ...htlcAmts,
+      ...htlcTos,
+      bobRate,
+      bobTotal,
+      charlieRate,
+      charlieTotal,
+      toAB,
+      toBC,
+      toCD,
+    ].every((c) => c.value.trim() === "");
+    if (!isEmpty) return;
+    const e = expectedFilled();
+    setHtlcAmts(e.htlcAmts);
+    setHtlcTos(e.htlcTos);
+    setBobRate(e.bobRate);
+    setBobTotal(e.bobTotal);
+    setCharlieRate(e.charlieRate);
+    setCharlieTotal(e.charlieTotal);
+    setToAB(e.toAB);
+    setToBC(e.toBC);
+    setToCD(e.toCD);
+  }, [reward?.alreadyCompleted]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [calcOpen, setCalcOpen] = useState(false);
   const [pickerChoice, setPickerChoice] =
