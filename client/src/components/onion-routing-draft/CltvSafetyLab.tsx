@@ -304,7 +304,7 @@ export function CltvSafetyLab() {
         <div className="flex items-center gap-2">
           <div className="w-1.5 h-1.5 rounded-full bg-[#b8860b]" />
           <span className="text-sm font-bold tracking-[0.08em] uppercase">
-            Step Through the Race
+            Step Through the Unwind
           </span>
         </div>
       </div>

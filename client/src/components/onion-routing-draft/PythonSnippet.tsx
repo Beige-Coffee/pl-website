@@ -503,7 +503,7 @@ export function PythonSnippet({ id, dark = false }: { id: string; dark?: boolean
           // bg follows the app theme (the `dark` prop), matching the token
           // colors below; using Tailwind's dark: here keyed it to the OS, not
           // the in-app toggle, which desynced bg from tokens.
-          background: dark ? "#0b1220" : "#eef1f7",
+          background: dark ? "#0b1220" : "#fffdf5",
           color: (dark ? DARK_COLOR : COLOR).default,
           letterSpacing: "0.005em",
         }}

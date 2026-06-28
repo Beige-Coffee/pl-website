@@ -123,7 +123,7 @@ export function OnionHintContent({ html, dark }: { html: string; dark: boolean }
 
   const inlineBg = dark ? "rgba(255,255,255,0.07)" : "rgba(13,21,38,0.06)";
   const inlineBorder = dark ? "rgba(255,255,255,0.10)" : "rgba(13,21,38,0.12)";
-  const blockBg = dark ? "#0d1526" : "#eef1f7";
+  const blockBg = dark ? "#0d1526" : "#fffdf5";
   const blockBorder = dark ? "rgba(255,255,255,0.10)" : "rgba(13,21,38,0.16)";
   const accent = dark ? "#FFD700" : "#b8860b";
 

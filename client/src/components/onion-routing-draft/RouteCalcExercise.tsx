@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { ChannelUpdateCard } from "./ChannelUpdateCard";
 import { FeeCalculatorModal } from "./FeeCalculatorModal";
+import { CheckpointRewardClaim } from "./CheckpointRewardClaim";
 
 // ────────────────────────────────────────────────────────────────────────────
 // RouteCalcExercise (DRAFT)
@@ -115,11 +116,32 @@ function CellInput({
   );
 }
 
-export interface RouteCalcExerciseProps {
-  headerless?: boolean;
+export const ROUTE_CALC_EXERCISE_ID = "exercise-route-calc-draft";
+
+// Auth + reward wiring passed down from the tutorial page so the completed
+// exercise can pay out sats via the shared CheckpointRewardClaim flow.
+export interface RouteCalcReward {
+  theme: "light" | "dark";
+  authenticated: boolean;
+  sessionToken: string | null;
+  lightningAddress: string | null;
+  emailVerified: boolean;
+  pubkey: string | null;
+  alreadyCompleted: boolean;
+  claimInfo: { checkpointId: string; amountSats: number; paidAt: string } | null;
+  onLoginRequest: () => void;
+  onCompleted: (checkpointId: string, amountSats?: number) => void;
 }
 
-export function RouteCalcExercise({ headerless }: RouteCalcExerciseProps = {}) {
+export interface RouteCalcExerciseProps {
+  headerless?: boolean;
+  reward?: RouteCalcReward;
+}
+
+export function RouteCalcExercise({
+  headerless,
+  reward,
+}: RouteCalcExerciseProps = {}) {
   // Cell state
   const [htlcAmts, setHtlcAmts] = useState<CellState[]>([
     empty(),
@@ -610,6 +632,25 @@ export function RouteCalcExercise({ headerless }: RouteCalcExerciseProps = {}) {
               onChoose={setPickerChoice}
             />
           </div>
+
+          {reward && (allDone || reward.alreadyCompleted) && (
+            <div style={{ marginTop: 16 }}>
+              <CheckpointRewardClaim
+                checkpointId={ROUTE_CALC_EXERCISE_ID}
+                answer={0}
+                theme={reward.theme}
+                authenticated={reward.authenticated}
+                sessionToken={reward.sessionToken}
+                lightningAddress={reward.lightningAddress}
+                emailVerified={reward.emailVerified}
+                pubkey={reward.pubkey}
+                alreadyCompleted={reward.alreadyCompleted}
+                claimInfo={reward.claimInfo}
+                onLoginRequest={reward.onLoginRequest}
+                onCompleted={reward.onCompleted}
+              />
+            </div>
+          )}
         </div>
       </div>
 

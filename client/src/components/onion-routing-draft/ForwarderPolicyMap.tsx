@@ -252,15 +252,13 @@ interface HoverState {
 
 const POPOVER_WIDTH = 260;
 
-// ── Single channel_announcement (the "newcomer" gossip ambience) ──────────
+// ── channel_announcement example ──────────────────────────────────────────
 //
-// One specific bg node in the upper-right blinks its connection to Hazel and
-// shows a small pulsing icon. Hovering the icon reveals the full announcement
-// fields. This replaces the more elaborate ticker system that turned out to
-// be too busy.
+// Shown in the click-toggled info panel behind the top-right
+// "ⓘ channel_announcement" button. GOSSIP_NODE_POS is kept only so the
+// seeded background-node layout stays identical to before.
 
 const GOSSIP_NODE_POS = { x: 1100, y: 220 };
-const GOSSIP_PARTNER_ID = "hazel";
 
 const GOSSIP_ANNOUNCEMENT = {
   scid: "744023x1182x0",
@@ -268,8 +266,6 @@ const GOSSIP_ANNOUNCEMENT = {
   node2Hex: "03c08b...92be",
   capacity: 5_000_000,
 };
-
-const GOSSIP_GOLD = "#b8860b";
 
 export function ForwarderPolicyMap() {
   const { allNodes, namedById, bgEdges, allChannelUpdates } = useMemo(() => {
@@ -353,41 +349,40 @@ export function ForwarderPolicyMap() {
   const [hover, setHover] = useState<HoverState | null>(null);
   const hoverGraceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Hover state for the channel_announcement icon (separate from node hover)
-  const [announcementHover, setAnnouncementHover] = useState<{
-    x: number;
-    y: number;
-  } | null>(null);
-  const announcementGraceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  function openAnnouncement(e: React.MouseEvent) {
-    if (announcementGraceRef.current) {
-      clearTimeout(announcementGraceRef.current);
-      announcementGraceRef.current = null;
-    }
-    const padding = 12;
-    const cardW = 280;
-    const cardHEstimate = 180;
-    let x = e.clientX + 16;
-    let y = e.clientY + 16;
-    if (x + cardW > window.innerWidth - padding) {
-      x = Math.max(padding, e.clientX - cardW - 16);
-    }
-    if (y + cardHEstimate > window.innerHeight - padding) {
-      y = Math.max(padding, window.innerHeight - cardHEstimate - padding);
-    }
-    setAnnouncementHover({ x, y });
-  }
-  function closeAnnouncement() {
-    if (announcementGraceRef.current) clearTimeout(announcementGraceRef.current);
-    announcementGraceRef.current = setTimeout(() => {
-      setAnnouncementHover(null);
-      announcementGraceRef.current = null;
-    }, 120);
-  }
-  function cancelAnnouncementClose() {
-    if (announcementGraceRef.current) {
-      clearTimeout(announcementGraceRef.current);
-      announcementGraceRef.current = null;
+  // channel_announcement info panel: click-toggled from the top-right button.
+  const [announcementOpen, setAnnouncementOpen] = useState(false);
+
+  // ── Hover "blip": a short, soft Web Audio tone when a node's popover opens.
+  // Created lazily and resumed on a user gesture to satisfy browser autoplay
+  // policies; silently no-ops if Web Audio is unavailable.
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  function playHoverBlip() {
+    try {
+      let ctx = audioCtxRef.current;
+      if (!ctx) {
+        const AC =
+          window.AudioContext ??
+          (window as unknown as { webkitAudioContext?: typeof AudioContext })
+            .webkitAudioContext;
+        if (!AC) return;
+        ctx = new AC();
+        audioCtxRef.current = ctx;
+      }
+      if (ctx.state === "suspended") void ctx.resume();
+      const t0 = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(680, t0);
+      osc.frequency.exponentialRampToValueAtTime(460, t0 + 0.09);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.05, t0 + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.13);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.15);
+    } catch {
+      /* audio unavailable; ignore */
     }
   }
 
@@ -538,11 +533,25 @@ export function ForwarderPolicyMap() {
             );
           })}
 
-          {/* 2. Highlighted route edges (drawn over background edges) */}
+          {/* 2. Highlighted route edges (drawn over background edges). When a
+              node is hovered, its incident channels thicken and the rest dim,
+              so the hovered node's channels are easy to trace. */}
           {ROUTE_EDGES.map((e, i) => {
             const a = nodeById.get(e.a);
             const b = nodeById.get(e.b);
             if (!a || !b) return null;
+            // Bold only the channel(s) this node actually advertises a
+            // channel_update for (exactly what the hover popover lists), so the
+            // highlighted line matches the popover instead of every edge that
+            // merely touches the node.
+            const incident =
+              hover != null &&
+              hoverUpdates.some(
+                (u) =>
+                  (u.from === e.a && u.to === e.b) ||
+                  (u.from === e.b && u.to === e.a),
+              );
+            const dimmed = hover != null && hoverUpdates.length > 0 && !incident;
             return (
               <line
                 key={`route-e-${i}`}
@@ -551,73 +560,28 @@ export function ForwarderPolicyMap() {
                 x2={b.x}
                 y2={b.y}
                 stroke={e.color}
-                strokeWidth={3}
-                strokeOpacity={1}
+                strokeWidth={incident ? 6.5 : 3}
+                strokeOpacity={dimmed ? 0.28 : 1}
+                strokeLinecap="round"
+                style={{
+                  transition:
+                    "stroke-width 0.12s ease, stroke-opacity 0.12s ease",
+                }}
               />
             );
           })}
 
-          {/* 2c. Pulsing gossip edge, newcomer node ↔ Hazel.
-              Uses SMIL <animate> so the blink is pure SVG, no extra state. */}
-          {(() => {
-            const partner = nodeById.get(GOSSIP_PARTNER_ID);
-            if (!partner) return null;
-            return (
-              <line
-                x1={GOSSIP_NODE_POS.x}
-                y1={GOSSIP_NODE_POS.y}
-                x2={partner.x}
-                y2={partner.y}
-                stroke={GOSSIP_GOLD}
-                strokeWidth={2.5}
-                strokeDasharray="6 4"
-                strokeOpacity={0.85}
-              >
-                <animate
-                  attributeName="stroke-opacity"
-                  values="0.25;0.95;0.25"
-                  dur="2s"
-                  repeatCount="indefinite"
-                />
-              </line>
-            );
-          })()}
-
-          {/* 2d. The newcomer gossip node itself (drawn just before bg nodes
-              so the others can still overlap nicely). */}
-          <g>
-            <circle
-              cx={GOSSIP_NODE_POS.x}
-              cy={GOSSIP_NODE_POS.y}
-              r={18}
-              fill={BG_COLOR.fill}
-              stroke={BG_COLOR.stroke}
-              strokeWidth={1.5}
-            />
-            {/* Soft pulsing halo */}
-            <circle
-              cx={GOSSIP_NODE_POS.x}
-              cy={GOSSIP_NODE_POS.y}
-              r={18}
-              fill="none"
-              stroke={GOSSIP_GOLD}
-              strokeWidth={2}
-              opacity={0.6}
-            >
-              <animate
-                attributeName="r"
-                values="18;30;18"
-                dur="2s"
-                repeatCount="indefinite"
-              />
-              <animate
-                attributeName="opacity"
-                values="0.55;0;0.55"
-                dur="2s"
-                repeatCount="indefinite"
-              />
-            </circle>
-          </g>
+          {/* 2c. The node at GOSSIP_NODE_POS is now just an ordinary
+              background node. The channel_announcement teaching moment moved
+              to the top-right "ⓘ channel_announcement" button + click panel. */}
+          <circle
+            cx={GOSSIP_NODE_POS.x}
+            cy={GOSSIP_NODE_POS.y}
+            r={18}
+            fill={BG_COLOR.fill}
+            stroke={BG_COLOR.stroke}
+            strokeWidth={1.5}
+          />
 
           {/* 3. Background nodes. These are anonymous graph filler, not part
               of the lesson, so they are inert: no hover popover, no pointer
@@ -645,7 +609,10 @@ export function ForwarderPolicyMap() {
               <g
                 key={n.id}
                 style={{ cursor: "pointer" }}
-                onMouseEnter={(e) => openHover(n.id, e)}
+                onMouseEnter={(e) => {
+                  if (!dragRef.current.moved) playHoverBlip();
+                  openHover(n.id, e);
+                }}
                 onMouseLeave={closeHover}
                 onMouseMove={(e) => {
                   if (hover && hover.nodeId === n.id) openHover(n.id, e);
@@ -688,83 +655,8 @@ export function ForwarderPolicyMap() {
             );
           })}
 
-          {/* 5. channel_announcement pill, anchored directly above the
-              newcomer gossip node so the connector points at the node it's
-              labeling, not at the edge midpoint. */}
-          {(() => {
-            const partner = nodeById.get(GOSSIP_PARTNER_ID);
-            if (!partner) return null;
-            const PILL_W = 340;
-            const PILL_H = 56;
-            // Gap between the top of the gossip node circle and the bottom
-            // of the pill. Lifts the pill into the clean upper area.
-            const PILL_LIFT = 90;
-            const NODE_R = 18;
-            const pillCenterX = GOSSIP_NODE_POS.x;
-            const pillBottomY = GOSSIP_NODE_POS.y - NODE_R - PILL_LIFT;
-            return (
-              <>
-                {/* Thin connector from pill bottom down to gossip node top */}
-                <line
-                  x1={pillCenterX}
-                  y1={pillBottomY}
-                  x2={GOSSIP_NODE_POS.x}
-                  y2={GOSSIP_NODE_POS.y - NODE_R}
-                  stroke={INK}
-                  strokeOpacity={0.35}
-                  strokeWidth={1}
-                  strokeDasharray="2 3"
-                />
-                <foreignObject
-                  x={pillCenterX - PILL_W / 2}
-                  y={pillBottomY - PILL_H}
-                  width={PILL_W}
-                  height={PILL_H + 4}
-                >
-                <div
-                  style={{
-                    width: PILL_W,
-                    height: PILL_H,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    background: "#fffdf5",
-                    color: INK,
-                    border: `1.5px solid ${INK}`,
-                    borderRadius: 999,
-                    fontFamily: '"JetBrains Mono", "Fira Code", monospace',
-                    fontSize: 18,
-                    fontWeight: 700,
-                    letterSpacing: "0.04em",
-                    cursor: "help",
-                    boxShadow: "0 4px 12px rgba(0,0,0,0.18)",
-                    animation: "channelAnnouncementPulse 1.6s ease-in-out infinite",
-                  }}
-                  onMouseEnter={(e) => openAnnouncement(e)}
-                  onMouseMove={(e) => {
-                    if (announcementHover) openAnnouncement(e);
-                  }}
-                  onMouseLeave={closeAnnouncement}
-                  onPointerDown={(e) => e.stopPropagation()}
-                >
-                  <span>channel_announcement</span>
-                </div>
-                <style>{`
-                  @keyframes channelAnnouncementPulse {
-                    0%, 100% {
-                      box-shadow: 0 4px 12px rgba(0,0,0,0.18),
-                                  0 0 0 0 rgba(184,134,11,0.55);
-                    }
-                    50% {
-                      box-shadow: 0 4px 12px rgba(0,0,0,0.18),
-                                  0 0 0 8px rgba(184,134,11,0.0);
-                    }
-                  }
-                `}</style>
-                </foreignObject>
-              </>
-            );
-          })()}
+          {/* (The channel_announcement teaching moment is now the top-right
+              "ⓘ channel_announcement" button + click panel, below.) */}
         </svg>
 
         {/* Top-left legend strip */}
@@ -782,34 +674,47 @@ export function ForwarderPolicyMap() {
           <LegendRow color={ROUTE_C_COLOR} label="Route C · via Bob+Charlie (magenta)" />
         </div>
 
-        {/* Top-right zoom controls */}
-        <div className="absolute top-3 right-3 flex flex-col gap-1.5">
-          <ZoomBtn onClick={zoomIn} aria-label="Zoom in">+</ZoomBtn>
-          <ZoomBtn onClick={zoomOut} aria-label="Zoom out">−</ZoomBtn>
-          <ZoomBtn onClick={reset} aria-label="Reset view" small>⤾</ZoomBtn>
+        {/* Top-right controls: channel_announcement info button + zoom */}
+        <div className="absolute top-3 right-3 flex flex-col items-end gap-2">
+          <button
+            type="button"
+            onClick={() => setAnnouncementOpen((v) => !v)}
+            onPointerDown={(e) => e.stopPropagation()}
+            aria-expanded={announcementOpen}
+            aria-label="Learn about channel_announcement"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "5px 10px",
+              background: announcementOpen ? INK : "#fffdf5",
+              color: announcementOpen ? "#fffdf5" : INK,
+              border: `1.5px solid ${INK}`,
+              borderRadius: 8,
+              fontFamily: '"JetBrains Mono", "Fira Code", monospace',
+              fontSize: 12.5,
+              fontWeight: 700,
+              letterSpacing: "0.02em",
+              cursor: "pointer",
+              boxShadow: "0 2px 6px rgba(0,0,0,0.12)",
+              whiteSpace: "nowrap",
+            }}
+          >
+            <span style={{ fontSize: 14, lineHeight: 1 }}>ⓘ</span>
+            <span>channel_announcement</span>
+          </button>
+          <div className="flex flex-col gap-1.5">
+            <ZoomBtn onClick={zoomIn} aria-label="Zoom in">+</ZoomBtn>
+            <ZoomBtn onClick={zoomOut} aria-label="Zoom out">−</ZoomBtn>
+            <ZoomBtn onClick={reset} aria-label="Reset view" small>⤾</ZoomBtn>
+          </div>
         </div>
 
-      </div>
-
-      {/* Footer hint */}
-      <div className="px-4 py-2 border-t-[1.5px] border-foreground/30 text-xs opacity-70 bg-card">
-        Each named node publishes a <span className="font-semibold">channel_update</span> per outgoing channel. Hover any node to see what it's advertising. The pulsing badge in the upper-right is a fresh <span className="font-semibold">channel_announcement</span> entering the gossip layer, hover it for details.
-      </div>
-
-      {/* channel_announcement detail tooltip */}
-      {announcementHover && (() => {
-        const partner = namedById.get(GOSSIP_PARTNER_ID);
-        const partnerName = partner?.label ?? GOSSIP_PARTNER_ID;
-        return (
+        {/* channel_announcement info panel (click-toggled from the button) */}
+        {announcementOpen && (
           <div
-            className="fixed z-50"
-            style={{
-              left: announcementHover.x,
-              top: announcementHover.y,
-              width: 340,
-            }}
-            onMouseEnter={cancelAnnouncementClose}
-            onMouseLeave={closeAnnouncement}
+            className="absolute z-40"
+            style={{ top: 58, right: 12, width: 330 }}
           >
             <div
               className="border-[1.5px]"
@@ -821,63 +726,77 @@ export function ForwarderPolicyMap() {
               }}
             >
               <div
-                className="px-3 py-2.5 border-b-[1.5px] flex items-center"
-                style={{
-                  borderColor: INK,
-                  background: "#fffdf5",
-                  color: INK,
-                }}
+                className="px-3 py-2.5 border-b-[1.5px] flex items-center justify-between"
+                style={{ borderColor: INK, color: INK }}
               >
                 <span
                   style={{
                     fontFamily: '"JetBrains Mono", "Fira Code", monospace',
-                    fontSize: 15,
+                    fontSize: 14,
                     fontWeight: 700,
-                    letterSpacing: "0.04em",
+                    letterSpacing: "0.03em",
                   }}
                 >
                   channel_announcement
                 </span>
+                <button
+                  type="button"
+                  onClick={() => setAnnouncementOpen(false)}
+                  aria-label="Close"
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    color: INK,
+                    cursor: "pointer",
+                    fontSize: 18,
+                    lineHeight: 1,
+                    padding: 0,
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+              <div
+                className="px-3 py-2.5"
+                style={{
+                  color: SLATE,
+                  fontSize: 12,
+                  lineHeight: 1.55,
+                  borderBottom: `1.5px solid ${INK}20`,
+                }}
+              >
+                Published once when a channel opens. It binds the channel to its
+                two nodes and the on-chain 2-of-2 funding output, with signatures
+                from both the node and funding keys, so peers can verify the two
+                parties really co-own the channel.
               </div>
               <div
                 className="px-3 py-3"
                 style={{
                   fontFamily: '"JetBrains Mono", "Fira Code", monospace',
-                  fontSize: 13,
+                  fontSize: 12.5,
                   lineHeight: 1.7,
                 }}
               >
                 <Row k="short_channel_id" v={GOSSIP_ANNOUNCEMENT.scid} />
-                <Row
-                  k="node_id_1"
-                  v={`${GOSSIP_ANNOUNCEMENT.node1Hex} (newcomer)`}
-                />
-                <Row
-                  k="node_id_2"
-                  v={`${GOSSIP_ANNOUNCEMENT.node2Hex} (${partnerName})`}
-                />
+                <Row k="node_id_1" v={GOSSIP_ANNOUNCEMENT.node1Hex} />
+                <Row k="node_id_2" v={GOSSIP_ANNOUNCEMENT.node2Hex} />
                 <Row
                   k="capacity"
-                  v={`${GOSSIP_ANNOUNCEMENT.capacity.toLocaleString()} sat (derived from funding UTXO, not in the message)`}
+                  v={`${GOSSIP_ANNOUNCEMENT.capacity.toLocaleString()} sat`}
                 />
-              </div>
-              <div
-                className="px-3 py-2 border-t-[1.5px]"
-                style={{
-                  borderColor: `${INK}30`,
-                  color: SLATE,
-                  background: "#fafafa",
-                  fontSize: 12,
-                  lineHeight: 1.55,
-                }}
-              >
-                A new node just opened a channel with {partnerName}. Once a few
-                blocks confirm, it'll start propagating <code style={{ fontFamily: '"JetBrains Mono", "Fira Code", monospace' }}>channel_update</code>s to advertise its policy.
               </div>
             </div>
           </div>
-        );
-      })()}
+        )}
+
+      </div>
+
+      {/* Footer hint */}
+      <div className="px-4 py-2 border-t-[1.5px] border-foreground/30 text-xs opacity-70 bg-card">
+        Each node publishes a <span className="font-semibold">channel_update</span> per outgoing channel. Hover any node to see what it's advertising, and its channels brighten so you can trace them. Click the <span className="font-semibold">channel_announcement</span> button (top right) to learn about the gossip message a node sends when it first opens a channel.
+      </div>
+
 
       {/* Floating hover popover (position: fixed, viewport-clamped) */}
       {hover && (

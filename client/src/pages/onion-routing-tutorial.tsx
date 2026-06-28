@@ -53,6 +53,7 @@ import { WrapPrimerDiagram } from "../components/onion-routing-draft/WrapPrimerD
 import { PeelPrimerDiagram } from "../components/onion-routing-draft/PeelPrimerDiagram";
 import { OnionPacketAnatomyDiagram, AnatomyHighlightProvider, AnatomyTerm } from "../components/onion-routing-draft/OnionPacketAnatomyDiagram";
 import { RouteComparisonDiagram } from "../components/onion-routing-draft/RouteComparisonDiagram";
+import { ROUTE_CALC_EXERCISE_ID } from "../components/onion-routing-draft/RouteCalcExercise";
 import { CltvSafetyLab } from "../components/onion-routing-draft/CltvSafetyLab";
 import { ForwarderPolicyMap } from "../components/onion-routing-draft/ForwarderPolicyMap";
 
@@ -552,7 +553,7 @@ export const CHAPTER_REQUIREMENTS: Record<string, {
   exercises: string[];
 }> = {
   "a-lightning-payment": { checkpoints: [], exercises: [] },
-  "pathfinding-101": { checkpoints: ["cp-channel-update-direction-draft", "cp-cheapest-route-draft"], exercises: [] },
+  "pathfinding-101": { checkpoints: ["cp-channel-update-direction-draft", "cp-cheapest-route-draft"], exercises: ["exercise-route-calc-draft"] },
   "privacy-problem": { checkpoints: ["cp-naive-plaintext-leak-draft", "km-privacy-rubric-draft", "cp-still-vulnerable-draft"], exercises: [] },
   "shared-secrets": { checkpoints: ["cp-node-key-ecdh-draft", "cp-naive-shared-secrets-draft", "cp-blinding-public-draft"], exercises: ["exercise-derive-shared-secrets-draft"] },
   "onion-routing-101": {
@@ -1016,7 +1017,31 @@ function ChapterContent({
             );
           },
           "route-comparison": () => {
-            return <RouteComparisonDiagram />;
+            const ex =
+              completedCheckpoints.find(
+                (c) => c.checkpointId === ROUTE_CALC_EXERCISE_ID,
+              ) || null;
+            return (
+              <div
+                id={`item-${ROUTE_CALC_EXERCISE_ID}`}
+                style={{ scrollMarginTop: 90 }}
+              >
+                <RouteComparisonDiagram
+                  reward={{
+                    theme,
+                    authenticated,
+                    sessionToken,
+                    lightningAddress,
+                    emailVerified,
+                    pubkey,
+                    alreadyCompleted: !!ex,
+                    claimInfo: ex,
+                    onLoginRequest,
+                    onCompleted: onCheckpointCompleted,
+                  }}
+                />
+              </div>
+            );
           },
           "kdf-pipeline": () => {
             return <KdfPipelineDiagram />;
@@ -1663,7 +1688,7 @@ function OnionRoutingDraftTutorialShell({ activeId }: { activeId: string }) {
                                   {reqs!.exercises.map((exId) => (
                                     <Tooltip key={exId} delayDuration={200}>
                                       <TooltipTrigger asChild>
-                                        <button type="button" onClick={(e) => { e.stopPropagation(); goToItem(c.id, exId, "exercise"); }} className={`font-mono text-[13px] leading-none font-bold cursor-pointer ${badgeCompleted.has(exId) ? badgeLit : badgeDim}`}>&lt;/&gt;</button>
+                                        <button type="button" onClick={(e) => { e.stopPropagation(); goToItem(c.id, exId, "exercise"); }} className={`font-mono leading-none font-bold cursor-pointer ${exId === ROUTE_CALC_EXERCISE_ID ? "text-[15px]" : "text-[13px]"} ${badgeCompleted.has(exId) ? badgeLit : badgeDim}`}>{exId === ROUTE_CALC_EXERCISE_ID ? "Σ" : "</>"}</button>
                                       </TooltipTrigger>
                                       <TooltipContent side="bottom" className={badgeTooltipClass}>
                                         {badgeCompleted.has(exId) ? "Jump to exercise (complete)" : "Jump to exercise"}

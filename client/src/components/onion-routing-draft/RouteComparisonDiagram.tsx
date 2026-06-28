@@ -4,7 +4,7 @@ import {
   ComputedRouteDiagram,
   type ComputedRouteDiagramProps,
 } from "./ComputedRouteDiagram";
-import { RouteCalcExercise } from "./RouteCalcExercise";
+import { RouteCalcExercise, type RouteCalcReward } from "./RouteCalcExercise";
 
 // ────────────────────────────────────────────────────────────────────────────
 // RouteComparisonDiagram (DRAFT)
@@ -149,7 +149,13 @@ function TabButton({ label, active, onClick }: TabButtonProps) {
   );
 }
 
-export function RouteComparisonDiagram() {
+export interface RouteComparisonDiagramProps {
+  reward?: RouteCalcReward;
+}
+
+export function RouteComparisonDiagram({
+  reward,
+}: RouteComparisonDiagramProps = {}) {
   const [tab, setTab] = useState<Tab>("a");
 
   const rootRef = useReadableInDark();
@@ -193,7 +199,7 @@ export function RouteComparisonDiagram() {
       <div>
         {tab === "a" && <ComputedRouteDiagram {...ROUTE_A} headerless />}
         {tab === "b" && <ComputedRouteDiagram {...ROUTE_B} headerless />}
-        {tab === "c" && <RouteCalcExercise headerless />}
+        {tab === "c" && <RouteCalcExercise headerless reward={reward} />}
       </div>
     </div>
   );

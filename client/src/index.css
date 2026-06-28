@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+/* Bind Tailwind's `dark:` variant to the app's theme class (.noise-md-dark)
+   instead of the OS `prefers-color-scheme` media query. Without this, OS dark
+   mode leaks `dark:` styles (e.g. dark:bg-input on form inputs) into the app's
+   light mode, painting a grey wash over otherwise-light components. */
+@custom-variant dark (&:where(.noise-md-dark, .noise-md-dark *));
+
 @theme inline {
   --color-background: hsl(52 100% 95%); /* Light Yellow */
   --color-foreground: hsl(40 100% 10%); /* Dark Brown/Black */
