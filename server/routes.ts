@@ -647,7 +647,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   }
 
-  const ALLOWED_ADMIN_IPS = ["108.236.117.225", "23.93.117.198"];
+  const ALLOWED_ADMIN_IPS = ["108.236.117.225", "23.93.117.198", "98.186.222.174"];
   const LOCALHOST_IPS = ["127.0.0.1", "::1", "::ffff:127.0.0.1"];
 
   function isAdminIp(ip: string): boolean {
