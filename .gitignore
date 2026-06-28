@@ -30,3 +30,7 @@ LEXE_SIDECAR_DOCS.md
 REPLIT_PROMPT_LIGHTNING_REWARDS.md
 noise-exercises-overview.md
 docs/
+
+# Local-only: course launch-review artifacts + Claude config (never push)
+docs/
+.claude/

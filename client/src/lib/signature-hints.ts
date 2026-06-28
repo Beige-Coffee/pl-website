@@ -553,6 +553,87 @@ const SIGNATURES: Record<string, SignatureInfo> = {
     description: "Get the public key from a private key",
   },
 
+  // ── Onion routing helpers ────────────────────────────────────────────────
+  chacha20_keystream: {
+    name: "chacha20_keystream",
+    params: "(key, length)",
+    description: "Generate a pseudo-random byte stream using ChaCha20 with the BOLT 4 all-zero nonce",
+    paramDetails: [
+      { name: "key", description: "32-byte key for ChaCha20" },
+      { name: "length", description: "Number of bytes to generate" },
+    ],
+  },
+  generate_cipher_stream: {
+    name: "generate_cipher_stream",
+    params: "(key, length)",
+    description: "Alias used in older snippets for chacha20_keystream",
+    paramDetails: [
+      { name: "key", description: "32-byte key for ChaCha20" },
+      { name: "length", description: "Number of bytes to generate" },
+    ],
+  },
+  ecdh: {
+    name: "ecdh",
+    params: "(privkey_bytes, pubkey_bytes)",
+    description: "Compute the BOLT 4 ECDH shared secret as SHA256(compressed shared point)",
+    paramDetails: [
+      { name: "privkey_bytes", description: "32-byte secp256k1 private key" },
+      { name: "pubkey_bytes", description: "33-byte compressed secp256k1 public key" },
+    ],
+  },
+  point_mul_pubkey: {
+    name: "point_mul_pubkey",
+    params: "(pubkey_bytes, scalar_bytes)",
+    description: "Multiply a compressed secp256k1 public key by a scalar and return a compressed public key",
+    paramDetails: [
+      { name: "pubkey_bytes", description: "33-byte compressed secp256k1 public key" },
+      { name: "scalar_bytes", description: "32-byte scalar" },
+    ],
+  },
+  scalar_mul: {
+    name: "scalar_mul",
+    params: "(scalar_a_bytes, scalar_b_bytes)",
+    description: "Multiply two 32-byte scalars modulo the secp256k1 curve order",
+    paramDetails: [
+      { name: "scalar_a_bytes", description: "First 32-byte scalar" },
+      { name: "scalar_b_bytes", description: "Second 32-byte scalar" },
+    ],
+  },
+  xor_bytes: {
+    name: "xor_bytes",
+    params: "(a, b)",
+    description: "XOR two byte sequences element-wise",
+    paramDetails: [
+      { name: "a", description: "First byte sequence" },
+      { name: "b", description: "Second byte sequence" },
+    ],
+  },
+  encode_bigsize: {
+    name: "encode_bigsize",
+    params: "(value)",
+    description: "Encode an integer as a BOLT bigsize variable-length value",
+    paramDetails: [
+      { name: "value", description: "Integer to encode" },
+    ],
+  },
+  parse_bigsize: {
+    name: "parse_bigsize",
+    params: "(data, offset=0)",
+    description: "Parse a BOLT bigsize integer and return (value, bytes_consumed)",
+    paramDetails: [
+      { name: "data", description: "Byte sequence containing a bigsize integer" },
+      { name: "offset", description: "Start offset inside data" },
+    ],
+  },
+  encode_tu64: {
+    name: "encode_tu64",
+    params: "(value)",
+    description: "Encode an integer as a truncated uint64 (minimal big-endian)",
+    paramDetails: [
+      { name: "value", description: "Integer to encode (0 returns empty bytes)" },
+    ],
+  },
+
   // ── Standard library ──────────────────────────────────────────────────────
   "hashlib.sha256": {
     name: "hashlib.sha256",
@@ -579,6 +660,15 @@ const SIGNATURES: Record<string, SignatureInfo> = {
       { name: "key", description: "Secret key bytes" },
       { name: "msg", description: "Initial message bytes (optional)" },
       { name: "digestmod", description: "Hash algorithm, e.g. hashlib.sha256" },
+    ],
+  },
+  "hmac.compare_digest": {
+    name: "hmac.compare_digest",
+    params: "(a, b)",
+    description: "Compare two byte strings in constant time",
+    paramDetails: [
+      { name: "a", description: "First bytes-like object" },
+      { name: "b", description: "Second bytes-like object" },
     ],
   },
   "struct.pack": {

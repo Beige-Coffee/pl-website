@@ -231,6 +231,24 @@ function inferTypeFromDoc(varName: string, doc: string): string | null {
 // instance-level completions statically keyed by class name.
 
 const SELF_COMPLETIONS: Record<string, Completion[]> = {
+  SphinxPacketBuilder: [
+    // Instance attributes (set in __init__ and compute_ephemeral_keys_and_secrets)
+    { label: "session_key", type: "property", detail: "32-byte session private key" },
+    { label: "route_pubkeys", type: "property", detail: "List of hop public keys" },
+    { label: "num_hops", type: "property", detail: "Number of hops in the route" },
+    { label: "ephemeral_pubkeys", type: "property", detail: "List of 33-byte ephemeral pubkeys" },
+    { label: "shared_secrets", type: "property", detail: "List of 32-byte shared secrets" },
+    { label: "hop_keys", type: "property", detail: "List of per-hop key dicts (rho, mu, ...)" },
+    // Methods
+    { label: "compute_shared_secret", type: "function", detail: "ECDH shared secret" },
+    { label: "derive_hop_keys", type: "function", detail: "Derive 5 per-hop keys" },
+    { label: "compute_blinding_factor", type: "function", detail: "SHA256(pubkey || secret)" },
+    { label: "compute_ephemeral_keys_and_secrets", type: "function", detail: "Full key chain" },
+    { label: "build_hop_payloads", type: "function", detail: "Build TLV payloads for all hops" },
+    { label: "generate_filler", type: "function", detail: "Generate filler bytes" },
+    { label: "wrap_layer", type: "function", detail: "Wrap a single onion layer" },
+    { label: "construct_packet", type: "function", detail: "Build the full 1366-byte packet" },
+  ],
   ChannelKeyManager: [
     // Instance attributes (set in __init__)
     { label: "funding_key", type: "property", detail: "Family 0 private key" },

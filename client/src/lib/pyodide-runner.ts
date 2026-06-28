@@ -9,6 +9,10 @@ export interface TestResult {
   name: string;
   passed: boolean;
   message: string;
+  /** 1-indexed line (in the assembled run source) where a runtime error was raised, if any. */
+  line?: number | null;
+  /** Source text of that line, looked up by the worker — the line that actually failed. */
+  source?: string;
 }
 
 export interface CodeRunResult {
@@ -88,6 +92,14 @@ const WORKER_SRC = [
   "      return;",
   "    }",
   "",
+  '    if (mode === "trace") {',
+  "      // ── Trace mode: run a self-contained program that sets _trace_result (a JSON string) ──",
+  "      await pyodide.runPythonAsync(code);",
+  '      const trace = await pyodide.runPythonAsync("_trace_result");',
+  '      self.postMessage({ id, type: "trace_result", trace });',
+  "      return;",
+  "    }",
+  "",
   '    if (mode === "signature") {',
   "      // ── Signature mode: get function signature via inspect ──",
   '      const script = [',
@@ -139,6 +151,7 @@ const WORKER_SRC = [
   "    // ── Test mode: run student code + test suite ──",
   '    const harness = [',
   '      "import json as _json",',
+  '      "import traceback as _traceback",',
   '      "_test_results = []",',
   '      "for _name, _fn in sorted(globals().items()):",',
   '      "    if _name.startswith(\\"test_\\") and callable(_fn):",',
@@ -148,13 +161,21 @@ const WORKER_SRC = [
   '      "        except AssertionError as _ae:",',
   '      "            _test_results.append({\\"name\\": _name, \\"passed\\": False, \\"message\\": str(_ae) or \\"Assertion failed\\"})",',
   '      "        except Exception as _ex:",',
-  '      "            _test_results.append({\\"name\\": _name, \\"passed\\": False, \\"message\\": type(_ex).__name__ + \\": \\" + str(_ex)})",',
+  '      "            _exec_frames = [f for f in _traceback.extract_tb(_ex.__traceback__) if f.filename == \\"<exec>\\"]",',
+  '      "            _err_line = _exec_frames[-1].lineno if _exec_frames else None",',
+  '      "            _test_results.append({\\"name\\": _name, \\"passed\\": False, \\"message\\": type(_ex).__name__ + \\": \\" + str(_ex), \\"line\\": _err_line})",',
   '      "_json.dumps(_test_results)",',
   "    ].join('\\n');",
   '    const cleanup = "for _k in [k for k in list(globals()) if k.startswith(\\"test_\\")]: del globals()[_k]\\n";',
   '    const combined = cleanup + studentCode + "\\n\\n" + testCode + "\\n\\n" + harness;',
   "    const result = await pyodide.runPythonAsync(combined);",
   "    const results = JSON.parse(result);",
+  "    const combinedLines = combined.split('\\n');",
+  "    for (const r of results) {",
+  "      if (r && r.line && combinedLines[r.line - 1] !== undefined) {",
+  "        r.source = combinedLines[r.line - 1].trim();",
+  "      }",
+  "    }",
   '    self.postMessage({ id, type: "result", results });',
   "  } catch (err) {",
   "    self.postMessage({",
@@ -215,7 +236,7 @@ function getWorker(): Worker {
   if (!worker) {
     worker = new Worker(workerURL);
     worker.onmessage = (e) => {
-      const { id, type, results, message, output, error, items, signature, phase } = e.data;
+      const { id, type, results, message, output, error, items, signature, phase, trace } = e.data;
       if (type === "loading") {
         currentPhase = phase as PyodideLoadingPhase;
         loadingListeners.forEach((cb) => cb(currentPhase));
@@ -231,6 +252,8 @@ function getWorker(): Worker {
         entry.resolve({ output: output || "", error: error || null });
       } else if (type === "exec_result") {
         entry.resolve(undefined);
+      } else if (type === "trace_result") {
+        entry.resolve(trace);
       } else if (type === "complete_result") {
         entry.resolve(items as CompletionItem[]);
       } else if (type === "signature_result") {
@@ -305,6 +328,24 @@ export async function execPythonSilent(code: string): Promise<void> {
     }, TIMEOUT_MS);
     pending.set(id, { resolve, reject, timer });
     w.postMessage({ id, code, mode: "exec" });
+  });
+}
+
+/**
+ * Run a self-contained trace program (which must set `_trace_result` to a JSON
+ * string) and return that JSON string. Used by the onion capstone step-through
+ * engine to capture per-line local-variable snapshots via sys.settrace.
+ */
+export async function runPythonTrace(code: string): Promise<string> {
+  const w = getWorker();
+  const id = ++messageId;
+  return new Promise<string>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      pending.delete(id);
+      reject(new Error("Trace timed out (60 s)."));
+    }, TIMEOUT_MS);
+    pending.set(id, { resolve, reject, timer });
+    w.postMessage({ id, code, mode: "trace" });
   });
 }
 

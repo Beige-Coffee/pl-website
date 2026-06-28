@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { useIsMobile } from "../hooks/use-mobile";
+import { renderMath } from "./onion-routing-draft/mathTokens";
 
 interface CheckpointQuestionProps {
   checkpointId: string;
   question: string;
   options: string[];
-  answer: number;
+  /** Single correct index, or array of indices for multi-select */
+  answer: number | number[];
   explanation: string;
   theme: "light" | "dark";
   authenticated: boolean;
@@ -21,24 +23,64 @@ interface CheckpointQuestionProps {
   onOpenProfile?: () => void;
 }
 
-// Render inline code: converts `text` to <code> elements
-function renderInlineCode(text: string, dark: boolean): React.ReactNode {
-  const parts = text.split(/(`[^`]+`)/g);
+// Render the small markup subset used in checkpoint question/option/explanation
+// text. Inline: `code` or <code> -> monospace pill; <m>token</m> -> math
+// typography (via renderMath); <strong>/**bold** -> bold; <em>/*italic* ->
+// italic (bold/italic may nest other inline markup). Block: blank lines become
+// paragraphs and single newlines become <br>. Multiplication is written with
+// "·" throughout this content, so "*" is unambiguously an italic delimiter.
+const codePillClass = (dark: boolean) =>
+  `rounded px-1 py-0.5 font-mono text-[0.9em] ${dark ? "bg-white/10" : "bg-black/[0.06]"}`;
+
+function renderInlineMarkup(text: string, dark: boolean): React.ReactNode {
+  const parts = text.split(
+    /(`[^`]+`|<m>[^<]+<\/m>|<code>[\s\S]*?<\/code>|<strong>[\s\S]*?<\/strong>|<em>[\s\S]*?<\/em>|\*\*[\s\S]+?\*\*|\*[^*\n]+\*)/g,
+  );
   if (parts.length === 1) return text;
   return parts.map((part, i) => {
-    if (part.startsWith("`") && part.endsWith("`")) {
-      const code = part.slice(1, -1);
+    if (!part) return null;
+    if (part.startsWith("`") && part.endsWith("`"))
+      return <code key={i} className={codePillClass(dark)}>{part.slice(1, -1)}</code>;
+    if (part.startsWith("<code>") && part.endsWith("</code>"))
+      return <code key={i} className={codePillClass(dark)}>{part.slice(6, -7)}</code>;
+    if (part.startsWith("<m>") && part.endsWith("</m>"))
       return (
-        <code
-          key={i}
-          className={`rounded px-1 py-0.5 font-mono text-[0.9em] ${dark ? "bg-white/10" : "bg-black/[0.06]"}`}
-        >
-          {code}
-        </code>
+        <span key={i} className="font-mono text-[1.05em] font-medium">
+          {renderMath(part.slice(3, -4))}
+        </span>
       );
-    }
+    if (part.startsWith("<strong>") && part.endsWith("</strong>"))
+      return <strong key={i}>{renderInlineMarkup(part.slice(8, -9), dark)}</strong>;
+    if (part.startsWith("**") && part.endsWith("**"))
+      return <strong key={i}>{renderInlineMarkup(part.slice(2, -2), dark)}</strong>;
+    if (part.startsWith("<em>") && part.endsWith("</em>"))
+      return <em key={i}>{renderInlineMarkup(part.slice(4, -5), dark)}</em>;
+    if (part.startsWith("*") && part.endsWith("*"))
+      return <em key={i}>{renderInlineMarkup(part.slice(1, -1), dark)}</em>;
     return part;
   });
+}
+
+function renderTextLines(block: string, dark: boolean): React.ReactNode {
+  const lines = block.split("\n");
+  if (lines.length === 1) return renderInlineMarkup(block, dark);
+  return lines.map((line, li) => (
+    <React.Fragment key={li}>
+      {li > 0 && <br />}
+      {renderInlineMarkup(line, dark)}
+    </React.Fragment>
+  ));
+}
+
+// Entry point kept under the original name so existing call sites are unchanged.
+function renderInlineCode(text: string, dark: boolean): React.ReactNode {
+  const paragraphs = text.split(/\n{2,}/);
+  if (paragraphs.length === 1) return renderTextLines(paragraphs[0], dark);
+  return paragraphs.map((p, pi) => (
+    <span key={pi} className={pi === 0 ? "block" : "block mt-2"}>
+      {renderTextLines(p, dark)}
+    </span>
+  ));
 }
 
 export default function CheckpointQuestion({
@@ -66,13 +108,30 @@ export default function CheckpointQuestion({
   const userSuffix = sessionToken ? `-${sessionToken.slice(0, 8)}` : "";
   const storageKey = `pl-checkpoint-${checkpointId}${userSuffix}`;
 
-  const [selected, setSelected] = useState<number | null>(() => {
+  // For multi-select questions (when `answer` is an array) `selected` is an
+  // array of indices. For single-select it's a single number. `null` = unset.
+  const isMulti = Array.isArray(answer);
+  const [selected, setSelected] = useState<number | number[] | null>(() => {
     try {
       const saved = localStorage.getItem(storageKey);
-      if (saved !== null) return JSON.parse(saved);
+      if (saved !== null) {
+        const parsed = JSON.parse(saved);
+        if (isMulti) {
+          return Array.isArray(parsed) ? parsed : null;
+        }
+        return typeof parsed === "number" ? parsed : null;
+      }
     } catch {}
     return null;
   });
+
+  // Helpers shared by submit + render logic.
+  const setEqual = (a: number[], b: number[]) =>
+    a.length === b.length &&
+    a.every((v) => b.includes(v));
+  const isSelectionEmpty =
+    selected === null ||
+    (Array.isArray(selected) && selected.length === 0);
   const [submitted, setSubmitted] = useState(false);
   const [correct, setCorrect] = useState(false);
   const [wrongAttempt, setWrongAttempt] = useState(false);
@@ -129,14 +188,20 @@ export default function CheckpointQuestion({
   };
 
   const handleSubmit = useCallback(async () => {
-    if (selected === null) return;
+    if (isSelectionEmpty) return;
 
     if (!authenticated) {
       onLoginRequest();
       return;
     }
 
-    if (selected !== answer) {
+    const isCorrect = isMulti
+      ? Array.isArray(selected) &&
+        Array.isArray(answer) &&
+        setEqual(selected, answer)
+      : selected === answer;
+
+    if (!isCorrect) {
       setWrongAttempt(true);
       setShaking(true);
       setTimeout(() => setShaking(false), 500);
@@ -320,8 +385,18 @@ export default function CheckpointQuestion({
         </div>
         <div className={`text-[17px] md:text-[19px] font-semibold ${textColor} mb-3`}>{renderInlineCode(question, dark)}</div>
         <div className={`text-[15px] md:text-[17px] ${textMuted} leading-relaxed`}>
-          <span className={`font-semibold ${greenText}`}>Correct answer: </span>
-          {renderInlineCode(options[answer], dark)}
+          <span className={`font-semibold ${greenText}`}>
+            {Array.isArray(answer) ? "Correct answers: " : "Correct answer: "}
+          </span>
+          {Array.isArray(answer) ? (
+            <ul className="mt-1 list-disc pl-5 space-y-1">
+              {answer.map((idx) => (
+                <li key={idx}>{renderInlineCode(options[idx], dark)}</li>
+              ))}
+            </ul>
+          ) : (
+            renderInlineCode(options[answer], dark)
+          )}
         </div>
         {explanation && (
           <div className={`mt-3 pt-3 border-t ${dark ? "border-[#1f2a44]" : "border-border"}`}>
@@ -355,11 +430,16 @@ export default function CheckpointQuestion({
 
       <div className={`text-[17px] md:text-[19px] font-semibold ${textColor} mb-4`}>{renderInlineCode(question, dark)}</div>
 
-      <div className="space-y-2 mb-4">
+      <div className="space-y-2 mb-4" role={isMulti ? "group" : "radiogroup"}>
         {options.map((opt, i) => {
-          const isSelected = selected === i;
-          const isWrongSelection = wrongAttempt && isSelected && i !== answer;
-          const isCorrectReveal = submitted && correct && i === answer;
+          const isSelected = isMulti
+            ? Array.isArray(selected) && selected.includes(i)
+            : selected === i;
+          const isCorrectIndex = isMulti
+            ? Array.isArray(answer) && answer.includes(i)
+            : i === answer;
+          const isWrongSelection = wrongAttempt && isSelected && !isCorrectIndex;
+          const isCorrectReveal = submitted && correct && isCorrectIndex;
 
           let optBorder = dark ? "border-[#2a3552]" : "border-border";
           let optBg = dark ? "bg-[#0b1220]" : "bg-background";
@@ -380,10 +460,21 @@ export default function CheckpointQuestion({
             <button
               key={i}
               type="button"
+              role={isMulti ? "checkbox" : "radio"}
+              aria-checked={isSelected}
               onClick={() => {
                 if (submitted) return;
-                setSelected(i);
-                try { localStorage.setItem(storageKey, JSON.stringify(i)); } catch {}
+                let next: number | number[];
+                if (isMulti) {
+                  const cur = Array.isArray(selected) ? selected : [];
+                  next = cur.includes(i)
+                    ? cur.filter((x) => x !== i)
+                    : [...cur, i].sort((a, b) => a - b);
+                } else {
+                  next = i;
+                }
+                setSelected(next);
+                try { localStorage.setItem(storageKey, JSON.stringify(next)); } catch {}
                 setWrongAttempt(false);
               }}
               disabled={submitted}
@@ -405,7 +496,7 @@ export default function CheckpointQuestion({
                       : "border-border text-foreground/60"
                   }`}
                 >
-                  {isCorrectReveal ? "\u2713" : isWrongSelection ? "\u2717" : String.fromCharCode(65 + i)}
+                  {isCorrectReveal ? "\u2713" : isWrongSelection ? "\u2717" : isMulti ? (isSelected ? "\u2713" : "") : String.fromCharCode(65 + i)}
                 </span>
                 <div className={`text-[15px] md:text-[17px] ${optText} leading-relaxed`}>{renderInlineCode(opt, dark)}</div>
               </div>
@@ -424,16 +515,16 @@ export default function CheckpointQuestion({
         <button
           type="button"
           onClick={handleSubmit}
-          disabled={selected === null}
+          disabled={isSelectionEmpty}
           className={`font-pixel text-sm border-2 px-6 py-3 transition-all ${
-            selected !== null
+            !isSelectionEmpty
               ? `${goldBorder} ${goldBg} text-black hover:bg-[#FFC800] active:scale-95`
               : dark
               ? "border-[#2a3552] bg-[#0f1930] text-slate-500 cursor-not-allowed"
               : "border-border bg-secondary text-foreground/40 cursor-not-allowed"
           }`}
         >
-          {selected !== null && !authenticated ? "LOGIN & SUBMIT" : "SUBMIT ANSWER"}
+          {!isSelectionEmpty && !authenticated ? "LOGIN & SUBMIT" : "SUBMIT ANSWER"}
         </button>
       )}
 

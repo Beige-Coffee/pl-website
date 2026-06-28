@@ -12,6 +12,7 @@ import NoiseTutorialPage from "@/pages/noise-tutorial";
 import LightningTutorialPage from "@/pages/lightning-tutorial";
 import AdminPage from "@/pages/admin";
 import VisualLightningPage from "@/pages/visual-lightning";
+import OnionRoutingTutorialPage from "@/pages/onion-routing-tutorial";
 import Learn from "@/pages/learn";
 import ResetPasswordPage from "@/pages/reset-password";
 
@@ -27,6 +28,8 @@ function Router() {
       <Route path="/noise-tutorial/:chapterId" component={NoiseTutorialPage} />
       <Route path="/lightning-tutorial" component={LightningTutorialPage} />
       <Route path="/lightning-tutorial/:chapterId" component={LightningTutorialPage} />
+      <Route path="/onion-routing-tutorial" component={OnionRoutingTutorialPage} />
+      <Route path="/onion-routing-tutorial/:chapterId" component={OnionRoutingTutorialPage} />
       <Route path="/reset-password" component={ResetPasswordPage} />
       <Route path="/admin" component={AdminPage} />
       <Route path="/visual-lightning" component={VisualLightningPage} />

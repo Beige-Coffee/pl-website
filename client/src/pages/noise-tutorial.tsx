@@ -1298,7 +1298,7 @@ function DonationWall({ theme }: { theme: "light" | "dark" }) {
   );
 }
 
-function PayItForward({ theme }: { theme: "light" | "dark" }) {
+export function PayItForward({ theme }: { theme: "light" | "dark" }) {
   const dark = theme === "dark";
   const [amount, setAmount] = useState("");
   const [customAmount, setCustomAmount] = useState("");

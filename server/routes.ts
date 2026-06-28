@@ -141,9 +141,27 @@ a:hover{opacity:0.9;}</style></head>
 <a href="/">BACK TO HOME</a></div></body></html>`;
 }
 
+// Validate an incoming checkpoint answer payload. Single-select submissions
+// arrive as a number; multi-select submissions as an array of numbers.
+function isValidAnswer(value: unknown): value is number | number[] {
+  if (typeof value === "number" && Number.isInteger(value)) return true;
+  if (Array.isArray(value) && value.every((v) => typeof v === "number" && Number.isInteger(v))) return true;
+  return false;
+}
+
+// Compare a user's submitted answer against the canonical answer. For
+// multi-select questions the order doesn't matter but the *set* of selected
+// indices must match exactly.
+function answersMatch(user: number | number[], correct: number | number[]): boolean {
+  const userArr = Array.isArray(user) ? [...user].sort((a, b) => a - b) : [user];
+  const correctArr = Array.isArray(correct) ? [...correct].sort((a, b) => a - b) : [correct];
+  if (userArr.length !== correctArr.length) return false;
+  return userArr.every((v, i) => v === correctArr[i]);
+}
+
 // Checkpoint questions — server-side answer key (index of correct option)
 // Exported for content integrity tests
-export const CHECKPOINT_ANSWER_KEY: Record<string, number> = {
+export const CHECKPOINT_ANSWER_KEY: Record<string, number | number[]> = {
   "pubkey-compression": 1,
   "hash-preimage": 2,
   "ecdh-security": 1,
@@ -153,6 +171,55 @@ export const CHECKPOINT_ANSWER_KEY: Record<string, number> = {
   "act2-both-ephemeral": 3,
   "act3-nonce-one": 2,
   "message-length-limit": 0,
+  // ── Onion routing tutorial checkpoints (draft naming retained on
+  // checkpoint IDs to preserve persisted user progress) ─────────────────
+  // Intro: Naive plaintext routing leak (draft)
+  "cp-naive-plaintext-leak-draft": 2,
+  // Chapter 3: The Privacy Problem (draft)
+  "cp-still-vulnerable-draft": [1, 2],
+  // Privacy-rubric grid (KnowledgeMatrix). Client-verified like a coding
+  // exercise: 0 means "all 24 cells correct".
+  "km-privacy-rubric-draft": 0,
+  // Chapter 2: Pathfinding 101 (draft)
+  "cp-channel-update-direction-draft": 1,
+  "cp-cheapest-route-draft": 2,
+  // Chapter 4: Shared Secrets per Hop (draft)
+  "cp-node-key-ecdh-draft": [0, 1, 2],
+  "cp-naive-shared-secrets-draft": [0, 2],
+  "cp-blinding-public-draft": 1,
+  "exercise-derive-shared-secrets-draft": 0,
+  // Chapter 5: Onion Routing 101 (draft)
+  "cp-101-keystream-shared-draft": 1,
+  "cp-101-encrypt-buffer-scope-draft": 2,
+  "cp-101-dave-layer-count-draft": 2,
+  "cp-101-decrypt-buffer-scope-draft": 2,
+  "cp-101-tamper-detection-draft": 1,
+  // Chapter 6: Key Derivation (draft)
+  "cp-key-separation-draft": [0, 1, 2],
+  "cp-key-domain-separation-draft": 1,
+  "exercise-derive-keys-draft": 0,
+  // Chapter 7: The Fixed-Size Packet & Filler (draft)
+  "cp-payload-shrink-leak-draft": [0],
+  "cp-filler-shared-keystream-draft": 1,
+  "cp-filler-reach-back-draft": 2,
+  "exercise-generate-filler-draft": 0,
+  // Chapter 8: Wrapping Layer-by-Layer (draft)
+  "cp-build-reverse-order-draft": 1,
+  "cp-hmac-commits-to-draft": 1,
+  "exercise-wrap-hop-draft": 0,
+  "exercise-build-packet-draft": 0,
+  // Chapter 9: Peeling a Layer (draft)
+  "cp-peel-extended-stream-draft": 2,
+  "cp-peel-next-hmac-draft": 1,
+  "exercise-peel-layer-draft": 0,
+  // Chapter 10: Forwarding & Validation (draft)
+  "cp-validate-before-decrypt-draft": 1,
+  "cp-tlv-final-vs-forward-draft": 1,
+  "exercise-verify-hmac-draft": 0,
+  "exercise-check-forward-draft": 0,
+  // Chapter 11: The Error Onion (draft)
+  "cp-error-trial-decrypt-draft": 1,
+  "exercise-decrypt-error-onion-draft": 0,
   // Coding exercise IDs — answer 0 means "all tests passed"
   "exercise-generate-keypair": 0,
   "exercise-ecdh": 0,
@@ -734,7 +801,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { checkpointId, answer } = req.body;
-      if (!checkpointId || typeof checkpointId !== "string" || typeof answer !== "number") {
+      if (
+        !checkpointId ||
+        typeof checkpointId !== "string" ||
+        !isValidAnswer(answer)
+      ) {
         return res.status(400).json({ error: "Invalid request" });
       }
 
@@ -743,7 +814,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Unknown checkpoint" });
       }
 
-      if (answer !== correctAnswer) {
+      if (!answersMatch(answer, correctAnswer)) {
         return res.json({ correct: false });
       }
 
@@ -774,7 +845,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { checkpointId, answer, method } = req.body;
-      if (!checkpointId || typeof checkpointId !== "string" || typeof answer !== "number") {
+      if (
+        !checkpointId ||
+        typeof checkpointId !== "string" ||
+        !isValidAnswer(answer)
+      ) {
         return res.status(400).json({ error: "Invalid request" });
       }
 
@@ -783,7 +858,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Unknown checkpoint" });
       }
 
-      if (answer !== correctAnswer) {
+      if (!answersMatch(answer, correctAnswer)) {
         return res.status(400).json({ error: "Incorrect answer", correct: false });
       }
 

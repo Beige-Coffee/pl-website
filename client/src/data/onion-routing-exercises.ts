@@ -1,0 +1,1258 @@
+// ─── Onion Routing Exercise Definitions ──────────────────────────────────────
+//
+// Each exercise has starter code, test code, hints, and metadata.
+// Exercises are keyed by ID and referenced from tutorial markdown via
+// <code-intro exercises="..."> tags.
+//
+// Exercises are added chapter-by-chapter. The 10 planned exercises:
+//
+// crypto/keys.py
+//   - exercise-derive-keys                     [Ch 4]
+//
+// sphinx/builder.py
+//   - exercise-derive-shared-secrets           [Ch 3]
+//   - exercise-generate-filler                 [Ch 6]
+//   - exercise-wrap-hop                        [Ch 7]
+//   - exercise-build-packet                    [Ch 7]
+//
+// sphinx/forwarder.py
+//   - exercise-peel-layer                      [Ch 8]
+//   - exercise-process-onion                   [Ch 9]
+//
+// sphinx/errors.py
+//   - exercise-build-error-onion               [Ch 10]
+//   - exercise-decrypt-error-onion             [Ch 10]
+//
+// (Chapter 11–12 capstones are integrations, not new exercises.)
+
+export interface CodeExerciseData {
+  id: string;
+  title: string;
+  description: string;
+  starterCode: string;
+  testCode: string;
+  hints: {
+    conceptual: string;
+    steps: string;
+    code: string;
+  };
+  rewardSats: number;
+  group: string;
+  groupOrder: number;
+}
+
+export const ONION_ROUTING_EXERCISES: Record<string, CodeExerciseData> = {
+
+  "exercise-derive-keys": {
+    id: "exercise-derive-keys",
+    title: "Derive the Per-Hop Keys",
+    description:
+      "Implement derive_keys(shared_secret) -> KeyMaterial. Given a 32-byte shared secret, return the five named keys (rho, mu, um, pad, ammag) defined by BOLT 4. " +
+      "Each key is computed as HMAC-SHA256(name=ASCII label, msg=shared_secret) and is exactly 32 bytes long. The KeyMaterial dataclass is provided as a small named container.",
+    starterCode: `import hmac, hashlib
+from dataclasses import dataclass
+
+@dataclass
+class KeyMaterial:
+    rho: bytes
+    mu: bytes
+    um: bytes
+    pad: bytes
+    ammag: bytes
+
+def derive_keys(shared_secret: bytes) -> KeyMaterial:
+    """
+    Expand a 32-byte shared secret into the five named keys per BOLT 4.
+
+    Each key is HMAC-SHA256(key=name_bytes, msg=shared_secret), where name_bytes
+    is the ASCII bytes of the label (e.g. b"rho").
+
+    Returns a KeyMaterial with all five keys filled in.
+    """
+    # TODO: implement
+    pass
+`,
+    testCode: `import hmac, hashlib
+
+# Test vector: a deterministic 32-byte shared secret.
+SS = bytes.fromhex("4242424242424242424242424242424242424242424242424242424242424242")
+
+def reference(name, ss):
+    return hmac.new(name, ss, hashlib.sha256).digest()
+
+def test_returns_keymaterial():
+    out = derive_keys(SS)
+    assert isinstance(out, KeyMaterial), "Expected a KeyMaterial dataclass"
+
+def test_all_keys_are_32_bytes():
+    out = derive_keys(SS)
+    for name in ("rho", "mu", "um", "pad", "ammag"):
+        k = getattr(out, name)
+        assert isinstance(k, (bytes, bytearray)), f"{name} must be bytes"
+        assert len(k) == 32, f"{name} must be exactly 32 bytes, got {len(k)}"
+
+def test_keys_match_reference():
+    out = derive_keys(SS)
+    assert out.rho == reference(b"rho", SS), "rho doesn't match HMAC-SHA256(b'rho', ss)"
+    assert out.mu == reference(b"mu", SS), "mu doesn't match HMAC-SHA256(b'mu', ss)"
+    assert out.um == reference(b"um", SS), "um doesn't match HMAC-SHA256(b'um', ss)"
+    assert out.pad == reference(b"pad", SS), "pad doesn't match HMAC-SHA256(b'pad', ss)"
+    assert out.ammag == reference(b"ammag", SS), "ammag doesn't match HMAC-SHA256(b'ammag', ss)"
+
+def test_keys_are_distinct():
+    """Domain separation: every key should be different from every other key."""
+    out = derive_keys(SS)
+    keys = [out.rho, out.mu, out.um, out.pad, out.ammag]
+    seen = set()
+    for k in keys:
+        assert k not in seen, "Two derived keys collided; check that you're using the right label for each"
+        seen.add(k)
+
+def test_different_secrets_produce_different_keys():
+    """Sanity: a different shared secret should produce different output."""
+    other_ss = bytes.fromhex("4343434343434343434343434343434343434343434343434343434343434343")
+    a = derive_keys(SS)
+    b = derive_keys(other_ss)
+    assert a.rho != b.rho
+    assert a.mu  != b.mu
+`,
+    hints: {
+      conceptual:
+        "<strong>Goal:</strong> map one 32-byte shared secret to five 32-byte keys, each tagged with a different ASCII label." +
+        "<br><br><strong>Why HMAC:</strong> HMAC-SHA256 acts as a pseudorandom function: changing either input (key OR message) gives an output that looks statistically uncorrelated with the original. So HMAC(b'rho', ss) and HMAC(b'mu', ss) are independent-looking even though they share the same ss." +
+        "<br><br><strong>Argument order matters:</strong> the BOLT 4 construction puts the label as the HMAC key and the shared secret as the message. <code>hmac.new(key, msg, digestmod)</code> takes them in that order.",
+      steps:
+        "<strong>Imports already done:</strong> hmac, hashlib, and the KeyMaterial dataclass are in scope." +
+        "<br><br>For each of the five labels (rho, mu, um, pad, ammag):" +
+        "<br>1. Encode the label to bytes: <code>b\"rho\"</code> etc." +
+        "<br>2. Compute <code>hmac.new(label_bytes, shared_secret, hashlib.sha256).digest()</code>." +
+        "<br><br>Pack the five 32-byte values into a KeyMaterial(rho=..., mu=..., ...) and return it.",
+      code:
+        `<strong>Solution:</strong><br><pre><code>def derive_keys(shared_secret):
+    def k(name):
+        return hmac.new(name, shared_secret, hashlib.sha256).digest()
+    return KeyMaterial(
+        rho=k(b"rho"),
+        mu=k(b"mu"),
+        um=k(b"um"),
+        pad=k(b"pad"),
+        ammag=k(b"ammag"),
+    )
+</code></pre>`,
+    },
+    rewardSats: 30,
+    group: "crypto/keys",
+    groupOrder: 1,
+  },
+
+  "exercise-build-error-onion": {
+    id: "exercise-build-error-onion",
+    title: "Build the Error Onion (Failing Hop)",
+    description:
+      "Implement build_error_onion. Given a failure message and the failing hop's um + ammag keys, produce the 288-byte error packet (HMAC + padded message, encrypted with ammag).",
+    starterCode: `import hmac, hashlib
+
+ERROR_PACKET_SIZE = 288  # 32 hmac + 256 padded message
+
+def build_error_onion(failure_message, um_key, ammag_key):
+    """
+    Build the failing hop's encrypted error packet (BOLT 4 'Failure Messages').
+
+    Args:
+      failure_message: bytes, must be < 256 bytes
+      um_key:          32-byte 'um' key for this hop
+      ammag_key:       32-byte 'ammag' key for this hop
+
+    Returns:
+      288 bytes: error_packet XOR ammag_keystream
+
+    Algorithm:
+      1. Pad failure_message with zeros to 256 bytes (right-pad).
+      2. error_hmac = HMAC-SHA256(um_key, padded_msg)
+      3. error_packet = error_hmac (32 bytes) || padded_msg (256 bytes)
+      4. wrapped = error_packet XOR chacha20_keystream(ammag_key, 288)
+
+    Helpers in scope: chacha20_keystream, xor_bytes.
+    """
+    # TODO: implement
+    pass
+`,
+    testCode: `import hmac, hashlib
+
+UM = bytes.fromhex("aa" * 32)
+AMMAG = bytes.fromhex("bb" * 32)
+
+def reference(msg, um, ammag):
+    padded = msg + b"\\x00" * (256 - len(msg))
+    h = hmac.new(um, padded, hashlib.sha256).digest()
+    pkt = h + padded
+    stream = chacha20_keystream(ammag, 288)
+    return xor_bytes(pkt, stream)
+
+def test_returns_288_bytes():
+    out = build_error_onion(b"temporary_channel_failure", UM, AMMAG)
+    assert isinstance(out, (bytes, bytearray))
+    assert len(out) == 288, f"Expected 288 bytes, got {len(out)}"
+
+def test_matches_reference():
+    msg = b"temporary_channel_failure"
+    out = build_error_onion(msg, UM, AMMAG)
+    expected = reference(msg, UM, AMMAG)
+    assert out == expected, "Wrapped error doesn't match reference"
+
+def test_round_trip_decrypts_to_message():
+    """XOR-ing with the same ammag stream undoes the encryption. The leading 32 bytes
+    should be a valid HMAC over the trailing 256."""
+    msg = b"channel_disabled"
+    wrapped = build_error_onion(msg, UM, AMMAG)
+    stream = chacha20_keystream(AMMAG, 288)
+    decrypted = xor_bytes(wrapped, stream)
+    assert decrypted[32:32 + len(msg)] == msg, "Decryption should reveal the original message at the front of the padded region"
+    expected_hmac = hmac.new(UM, decrypted[32:], hashlib.sha256).digest()
+    assert decrypted[:32] == expected_hmac, "HMAC must verify after decryption"
+
+def test_short_message_padded():
+    out = build_error_onion(b"x", UM, AMMAG)
+    assert len(out) == 288, "All errors are 288 bytes regardless of message size"
+`,
+    hints: {
+      conceptual:
+        "<strong>Goal:</strong> from the failing hop's perspective, build the encrypted error packet that goes upstream." +
+        "<br><br><strong>Why fixed 288 bytes:</strong> all error onions are the same size regardless of failure code, so observers can't infer the failure type from packet length. Pad short messages to 256 bytes; the 32-byte HMAC brings the total to 288.",
+      steps:
+        "<strong>1. Pad:</strong> <code>padded = failure_message + b'\\x00' * (256 - len(failure_message))</code>." +
+        "<br><strong>2. HMAC:</strong> <code>tag = hmac.new(um_key, padded, hashlib.sha256).digest()</code>." +
+        "<br><strong>3. Concatenate:</strong> <code>packet = tag + padded</code> (288 bytes)." +
+        "<br><strong>4. Encrypt:</strong> <code>stream = chacha20_keystream(ammag_key, 288)</code>; return <code>xor_bytes(packet, stream)</code>.",
+      code:
+        `<strong>Solution:</strong><br><pre><code>def build_error_onion(failure_message, um_key, ammag_key):
+    padded = failure_message + b"\\x00" * (256 - len(failure_message))
+    tag = hmac.new(um_key, padded, hashlib.sha256).digest()
+    packet = tag + padded
+    stream = chacha20_keystream(ammag_key, 288)
+    return xor_bytes(packet, stream)
+</code></pre>`,
+    },
+    rewardSats: 50,
+    group: "sphinx/errors",
+    groupOrder: 1,
+  },
+
+  "exercise-decrypt-error-onion": {
+    id: "exercise-decrypt-error-onion",
+    title: "Decrypt the Error Onion (Sender Side)",
+    description:
+      "Implement decrypt_error_onion. Given the wrapped error bytes and a chain of (um, ammag) per-hop keys (in route order), peel layers one at a time and identify which hop generated the error.",
+    starterCode: `import hmac, hashlib
+
+def decrypt_error_onion(wrapped_error, hop_keys):
+    """
+    Args:
+      wrapped_error: 288-byte error blob received on the return HTLC
+      hop_keys:      list of (um, ammag) tuples per hop, in route order
+                     hop_keys[0] is the first forwarder, last is the destination
+
+    Returns:
+      (failing_hop_index, failure_message) if a layer's HMAC verifies
+      (None, None) if no layer matched (the error was tampered with)
+
+    Algorithm:
+      For each i in range(len(hop_keys)):
+        wrapped = wrapped XOR chacha20_keystream(ammag_i, 288)
+        if HMAC-SHA256(um_i, wrapped[32:]) == wrapped[:32]:
+            unpadded = strip trailing zeros from wrapped[32:]
+            return (i, unpadded)
+      return (None, None)
+    """
+    # TODO: implement
+    pass
+`,
+    testCode: `import hmac, hashlib
+
+def reference_build(msg, um, ammag):
+    padded = msg + b"\\x00" * (256 - len(msg))
+    pkt = hmac.new(um, padded, hashlib.sha256).digest() + padded
+    return xor_bytes(pkt, chacha20_keystream(ammag, 288))
+
+UM_BOB    = bytes.fromhex("01" * 32)
+AMMAG_BOB = bytes.fromhex("02" * 32)
+UM_CAROL    = bytes.fromhex("03" * 32)
+AMMAG_CAROL = bytes.fromhex("04" * 32)
+UM_DAVE    = bytes.fromhex("05" * 32)
+AMMAG_DAVE = bytes.fromhex("06" * 32)
+
+HOP_KEYS = [(UM_BOB, AMMAG_BOB), (UM_CAROL, AMMAG_CAROL), (UM_DAVE, AMMAG_DAVE)]
+
+def wrap_through_route(originating_hop_index, msg):
+    """Simulate Carol failing, then Bob wrapping on the way back."""
+    um, ammag = HOP_KEYS[originating_hop_index]
+    wrapped = reference_build(msg, um, ammag)
+    # Wrap by every upstream hop (indices < originating_hop_index, in reverse order)
+    for i in range(originating_hop_index - 1, -1, -1):
+        _, ammag_up = HOP_KEYS[i]
+        wrapped = xor_bytes(wrapped, chacha20_keystream(ammag_up, 288))
+    return wrapped
+
+def test_carol_failure_identified():
+    msg = b"temporary_channel_failure"
+    wrapped = wrap_through_route(originating_hop_index=1, msg=msg)
+    idx, recovered = decrypt_error_onion(wrapped, HOP_KEYS)
+    assert idx == 1, f"Expected failing hop index 1 (Carol), got {idx}"
+    assert recovered.startswith(msg), f"Recovered message must start with '{msg.decode()}'"
+
+def test_bob_failure_identified():
+    msg = b"fee_insufficient"
+    wrapped = wrap_through_route(originating_hop_index=0, msg=msg)
+    idx, recovered = decrypt_error_onion(wrapped, HOP_KEYS)
+    assert idx == 0, f"Expected failing hop index 0 (Bob), got {idx}"
+    assert recovered.startswith(msg)
+
+def test_dave_failure_identified():
+    msg = b"incorrect_or_unknown_payment_details"
+    wrapped = wrap_through_route(originating_hop_index=2, msg=msg)
+    idx, recovered = decrypt_error_onion(wrapped, HOP_KEYS)
+    assert idx == 2, f"Expected failing hop index 2 (Dave), got {idx}"
+    assert recovered.startswith(msg)
+
+def test_tampered_returns_none():
+    """Random bytes of the right length but no valid HMAC anywhere."""
+    wrapped = bytes(288)  # all zeros - no hop's HMAC will verify
+    idx, recovered = decrypt_error_onion(wrapped, HOP_KEYS)
+    assert idx is None and recovered is None
+`,
+    hints: {
+      conceptual:
+        "<strong>Goal:</strong> Alice's view of the return path. She has all the (um, ammag) keys; she just doesn't know which layer the failing hop wrapped with. Solution: try each layer in order until one's HMAC verifies." +
+        "<br><br><strong>Order:</strong> peel from outermost to innermost, which is hop 0, hop 1, hop 2... (the first forwarder is the outermost wrapper because their wrap was the most recent during the return trip).",
+      steps:
+        "<strong>For each i in range(len(hop_keys)):</strong>" +
+        "<br>1. <code>um, ammag = hop_keys[i]</code>." +
+        "<br>2. <code>wrapped = xor_bytes(wrapped, chacha20_keystream(ammag, 288))</code> (peel this layer)." +
+        "<br>3. <code>tag, payload = wrapped[:32], wrapped[32:]</code>." +
+        "<br>4. <code>expected = hmac.new(um, payload, hashlib.sha256).digest()</code>." +
+        "<br>5. If <code>tag == expected</code>: this is the failing hop. Strip trailing zeros from <code>payload</code> and return <code>(i, payload.rstrip(b'\\x00'))</code>." +
+        "<br><br>If the loop ends with no match, return <code>(None, None)</code>.",
+      code:
+        `<strong>Solution:</strong><br><pre><code>def decrypt_error_onion(wrapped_error, hop_keys):
+    wrapped = wrapped_error
+    for i, (um, ammag) in enumerate(hop_keys):
+        wrapped = xor_bytes(wrapped, chacha20_keystream(ammag, 288))
+        tag = wrapped[:32]
+        payload = wrapped[32:]
+        if hmac.new(um, payload, hashlib.sha256).digest() == tag:
+            return i, payload.rstrip(b"\\x00")
+    return None, None
+</code></pre>`,
+    },
+    rewardSats: 75,
+    group: "sphinx/errors",
+    groupOrder: 2,
+  },
+
+  "exercise-process-onion": {
+    id: "exercise-process-onion",
+    title: "Process an Inbound Onion",
+    description:
+      "Implement OnionForwarder.process. Verify length/version, verify HMAC, peel the layer, parse the TLV, and return a ForwardInstruction (forwarder), FinalDelivery (destination), or Rejection (anything wrong). " +
+      "Use ProcessResult dataclasses provided in the preamble. Skip detailed fee/CLTV economic validation, return ForwardInstruction or FinalDelivery once the structure of the payload is parsed correctly.",
+    starterCode: `from dataclasses import dataclass
+
+@dataclass
+class ForwardInstruction:
+    next_packet: bytes
+    short_channel_id: bytes
+    amt_to_forward_msat: int
+    outgoing_cltv_value: int
+    shared_secret: bytes  # for the error path
+
+@dataclass
+class FinalDelivery:
+    amt_msat: int
+    outgoing_cltv_value: int
+    payment_data: bytes  # raw type-8 value; caller validates against invoice
+    shared_secret: bytes
+
+@dataclass
+class Rejection:
+    code: str
+    shared_secret: bytes  # may be b"" if rejection happened before ECDH
+
+class OnionForwarder:
+    def process(self, packet, node_privkey):
+        """
+        Process an inbound onion packet.
+
+        Steps:
+          1. Length and version check.
+          2. ECDH + HMAC verification.
+          3. Peel the layer (delegate to self.peel_layer).
+          4. Parse the TLV payload bytes.
+          5. Branch: forwarding (has type 6) vs final delivery (has type 8).
+
+        Args:
+          packet:        1366-byte BOLT 4 onion packet
+          node_privkey:  this hop's 32-byte node private key
+
+        Returns: ForwardInstruction | FinalDelivery | Rejection
+        """
+        # TODO: implement
+        pass
+
+
+def parse_tlv_records(payload_bytes):
+    """
+    Parse a bigsize-prefixed TLV payload into a {type: value_bytes} dict.
+
+    The first bigsize prefix is the total TLV length; after that, each record
+    is bigsize_type || bigsize_length || value_bytes.
+    """
+    total_len, header_len = parse_bigsize(payload_bytes, 0)
+    records = {}
+    pos = header_len
+    end = header_len + total_len
+    while pos < end:
+        t, t_len = parse_bigsize(payload_bytes, pos)
+        pos += t_len
+        l, l_len = parse_bigsize(payload_bytes, pos)
+        pos += l_len
+        records[t] = bytes(payload_bytes[pos:pos + l])
+        pos += l
+    return records
+`,
+    testCode: `import hmac, hashlib
+
+ROUTING_INFO_SIZE = 1300
+
+# Reuse helpers from sphinx/builder.py exercises (in scope at runtime).
+SESSION_KEY = bytes.fromhex("4141414141414141414141414141414141414141414141414141414141414141")
+BOB_PRIV   = bytes.fromhex("4242424242424242424242424242424242424242424242424242424242424242")
+CAROL_PRIV = bytes.fromhex("4343434343434343434343434343434343434343434343434343434343434343")
+DAVE_PRIV  = bytes.fromhex("4444444444444444444444444444444444444444444444444444444444444444")
+
+BOB_PUB   = privkey_to_pubkey(BOB_PRIV)
+CAROL_PUB = privkey_to_pubkey(CAROL_PRIV)
+DAVE_PUB  = privkey_to_pubkey(DAVE_PRIV)
+
+# Build well-formed TLVs with the right structure.
+# Bob payload: type 2 (amt=10003000), type 4 (cltv=260), type 6 (scid=0x0102030405060708)
+def build_intermediate_tlv(amt_msat, cltv, scid):
+    inner = (
+        encode_bigsize(2) + encode_bigsize(3) + amt_msat.to_bytes(3, 'big') +
+        encode_bigsize(4) + encode_bigsize(2) + cltv.to_bytes(2, 'big') +
+        encode_bigsize(6) + encode_bigsize(8) + scid
+    )
+    return encode_bigsize(len(inner)) + inner
+
+def build_final_tlv(amt_msat, cltv, payment_data):
+    inner = (
+        encode_bigsize(2) + encode_bigsize(3) + amt_msat.to_bytes(3, 'big') +
+        encode_bigsize(4) + encode_bigsize(2) + cltv.to_bytes(2, 'big') +
+        encode_bigsize(8) + encode_bigsize(len(payment_data)) + payment_data
+    )
+    return encode_bigsize(len(inner)) + inner
+
+BOB_SCID   = bytes.fromhex("0102030405060708")
+CAROL_SCID = bytes.fromhex("1112131415161718")
+PAYMENT_DATA = bytes.fromhex("aa" * 32 + "0000000000989680")  # 32 secret + 8 total_msat
+
+PAYLOADS = [
+    build_intermediate_tlv(10_003_000, 260, BOB_SCID),
+    build_intermediate_tlv(10_002_000, 220, CAROL_SCID),
+    build_final_tlv(10_000_000, 140, PAYMENT_DATA),
+]
+
+def chain(session_key, hop_pubkeys):
+    ek_list, ss_list = [], []
+    e = session_key
+    for pub in hop_pubkeys:
+        E = privkey_to_pubkey(e)
+        ss = ecdh(e, pub)
+        b = hashlib.sha256(E + ss).digest()
+        ek_list.append(E); ss_list.append(ss)
+        e = scalar_mul(e, b)
+    return ek_list, ss_list
+
+def reference_build(session_key, hop_pubkeys, payloads):
+    ek_list, ss_list = chain(session_key, hop_pubkeys)
+    rhos = [hmac.new(b"rho", ss, hashlib.sha256).digest() for ss in ss_list]
+    mus  = [hmac.new(b"mu", ss, hashlib.sha256).digest() for ss in ss_list]
+    sizes = [len(p) + 32 for p in payloads[:-1]]
+    filler = b""
+    for i in range(len(rhos) - 1):
+        filler = filler + b"\\x00" * sizes[i]
+        stream = chacha20_keystream(rhos[i], ROUTING_INFO_SIZE + sizes[i])
+        filler = xor_bytes(filler, stream[ROUTING_INFO_SIZE + sizes[i] - len(filler):])
+    buf = b"\\x00" * (ROUTING_INFO_SIZE - len(filler)) + filler
+    nhmac = b"\\x00" * 32
+    for i in range(len(payloads) - 1, -1, -1):
+        ss = len(payloads[i]) + 32
+        shifted = bytearray(ss) + bytearray(buf[:-ss])
+        shifted[:len(payloads[i])] = payloads[i]
+        shifted[len(payloads[i]):len(payloads[i])+32] = nhmac
+        stream = chacha20_keystream(rhos[i], ROUTING_INFO_SIZE)
+        buf = xor_bytes(bytes(shifted), stream)
+        nhmac = hmac.new(mus[i], buf, hashlib.sha256).digest()
+    return b"\\x00" + ek_list[0] + buf + nhmac
+
+PACKET = reference_build(SESSION_KEY, [BOB_PUB, CAROL_PUB, DAVE_PUB], PAYLOADS)
+
+def test_forwarding_path_returns_forward_instruction():
+    f = OnionForwarder()
+    out = f.process(PACKET, BOB_PRIV)
+    assert isinstance(out, ForwardInstruction), f"Expected ForwardInstruction, got {type(out).__name__}"
+    assert out.short_channel_id == BOB_SCID
+    assert out.amt_to_forward_msat == 10_003_000
+    assert out.outgoing_cltv_value == 260
+    assert isinstance(out.shared_secret, (bytes, bytearray)) and len(out.shared_secret) == 32
+    assert isinstance(out.next_packet, (bytes, bytearray)) and len(out.next_packet) == 1366
+
+def test_destination_returns_final_delivery():
+    """Peel through Bob and Carol; Dave should see FinalDelivery."""
+    f = OnionForwarder()
+    bob_out = f.process(PACKET, BOB_PRIV)
+    assert isinstance(bob_out, ForwardInstruction)
+    carol_out = f.process(bob_out.next_packet, CAROL_PRIV)
+    assert isinstance(carol_out, ForwardInstruction)
+    dave_out = f.process(carol_out.next_packet, DAVE_PRIV)
+    assert isinstance(dave_out, FinalDelivery), f"Dave should get FinalDelivery, got {type(dave_out).__name__}"
+    assert dave_out.amt_msat == 10_000_000
+    assert dave_out.outgoing_cltv_value == 140
+    assert dave_out.payment_data == PAYMENT_DATA
+
+def test_tampered_hmac_returns_rejection():
+    f = OnionForwarder()
+    tampered = bytearray(PACKET)
+    tampered[1334] ^= 0xff  # flip a byte in the HMAC field
+    out = f.process(bytes(tampered), BOB_PRIV)
+    assert isinstance(out, Rejection), f"Tampered HMAC should yield Rejection, got {type(out).__name__}"
+    assert "hmac" in out.code.lower() or "invalid" in out.code.lower()
+
+def test_wrong_version_returns_rejection():
+    f = OnionForwarder()
+    bad = b"\\x01" + PACKET[1:]
+    out = f.process(bad, BOB_PRIV)
+    assert isinstance(out, Rejection)
+
+def test_wrong_length_returns_rejection():
+    f = OnionForwarder()
+    out = f.process(PACKET[:-1], BOB_PRIV)
+    assert isinstance(out, Rejection)
+`,
+    hints: {
+      conceptual:
+        "<strong>Goal:</strong> tie peel + validation + parsing into a single function that returns one of three result types." +
+        "<br><br><strong>Order matters:</strong> verify before decrypt. Length and version come first; HMAC verification comes before any peel work; peel before parse; parse before branch." +
+        "<br><br><strong>Branch on TLV contents:</strong> presence of type 6 (short_channel_id) means forwarder. Presence of type 8 (payment_data) without type 6 means destination. Anything else (both, neither) is malformed.",
+      steps:
+        "<strong>1. Reject if len != 1366 or packet[0] != 0:</strong> return <code>Rejection('invalid_onion_version', b'')</code>." +
+        "<br><strong>2. Compute ss + mu:</strong> <code>ss = ecdh(node_privkey, packet[1:34])</code>; <code>mu = hmac.new(b'mu', ss, hashlib.sha256).digest()</code>." +
+        "<br><strong>3. HMAC check:</strong> <code>expected = hmac.new(mu, packet[34:1334], hashlib.sha256).digest()</code>. If <code>expected != packet[1334:1366]</code>, return <code>Rejection('invalid_onion_hmac', ss)</code>." +
+        "<br><strong>4. Peel:</strong> call <code>self.peel_layer(packet, node_privkey)</code>; unpack <code>(next_packet, payload_bytes, _)</code>." +
+        "<br><strong>5. Parse:</strong> <code>records = parse_tlv_records(payload_bytes)</code>." +
+        "<br><strong>6. Decode amt_to_forward + outgoing_cltv:</strong> <code>amt = int.from_bytes(records[2], 'big')</code> and similarly for type 4." +
+        "<br><strong>7. Branch:</strong> if 6 in records, return ForwardInstruction; elif 8 in records, return FinalDelivery; else return Rejection('invalid_onion_payload', ss).",
+      code:
+        `<strong>Solution:</strong><br><pre><code>def process(self, packet, node_privkey):
+    if len(packet) != 1366 or packet[0] != 0:
+        return Rejection('invalid_onion_version', b'')
+    E = packet[1:34]
+    ss = ecdh(node_privkey, E)
+    mu = hmac.new(b"mu", ss, hashlib.sha256).digest()
+    expected = hmac.new(mu, packet[34:1334], hashlib.sha256).digest()
+    if expected != packet[1334:1366]:
+        return Rejection('invalid_onion_hmac', ss)
+    next_packet, payload_bytes, _ = self.peel_layer(packet, node_privkey)
+    try:
+        records = parse_tlv_records(payload_bytes)
+        amt = int.from_bytes(records[2], 'big')
+        cltv = int.from_bytes(records[4], 'big')
+    except Exception:
+        return Rejection('invalid_onion_payload', ss)
+    if 6 in records:
+        return ForwardInstruction(next_packet, records[6], amt, cltv, ss)
+    if 8 in records:
+        return FinalDelivery(amt, cltv, records[8], ss)
+    return Rejection('invalid_onion_payload', ss)
+</code></pre>`,
+    },
+    rewardSats: 100,
+    group: "sphinx/forwarder",
+    groupOrder: 2,
+  },
+
+  "exercise-peel-layer": {
+    id: "exercise-peel-layer",
+    title: "Peel a Single Layer",
+    description:
+      "Implement OnionForwarder.peel_layer. Given a 1366-byte BOLT 4 onion packet and the forwarder's 32-byte node private key, return (next_packet, payload_bytes, shared_secret). " +
+      "Hop payloads in this exercise are prefixed with a bigsize length, so the slot size is parse_bigsize(...)[0] + bigsize_header_size + 32 (HMAC). " +
+      "Skip HMAC validation in this exercise; chapter 9 layers it on. Focus on the ECDH, the keystream-extended XOR, slot extraction, and ephemeral pubkey advancement.",
+    starterCode: `class OnionForwarder:
+    def peel_layer(self, packet, node_privkey):
+        """
+        Args:
+          packet:        1366-byte BOLT 4 onion packet
+                         (1 version + 33 E_i + 1300 hop_payloads + 32 hmac)
+          node_privkey:  this forwarder's 32-byte node private key
+
+        Returns: (next_packet, payload_bytes, shared_secret)
+          next_packet:    1366-byte packet to forward to the next hop
+          payload_bytes:  the bigsize-length-prefixed TLV payload bytes for THIS hop
+                          (caller will parse it further)
+          shared_secret:  32-byte ss_i this hop derived; useful for the error path
+
+        Algorithm:
+          1. Parse the inbound packet: version, E_i, hop_payloads, inbound_hmac.
+          2. ss_i = ecdh(node_privkey, E_i)
+          3. rho = HMAC-SHA256(b"rho", ss_i)
+          4. Allocate a 2 * 1300 = 2600-byte working buffer:
+             work = hop_payloads + b"\\x00" * 1300
+          5. XOR work with chacha20_keystream(rho, 2600)
+          6. Parse work[0:] as bigsize-prefixed payload: read bigsize, the payload
+             is bigsize bytes after that, slot_size = bigsize_header_len + length + 32
+          7. payload_bytes = work[0 : bigsize_header_len + length]
+          8. next_hmac = work[slot_size - 32 : slot_size]
+          9. next_hop_payloads = work[slot_size : slot_size + 1300]
+          10. b_i = SHA256(E_i || ss_i)
+          11. E_next = point_mul_pubkey(E_i, b_i)
+          12. Return: (b"\\x00" + E_next + next_hop_payloads + next_hmac,
+                       payload_bytes, ss_i)
+        """
+        # TODO: implement
+        pass
+`,
+    testCode: `import hmac, hashlib
+
+ROUTING_INFO_SIZE = 1300
+
+# Build a fixed test packet using a reference encoder so we can verify peeling.
+SESSION_KEY = bytes.fromhex("4141414141414141414141414141414141414141414141414141414141414141")
+BOB_PRIV   = bytes.fromhex("4242424242424242424242424242424242424242424242424242424242424242")
+CAROL_PRIV = bytes.fromhex("4343434343434343434343434343434343434343434343434343434343434343")
+DAVE_PRIV  = bytes.fromhex("4444444444444444444444444444444444444444444444444444444444444444")
+
+BOB_PUB   = privkey_to_pubkey(BOB_PRIV)
+CAROL_PUB = privkey_to_pubkey(CAROL_PRIV)
+DAVE_PUB  = privkey_to_pubkey(DAVE_PRIV)
+HOP_PUBKEYS = [BOB_PUB, CAROL_PUB, DAVE_PUB]
+HOP_PRIVKEYS = [BOB_PRIV, CAROL_PRIV, DAVE_PRIV]
+
+# Fixed TLV payloads - bigsize-prefixed: each is a 19/19/8-byte TLV, prefixed by a 1-byte length.
+RAW_TLVS = [
+    bytes.fromhex("0203989a900401b40608000000012345678920"),
+    bytes.fromhex("0203989a900401b40608000000012345678921"),
+    bytes.fromhex("0203989a90040181"),
+]
+PAYLOADS = [encode_bigsize(len(t)) + t for t in RAW_TLVS]
+
+def chain(session_key, hop_pubkeys):
+    ek_list, ss_list = [], []
+    e = session_key
+    for pub in hop_pubkeys:
+        E = privkey_to_pubkey(e)
+        ss = ecdh(e, pub)
+        b = hashlib.sha256(E + ss).digest()
+        ek_list.append(E)
+        ss_list.append(ss)
+        e = scalar_mul(e, b)
+    return ek_list, ss_list
+
+def reference_build(session_key, hop_pubkeys, payloads):
+    ek_list, ss_list = chain(session_key, hop_pubkeys)
+    rhos = [hmac.new(b"rho", ss, hashlib.sha256).digest() for ss in ss_list]
+    mus  = [hmac.new(b"mu", ss, hashlib.sha256).digest() for ss in ss_list]
+    sizes = [len(p) + 32 for p in payloads[:-1]]
+
+    # Filler
+    filler = b""
+    for i in range(len(rhos) - 1):
+        filler = filler + b"\\x00" * sizes[i]
+        stream = chacha20_keystream(rhos[i], ROUTING_INFO_SIZE + sizes[i])
+        chunk = stream[ROUTING_INFO_SIZE + sizes[i] - len(filler):]
+        filler = xor_bytes(filler, chunk)
+
+    buf = b"\\x00" * (ROUTING_INFO_SIZE - len(filler)) + filler
+    nhmac = b"\\x00" * 32
+    for i in range(len(payloads) - 1, -1, -1):
+        ss = len(payloads[i]) + 32
+        shifted = bytearray(ss) + bytearray(buf[:-ss])
+        shifted[:len(payloads[i])] = payloads[i]
+        shifted[len(payloads[i]):len(payloads[i])+32] = nhmac
+        stream = chacha20_keystream(rhos[i], ROUTING_INFO_SIZE)
+        buf = xor_bytes(bytes(shifted), stream)
+        nhmac = hmac.new(mus[i], buf, hashlib.sha256).digest()
+
+    return b"\\x00" + ek_list[0] + buf + nhmac, ek_list, ss_list
+
+PACKET, EK_LIST, SS_LIST = reference_build(SESSION_KEY, HOP_PUBKEYS, PAYLOADS)
+
+def test_returns_tuple_of_three():
+    f = OnionForwarder()
+    out = f.peel_layer(PACKET, BOB_PRIV)
+    assert isinstance(out, tuple) and len(out) == 3, "Expected (next_packet, payload, ss)"
+
+def test_recovers_bob_shared_secret():
+    f = OnionForwarder()
+    _, _, ss = f.peel_layer(PACKET, BOB_PRIV)
+    assert ss == SS_LIST[0], "Bob's recovered shared secret must match the chain"
+
+def test_extracts_bob_payload():
+    f = OnionForwarder()
+    _, payload, _ = f.peel_layer(PACKET, BOB_PRIV)
+    assert payload == PAYLOADS[0], "Extracted payload must equal Bob's original bigsize-prefixed TLV"
+
+def test_next_packet_size():
+    f = OnionForwarder()
+    next_packet, _, _ = f.peel_layer(PACKET, BOB_PRIV)
+    assert len(next_packet) == 1366, "Outgoing packet must be exactly 1366 bytes"
+
+def test_next_ephemeral_advances():
+    f = OnionForwarder()
+    next_packet, _, _ = f.peel_layer(PACKET, BOB_PRIV)
+    assert next_packet[1:34] == EK_LIST[1], "Outgoing E must equal E_1 from the chain"
+
+def test_carol_can_peel_next():
+    """End-to-end: Bob's output is a valid input for Carol's peel."""
+    f = OnionForwarder()
+    bob_out, _, _ = f.peel_layer(PACKET, BOB_PRIV)
+    next_out, carol_payload, carol_ss = f.peel_layer(bob_out, CAROL_PRIV)
+    assert carol_ss == SS_LIST[1], "Carol's recovered ss must match the chain"
+    assert carol_payload == PAYLOADS[1], "Carol's payload must round-trip through the peel"
+`,
+    hints: {
+      conceptual:
+        "<strong>Goal:</strong> reverse the wrap_hop operation. Take a packet, derive the keys this hop needs, decrypt the buffer with an extended keystream, lift this hop's slot, and produce the packet to forward." +
+        "<br><br><strong>Why the extended keystream:</strong> when this hop strips its slot off the front and shifts the inner contents forward, the trailing positions must contain the extension of this hop's rho keystream. That's exactly what was XORed into the corresponding filler bytes during construction. By generating 2x the routing info size, we cover both the decrypted hop_payloads AND the keystream-extension that fills the gap.",
+      steps:
+        "<strong>1. Parse the packet:</strong>" +
+        "<br>&nbsp;&nbsp;&nbsp;&nbsp;<code>version = packet[0]</code>" +
+        "<br>&nbsp;&nbsp;&nbsp;&nbsp;<code>E_i = packet[1:34]</code>" +
+        "<br>&nbsp;&nbsp;&nbsp;&nbsp;<code>hop_payloads = packet[34:1334]</code>" +
+        "<br>&nbsp;&nbsp;&nbsp;&nbsp;<code>inbound_hmac = packet[1334:1366]</code>" +
+        "<br><strong>2. Derive keys:</strong> ss = ecdh(node_privkey, E_i); rho = HMAC(b\"rho\", ss)." +
+        "<br><strong>3. Working buffer:</strong> <code>work = hop_payloads + b\"\\x00\" * 1300</code>." +
+        "<br><strong>4. XOR with extended keystream:</strong> <code>stream = chacha20_keystream(rho, 2600); work = xor_bytes(work, stream)</code>." +
+        "<br><strong>5. Parse the bigsize length:</strong> <code>length, header_len = parse_bigsize(work, 0)</code>. The TLV bytes occupy <code>work[0:header_len + length]</code>. The slot size is <code>header_len + length + 32</code>." +
+        "<br><strong>6. Extract:</strong> <code>payload = work[0:header_len + length]</code>; <code>next_hmac = work[slot_size - 32:slot_size]</code>." +
+        "<br><strong>7. Next hop_payloads:</strong> <code>work[slot_size : slot_size + 1300]</code>." +
+        "<br><strong>8. Advance ephemeral:</strong> <code>b = SHA256(E_i + ss)</code>; <code>E_next = point_mul_pubkey(E_i, b)</code>." +
+        "<br><strong>9. Assemble outgoing:</strong> <code>b\"\\x00\" + E_next + next_hop_payloads + next_hmac</code>.",
+      code:
+        `<strong>Solution:</strong><br><pre><code>def peel_layer(self, packet, node_privkey):
+    E_i = packet[1:34]
+    hop_payloads = packet[34:1334]
+    ss = ecdh(node_privkey, E_i)
+    rho = hmac.new(b"rho", ss, hashlib.sha256).digest()
+    work = hop_payloads + b"\\x00" * ROUTING_INFO_SIZE
+    stream = chacha20_keystream(rho, 2 * ROUTING_INFO_SIZE)
+    work = xor_bytes(work, stream)
+    length, header_len = parse_bigsize(work, 0)
+    payload = work[0:header_len + length]
+    slot = header_len + length + 32
+    next_hmac = work[slot - 32:slot]
+    next_hop_payloads = work[slot:slot + ROUTING_INFO_SIZE]
+    b = hashlib.sha256(E_i + ss).digest()
+    E_next = point_mul_pubkey(E_i, b)
+    next_packet = b"\\x00" + E_next + next_hop_payloads + next_hmac
+    return next_packet, payload, ss
+</code></pre>`,
+    },
+    rewardSats: 100,
+    group: "sphinx/forwarder",
+    groupOrder: 1,
+  },
+
+  "exercise-wrap-hop": {
+    id: "exercise-wrap-hop",
+    title: "Wrap a Single Layer",
+    description:
+      "Implement OnionPacketBuilder.wrap_hop. Given the current 1300-byte buffer, this hop's TLV payload, the next-hop HMAC (32 bytes), and this hop's rho/mu keys, produce the new buffer (after shift+write+XOR) and the HMAC over the new buffer that the layer above will reference.",
+    starterCode: `class OnionPacketBuilder:
+    def wrap_hop(self, buffer, payload, next_hmac, rho, mu):
+        """
+        Args:
+          buffer:    current 1300-byte hop_payloads buffer (bytes)
+          payload:   this hop's TLV payload (bytes, variable length)
+          next_hmac: 32-byte HMAC pointing to the inner layer
+                     (all zeros for the destination hop)
+          rho:       this hop's 32-byte rho key
+          mu:        this hop's 32-byte mu key
+
+        Returns: (new_buffer, this_hop_hmac)
+          new_buffer:     the rewritten + encrypted 1300-byte buffer
+          this_hop_hmac:  HMAC-SHA256(mu, new_buffer), 32 bytes
+
+        Algorithm:
+          slot_size = len(payload) + 32
+          1. Right-shift buffer by slot_size: drop the last slot_size bytes,
+             prepend slot_size bytes of space (any value; we overwrite next)
+          2. Write payload at offset 0, then next_hmac at offset len(payload)
+          3. XOR the entire 1300-byte buffer with chacha20_keystream(rho, 1300)
+          4. Compute hmac.new(mu, new_buffer, hashlib.sha256).digest()
+        """
+        # TODO: implement
+        pass
+`,
+    testCode: `import hmac, hashlib
+
+ROUTING_INFO_SIZE = 1300
+
+def reference_wrap_hop(buffer, payload, next_hmac, rho, mu):
+    slot_size = len(payload) + 32
+    # right-shift: prepend slot_size bytes, drop last slot_size bytes
+    shifted = bytearray(slot_size) + bytearray(buffer[:-slot_size])
+    # write payload + next_hmac
+    shifted[:len(payload)] = payload
+    shifted[len(payload):len(payload) + 32] = next_hmac
+    # XOR with rho keystream
+    stream = chacha20_keystream(rho, ROUTING_INFO_SIZE)
+    encrypted = xor_bytes(bytes(shifted), stream)
+    # HMAC
+    tag = hmac.new(mu, encrypted, hashlib.sha256).digest()
+    return encrypted, tag
+
+# Test vector: a deterministic initial buffer, payload, etc.
+INIT_BUFFER = bytes(ROUTING_INFO_SIZE)  # all zeros
+PAYLOAD = bytes.fromhex("0203989a900401b40608000000012345678920" + "00" * 32 + "ffaa")  # arbitrary
+NEXT_HMAC = bytes.fromhex("11" * 32)
+RHO = bytes.fromhex("aa" * 32)
+MU = bytes.fromhex("bb" * 32)
+
+def test_returns_buffer_and_hmac():
+    b = OnionPacketBuilder.__new__(OnionPacketBuilder)
+    out = b.wrap_hop(INIT_BUFFER, PAYLOAD, NEXT_HMAC, RHO, MU)
+    assert isinstance(out, tuple) and len(out) == 2, "Expected a (buffer, hmac) tuple"
+    new_buf, tag = out
+    assert isinstance(new_buf, (bytes, bytearray)) and len(new_buf) == ROUTING_INFO_SIZE
+    assert isinstance(tag, (bytes, bytearray)) and len(tag) == 32
+
+def test_matches_reference():
+    b = OnionPacketBuilder.__new__(OnionPacketBuilder)
+    new_buf, tag = b.wrap_hop(INIT_BUFFER, PAYLOAD, NEXT_HMAC, RHO, MU)
+    ref_buf, ref_tag = reference_wrap_hop(INIT_BUFFER, PAYLOAD, NEXT_HMAC, RHO, MU)
+    assert new_buf == ref_buf, "Buffer doesn't match reference"
+    assert tag == ref_tag, "HMAC doesn't match reference"
+
+def test_different_mu_changes_hmac_only():
+    b = OnionPacketBuilder.__new__(OnionPacketBuilder)
+    out_a = b.wrap_hop(INIT_BUFFER, PAYLOAD, NEXT_HMAC, RHO, MU)
+    out_b = b.wrap_hop(INIT_BUFFER, PAYLOAD, NEXT_HMAC, RHO, bytes.fromhex("cc" * 32))
+    assert out_a[0] == out_b[0], "Different mu should not affect the buffer"
+    assert out_a[1] != out_b[1], "Different mu must produce a different HMAC"
+
+def test_payload_at_front_after_decrypt():
+    """Sanity: decrypting the new buffer with rho should reveal the payload at the front."""
+    b = OnionPacketBuilder.__new__(OnionPacketBuilder)
+    new_buf, _ = b.wrap_hop(INIT_BUFFER, PAYLOAD, NEXT_HMAC, RHO, MU)
+    stream = chacha20_keystream(RHO, ROUTING_INFO_SIZE)
+    plaintext = xor_bytes(new_buf, stream)
+    assert plaintext[:len(PAYLOAD)] == PAYLOAD, "Decrypting must reveal the payload at offset 0"
+    assert plaintext[len(PAYLOAD):len(PAYLOAD) + 32] == NEXT_HMAC, "next_hmac must follow the payload"
+`,
+    hints: {
+      conceptual:
+        "<strong>Goal:</strong> perform one iteration of the build loop. Take the current buffer, the new hop's data, the inner-layer HMAC, and produce a buffer that has this hop's data at the front (encrypted with rho) plus the HMAC for use by the layer above." +
+        "<br><br><strong>Slot size:</strong> the bytes consumed by this hop = len(payload) + 32 (HMAC). The 'shift right' makes room for those bytes at the front by pushing existing contents back.",
+      steps:
+        "<strong>1. Compute slot_size = len(payload) + 32.</strong>" +
+        "<br><strong>2. Shift right:</strong> the new buffer should be <code>bytearray(slot_size) + bytearray(buffer[:-slot_size])</code>. (You'll overwrite the leading slot_size bytes immediately.)" +
+        "<br><strong>3. Write the payload</strong> at offset 0: <code>new_buffer[:len(payload)] = payload</code>." +
+        "<br><strong>4. Write next_hmac</strong> right after: <code>new_buffer[len(payload):len(payload)+32] = next_hmac</code>." +
+        "<br><strong>5. Encrypt</strong> the whole 1300-byte buffer: XOR with <code>chacha20_keystream(rho, 1300)</code>." +
+        "<br><strong>6. HMAC</strong> the encrypted buffer using <code>hmac.new(mu, encrypted, hashlib.sha256).digest()</code>." +
+        "<br><strong>7. Return</strong> <code>(encrypted_buffer, hmac_tag)</code>.",
+      code:
+        `<strong>Solution:</strong><br><pre><code>def wrap_hop(self, buffer, payload, next_hmac, rho, mu):
+    slot_size = len(payload) + 32
+    shifted = bytearray(slot_size) + bytearray(buffer[:-slot_size])
+    shifted[:len(payload)] = payload
+    shifted[len(payload):len(payload) + 32] = next_hmac
+    stream = chacha20_keystream(rho, ROUTING_INFO_SIZE)
+    encrypted = xor_bytes(bytes(shifted), stream)
+    tag = hmac.new(mu, encrypted, hashlib.sha256).digest()
+    return encrypted, tag
+</code></pre>`,
+    },
+    rewardSats: 75,
+    group: "sphinx/builder",
+    groupOrder: 3,
+  },
+
+  "exercise-build-packet": {
+    id: "exercise-build-packet",
+    title: "Build the Full Onion Packet",
+    description:
+      "Implement OnionPacketBuilder.build. Given the route data already loaded into self (session_key, hop_pubkeys, payloads), produce the final 1366-byte BOLT 4 onion packet by combining derive_shared_secrets, per-hop key derivation, generate_filler, and wrap_hop in a single function.",
+    starterCode: `class OnionPacketBuilder:
+    def build(self, payloads):
+        """
+        Build a complete 1366-byte BOLT 4 onion packet.
+
+        Args:
+          payloads: list of TLV-encoded hop payloads, in route order.
+                    payloads[0] is for the first hop, payloads[-1] is for the destination.
+
+        Returns:
+          bytes of length 1366: version (1) || ephemeral_pubkey (33) ||
+                                hop_payloads (1300) || hmac (32)
+
+        Algorithm:
+          1. Derive the shared-secret chain: self.derive_shared_secrets()
+          2. Derive per-hop keys: rho_i, mu_i for each hop
+          3. Build filler from rho keys for hops 0..N-2 and their payload sizes
+             (where size = len(payload) + 32)
+          4. Initialize a 1300-byte buffer with filler at the END:
+             buffer = b"\\x00" * (1300 - len(filler)) + filler
+          5. next_hmac = b"\\x00" * 32  (Dave has no inner layer)
+          6. For i in reverse order (last hop first, first hop last):
+             buffer, next_hmac = self.wrap_hop(
+                 buffer, payloads[i], next_hmac, rho_i, mu_i
+             )
+          7. Assemble: b"\\x00" + self.ephemeral_pubkeys[0] + buffer + next_hmac
+
+        Use the helpers already in scope: derive_keys (from crypto/keys.py),
+        chacha20_keystream, xor_bytes.
+        """
+        # TODO: implement
+        pass
+`,
+    testCode: `import hmac, hashlib
+
+ROUTING_INFO_SIZE = 1300
+
+# Reuse test vectors from the shared-secrets exercise
+SESSION_KEY = bytes.fromhex("4141414141414141414141414141414141414141414141414141414141414141")
+BOB_PRIV   = bytes.fromhex("4242424242424242424242424242424242424242424242424242424242424242")
+CAROL_PRIV = bytes.fromhex("4343434343434343434343434343434343434343434343434343434343434343")
+DAVE_PRIV  = bytes.fromhex("4444444444444444444444444444444444444444444444444444444444444444")
+
+BOB_PUB   = privkey_to_pubkey(BOB_PRIV)
+CAROL_PUB = privkey_to_pubkey(CAROL_PRIV)
+DAVE_PUB  = privkey_to_pubkey(DAVE_PRIV)
+HOP_PUBKEYS = [BOB_PUB, CAROL_PUB, DAVE_PUB]
+
+# Each hop payload (TLV bytes - actual TLV correctness not enforced here, just length)
+PAYLOADS = [
+    bytes.fromhex("0203989a900401b40608000000012345678920"),  # ~19 bytes
+    bytes.fromhex("0203989a900401b40608000000012345678921"),  # ~19 bytes
+    bytes.fromhex("0203989a90040181"),                        # ~8 bytes (final hop, smaller)
+]
+
+def test_returns_1366_bytes():
+    b = OnionPacketBuilder(SESSION_KEY, HOP_PUBKEYS)
+    packet = b.build(PAYLOADS)
+    assert isinstance(packet, (bytes, bytearray))
+    assert len(packet) == 1366, f"Expected 1366 bytes, got {len(packet)}"
+
+def test_version_byte():
+    b = OnionPacketBuilder(SESSION_KEY, HOP_PUBKEYS)
+    packet = b.build(PAYLOADS)
+    assert packet[0] == 0x00, "Version byte must be 0x00"
+
+def test_ephemeral_pubkey_field():
+    b = OnionPacketBuilder(SESSION_KEY, HOP_PUBKEYS)
+    packet = b.build(PAYLOADS)
+    assert packet[1:34] == b.ephemeral_pubkeys[0], "Bytes 1..34 must be E_0"
+
+def test_hmac_validates_against_first_hop_mu():
+    """Bob's verification: HMAC-SHA256(bob_mu, hop_payloads) must match packet.hmac."""
+    b = OnionPacketBuilder(SESSION_KEY, HOP_PUBKEYS)
+    packet = b.build(PAYLOADS)
+
+    # Recover Bob's mu key from the shared secrets the builder computed
+    bob_ss = b.shared_secrets[0]
+    bob_mu = hmac.new(b"mu", bob_ss, hashlib.sha256).digest()
+
+    hop_payloads = packet[34:1334]
+    expected_hmac = hmac.new(bob_mu, hop_payloads, hashlib.sha256).digest()
+    actual_hmac = packet[1334:1366]
+    assert expected_hmac == actual_hmac, "Packet HMAC must verify with Bob's mu"
+`,
+    hints: {
+      conceptual:
+        "<strong>Goal:</strong> orchestrate the full construction by stitching together everything from chapters 3-7." +
+        "<br><br><strong>Order of operations:</strong> derive shared secrets → derive per-hop keys → generate filler → initialize buffer with filler at the end → loop in reverse, calling wrap_hop, threading next_hmac through → assemble the final packet.",
+      steps:
+        "<strong>1. Shared secrets:</strong> call <code>self.derive_shared_secrets()</code> first." +
+        "<br><strong>2. Per-hop keys:</strong> for each hop's shared secret, derive rho and mu using HMAC-SHA256 with the b\"rho\" and b\"mu\" labels (re-implement here or import KeyMaterial)." +
+        "<br><strong>3. Filler:</strong> use rho keys for hops 0..N-2 and their payload sizes (where slot_size = len(payload) + 32). Don't include the final hop." +
+        "<br><strong>4. Initial buffer:</strong> <code>b'\\x00' * (1300 - len(filler)) + filler</code>." +
+        "<br><strong>5. Reverse loop:</strong> <code>for i in range(len(payloads) - 1, -1, -1):</code> call <code>wrap_hop</code> with the current buffer, payloads[i], next_hmac, rho_i, mu_i. Update both buffer and next_hmac from the return value." +
+        "<br><strong>6. Initial next_hmac</strong> (for the final hop): <code>b'\\x00' * 32</code>." +
+        "<br><strong>7. Final packet:</strong> <code>b'\\x00' + self.ephemeral_pubkeys[0] + buffer + next_hmac</code>.",
+      code:
+        `<strong>Solution:</strong><br><pre><code>def build(self, payloads):
+    self.derive_shared_secrets()
+    rho_keys = [hmac.new(b"rho", ss, hashlib.sha256).digest()
+                for ss in self.shared_secrets]
+    mu_keys = [hmac.new(b"mu", ss, hashlib.sha256).digest()
+               for ss in self.shared_secrets]
+    sizes = [len(p) + 32 for p in payloads[:-1]]
+    filler = self.generate_filler(rho_keys[:-1], sizes)
+    buffer = b"\\x00" * (ROUTING_INFO_SIZE - len(filler)) + filler
+    next_hmac = b"\\x00" * 32
+    for i in range(len(payloads) - 1, -1, -1):
+        buffer, next_hmac = self.wrap_hop(
+            buffer, payloads[i], next_hmac, rho_keys[i], mu_keys[i]
+        )
+    return b"\\x00" + self.ephemeral_pubkeys[0] + buffer + next_hmac
+</code></pre>`,
+    },
+    rewardSats: 100,
+    group: "sphinx/builder",
+    groupOrder: 4,
+  },
+
+  "exercise-generate-filler": {
+    id: "exercise-generate-filler",
+    title: "Generate the Filler",
+    description:
+      "Implement OnionPacketBuilder.generate_filler. Given the rho keys and per-hop payload sizes for hops 0..N-2 (every hop except the final one), produce the filler bytes that will appear at the trailing positions of each hop's hop_payloads view after peeling. " +
+      "The filler grows by one hop's payload size on each iteration: prepend that many zero bytes, then XOR the running filler with the trailing portion of that hop's rho keystream (extended to ROUTING_INFO_SIZE + cumulative_size). " +
+      "Reference: BOLT 4 'Filler Generation'. Helpers in scope: chacha20_keystream, xor_bytes.",
+    starterCode: `class OnionPacketBuilder:
+    def generate_filler(self, rho_keys, payload_sizes):
+        """
+        Args:
+          rho_keys:       list of 32-byte rho keys for hops 0..N-2.
+                          The final hop's rho is NOT included; it doesn't shift,
+                          so it doesn't contribute filler.
+          payload_sizes:  list of per-hop slot sizes in bytes for the same hops.
+                          slot_size = len(TLV payload) + 32 (HMAC).
+
+        Returns:
+          bytes of length sum(payload_sizes). Will be placed at the end of the
+          1300-byte hop_payloads field during construction.
+
+        Algorithm (BOLT 4):
+          filler = empty
+          for i in 0..len(rho_keys)-1:
+              # extend filler with this hop's slot at the END
+              filler = filler + (payload_sizes[i] zero bytes)
+              # generate this hop's keystream extended past 1300 bytes
+              stream = chacha20_keystream(rho_keys[i], ROUTING_INFO_SIZE + payload_sizes[i])
+              # XOR the trailing len(filler) bytes onto filler
+              filler ^= stream[ROUTING_INFO_SIZE + payload_sizes[i] - len(filler):]
+          return filler
+        """
+        # TODO: implement
+        pass
+`,
+    testCode: `def reference_generate_filler(rho_keys, payload_sizes):
+    """Reference per BOLT 4 'Filler Generation'."""
+    filler = b""
+    for i in range(len(rho_keys)):
+        filler = filler + b"\\x00" * payload_sizes[i]
+        stream = chacha20_keystream(rho_keys[i], ROUTING_INFO_SIZE + payload_sizes[i])
+        chunk = stream[ROUTING_INFO_SIZE + payload_sizes[i] - len(filler):]
+        filler = xor_bytes(filler, chunk)
+    return filler
+
+# Test vectors
+RHO_BOB   = bytes.fromhex("01" * 32)
+RHO_CAROL = bytes.fromhex("02" * 32)
+RHO_DAVE  = bytes.fromhex("03" * 32)
+
+def test_two_hop_filler_size():
+    """For a 3-hop route (Bob, Carol, Dave), filler covers Bob and Carol's slots."""
+    b = OnionPacketBuilder.__new__(OnionPacketBuilder)
+    out = b.generate_filler([RHO_BOB, RHO_CAROL], [65, 65])
+    assert isinstance(out, (bytes, bytearray))
+    assert len(out) == 130, f"Expected 130 bytes (65 + 65), got {len(out)}"
+
+def test_two_hop_matches_reference():
+    b = OnionPacketBuilder.__new__(OnionPacketBuilder)
+    out = b.generate_filler([RHO_BOB, RHO_CAROL], [65, 65])
+    expected = reference_generate_filler([RHO_BOB, RHO_CAROL], [65, 65])
+    assert out == expected, "Filler bytes don't match the BOLT 4 reference"
+
+def test_one_hop_filler_size():
+    """For a 2-hop route (Bob, Dave), filler covers only Bob."""
+    b = OnionPacketBuilder.__new__(OnionPacketBuilder)
+    out = b.generate_filler([RHO_BOB], [80])
+    assert len(out) == 80
+
+def test_three_hop_filler_size():
+    """For a 4-hop route (Bob, Carol, X, Dave), filler covers three intermediate hops."""
+    b = OnionPacketBuilder.__new__(OnionPacketBuilder)
+    out = b.generate_filler([RHO_BOB, RHO_CAROL, RHO_DAVE], [60, 70, 50])
+    assert len(out) == 60 + 70 + 50
+
+def test_three_hop_matches_reference():
+    b = OnionPacketBuilder.__new__(OnionPacketBuilder)
+    sizes = [60, 70, 50]
+    keys = [RHO_BOB, RHO_CAROL, RHO_DAVE]
+    out = b.generate_filler(keys, sizes)
+    expected = reference_generate_filler(keys, sizes)
+    assert out == expected
+
+def test_empty_rho_keys_returns_empty():
+    """A single-hop route (just the destination) has no filler."""
+    b = OnionPacketBuilder.__new__(OnionPacketBuilder)
+    out = b.generate_filler([], [])
+    assert out == b"", "No intermediate hops means no filler"
+`,
+    hints: {
+      conceptual:
+        "<strong>Goal:</strong> compute the bytes that will appear at the end of the hop_payloads field after each forwarder peels its layer." +
+        "<br><br><strong>Why this works:</strong> Alice can't compute filler in isolation; it has to account for what each rho XOR will do during peeling. By simulating the hops one by one (in order from first forwarder to last forwarder), Alice builds up the cumulative effect of all those XORs in the trailing positions." +
+        "<br><br><strong>Loop invariant:</strong> after iteration i, <code>filler</code> contains exactly what the last <code>sum(payload_sizes[:i+1])</code> bytes of hop i's view of the packet would look like, given that earlier hops' rho XORs have already been applied (virtually).",
+      steps:
+        "<strong>For each hop i in 0..len(rho_keys)-1:</strong>" +
+        "<br>1. Extend filler at the END with <code>payload_sizes[i]</code> zero bytes." +
+        "<br>2. Generate this hop's rho keystream of length <code>ROUTING_INFO_SIZE + payload_sizes[i]</code> using <code>chacha20_keystream</code>." +
+        "<br>3. Take the trailing <code>len(filler)</code> bytes of that keystream and XOR them into <code>filler</code> using <code>xor_bytes</code>." +
+        "<br><br><strong>Return:</strong> the accumulated filler bytes. Total length = <code>sum(payload_sizes)</code>.",
+      code:
+        `<strong>Solution:</strong><br><pre><code>def generate_filler(self, rho_keys, payload_sizes):
+    filler = b""
+    for i in range(len(rho_keys)):
+        filler = filler + b"\\x00" * payload_sizes[i]
+        stream_len = ROUTING_INFO_SIZE + payload_sizes[i]
+        stream = chacha20_keystream(rho_keys[i], stream_len)
+        chunk = stream[stream_len - len(filler):]
+        filler = xor_bytes(filler, chunk)
+    return filler
+</code></pre>`,
+    },
+    rewardSats: 75,
+    group: "sphinx/builder",
+    groupOrder: 2,
+  },
+
+  "exercise-derive-shared-secrets": {
+    id: "exercise-derive-shared-secrets",
+    title: "Derive the Shared-Secret Chain",
+    description:
+      "Implement OnionPacketBuilder.derive_shared_secrets. Given Alice's session_key (32 bytes) and the route's hop pubkeys (33-byte compressed each), produce the chain of (ephemeral_pubkey, shared_secret) pairs. " +
+      "For hop 0, the ephemeral private key is just session_key; for each subsequent hop, multiply the previous ephemeral private key by the previous hop's blinding factor (mod the curve order). " +
+      "Use the provided helpers: privkey_to_pubkey, ecdh, point_mul_pubkey, scalar_mul.",
+    starterCode: `import hashlib
+
+class OnionPacketBuilder:
+    def __init__(self, session_key: bytes, hop_pubkeys: list[bytes]):
+        """
+        Args:
+          session_key:  32 bytes. Alice's per-payment ephemeral private key.
+          hop_pubkeys:  list of 33-byte compressed node public keys, in route order.
+                        Index 0 is the first forwarder, last index is the receiver.
+        """
+        self.session_key = session_key
+        self.hop_pubkeys = hop_pubkeys
+        self.shared_secrets = []        # filled in below: 32-byte ss per hop
+        self.ephemeral_pubkeys = []     # filled in below: 33-byte E_i per hop
+
+    def derive_shared_secrets(self):
+        """
+        Walk the blinding chain and populate self.shared_secrets and
+        self.ephemeral_pubkeys. Each entry corresponds to one hop, in route order.
+
+        For hop i:
+          - e_i is the ephemeral private key (32 bytes scalar).
+          - E_i = e_i * G          (the ephemeral pubkey, 33 bytes compressed)
+          - ss_i = ECDH(e_i, hop_pubkey_i)
+          - b_i  = SHA256(E_i || ss_i)
+          - e_{i+1} = e_i * b_i (mod n)
+
+        Helpers available in scope:
+          privkey_to_pubkey(privkey: bytes) -> bytes        # 32 -> 33
+          ecdh(privkey: bytes, pubkey: bytes) -> bytes       # 32, 33 -> 32
+          point_mul_pubkey(pubkey: bytes, scalar: bytes) -> bytes   # 33, 32 -> 33
+          scalar_mul(a: bytes, b: bytes) -> bytes            # 32, 32 -> 32 mod n
+        """
+        # TODO: implement
+        pass
+`,
+    testCode: `import hashlib
+
+# Reference values for a fixed test vector.
+SESSION_KEY = bytes.fromhex("4141414141414141414141414141414141414141414141414141414141414141")
+BOB_PRIV   = bytes.fromhex("4242424242424242424242424242424242424242424242424242424242424242")
+CAROL_PRIV = bytes.fromhex("4343434343434343434343434343434343434343434343434343434343434343")
+DAVE_PRIV  = bytes.fromhex("4444444444444444444444444444444444444444444444444444444444444444")
+
+BOB_PUB   = privkey_to_pubkey(BOB_PRIV)
+CAROL_PUB = privkey_to_pubkey(CAROL_PRIV)
+DAVE_PUB  = privkey_to_pubkey(DAVE_PRIV)
+HOP_PUBKEYS = [BOB_PUB, CAROL_PUB, DAVE_PUB]
+HOP_PRIVKEYS = [BOB_PRIV, CAROL_PRIV, DAVE_PRIV]
+
+def reference_chain(session_key, hop_pubkeys):
+    """Reference implementation used to cross-check the student's output."""
+    ss_list = []
+    ek_list = []
+    e = session_key
+    for pub in hop_pubkeys:
+        E = privkey_to_pubkey(e)
+        ss = ecdh(e, pub)
+        b = hashlib.sha256(E + ss).digest()
+        ss_list.append(ss)
+        ek_list.append(E)
+        e = scalar_mul(e, b)
+    return ss_list, ek_list
+
+def test_returns_three_pairs():
+    b = OnionPacketBuilder(SESSION_KEY, HOP_PUBKEYS)
+    b.derive_shared_secrets()
+    assert len(b.shared_secrets) == 3, "Expected 3 shared secrets, one per hop"
+    assert len(b.ephemeral_pubkeys) == 3, "Expected 3 ephemeral pubkeys"
+    for ss in b.shared_secrets:
+        assert isinstance(ss, (bytes, bytearray)) and len(ss) == 32
+    for ek in b.ephemeral_pubkeys:
+        assert isinstance(ek, (bytes, bytearray)) and len(ek) == 33
+        assert ek[0] in (2, 3), "Compressed pubkey must start with 0x02 or 0x03"
+
+def test_first_ephemeral_is_session_pubkey():
+    b = OnionPacketBuilder(SESSION_KEY, HOP_PUBKEYS)
+    b.derive_shared_secrets()
+    expected_E0 = privkey_to_pubkey(SESSION_KEY)
+    assert b.ephemeral_pubkeys[0] == expected_E0, "E_0 must equal session_key * G"
+
+def test_matches_reference_chain():
+    b = OnionPacketBuilder(SESSION_KEY, HOP_PUBKEYS)
+    b.derive_shared_secrets()
+    ref_ss, ref_ek = reference_chain(SESSION_KEY, HOP_PUBKEYS)
+    assert b.shared_secrets == ref_ss, "Shared secret chain doesn't match reference"
+    assert b.ephemeral_pubkeys == ref_ek, "Ephemeral pubkey chain doesn't match reference"
+
+def test_hops_can_recover_same_shared_secrets():
+    """Each hop derives the same ss using its own privkey + the ephemeral pubkey."""
+    b = OnionPacketBuilder(SESSION_KEY, HOP_PUBKEYS)
+    b.derive_shared_secrets()
+    for i, hop_priv in enumerate(HOP_PRIVKEYS):
+        hop_view_ss = ecdh(hop_priv, b.ephemeral_pubkeys[i])
+        assert hop_view_ss == b.shared_secrets[i], (
+            f"Hop {i}: forwarder's ECDH(hop_priv, E_i) must match Alice's ss_i"
+        )
+`,
+    hints: {
+      conceptual:
+        "<strong>Goal:</strong> turn one session key into a deterministic sequence of (ephemeral_pubkey, shared_secret) pairs, one per hop." +
+        "<br><br><strong>Why a chain:</strong> we want a single ephemeral key (E₀) in the packet, not one per hop. Each forwarder computes the next ephemeral key on its own from public information. The chain advances by multiplying the current ephemeral private key by a 'blinding factor' derived from the current ephemeral pubkey and shared secret." +
+        "<br><br><strong>Key invariant:</strong> after the loop, both Alice and the i-th hop must derive the same ss_i. Alice does it as ecdh(e_i, hop_pubkey_i); the hop does it as ecdh(hop_privkey, E_i). The math works because both sides compute the same point on the curve.",
+      steps:
+        "<strong>Initial state:</strong> e = session_key. This is the ephemeral private key for hop 0." +
+        "<br><br><strong>For each hop i:</strong>" +
+        "<br>1. Compute the ephemeral pubkey E_i with <code>privkey_to_pubkey(e)</code>. Append it to <code>self.ephemeral_pubkeys</code>." +
+        "<br>2. Compute the shared secret ss_i with <code>ecdh(e, hop_pubkey_i)</code>. Append it to <code>self.shared_secrets</code>." +
+        "<br>3. Compute the blinding factor b_i = SHA256(E_i || ss_i). Use <code>hashlib.sha256(...).digest()</code> to get 32 bytes." +
+        "<br>4. Advance e: <code>e = scalar_mul(e, b_i)</code>." +
+        "<br><br><strong>Done:</strong> after looping over every hop in <code>self.hop_pubkeys</code>, the two lists are populated and the function returns.",
+      code:
+        `<strong>Solution:</strong><br><pre><code>def derive_shared_secrets(self):
+    e = self.session_key
+    for hop_pubkey in self.hop_pubkeys:
+        E = privkey_to_pubkey(e)
+        ss = ecdh(e, hop_pubkey)
+        b = hashlib.sha256(E + ss).digest()
+        self.ephemeral_pubkeys.append(E)
+        self.shared_secrets.append(ss)
+        e = scalar_mul(e, b)
+</code></pre>`,
+    },
+    rewardSats: 50,
+    group: "sphinx/builder",
+    groupOrder: 1,
+  },
+
+};
