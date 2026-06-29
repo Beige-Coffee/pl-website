@@ -820,8 +820,8 @@ print(f"rho key: {rho.hex()[:16]}...")
 # bytes shift into the readable window (this is how filler lines up).
 buffer = bytes(ROUTING_INFO_SIZE)             # stand-in encrypted buffer
 stream = chacha20_keystream(rho, ROUTING_INFO_SIZE * 2)
-extended = xor_bytes(buffer + bytes(ROUTING_INFO_SIZE), stream)
-print(f"decrypted+extended buffer: {len(extended)} bytes")
+padded = xor_bytes(buffer + bytes(ROUTING_INFO_SIZE), stream)
+print(f"decrypted+padded buffer: {len(padded)} bytes")
 
 # A bigsize length prefix tells the forwarder how long THIS hop's payload is.
 example = encode_bigsize(19) + b"\\x00" * 19
@@ -983,7 +983,7 @@ def test_peels_the_official_bolt4_onion():
     hints: {
       conceptual:
         "<strong>Goal:</strong> <code>peel_layer</code> is the inverse of <code>wrap_hop</code>. Take a 1366-byte packet, recover the key this hop shares with Alice, decrypt the routing region, read this hop's own hop payload off the front, and produce a fresh 1366-byte packet for the next hop, never changing its size. It returns <code>(next_packet, payload_bytes, shared_secret)</code>; the shared secret is handed back because the error path (chapter 11) needs it later." +
-        "<br><br><strong>Deriving this hop's key:</strong> the packet's leading 33 bytes are Alice's ephemeral pubkey for this hop. Compute <code>ecdh</code> between this node's private key and that ephemeral key (then SHA256) to recover the same shared secret Alice used, and derive <code>rho</code> from it, the key that decrypts the routing region. Authenticating with <code>mu</code> is chapter 10's job, so <code>peel_layer</code> skips it." +
+        "<br><br><strong>Deriving this hop's key:</strong> the packet's leading 33 bytes are Alice's ephemeral pubkey for this hop. Compute <code>ecdh</code> between this node's private key and that ephemeral key (then SHA256) to recover the same shared secret Alice used, and derive <code>rho</code> from it, the key that decrypts the routing region. Authenticating with <code>mu</code> is covered in chapter 10, so <code>peel_layer</code> skips it." +
         "<br><br><strong>Why the extended keystream:</strong> when this hop strips its hop payload off the front and shifts the inner contents forward, the trailing positions must contain the extension of this hop's rho<sub>i</sub> keystream. That's exactly what was XORed into the corresponding filler bytes during construction. Generating 2x the routing info size covers both the decrypted <code>hop_payloads</code> AND the keystream-extension that fills the gap." +
         "<br><br><strong>What to read, and what to forward:</strong> after decrypting, the front holds this hop's hop payload (a bigsize length prefix, the TLV, then a 32-byte HMAC that authenticates the next hop's view). Lift the payload, take the next hop's 1,300-byte <code>hop_payloads</code>, and reassemble: version, the next ephemeral key, the next <code>hop_payloads</code>, and the next HMAC. An all-zero next HMAC means this hop is the destination." +
         "<br><br><strong>Advancing the ephemeral key:</strong> each hop sees a different ephemeral key (Alice blinds it per hop so the packet can't be correlated). Compute the next one by blinding the current key with <code>SHA256(E_i || ss_i)</code>, so the downstream hop's ECDH lands on its own shared secret.",
@@ -993,11 +993,11 @@ def test_peels_the_official_bolt4_onion():
         "<br><code>E_i = packet[1:34]\nhop_payloads = packet[34:1334]</code>" +
         "<br><strong>2. Derive keys:</strong> ss<sub>i</sub> = ecdh(node_privkey, <i>E</i><sub>i</sub>); rho<sub>i</sub> = HMAC(b\"rho\", ss<sub>i</sub>)." +
         "<br><strong>4. Extend, then decrypt:</strong>" +
-        "<br><code>work = hop_payloads + b\"\\x00\" * 1300\nwork = xor_bytes(work, chacha20_keystream(rho, 2600))</code>" +
+        "<br><code>padded = hop_payloads + b\"\\x00\" * 1300\nwork = xor_bytes(padded, chacha20_keystream(rho, 2600))</code>" +
         "<br><strong>5. Read the payload at the front:</strong>" +
-        "<br><code>length, header_len = parse_bigsize(work, 0)\npayload = work[0:header_len + length]\nhop_size = header_len + length + 32  # prefix + TLVs + 32-byte HMAC\nnext_hmac = work[hop_size - 32:hop_size]</code>" +
+        "<br><code>length, header_len = parse_bigsize(padded, 0)\npayload = padded[0:header_len + length]\nhop_size = header_len + length + 32  # prefix + TLVs + 32-byte HMAC\nnext_hmac = padded[hop_size - 32:hop_size]</code>" +
         "<br><strong>6. Lift the next 1,300 bytes:</strong>" +
-        "<br><code>next_hop_payloads = work[hop_size : hop_size + 1300]</code>" +
+        "<br><code>next_hop_payloads = padded[hop_size : hop_size + 1300]</code>" +
         "<br><strong>7. Advance the ephemeral key:</strong>" +
         "<br><code>b = SHA256(E_i + ss)\nE_next = point_mul_pubkey(E_i, b)</code>" +
         "<br><strong>8. Assemble the outgoing packet:</strong>" +
@@ -1014,19 +1014,19 @@ def test_peels_the_official_bolt4_onion():
         rho = hmac.new(b"rho", ss, hashlib.sha256).digest()
 
         # Step 4. Extend the buffer to 2x routing size, then XOR with the keystream.
-        work = hop_payloads + b"\\x00" * ROUTING_INFO_SIZE
+        padded = hop_payloads + b"\\x00" * ROUTING_INFO_SIZE
         stream = chacha20_keystream(rho, 2 * ROUTING_INFO_SIZE)
-        work = xor_bytes(work, stream)
+        padded = xor_bytes(padded, stream)
 
         # Step 5. Read this hop's payload at the front:
         #   bigsize_LEN || TLV records (length bytes) || next_hmac (32 bytes).
-        length, header_len = parse_bigsize(work, 0)
-        payload = work[0:header_len + length]
+        length, header_len = parse_bigsize(padded, 0)
+        payload = padded[0:header_len + length]
         hop_size = header_len + length + 32
-        next_hmac = work[hop_size - 32:hop_size]
+        next_hmac = padded[hop_size - 32:hop_size]
 
         # Step 6. Lift the next 1,300 bytes as the outgoing hop_payloads.
-        next_hop_payloads = work[hop_size:hop_size + ROUTING_INFO_SIZE]
+        next_hop_payloads = padded[hop_size:hop_size + ROUTING_INFO_SIZE]
 
         # Step 7. Advance the ephemeral pubkey via the blinding factor.
         b = hashlib.sha256(E_i + ss).digest()
@@ -1445,15 +1445,15 @@ def test_end_to_end_peel_through_route():
         assert expected_hmac == inbound_hmac, f"Hop {i}: HMAC must validate with assoc_data"
         # Peel: extract payload + advance ephemeral
         rho = hmac.new(b"rho", ss, hashlib.sha256).digest()
-        work = bytearray(hop_payloads + b"\\x00" * ROUTING_INFO_SIZE)
+        padded = bytearray(hop_payloads + b"\\x00" * ROUTING_INFO_SIZE)
         stream = chacha20_keystream(rho, 2 * ROUTING_INFO_SIZE)
-        work = bytes(a ^ b for a, b in zip(work, stream))
-        length, hl = parse_bigsize(work, 0)
-        payload = work[:hl + length]
+        padded = bytes(a ^ b for a, b in zip(padded, stream))
+        length, hl = parse_bigsize(padded, 0)
+        payload = padded[:hl + length]
         assert payload == PAYLOADS[i], f"Hop {i}: extracted payload must match original"
         hop_size = hl + length + 32
-        next_hmac = work[hop_size - 32:hop_size]
-        next_hop_payloads = work[hop_size:hop_size + ROUTING_INFO_SIZE]
+        next_hmac = padded[hop_size - 32:hop_size]
+        next_hop_payloads = padded[hop_size:hop_size + ROUTING_INFO_SIZE]
         bf = hashlib.sha256(E + ss).digest()
         E_next = point_mul_pubkey(E, bf)
         current = b"\\x00" + E_next + next_hop_payloads + next_hmac

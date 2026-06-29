@@ -758,7 +758,7 @@ const ENTRIES: Record<string, GlossaryEntry> = {
     category: "your function",
     signature: "def peel_layer(self, packet, node_privkey):",
     definition:
-      "Your `OnionForwarder` method: the full peel. ECDH against the packet's ephemeral pubkey, extend-and-XOR with `rho`, lift the next 1,300 bytes, advance the ephemeral. (HMAC verification is `verify_hmac`'s job.) Returns `(next_packet, payload_bytes, shared_secret)`.",
+      "Your `OnionForwarder` method: the full peel. ECDH against the packet's ephemeral pubkey, extend-and-XOR with `rho`, lift the next 1,300 bytes, advance the ephemeral. (`verify_hmac` handles HMAC verification.) Returns `(next_packet, payload_bytes, shared_secret)`.",
     chapter: "9",
   },
   verify_hmac: {

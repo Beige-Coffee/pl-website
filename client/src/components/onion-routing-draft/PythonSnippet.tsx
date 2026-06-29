@@ -129,17 +129,17 @@ const SNIPPETS: Record<string, Snippet> = {
 
   "peel-extend-xor": {
     python:
-      '# Extend hop_payloads with 1,300 zero bytes, then XOR the whole\n# 2,600-byte buffer with rho_B\'s keystream.\nextended = bytearray(hop_payloads) + bytearray(1300)\nstream = chacha20_keystream(rho_B, 2600)\nextended = xor_bytes(extended, stream)',
+      '# Extend hop_payloads with 1,300 zero bytes, then XOR the whole\n# 2,600-byte buffer with rho_B\'s keystream.\npadded = bytearray(hop_payloads) + bytearray(1300)\nstream = chacha20_keystream(rho_B, 2600)\npadded = xor_bytes(padded, stream)',
   },
 
   "peel-read-payload": {
     python:
-      '# Parse the bigsize length prefix, then keep the whole hop payload\n# (prefix + TLV records), then the 32-byte next_hmac that follows it.\n# parse_bigsize returns (value, bytes_consumed).\npayload_len, header_len = parse_bigsize(extended, 0)\nthis_hop_payload = extended[0:header_len + payload_len]\nhop_size = header_len + payload_len + 32  # prefix + TLVs + next_hmac\nnext_hmac = bytes(extended[hop_size - 32:hop_size])',
+      '# Parse the bigsize length prefix, then keep the whole hop payload\n# (prefix + TLV records), then the 32-byte next_hmac that follows it.\n# parse_bigsize returns (value, bytes_consumed).\npayload_len, header_len = parse_bigsize(padded, 0)\nthis_hop_payload = padded[0:header_len + payload_len]\nhop_size = header_len + payload_len + 32  # prefix + TLVs + next_hmac\nnext_hmac = bytes(padded[hop_size - 32:hop_size])',
   },
 
   "peel-lift-next": {
     python:
-      "# The next 1,300 bytes after Bob's hop payload become Charlie's\n# hop_payloads field, the same fixed wire size as what Bob received.\nnext_hop_payloads = bytes(extended[hop_size:hop_size + 1300])",
+      "# The next 1,300 bytes after Bob's hop payload become Charlie's\n# hop_payloads field, the same fixed wire size as what Bob received.\nnext_hop_payloads = bytes(padded[hop_size:hop_size + 1300])",
   },
 
   "peel-advance-ephemeral": {

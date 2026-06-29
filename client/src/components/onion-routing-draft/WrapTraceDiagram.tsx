@@ -196,7 +196,7 @@ const BEATS: Beat[] = [
     subLabel: "SHIFT + WRITE",
     title: "Right-shift by 60 and write Bob's hop payload",
     caption:
-      "Last hop, last time through. Drop the last 60 bytes off the right (the Bob+Charlie filler residue, which has done its job by now) and write Bob's TLV records plus `charlie_hmac` into the freed front.",
+      "Last hop, last time through. Drop the last 60 bytes off the right (the Bob+Charlie filler residue, which is no longer needed) and write Bob's TLV records plus `charlie_hmac` into the freed front.",
     focus: "front",
   } as Beat,
   {
