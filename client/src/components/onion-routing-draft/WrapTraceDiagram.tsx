@@ -179,7 +179,7 @@ const BEATS: Beat[] = [
     subLabel: "SHIFT + WRITE",
     title: "Right-shift by 80 and write Charlie's hop payload",
     caption:
-      "Same steps, one layer out. Drop the last 80 bytes off the right (the Charlie-only tail of the filler), prepend 80 bytes of placeholder, and write Charlie's TLV records plus `dave_hmac` (the value we just computed) into it. The Bob+Charlie portion of the filler stays put in the trailing 60 bytes.",
+      "Next, we repeat for another layer. Drop the last 80 bytes off the right (the Charlie-only tail of the filler), prepend 80 bytes of placeholder, and write Charlie's TLV records plus `dave_hmac` (the value we just computed) into it. The Bob+Charlie portion of the filler stays put in the trailing 60 bytes.",
     focus: "front",
   } as Beat,
   {
@@ -1054,7 +1054,7 @@ export function BufferRegion({
               cursor: "help",
             }}
           >
-            filler ?
+            filler
           </span>
         </Tooltip>
       </div>
