@@ -1240,8 +1240,8 @@ def test_no_filler_default_unchanged():
     id: "exercise-build-packet-draft",
     title: "Build the Full Onion Packet",
     description:
-      "Implement <code>OnionPacketBuilder.build</code>. Given the route data already on <code>self</code> (<code>session_key</code>, <code>hop_pubkeys</code>), the per-hop bigsize-prefixed payloads, and the payment's 32-byte <code>associated_data</code> (<code>payment_hash</code>), produce the final 1366-byte BOLT 4 onion packet. " +
-      "This is the chapter's wrap loop end to end, wiring together the functions you already wrote: <code>derive_shared_secrets</code> (chapter 4), <code>derive_keys</code> (chapter 6), <code>generate_filler</code> (chapter 7), and <code>wrap_hop</code>. Only the elliptic-curve and ChaCha20 primitives are provided.",
+      "Implement <code>OnionPacketBuilder.build</code>. The setup, the per-hop keys, the filler, and the pad-noise buffer, is provided for you in the starter, re-using the <code>derive_keys</code> (chapter 6) and <code>generate_filler</code> (chapter 7) functions you already wrote and were tested on. " +
+      "Your job is the integration that's new this chapter: wrap the hops inside-out with <code>wrap_hop</code> (threading <code>next_hmac</code>, laying the filler in once), then assemble the final 1366-byte BOLT 4 packet (version || ephemeral_pubkey || hop_payloads || hmac).",
     sampleCode: `# Build-loop sandbox - watch the inside-out wrap order and the shape of the
 # finished packet, without the full 1300-byte machinery.
 #
@@ -1277,36 +1277,51 @@ print(f"\\nfinal packet size = 1 + 33 + {ROUTING_INFO_SIZE} + 32 = {1 + 33 + ROU
 `,
     starterCode: `    def build(self, payloads, associated_data):
         """
-        Build a complete 1366-byte BOLT 4 onion packet.
+        Assemble the final 1366-byte BOLT 4 onion packet:
+          version(1) || ephemeral_pubkey(33) || hop_payloads(1300) || hmac(32)
 
-        Args:
-          payloads:         list of bigsize-prefixed TLV hop payloads, in route order.
-                            Each entry is bigsize_len(N) || N_bytes_of_TLV.
-                            payloads[0] is for the first hop, payloads[-1] is the destination.
-          associated_data:  32-byte payment_hash. Bound into every hop's HMAC.
+        The setup below just re-uses functions you already wrote (and were tested
+        on): derive_keys (ch6) and generate_filler (ch7). Read it, then write the
+        two new pieces: the inside-out wrap loop and the final assembly. That loop
+        is onion routing's core construction, we wrap destination-first so each
+        layer's HMAC can commit to the one beneath it.
 
-        Returns:
-          bytes of length 1366: version (1) || ephemeral_pubkey (33) ||
-                                hop_payloads (1300) || hmac (32)
-
-        The shared secrets are
-        already derived for you: self.shared_secrets and self.ephemeral_pubkeys
-        are populated before build runs (the harness calls derive_shared_secrets
-        first). You wire together the functions you wrote in earlier chapters:
-          derive_keys(secret)           -> KeyMaterial(rho, mu, um, pad, ammag)
-                                           for one secret (chapter 6). Call it per
-                                           hop for rho/mu, and once on
-                                           self.session_key for the pad key.
-          self.generate_filler(rho_keys, sizes) -> filler bytes (chapter 7)
-          self.wrap_hop(...)            -> one layer; pass filler= on the
-                                           innermost hop only
-
-        Initialize the buffer with pad-key noise (not zeros) so the unused tail
-        can't reveal a short route. Wrap hops innermost-first (destination first,
-        out to the first hop). Then assemble version || E_0 || buffer || hmac.
-
-        In scope: derive_keys, chacha20_keystream(key, length), xor_bytes(a, b).
+        In scope: self.wrap_hop (chapter 8), self.ephemeral_pubkeys.
         """
+        # --- Provided: re-application of earlier chapters (nothing new here) ---
+        # ch6 derive_keys, per hop, off the secrets already on self:
+        keys = [derive_keys(ss) for ss in self.shared_secrets]
+
+        # ch7 generate_filler, for the FORWARDERS only (slice off the destination,
+        # which doesn't shift). A hop occupies len(payload) + 32 bytes:
+        filler = self.generate_filler(
+            [k.rho for k in keys[:-1]],
+            [len(p) + 32 for p in payloads[:-1]],
+        )
+
+        # Seed the 1300-byte buffer with pad-key NOISE (not zeros) so a short route
+        # can't be detected from the trailing bytes. The pad key is off the SESSION
+        # key, not a hop secret:
+        pad_key = derive_keys(self.session_key).pad
+        buffer = bytearray(chacha20_keystream(pad_key, ROUTING_INFO_SIZE))
+
+        # Pair each payload with its hop's rho/mu so the loop reads cleanly:
+        hops = [(p, k.rho, k.mu) for p, k in zip(payloads, keys)]
+
+        # ---------------- Your job starts here ----------------
+        # The destination is the ONLY hop that gets the filler, so wrap it on its
+        # own first, then loop the forwarders. Each wrap_hop returns
+        # (new_buffer, this_hop_hmac); thread that hmac forward as the next one.
+        #
+        # 1) Wrap the destination (hops[-1]) WITH the filler. Its incoming
+        #    next_hmac is 32 zero bytes (no inner layer beneath it):
+        #      payload, rho, mu = hops[-1]
+        #      buffer, next_hmac = self.wrap_hop(buffer, payload, b"\\x00" * 32,
+        #          rho, mu, associated_data, filler=filler)
+        # 2) Wrap the forwarders, reversed(hops[:-1]), with NO filler, threading
+        #    next_hmac through each call.
+        # 3) Assemble + return:
+        #      b"\\x00" + self.ephemeral_pubkeys[0] + bytes(buffer) + next_hmac
         # TODO: implement
         pass
 `,
@@ -1448,43 +1463,42 @@ def test_end_to_end_peel_through_route():
 `,
     hints: {
       conceptual:
-        "<strong>Goal:</strong> wire together the functions you already wrote into the full construction. <code>derive_keys</code> (ch6), <code>generate_filler</code> (ch7), and <code>wrap_hop</code> all come back here; build is the integration step. The shared secrets are already on <code>self.shared_secrets</code> / <code>self.ephemeral_pubkeys</code> (the harness runs <code>derive_shared_secrets</code> before build), so build doesn't derive them. The only provided pieces are the crypto primitives (<code>chacha20_keystream</code>, <code>xor_bytes</code>, ECDH)." +
-        "<br><br><strong>Per-hop keys from your own derive_keys:</strong> for each secret already in <code>self.shared_secrets</code>, call <code>derive_keys(ss)</code> to get its <code>KeyMaterial</code> (use <code>.rho</code> and <code>.mu</code>). The pad key comes from the SESSION key, not a hop secret, so it's <code>derive_keys(self.session_key).pad</code> (same KDF, different input)." +
-        "<br><br><strong>Pad-key noise (not zeros):</strong> initialize the buffer with <code>chacha20_keystream(pad_key, 1300)</code>. A destination who sees zeros at the end of their decrypted hop_payloads could infer a short route." +
-        "<br><br><strong>Inside-out order:</strong> wrap the destination first, then each forwarder, ending with the first hop on the outside, because each hop's HMAC commits to the layer beneath it (which must already exist). Iterate with <code>reversed(...)</code>." +
-        "<br><br><strong>Filler goes through wrap_hop now:</strong> <code>wrap_hop</code> lays the filler in (before its single HMAC) on the innermost hop. You just pass <code>filler=filler</code> on the destination's wrap and <code>filler=None</code> on every forwarder. No overwrite-and-recompute in build.",
+        "<strong>Goal:</strong> the setup (per-hop keys via your ch6 <code>derive_keys</code>, the filler via your ch7 <code>generate_filler</code>, and the pad-noise buffer) is already written for you in the starter. Your job is the integration that's new here: wrapping the hops inside-out and assembling the packet." +
+        "<br><br><strong>The destination is special.</strong> It's the innermost wrap AND the only hop that gets the filler, so wrap it on its own first. Its incoming <code>next_hmac</code> is 32 zero bytes (no inner layer beneath it), and you pass <code>filler=filler</code> so <code>wrap_hop</code> lays the filler in. (That overlay can only happen here, between the destination's XOR and its HMAC.)" +
+        "<br><br><strong>Then the forwarders, outward.</strong> Loop the remaining hops with <code>reversed(hops[:-1])</code> (Charlie, then Bob), passing NO filler. Each <code>wrap_hop</code> returns <code>(new_buffer, this_hop_hmac)</code>; thread <code>this_hop_hmac</code> forward as the next <code>next_hmac</code>. The order is destination-first because each hop's HMAC commits to the layer beneath it, which must already exist." +
+        "<br><br><strong>Assemble:</strong> the finished buffer is the 1300-byte hop_payloads field. Wrap the envelope: <code>b\"\\x00\"</code> (version) + <code>self.ephemeral_pubkeys[0]</code> (33-byte E_0) + the buffer + the final <code>next_hmac</code> (the outer HMAC). That is 1 + 33 + 1300 + 32 = 1366 bytes.",
       steps:
-        "<strong>1. Per-hop keys.</strong> The shared secrets are already on <code>self.shared_secrets</code>, so derive each hop's keys:" +
-        "<br><code>keys = [derive_keys(ss) for ss in self.shared_secrets]</code>" +
-        "<br><strong>2. Filler</strong> for the forwarders only, so slice off the destination:" +
-        "<br><code>filler = self.generate_filler([k.rho for k in keys[:-1]], [len(p) + 32 for p in payloads[:-1]])</code>" +
-        "<br><strong>3. Buffer init (pad-noise):</strong>" +
-        "<br><code>pad_key = derive_keys(self.session_key).pad\nbuffer = bytearray(chacha20_keystream(pad_key, ROUTING_INFO_SIZE))</code>" +
-        "<br><strong>4. next_hmac</strong> starts as the destination's all-zero signal:" +
-        "<br><code>next_hmac = b\"\\x00\" * 32</code>" +
-        "<br><strong>5. Wrap inside-out:</strong> pair each payload with its keys, then walk them destination-first, clearing the filler after the first (innermost) wrap so it is laid in only once:" +
-        "<br><code>hops = list(zip(payloads, keys))\nfor payload, k in reversed(hops):\n    buffer, next_hmac = self.wrap_hop(\n        buffer, payload, next_hmac,\n        k.rho, k.mu, associated_data, filler=filler,\n    )\n    filler = None</code>" +
-        "<br><strong>6. Assemble</strong> the final packet:" +
+        "The setup (<code>keys</code>, <code>filler</code>, the pad-noise <code>buffer</code>, and the <code>hops</code> list) is already in the starter, so you write the wraps and the assembly." +
+        "<br><strong>1. Wrap the destination, with the filler.</strong> It's the innermost hop (<code>hops[-1]</code>); its incoming HMAC is all-zero, and it's the only wrap that gets the filler:" +
+        "<br><code>payload, rho, mu = hops[-1]\nbuffer, next_hmac = self.wrap_hop(\n    buffer, payload, b\"\\x00\" * 32, rho, mu, associated_data, filler=filler,\n)</code>" +
+        "<br><strong>2. Wrap the forwarders, outward, with no filler.</strong> Walk <code>reversed(hops[:-1])</code> (Charlie, then Bob), threading next_hmac through each call:" +
+        "<br><code>for payload, rho, mu in reversed(hops[:-1]):\n    buffer, next_hmac = self.wrap_hop(\n        buffer, payload, next_hmac, rho, mu, associated_data,\n    )</code>" +
+        "<br><strong>3. Assemble</strong> version || E_0 || hop_payloads || hmac:" +
         "<br><code>return b\"\\x00\" + self.ephemeral_pubkeys[0] + bytes(buffer) + next_hmac</code>",
       code:
         `    def build(self, payloads, associated_data):
+        # --- Provided in the starter (re-uses your earlier functions) ---
         keys = [derive_keys(ss) for ss in self.shared_secrets]
-
         filler = self.generate_filler(
             [k.rho for k in keys[:-1]],
             [len(p) + 32 for p in payloads[:-1]],
         )
-
         pad_key = derive_keys(self.session_key).pad
         buffer = bytearray(chacha20_keystream(pad_key, ROUTING_INFO_SIZE))
-        next_hmac = b"\\x00" * 32
+        hops = [(p, k.rho, k.mu) for p, k in zip(payloads, keys)]
 
-        hops = list(zip(payloads, keys))
-        for payload, k in reversed(hops):
+        # --- What you write ---
+        # The destination is the innermost wrap and the only hop with the filler:
+        payload, rho, mu = hops[-1]
+        buffer, next_hmac = self.wrap_hop(
+            buffer, payload, b"\\x00" * 32, rho, mu, associated_data, filler=filler,
+        )
+
+        # The forwarders, outward (Charlie, then Bob), with no filler:
+        for payload, rho, mu in reversed(hops[:-1]):
             buffer, next_hmac = self.wrap_hop(
-                buffer, payload, next_hmac, k.rho, k.mu, associated_data, filler=filler,
+                buffer, payload, next_hmac, rho, mu, associated_data,
             )
-            filler = None  # the filler is laid in only on the innermost (first) wrap
 
         return b"\\x00" + self.ephemeral_pubkeys[0] + bytes(buffer) + next_hmac`,
     },
