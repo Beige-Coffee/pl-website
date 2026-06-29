@@ -283,15 +283,18 @@ def decrypt_error_onion(wrapped_error, hop_keys):
                      hop_keys[0] is the first forwarder, last is the destination
 
     Returns:
-      (failing_hop_index, failure_message) if a layer's HMAC verifies
-      (None, None) if no layer matched (the error was tampered with)
+      (failing_hop_index, failure_message) once a layer's HMAC verifies and
+        its length fields are well-formed
+      (None, None) if no layer's HMAC verifies (tampered en route), or the
+        one that does is malformed
 
     Unwrapped packet layout (chapter 11's "what the failing hop builds"):
       error_hmac (32) || failure_len (2) || failure_message || pad_len (2) || pad
 
-    A valid HMAC alone is not enough: the two length fields must exactly
-    tile the payload, or that layer is malformed and you keep trying the
-    remaining hops.
+    A verified HMAC pins down the failing hop (only it has that um key), but it
+    doesn't prove the bytes are well-formed. If the two length fields don't
+    exactly tile the payload, that hop sent a malformed error and there's
+    nothing to recover, so return (None, None).
 
     Helpers in scope: chacha20_keystream(key, length), xor_bytes(a, b).
     """
@@ -435,7 +438,7 @@ def test_official_bolt4_error_vector():
         "<br><br><strong>Order:</strong> peel from outermost to innermost, which is hop 0, hop 1, hop 2 (the first forwarder is the outermost wrapper because their wrap was applied most recently during the return trip)." +
         "<br><br><strong>Why parse the u16 length:</strong> failure messages can contain zero bytes (e.g., binary <code>channel_update</code> data attached to <code>temporary_channel_failure</code>). Stripping trailing zeros would corrupt those messages. The explicit u16 failure_len at the front of the decrypted payload tells us the exact byte boundary." +
         "<br><br><strong>Why <code>len(wrapped_error)</code> instead of a constant:</strong> the sender pads <code>failuremsg + pad</code> to a fixed total so the size can't leak which error occurred, but that total is not always 256. Our worked example uses the 256-byte minimum (a 292-byte packet); a historical BOLT 4 test vector padded a bigger message to 1,024 (a 1,060-byte packet), and that legacy vector is still hardcoded in our test fixture for interop. The structure is self-describing, so a decryptor that reads the lengths from the packet handles every size a real node might send." +
-        "<br><br><strong>Why validate after the HMAC matches:</strong> the HMAC proves which hop authored the bytes, not that the bytes are well-formed. The two length fields must exactly tile the payload (<code>2 + failure_len + 2 + pad_len == len(payload)</code>); anything else is malformed and should be treated as a non-match.",
+        "<br><br><strong>Why validate after the HMAC matches:</strong> the HMAC proves which hop authored the bytes, not that the bytes are well-formed. A verified HMAC has already pinned the failing hop (only it has the <code>um</code> key), so if the two length fields don't exactly tile the payload (<code>2 + failure_len + 2 + pad_len == len(payload)</code>), that hop sent a malformed error and there's nothing left to recover: return <code>(None, None)</code>.",
       steps:
         "<strong>Set up the working buffer.</strong> Start it at the received error packet; the loop below peels each layer off it in place, reassigning <code>wrapped</code> every pass:" +
         "<br><code>wrapped = wrapped_error</code>" +
@@ -444,11 +447,11 @@ def test_official_bolt4_error_vector():
         "<br><code>wrapped = xor_bytes(wrapped, chacha20_keystream(ammag, len(wrapped)))</code>" +
         "<br><strong>2. Split off the 32-byte tag and the payload:</strong>" +
         "<br><code>tag = wrapped[:32]\npayload = wrapped[32:]</code>" +
-        "<br><strong>3. Check this hop's HMAC.</strong> If <code>hmac.new(um, payload, hashlib.sha256).digest() == tag</code>, this is the candidate failing hop, so parse and validate the length-prefixed payload:" +
+        "<br><strong>3. Check this hop's HMAC.</strong> Compare <code>hmac.new(um, payload, hashlib.sha256).digest()</code> to <code>tag</code>. If they differ, this is the wrong hop, so <code>continue</code> to peel the next layer. If they match, this IS the failing hop (only it has the <code>um</code> key), so parse and validate the length-prefixed payload:" +
         "<br><code>failure_len = int.from_bytes(payload[0:2], 'big')</code>" +
-        "<br>Reject (keep looping) if <code>2 + failure_len + 2 > len(payload)</code>." +
+        "<br>If <code>2 + failure_len + 2 > len(payload)</code>, the length overshoots the packet, so the error is malformed and unrecoverable: <code>return None, None</code>." +
         "<br><code>pad_start = 2 + failure_len\npad_len = int.from_bytes(payload[pad_start:pad_start + 2], 'big')</code>" +
-        "<br>Reject (keep looping) if <code>2 + failure_len + 2 + pad_len != len(payload)</code>; the two length fields must exactly tile the payload." +
+        "<br>If <code>2 + failure_len + 2 + pad_len != len(payload)</code>, the two length fields don't tile the payload, so it's malformed too: <code>return None, None</code>." +
         "<br>Otherwise, return the hop index with the recovered message:" +
         "<br><code>return i, payload[2:2 + failure_len]</code>" +
         "<br><br><strong>If the loop ends with no match:</strong>" +
@@ -460,15 +463,18 @@ def test_official_bolt4_error_vector():
         wrapped = xor_bytes(wrapped, chacha20_keystream(ammag, len(wrapped)))
         tag = wrapped[:32]
         payload = wrapped[32:]
-        if hmac.compare_digest(hmac.new(um, payload, hashlib.sha256).digest(), tag):
-            failure_len = int.from_bytes(payload[0:2], "big")
-            if 2 + failure_len + 2 > len(payload):
-                continue
-            pad_start = 2 + failure_len
-            pad_len = int.from_bytes(payload[pad_start:pad_start + 2], "big")
-            if 2 + failure_len + 2 + pad_len != len(payload):
-                continue
-            return i, payload[2:2 + failure_len]
+        expected = hmac.new(um, payload, hashlib.sha256).digest()
+        if not hmac.compare_digest(expected, tag):
+            continue  # wrong hop, peel the next layer
+        # The HMAC verified, so this IS the failing hop. Now parse it strictly.
+        failure_len = int.from_bytes(payload[0:2], "big")
+        if 2 + failure_len + 2 > len(payload):
+            return None, None  # length overshoots the packet: malformed
+        pad_start = 2 + failure_len
+        pad_len = int.from_bytes(payload[pad_start:pad_start + 2], "big")
+        if 2 + failure_len + 2 + pad_len != len(payload):
+            return None, None  # lengths don't tile: malformed
+        return i, payload[2:2 + failure_len]
     return None, None`,
     },
     rewardSats: 100,

@@ -369,7 +369,7 @@ export function OnionCapstoneLab({ injectedTrace, getSaved, demo, dark = false }
         <div className="px-4 py-4" style={{ background: dark ? "#0b1220" : "#fefdfb" }}>
           {runState === "idle" && (
             <div style={{ textAlign: "center", padding: "24px 0" }}>
-              <p style={{ color: P.text, fontSize: 14, maxWidth: 520, margin: "0 auto 16px" }}>Run a real payment through the onion you built. Your code plays every role: Alice builds the packet, then each forwarder peels and forwards it. Pick a function to watch it run, and see the onion change exactly when your code changes it.</p>
+              <p style={{ color: P.text, fontSize: 14, maxWidth: 520, margin: "0 auto 16px" }}>Run a simulated payment through the onion you built. Alice builds the packet, then each forwarder peels and forwards it. Pick a function to watch it run, and see the onion change exactly when your code changes it.</p>
               <button onClick={run} style={{ fontFamily: SANS, fontWeight: 700, fontSize: 13, color: dark ? P.onAccent : "#fff", background: dark ? P.gold : "#000", padding: "10px 20px", border: "none", cursor: "pointer" }}>Run the capstone</button>
             </div>
           )}
