@@ -5,8 +5,8 @@ import { StepCaption } from "./StepCaption";
 // ────────────────────────────────────────────────────────────────────────────
 // EcdhRecapDiagram (DRAFT)
 //
-// Single-visual ECDH refresher. Two modes (Abstract / Concrete) selectable
-// via toggle. Three pedagogical steps reveal the protocol progressively:
+// Single-visual ECDH refresher. Three pedagogical steps reveal the protocol
+// progressively:
 //   1. Setup     each party has a keypair (private + public)
 //   2. Exchange  public keys travel to the center, both visible
 //   3. Compute   each party computes the shared point; gold pill appears
@@ -21,8 +21,6 @@ const SLATE = "#475569";
 const CREAM_CARD = "#fffdf5";
 const SHARED = "#b8860b";
 const MONO = '"JetBrains Mono", "Fira Code", monospace';
-
-type Mode = "abstract" | "concrete";
 
 interface ModeValues {
   a: string;
@@ -41,58 +39,30 @@ interface ModeValues {
   sharedSecret: string;
 }
 
-const VALUES: Record<Mode, ModeValues> = {
-  abstract: {
-    a: "a",
-    b: "b",
-    G: "G",
-    A: "A = a · G",
-    B: "B = b · G",
-    chipA: "A = a · G",
-    chipB: "B = b · G",
-    shared: "ab · G",
-    sharedHash: "SHA256(ab · G)",
-    sharedSecret: "32-byte shared secret",
-  },
-  concrete: {
-    a: "3",
-    b: "5",
-    G: "7",
-    A: "A = 3 · 7 = 21",
-    B: "B = 5 · 7 = 35",
-    chipA: "A = 21",
-    chipB: "B = 35",
-    shared: "105",
-    sharedHash: "SHA256(105)",
-    // Real SHA256 of the shared point 105, truncated for display.
-    sharedSecret: "0x1253e937…0155e860",
-  },
+const VALUES: ModeValues = {
+  a: "a",
+  b: "b",
+  G: "G",
+  A: "A = a · G",
+  B: "B = b · G",
+  chipA: "A = a · G",
+  chipB: "B = b · G",
+  shared: "ab · G",
+  sharedHash: "SHA256(ab · G)",
+  sharedSecret: "32-byte shared secret",
 };
 
 // ── Tooltip catalog ─────────────────────────────────────────────────────────
 
-function tooltips(mode: Mode) {
-  if (mode === "abstract") {
-    return {
-      a: "Alice's private key. A 256-bit random number she rolls locally and never shares.",
-      A: "Alice's public key, which is just a · G. Safe to hand out, since recovering a from A means solving the discrete log problem (good luck!).",
-      b: "Bob's private key. A 256-bit random number he rolls locally and never shares.",
-      B: "Bob's public key, which is just b · G. Safe to hand out.",
-      G: "The generator point. A fixed point on the elliptic curve that everyone knows.",
-      shared:
-        "The shared point. Both sides land on it without ever sending it. An eavesdropper sees A and B, but with no private key, can't fold them into ab · G.",
-    };
-  }
-  return {
-    a: "Alice's private number. In real ECDH this would be 256 bits of randomness, not 3.",
-    A: "Alice's public key, 3 · 7 = 21. Safe to publish.",
-    b: "Bob's private number. In real ECDH this would be 256 bits of randomness, not 5.",
-    B: "Bob's public key, 5 · 7 = 35. Safe to publish.",
-    G: "The generator. Everyone shares the same one. We're using 7 as a stand-in for the fixed, well-known point on a real curve.",
-    shared:
-      "The shared point. Both reach 105 because 3 · 5 = 5 · 3, and neither had to send it. Each one worked it out on its own.",
-  };
-}
+const TOOLTIPS = {
+  a: "Alice's private key. A 256-bit random number she rolls locally and never shares.",
+  A: "Alice's public key, which is just a · G. Safe to hand out, since recovering a from A means solving the discrete log problem (good luck!).",
+  b: "Bob's private key. A 256-bit random number he rolls locally and never shares.",
+  B: "Bob's public key, which is just b · G. Safe to hand out.",
+  G: "The generator point. A fixed point on the elliptic curve that everyone knows.",
+  shared:
+    "The shared point. Both sides land on it without ever sending it. An eavesdropper sees A and B, but with no private key, can't fold them into ab · G.",
+};
 
 // ── HoverTip with viewport-clamped fixed positioning ────────────────────────
 
@@ -187,37 +157,6 @@ function LockTile() {
       <rect x="2" y="5" width="8" height="6" fill={SLATE} />
       <rect x="5" y="7" width="2" height="2" fill={CREAM_CARD} />
     </svg>
-  );
-}
-
-// ── Mode toggle ─────────────────────────────────────────────────────────────
-
-function ModeToggle({ mode, onChange }: { mode: Mode; onChange: (m: Mode) => void }) {
-  const Btn = ({ value, label }: { value: Mode; label: string }) => (
-    <button
-      onClick={() => onChange(value)}
-      className="px-3 py-1 border-[1.5px] text-[10px] font-bold tracking-[0.06em] uppercase transition-colors"
-      style={{
-        background: mode === value ? INK : CREAM_CARD,
-        color: mode === value ? "#fffdf5" : INK,
-        borderColor: INK,
-      }}
-      data-testid={`ecdh-recap-mode-${value}`}
-    >
-      {label}
-    </button>
-  );
-  return (
-    <div className="border-b-[1.5px] border-foreground/20 px-4 py-2 flex items-center gap-2 flex-wrap">
-      <span
-        className="text-[10px] uppercase tracking-wider"
-        style={{ color: SLATE, fontFamily: "ui-sans-serif, system-ui, sans-serif" }}
-      >
-        Mode
-      </span>
-      <Btn value="abstract" label="Abstract" />
-      <Btn value="concrete" label="Concrete (a=3, b=5, G=7)" />
-    </div>
   );
 }
 
@@ -326,17 +265,10 @@ function PartyColumn({
 
 const TOTAL_STEPS = 3;
 
-const STEP_CAPTIONS: Record<Mode, Record<number, string>> = {
-  abstract: {
-    0: "First, each party rolls a private key (a 256-bit random number) and derives a public key from it. The private key never leaves its owner. The public key, you can hand out freely.",
-    1: "Now Alice and Bob trade public keys. Those two values in the center are all an eavesdropper gets to see. Without one of the private keys, that's just not enough to reach ab · G.",
-    2: "Watch what happens as each public key flies into the other side's math. Alice mixes her private key with B, Bob mixes his with A, and they land on the *same* shared point because scalar multiplication commutes. Hash that point and you've got a 32-byte symmetric key.",
-  },
-  concrete: {
-    0: "Here we plug in tiny stand-ins: Alice's private key is 3, Bob's is 5, and the generator G is 7. (Real keys are 256-bit random numbers, but small ones keep the arithmetic easy to follow.) Each public key is just the private key times G, so Alice publishes 3 · 7 = 21 and Bob publishes 5 · 7 = 35.",
-    1: "Alice and Bob swap public keys, so 21 and 35 are the values that travel across the wire. Notice that neither private number, 3 or 5, ever leaves home.",
-    2: "Now each side folds in its own private number. Alice computes 3 · 35 = 105, Bob computes 5 · 21 = 105, and they land on the *same* 105 because 3 · 5 = 5 · 3. Hash that shared number and both ends hold the identical 32-byte key. (With real 256-bit keys, someone who sees 21 and 35 still cannot work back to 3 or 5. That is the discrete log problem doing the heavy lifting.)",
-  },
+const STEP_CAPTIONS: Record<number, string> = {
+  0: "First, each party rolls a private key (a 256-bit random number) and derives a public key from it. The private key never leaves its owner. The public key, you can hand out freely.",
+  1: "Now Alice and Bob trade public keys. Those two values in the center are all an eavesdropper gets to see. Without one of the private keys, they cannot derive ab · G.",
+  2: "Alice mixes her private key with B, Bob mixes his with A, and they derive the *same* shared point. Once they hash the resulting point, they now have the same 32-byte symmetric key.",
 };
 
 const STEP_TITLES: Record<number, string> = {
@@ -354,15 +286,9 @@ const STEP_LABELS: Record<number, string> = {
 // ── Main component ──────────────────────────────────────────────────────────
 
 export function EcdhRecapDiagram() {
-  const [mode, setMode] = useState<Mode>("abstract");
   const [step, setStep] = useState<number>(0);
   // arrived = chips have completed their step-3 flight to opposite compute boxes
   const [arrived, setArrived] = useState(false);
-
-  // Reset to step 0 when mode changes.
-  useEffect(() => {
-    setStep(0);
-  }, [mode]);
 
   // Manage the step-3 arrival timing.
   useEffect(() => {
@@ -374,8 +300,8 @@ export function EcdhRecapDiagram() {
     setArrived(false);
   }, [step]);
 
-  const v = VALUES[mode];
-  const t = tooltips(mode);
+  const v = VALUES;
+  const t = TOOLTIPS;
 
   const showExchange = step >= 1; // chips visible
   const flyingToCompute = step >= 2; // chips moving to opposite compute box
@@ -447,9 +373,6 @@ export function EcdhRecapDiagram() {
           </span>
         </div>
       </div>
-
-      {/* Mode toggle */}
-      <ModeToggle mode={mode} onChange={setMode} />
 
       {/* Stage */}
       <div className="overflow-x-auto">
@@ -575,30 +498,10 @@ export function EcdhRecapDiagram() {
                 >
                   {v.sharedHash}
                 </div>
-                {mode === "concrete" ? (
-                  <>
-                    <div
-                      className="text-[10px] leading-snug mt-0.5"
-                      style={{ color: INK, fontFamily: MONO }}
-                    >
-                      <span style={{ fontWeight: 700 }}>→</span> {v.sharedSecret}
-                    </div>
-                    <div
-                      className="text-[9px] leading-snug mt-0.5 italic"
-                      style={{
-                        color: SLATE,
-                        fontFamily: "ui-sans-serif, system-ui, sans-serif",
-                      }}
-                    >
-                      32-byte shared secret
-                    </div>
-                  </>
-                ) : (
-                  <div className="text-[10px] leading-snug mt-0.5" style={{ color: INK }}>
-                    <span style={{ fontWeight: 700 }}>→</span>{" "}
-                    <span className="italic">{v.sharedSecret}</span>
-                  </div>
-                )}
+                <div className="text-[10px] leading-snug mt-0.5" style={{ color: INK }}>
+                  <span style={{ fontWeight: 700 }}>→</span>{" "}
+                  <span className="italic">{v.sharedSecret}</span>
+                </div>
               </div>
             </div>
 
@@ -616,7 +519,7 @@ export function EcdhRecapDiagram() {
           <StepCaption
             label={STEP_LABELS[step]}
             title={STEP_TITLES[step]}
-            caption={`${STEP_CAPTIONS[mode][step]} Hover any value above for a refresher.`}
+            caption={`${STEP_CAPTIONS[step]} Hover any value above for a refresher.`}
             accentColor={SHARED}
           />
         </div>
