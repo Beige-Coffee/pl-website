@@ -203,12 +203,12 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
     question: "Alice receives a wrapped error from a 3-hop route Bob → Charlie → Dave. She tries hop 0's keys (Bob), the HMAC doesn't verify, then tries hop 1's keys (Charlie), the HMAC verifies. What does Alice's algorithm do if Charlie's keys hadn't matched either?",
     options: [
       "Restart from i=0 with a different decryption mode (CBC instead of CTR), since BOLT 4 allows fallback ciphers",
-      "Continue to i=2 (Dave's keys). If no layer matches, conclude the error was tampered with and disconnect the peer",
+      "Continue to i=2 (Dave's keys). If no layer matches, conclude the error was corrupted on the return path (she can't tell which hop)",
       "Send the bytes back through the route asking each hop to peel its own layer cooperatively until one says 'this is mine'",
       "Use the failure code from a default mapping based on the wrapped bytes' length, since BOLT 4 defines a canonical fallback for unknown hops",
     ],
     answer: 1,
-    explanation: "She keeps going. The algorithm is a strict trial-decrypt loop: peel with the next hop's `ammag`, check that hop's `um` HMAC, repeat. If she runs through every hop and nothing verifies, the error is garbage, some peer on the return path tampered with it or made it up. Since no one without a `um` key can forge bytes that pass any layer's HMAC, Alice can safely disconnect that peer or dock its reliability.",
+    explanation: "She keeps going. The algorithm is a strict trial-decrypt loop: peel with the next hop's `ammag`, check that hop's `um` HMAC, repeat. If she runs through every hop and nothing verifies, the error is garbage: a hop on the return path corrupted it or made it up. The honest catch is that she can't tell *which* hop, a corrupted error carries no valid HMAC to trace back to a culprit. So Alice fails the payment and steers around that route on the retry. BOLT 4 doesn't have her disconnect a specific peer here, because she can't actually prove who did it.",
   },
   // ── Chapter 10: Forwarding & Validation ──────────────────────────────────
   "cp-validate-before-decrypt-draft": {
