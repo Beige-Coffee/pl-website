@@ -188,7 +188,6 @@ export const CHECKPOINT_ANSWER_KEY: Record<string, number | number[]> = {
   // exercises. The `exercise-` prefix routes it through the exercise reward.
   "exercise-route-calc-draft": 0,
   // Chapter 4: Shared Secrets per Hop (draft)
-  "cp-node-key-ecdh-draft": [0, 1, 2],
   "cp-naive-shared-secrets-draft": [0, 2],
   "cp-blinding-public-draft": 1,
   "exercise-derive-shared-secrets-draft": 0,

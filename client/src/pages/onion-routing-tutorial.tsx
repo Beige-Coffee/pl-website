@@ -338,20 +338,8 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
     explanation: "Each per-hop key is HMAC-SHA256(label, shared_secret) for a different ASCII label. HMAC's pseudorandom-function property means that knowing one output (<m>rho_i</m>) gives an attacker no usable information about the other three per-hop outputs unless they also know the shared secret <m>ss_i</m>. Recovering `rho` only lets them attack the forward stream cipher, which is bad enough on its own (they can read Bob's hop payload) but doesn't extend to forging HMACs (`mu`) or attacking the return path (`um`, `ammag`). That's the entire point of domain separation: a leak in one key stays contained to its own role. (The fifth key, `pad`, is derived from Alice's session key rather than any per-hop secret, so a forwarder couldn't recover it from <m>ss_AB</m> anyway.)",
   },
   // ── Chapter 4: Shared Secrets per Hop ────────────────────────────────────
-  "cp-node-key-ecdh-draft": {
-    question: "Reusing Alice's node-identity key as the ECDH input causes several problems. Some are visible in the animation above, and others you have to reason through yourself. Select all the real ones.",
-    options: [
-      "Every forwarder can match the pubkey in the packet against the public gossip graph and identify Alice as the sender.",
-      "Two of Alice's payments would carry the same pubkey, letting an observer link them to the same sender.",
-      "Every payment Alice routes through the same forwarder would derive the same shared secret with that forwarder, since both ECDH inputs are static keys.",
-      "A forwarder receiving Alice's onion could decrypt the slices intended for hops further downstream, since Alice's key is reused across all of them.",
-    ],
-    answer: [0, 1, 2],
-    explanation:
-      "Three real consequences fall out of one design choice, plus a tempting distractor.\n\n**Option 1 (correct).** The pubkey rides at the top of the packet because every forwarder needs it for ECDH. If it's Alice's published node-identity key, any forwarder can match it against the gossip graph and learn who sent the payment. That's exactly the gossip-lookup callout you saw fire at Bob, Charlie, and Dave in the visual.\n\n**Option 2 (correct).** Linkability across payments. Every onion Alice sends would carry the same pubkey, so an observer sitting between her and her first hop, or two colluding forwarders comparing notes, could correlate every one of her payments. The visual only animated one payment, but think about what an observer would see if she sent two.\n\n**Option 3 (correct).** ECDH with both inputs static is deterministic: same inputs always produce the same output. Every payment Alice routes through Bob would derive the *same* shared secret with Bob. That removes per-payment cryptographic separation, so a single shared-secret compromise retroactively breaks every payment Alice ever routed through that forwarder.\n\n**Option 4 (wrong, distractor).** Reusing Alice's side of the ECDH doesn't collapse the per-hop shared secrets. Each forwarder still derives a *different* shared secret because each has a *different* node privkey on its side of the ECDH. Bob computes `bob_priv` · <m>A</m>; Charlie computes `charlie_priv` · <m>A</m>; `bob_priv` ≠ `charlie_priv`, so the shared secrets differ. Bob cannot decrypt Charlie's slice.",
-  },
   "cp-naive-shared-secrets-draft": {
-    question: "The fresh-keypair-per-hop design fixes the identity leak from the first attempt, but it pays a price elsewhere that scales with the route length. Select all the real costs of this design.",
+    question: "The fresh-keypair-per-hop design fixes the sender-identity leak (there's no node-identity key sitting in the packet anymore), but it pays a price elsewhere that scales with the route length. Select all the real costs of this design.",
     options: [
       "The packet has to carry one ephemeral pubkey per hop, consuming bytes that would otherwise be available for the hop payloads.",
       "Each shared secret is statistically predictable because Alice can only generate a limited amount of randomness per payment.",
@@ -554,7 +542,7 @@ export const CHAPTER_REQUIREMENTS: Record<string, {
   "a-lightning-payment": { checkpoints: [], exercises: [] },
   "pathfinding-101": { checkpoints: ["cp-channel-update-direction-draft", "cp-cheapest-route-draft"], exercises: ["exercise-route-calc-draft"] },
   "privacy-problem": { checkpoints: ["cp-naive-plaintext-leak-draft", "km-privacy-rubric-draft", "cp-still-vulnerable-draft"], exercises: [] },
-  "shared-secrets": { checkpoints: ["cp-node-key-ecdh-draft", "cp-naive-shared-secrets-draft", "cp-blinding-public-draft"], exercises: ["exercise-derive-shared-secrets-draft"] },
+  "shared-secrets": { checkpoints: ["cp-naive-shared-secrets-draft", "cp-blinding-public-draft"], exercises: ["exercise-derive-shared-secrets-draft"] },
   "onion-routing-101": {
     checkpoints: [
       "cp-101-keystream-shared-draft",
