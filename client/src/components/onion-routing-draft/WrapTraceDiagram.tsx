@@ -68,7 +68,7 @@ export const HOP_LABEL: Record<ForwarderId, string> = {
 const NEXT_LABEL: Record<ForwarderId, string> = {
   bob: "for Charlie",
   charlie: "for Dave",
-  dave: "none",
+  dave: "all zeros",
 };
 const NEXT_COLOR: Record<ForwarderId, string> = {
   bob: HOP_STROKE.charlie,
@@ -137,7 +137,7 @@ const BEATS: Beat[] = [
     subLabel: "SHIFT + WRITE",
     title: "Right-shift by 100 and write Dave's hop payload",
     caption:
-      "We make room for Dave by dropping the last 100 bytes off the right (exactly the size of his hop payload: bigsize + TLV + HMAC, so the total stays at 1,300), then write his bigsize-prefixed TLV records (`amt_to_forward`, `outgoing_cltv_value`, `payment_data`) plus a 32-byte all-zero HMAC into the freed front. Those zeros are how Dave knows he's the *destination*: he's the final hop, so there's no inner layer for his HMAC to commit to.",
+      "Next, we make room for Dave by dropping the last 100 bytes off the right (exactly the size of his hop payload: bigsize + TLV + HMAC, so the total stays at 1,300), then write his bigsize-prefixed TLV records (`amt_to_forward`, `outgoing_cltv_value`, `payment_data`) plus a 32-byte all-zero HMAC into the freed front. Those zeros are how Dave knows he's the *destination*: he's the final hop, so there's no inner layer for his HMAC to commit to.",
     focus: "front",
   } as Beat,
   {

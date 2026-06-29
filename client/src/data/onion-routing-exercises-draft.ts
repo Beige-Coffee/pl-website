@@ -1309,19 +1309,16 @@ print(f"\\nfinal packet size = 1 + 33 + {ROUTING_INFO_SIZE} + 32 = {1 + 33 + ROU
         hops = [(p, k.rho, k.mu) for p, k in zip(payloads, keys)]
 
         # ---------------- Your job starts here ----------------
-        # The destination is the ONLY hop that gets the filler, so wrap it on its
-        # own first, then loop the forwarders. Each wrap_hop returns
-        # (new_buffer, this_hop_hmac); thread that hmac forward as the next one.
-        #
-        # 1) Wrap the destination (hops[-1]) WITH the filler. Its incoming
-        #    next_hmac is 32 zero bytes (no inner layer beneath it):
-        #      payload, rho, mu = hops[-1]
-        #      buffer, next_hmac = self.wrap_hop(buffer, payload, b"\\x00" * 32,
-        #          rho, mu, associated_data, filler=filler)
-        # 2) Wrap the forwarders, reversed(hops[:-1]), with NO filler, threading
-        #    next_hmac through each call.
-        # 3) Assemble + return:
-        #      b"\\x00" + self.ephemeral_pubkeys[0] + bytes(buffer) + next_hmac
+        # Build the onion inside-out (chapter 8's "Wrap, step by step"). hops is
+        # in route order (first forwarder ... destination), so the destination is
+        # the last entry.
+        #   1. Wrap the destination first, the only hop that gets the filler.
+        #      Nothing sits beneath it, so its incoming next_hmac is all zeros.
+        #   2. Wrap the remaining hops outward, no filler, threading each
+        #      wrap_hop's returned hmac in as the next call's next_hmac.
+        #   3. Assemble and return the packet in the docstring's layout:
+        #      version || first ephemeral pubkey || buffer || final hmac.
+        # wrap_hop returns (new_buffer, this_hop_hmac).
         # TODO: implement
         pass
 `,

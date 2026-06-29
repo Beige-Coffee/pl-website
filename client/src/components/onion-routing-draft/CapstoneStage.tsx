@@ -54,10 +54,10 @@ const DARK_PAL: StagePalette = {
 export const palette = (dark: boolean): StagePalette => (dark ? DARK_PAL : LIGHT_PAL);
 
 // Hop-payload subcell facts: byte count, BigSize LEN prefix (size-33), and the
-// HMAC target ("for <NextHop>"; the destination's HMAC is "none").
+// HMAC target ("for <NextHop>"; the destination's HMAC field is all zeros).
 const HOP_BYTES: Record<ForwarderId, number> = { bob: 59, charlie: 59, dave: 83 };
 const HOP_LEN_HEX: Record<ForwarderId, string> = { bob: "0x1A", charlie: "0x1A", dave: "0x32" };
-const HOP_HMAC_TARGET: Record<ForwarderId, string> = { bob: "for Charlie", charlie: "for Dave", dave: "none" };
+const HOP_HMAC_TARGET: Record<ForwarderId, string> = { bob: "for Charlie", charlie: "for Dave", dave: "all zeros" };
 const NODE_X_PCT: Record<HopId, number> = { alice: 12, bob: 38, charlie: 62, dave: 88 };
 
 export interface StageChip {

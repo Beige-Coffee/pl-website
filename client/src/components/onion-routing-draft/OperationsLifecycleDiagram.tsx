@@ -66,7 +66,7 @@ const HOP_LABEL: Record<HopId, string> = {
 const NEXT_HOP_LABEL: Record<ForwarderId, string> = {
   bob: "for Charlie",
   charlie: "for Dave",
-  dave: "none",
+  dave: "all zeros",
 };
 // Per-hop payload size (bytes) shown on the payload cell. Canonical 60/80/100.
 const HOP_PAYLOAD_BYTES: Record<ForwarderId, number> = {

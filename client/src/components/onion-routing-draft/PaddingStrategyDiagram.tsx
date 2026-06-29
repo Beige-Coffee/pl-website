@@ -70,7 +70,7 @@ const NODE_X_PCT: Record<HopId, number> = { alice: 12, bob: 38, charlie: 62, dav
 const SUCCESS_GREEN = "#5a7a2f";
 const ERROR_RED = "#a13a3a";
 
-const NEXT_HOP_LABEL: Record<ForwarderId, string> = { bob: "for Charlie", charlie: "for Dave", dave: "none" };
+const NEXT_HOP_LABEL: Record<ForwarderId, string> = { bob: "for Charlie", charlie: "for Dave", dave: "all zeros" };
 // Per-hop payload size (bytes) shown on the payload cell. Canonical 60/80/100.
 const HOP_PAYLOAD_BYTES: Record<ForwarderId, number> = { bob: 60, charlie: 80, dave: 100 };
 // bigsize LEN prefix = TLV payload bytes (hop payload total minus the 1-byte prefix

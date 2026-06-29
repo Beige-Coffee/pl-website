@@ -626,7 +626,7 @@ function ShrinkingOnionContainer({ state }: { state: State }) {
 const NEXT_HOP_LABEL: Record<ForwarderId, string> = {
   bob: "for Charlie",
   charlie: "for Dave",
-  dave: "none",
+  dave: "all zeros",
 };
 const NEXT_HOP_COLOR: Record<ForwarderId, string> = {
   bob: HOP_STROKE.charlie,
