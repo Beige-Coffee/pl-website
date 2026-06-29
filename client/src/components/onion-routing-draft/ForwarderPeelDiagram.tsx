@@ -93,13 +93,13 @@ const STEPS: StepDef[] = [
     step: 3,
     title: "Bob verifies the outer HMAC",
     caption:
-      "Now Bob recomputes `HMAC-SHA256(mu_B, hop_payloads ‖ associated_data)` and checks it against the HMAC field. Do they match? They do (Alice set it up that way), so Bob knows the packet is authentic and untouched.",
+      "Now Bob recomputes `HMAC-SHA256(mu_B, hop_payloads ‖ associated_data)` and checks it against the HMAC field. Do they match? Yes! So Bob knows the packet is authentic and untouched.",
   },
   {
     step: 4,
     title: "Bob extends the buffer and generates a matching keystream",
     caption:
-      "Next, Bob tacks 1,300 zero bytes onto `hop_payloads`, growing it from 1,300 to `2 × ROUTING_INFO_SIZE = 2,600` bytes. He also generates a matching 2,600-byte `rho_B` keystream from `chacha20(rho_B, 2600)`, ready to XOR against the extended buffer. (The diagram below zooms in on the first 1,360 bytes that matter: Bob's 60-byte hop payload plus the 1,300 that become Charlie's view. The other 1,240 get thrown away after the slice.)",
+      "Next, Bob tacks 1,300 zero bytes onto `hop_payloads`, growing it from 1,300 to `2 × ROUTING_INFO_SIZE = 2,600` bytes. He also generates a matching 2,600-byte `rho_B` keystream from `chacha20(rho_B, 2600)`, ready to XOR against the extended buffer. (The diagram above zooms in on the first 1,360 bytes that matter: Bob's 60-byte hop payload plus the 1,300 that become Charlie's view. The other 1,240 get thrown away after the slice.)",
   },
   {
     step: 5,
@@ -111,7 +111,7 @@ const STEPS: StepDef[] = [
     step: 6,
     title: "Bob slices off his hop payload; the rest is Charlie's hop_payloads",
     caption:
-      "Then Bob lops off the first 60 bytes of the XOR result (his plaintext hop payload, including `charlie_hmac` lifted from the TLV). What's left is exactly 1,300 bytes: Charlie's hop payload up front, then Dave's, then the encrypted padding, and the last 60 are the new ones the XOR made. Those 60 are *exactly* what Alice's filler precomputed.",
+      "Then Bob chops off the first 60 bytes of the XOR result (his plaintext hop payload, including `charlie_hmac` lifted from the TLV). What's left is exactly 1,300 bytes: Charlie's hop payload up front, then Dave's, then the encrypted padding, and the last 60 are the new filler bytes the XOR made. Those 60 are *exactly* what Alice's filler precomputed.",
   },
   {
     step: 7,

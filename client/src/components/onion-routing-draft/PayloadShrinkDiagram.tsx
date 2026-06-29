@@ -140,7 +140,7 @@ const STEP_CAPTIONS: Record<number, string> = {
   0: "So, without a fixed size, Alice just stacks the three encrypted hop payloads (60, 80, and 100 bytes) behind a 66-byte envelope (version + ephemeral pubkey + HMAC). That's 306 bytes. Now let's watch what happens as it travels...",
   1: "Bob's peeled his hop payload off the front and forwards what's left to Charlie: 246 bytes. See how the packet already shrank?",
   2: "Charlie does the same, peels his 80-byte hop payload and sends on the rest. We're down to 166 bytes now, just Dave's hop payload inside the envelope.",
-  3: "Dave's packet was only his own hop payload. He decrypts it, reads the `payment_data` and final amount, and claims the HTLC. The onion's empty. But here's the problem this whole section is about: the byte count *shrank at every hop*, so anyone watching the wire could tell exactly where each forwarder sits in the route. Ouch.",
+  3: "Dave's packet was only his own hop payload. He decrypts it, reads the `payment_data` and final amount, and claims the HTLC.",
 };
 
 const TOTAL_BEATS = 4;

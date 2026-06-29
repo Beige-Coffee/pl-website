@@ -100,7 +100,7 @@ const STEPS: StepDef[] = [
     iterLabel: "Iteration 1 of 2 (Bob)",
     title: "Empty filler",
     caption:
-      "So, we'll grow the filler one forwarder at a time, in route order. Bob first, then Charlie. Dave's the final hop, so he doesn't shift anything and adds no filler.",
+      "We'll grow the filler one forwarder at a time, in route order. Bob first, then Charlie. Dave's the final hop, so he doesn't shift anything and, therefore, doesn't add a filler.",
   },
   {
     beat: 2,
@@ -108,7 +108,7 @@ const STEPS: StepDef[] = [
     iterLabel: "Iteration 1 of 2 (Bob)",
     title: "Append Bob's 60 zero bytes",
     caption:
-      "Bob's hop payload is 60 bytes wide (a small intermediate-hop TLV plus the 32-byte HMAC). We'll tack 60 zeros onto the empty filler. They're just placeholders for Bob's keystream extension to XOR into.",
+      "Bob's hop payload is 60 bytes wide (a small intermediate-hop TLV plus the 32-byte HMAC). We'll tack 60 zeros onto the empty filler. These are just placeholders for Bob's keystream extension to XOR into.",
   },
   {
     beat: 3,
@@ -116,7 +116,7 @@ const STEPS: StepDef[] = [
     iterLabel: "Iteration 1 of 2 (Bob)",
     title: "Bob's keystream (1,360 bytes)",
     caption:
-      "Now, we'll generate Bob's `rho` keystream extended past the 1,300-byte boundary: `ROUTING_INFO_SIZE + 60 = 1,360 bytes`. Those extra 60 bytes past 1,300 are what Bob's shift would virtually XOR into the trailing region of Charlie's view.",
+      "Now, we'll generate Bob's `rho` keystream extended past the 1,300-byte boundary: `ROUTING_INFO_SIZE + 60 = 1,360 bytes`. Remember, these extra 60 bytes past 1,300 are what Bob's will XOR into the packet before sending to Charlie.",
   },
   {
     beat: 4,
@@ -124,7 +124,7 @@ const STEPS: StepDef[] = [
     iterLabel: "Iteration 1 of 2 (Bob)",
     title: "Slice the trailing 60 bytes",
     caption:
-      "Then, we'll keep just the last `len(filler)` = 60 bytes of Bob's keystream, the part that spills past the 1,300 boundary.",
+      "Then, we'll keep just the last `len(filler)` = 60 bytes of Bob's keystream, the part that extends past the 1,300 boundary.",
   },
   {
     beat: 5,
@@ -1173,12 +1173,14 @@ function WrapPreviewFooter({ step }: { step: number }) {
   );
 }
 
-// The persistent bar. In the shifted phase it is a bare bordered buffer; on
-// beat 14 the same bar gains the packet chrome (title bar + HEADER + HMAC),
-// which fades in as siblings/overlays around the unchanged inner region row.
+// The persistent bar across beats 11-13: a bare bordered hop_payloads buffer
+// whose contents crossfade (splice -> shifted) and tween. Beat 14 swaps to the
+// finished packet card (FinalPacketCard) so the result reads as the same onion
+// packet component used in the other visuals.
 function WrapPreviewBar({ step }: { step: number }) {
   const phase = wrapPhase(step);
-  const isPacket = step === 14;
+
+  if (step === 14) return <FinalPacketCard />;
 
   return (
     <MorphBox
@@ -1188,14 +1190,8 @@ function WrapPreviewBar({ step }: { step: number }) {
       className="relative"
       style={{ position: "relative" }}
     >
-      {/* Envelope chrome (beat 14 only): title bar + HEADER + HMAC fade in and
-          reserve their space via margins on the inner bar so it lands inside
-          the packet's PAYLOAD AREA. They overlay/flank the bar rather than
-          re-parenting it, keeping the bar one reconciled element. */}
-      <PacketChrome visible={isPacket} />
-
       {/* The inner region row - the actual hop_payloads bar. Same element on
-          every beat 11-14. The splice <-> shifted change crossfades its content;
+          beats 11-13. The splice <-> shifted change crossfades its content;
           within the shifted phase widths + hatch layers tween. */}
       <div
         className="border-[1.5px] relative overflow-hidden"
@@ -1203,10 +1199,6 @@ function WrapPreviewBar({ step }: { step: number }) {
           background: "#fffdf5",
           borderColor: INK,
           height: 56,
-          margin: isPacket ? "0 96px 0 138px" : 0,
-          boxShadow: isPacket ? `inset 0 0 0 2px ${FOCUS_GOLD}` : "none",
-          transition:
-            "margin 450ms ease-in-out, box-shadow 450ms ease-in-out",
         }}
       >
         <CrossfadeSwap swapKey={phase} style={{ height: "100%" }}>
@@ -1217,8 +1209,153 @@ function WrapPreviewBar({ step }: { step: number }) {
           )}
         </CrossfadeSwap>
       </div>
-
     </MorphBox>
+  );
+}
+
+// Beat 14: the finished 1,366-byte Sphinx packet. Rendered with the SAME nested
+// structure as ForwarderPeelDiagram's MainPacket - an outer bordered card, a
+// black title bar, a padded buffer, and an inner bordered row holding
+// HEADER | PAYLOAD AREA (labelled, boxed) | HMAC - so the packet reads as the
+// same component across visuals. The payload cells reuse ShiftedRegionRow at the
+// step-14 (packet) proportions.
+function FinalPacketCard() {
+  const bobColor = HOP_STROKE_COLOR.bob;
+  return (
+    <div
+      className="border-[1.5px]"
+      style={{ background: "#fffdf5", borderColor: INK }}
+    >
+      {/* Black title bar */}
+      <div
+        className="bg-black text-white px-3 py-1.5 flex items-center gap-2"
+        style={{ fontFamily: MONO }}
+      >
+        <span
+          style={{
+            width: 8,
+            height: 8,
+            background: FOCUS_GOLD,
+            display: "inline-block",
+            flexShrink: 0,
+          }}
+        />
+        <span className="text-[10px] uppercase tracking-[0.1em] font-bold">
+          ONION_PACKET (Alice → Bob)
+        </span>
+      </div>
+
+      {/* Padded buffer around the packet body */}
+      <div className="p-3">
+        {/* Inner bordered row: HEADER | PAYLOAD AREA | HMAC */}
+        <div
+          className="border-[1.5px] flex"
+          style={{ background: "#fffdf5", borderColor: INK, minHeight: 110 }}
+        >
+          {/* HEADER */}
+          <div
+            className="flex flex-col items-center justify-center text-center border-r-[1.5px]"
+            style={{
+              flexBasis: 130,
+              flexShrink: 0,
+              borderColor: INK,
+              color: INK,
+              padding: "8px 6px",
+              background: `${bobColor}24`,
+              fontFamily: MONO,
+            }}
+          >
+            <span className="text-[10px] font-bold uppercase tracking-[0.08em] leading-tight">
+              HEADER
+            </span>
+            <div
+              style={{
+                width: "60%",
+                height: 1,
+                background: "#0f172a30",
+                marginTop: 5,
+                marginBottom: 6,
+              }}
+            />
+            <span className="text-[9px] uppercase tracking-[0.05em] opacity-70 leading-tight">
+              version
+            </span>
+            <span
+              className="text-[11px] font-bold leading-tight mt-0.5"
+              style={{ color: INK }}
+            >
+              0x00
+            </span>
+            <span className="text-[9px] uppercase tracking-[0.05em] opacity-70 leading-tight mt-1.5">
+              ephemeral pubkey
+            </span>
+            <span
+              className="font-bold leading-tight mt-0.5"
+              style={{ color: bobColor, fontSize: 16 }}
+            >
+              E<span style={{ fontSize: 9, verticalAlign: "sub" }}>AB</span>
+            </span>
+          </div>
+
+          {/* PAYLOAD AREA: label + boxed cells */}
+          <div
+            className="flex flex-col"
+            style={{
+              flex: 1,
+              padding: "8px 8px",
+              minWidth: 0,
+              borderRight: `1.5px solid ${INK}`,
+            }}
+          >
+            <div className="text-center mb-1.5">
+              <div
+                className="text-[10px] font-bold uppercase tracking-[0.08em] leading-tight"
+                style={{ fontFamily: MONO }}
+              >
+                PAYLOAD AREA
+              </div>
+            </div>
+            <div
+              className="relative border-[1.5px] flex"
+              style={{
+                background: "#fffdf5",
+                borderColor: INK,
+                height: 64,
+                overflow: "hidden",
+              }}
+            >
+              <ShiftedRegionRow step={14} />
+            </div>
+          </div>
+
+          {/* HMAC */}
+          <div
+            className="flex flex-col items-center justify-center text-center"
+            style={{
+              flexBasis: 88,
+              flexShrink: 0,
+              color: INK,
+              padding: "8px 4px",
+              background: `${bobColor}24`,
+              fontFamily: MONO,
+            }}
+          >
+            <span className="text-[10px] font-bold uppercase tracking-[0.06em] leading-tight">
+              HMAC
+            </span>
+            <span
+              className="text-[9px] font-bold leading-tight mt-1"
+              style={{ color: bobColor }}
+            >
+              bob_hmac
+            </span>
+            <span className="text-[8.5px] font-normal opacity-60 leading-tight mt-0.5">
+              32 B
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1454,120 +1591,6 @@ function tailLabel(step: number): string {
   if (step === 14) return "padding";
   if (step === 12) return "wrapped middle + filler residue";
   return "wrapped pad-noise + filler residue";
-}
-
-// Packet envelope chrome for beat 14: the black title bar plus the dimmed
-// HEADER and HMAC blocks. Rendered as fading overlays around the persistent
-// inner bar so the bar itself is never re-parented (and keeps morphing).
-function PacketChrome({ visible }: { visible: boolean }) {
-  const DIMMED = 0.3;
-  const bobColor = HOP_STROKE_COLOR.bob;
-  return (
-    <div
-      className="pointer-events-none"
-      aria-hidden={!visible}
-      style={{
-        opacity: visible ? 1 : 0,
-        transition: "opacity 450ms ease-in-out",
-      }}
-    >
-      {/* Black title bar above the bar */}
-      <div
-        className="bg-black text-white px-3 py-1.5 flex items-center gap-2"
-        style={{ fontFamily: MONO }}
-      >
-        <span
-          style={{
-            width: 8,
-            height: 8,
-            background: FOCUS_GOLD,
-            display: "inline-block",
-            flexShrink: 0,
-          }}
-        />
-        <span className="text-[10px] uppercase tracking-[0.1em] font-bold">
-          ONION_PACKET (Alice → Bob)
-        </span>
-      </div>
-
-      {/* HEADER (left flank) */}
-      <div
-        className="absolute flex flex-col items-center justify-center text-center border-r-[1.5px]"
-        style={{
-          left: 0,
-          width: 138,
-          top: 33,
-          bottom: 0,
-          borderColor: INK,
-          color: INK,
-          padding: "8px 6px",
-          background: `${bobColor}24`,
-          opacity: DIMMED,
-          fontFamily: MONO,
-        }}
-      >
-        <span className="text-[10px] font-bold uppercase tracking-[0.08em] leading-tight">
-          HEADER
-        </span>
-        <div
-          style={{
-            width: "60%",
-            height: 1,
-            background: "#0f172a30",
-            marginTop: 5,
-            marginBottom: 6,
-          }}
-        />
-        <span className="text-[9px] uppercase tracking-[0.05em] opacity-70 leading-tight">
-          version
-        </span>
-        <span
-          className="text-[11px] font-bold leading-tight mt-0.5"
-          style={{ color: INK }}
-        >
-          0x00
-        </span>
-        <span className="text-[9px] uppercase tracking-[0.05em] opacity-70 leading-tight mt-1.5">
-          ephemeral pubkey
-        </span>
-        <span
-          className="font-bold leading-tight mt-0.5"
-          style={{ color: bobColor, fontSize: 16 }}
-        >
-          E<span style={{ fontSize: 9, verticalAlign: "sub" }}>AB</span>
-        </span>
-      </div>
-
-      {/* HMAC (right flank) */}
-      <div
-        className="absolute flex flex-col items-center justify-center text-center"
-        style={{
-          right: 0,
-          width: 96,
-          top: 33,
-          bottom: 0,
-          color: INK,
-          padding: "8px 4px",
-          background: `${bobColor}24`,
-          opacity: DIMMED,
-          fontFamily: MONO,
-        }}
-      >
-        <span className="text-[10px] font-bold uppercase tracking-[0.06em] leading-tight">
-          HMAC
-        </span>
-        <span
-          className="text-[9px] font-bold leading-tight mt-1"
-          style={{ color: bobColor }}
-        >
-          bob_hmac
-        </span>
-        <span className="text-[8.5px] font-normal opacity-60 leading-tight mt-0.5">
-          32 B
-        </span>
-      </div>
-    </div>
-  );
 }
 
 function WrappedPayloadCell({

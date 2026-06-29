@@ -145,7 +145,7 @@ const BEATS: Beat[] = [
     subLabel: "WRITE",
     title: "Write Dave's hop payload at the front",
     caption:
-      "Now we write Dave's bigsize-prefixed TLV records (`amt_to_forward`, `outgoing_cltv_value`, `payment_data`), then a 32-byte all-zero HMAC. Those zeros are how Dave knows he's the *destination*. He's the final hop, so there's no inner layer for his HMAC to commit to.",
+      "Next, we write Dave's bigsize-prefixed TLV records (`amt_to_forward`, `outgoing_cltv_value`, `payment_data`), then a 32-byte all-zero HMAC. Those zeros are how Dave knows he's the *destination*. He's the final hop, so there's no inner layer for his HMAC to commit to.",
     focus: "front",
   } as Beat,
   {
@@ -154,7 +154,7 @@ const BEATS: Beat[] = [
     subLabel: "ENCRYPT",
     title: "XOR with `rho_D` over the whole 1,300 bytes",
     caption:
-      "Now we encrypt. Generate `chacha20(rho_D, 1300)` and XOR it onto the whole buffer. In a single pass, Dave's hop payload and the pad-noise tail both pick up Dave's encryption layer.",
+      "Time to encrypt! We generate `chacha20(rho_D, 1300)` and XOR it onto the whole buffer. In a single pass, Dave's hop payload and the pad-noise tail both pick up Dave's encryption layer.",
   },
   {
     step: 5,
@@ -162,7 +162,7 @@ const BEATS: Beat[] = [
     subLabel: "FILLER OVERLAY",
     title: "Overwrite the trailing 140 bytes with filler",
     caption:
-      "Here's the one step we only do on the innermost iteration. We overwrite the last 140 bytes (`len(filler)`) with the filler we built back in chapter 7. It already carries Bob's and Charlie's encryption layers, and these are the very bytes that, after each forwarder peels, land right where Charlie's and Dave's HMACs were computed over.",
+      "Next up, add the filler. Remember, we only do this for the innermost iteration! We overwrite the last 140 bytes (`len(filler)`) with the filler we built back in chapter 7.",
     focus: "trailing",
   } as Beat,
   {

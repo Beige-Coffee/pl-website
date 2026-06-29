@@ -144,7 +144,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
     ],
     answer: 1,
     explanation:
-      "ChaCha20 is a deterministic stream cipher: feed it the same key and you get the same output every time. Alice derives her keystream from the shared secret she computed via ECDH; Bob derives his from the same shared secret on his end. They produce the exact same bytes without ever having to transmit them. That's the whole reason XOR-with-keystream works as bidirectional encryption from a single shared secret.",
+      "ChaCha20 is deterministic: same key in, same bytes out. Alice derives her keystream from the ECDH shared secret, and Bob derives his from the same secret on his end, so they land on identical bytes without ever putting them on the wire. That's what makes XOR-with-keystream work as encryption from a single shared secret.",
   },
   "cp-101-encrypt-buffer-scope-draft": {
     question:
@@ -157,7 +157,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
     ],
     answer: 2,
     explanation:
-      "Each iteration's encryption XORs the WHOLE 1,300-byte buffer with the hop's keystream, hop payloads that were already written, the hop payload Alice just wrote, and the padding alike. That's why the layers stack: by the end of construction, Dave's hop payload has been XOR'd by Dave's, then Charlie's, then Bob's keystream (3 layers); Bob's hop payload has only been XOR'd by Bob's keystream (1 layer). It also explains why each peel hop has to XOR the entire buffer to remove their layer.",
+      "The whole 1,300-byte buffer, every time. Each iteration XORs all of it with that hop's keystream, the payloads already written and the padding alike. That's why the layers stack: by the end, Dave's hop payload has been through three keystreams and Bob's through one, and it's why every peeling hop has to XOR the entire buffer to strip its own layer.",
   },
   "cp-101-dave-layer-count-draft": {
     question:
@@ -170,7 +170,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
     ],
     answer: 2,
     explanation:
-      "Dave's hop payload is written first (innermost), so it's present for every subsequent encryption pass. Alice's iteration order is Dave → Charlie → Bob, and each iteration XORs the entire buffer with that hop's keystream. So Dave's hop payload picks up rho_dave, then rho_charlie, then rho_bob, three layers. Bob's hop payload, written last, only gets one layer. That asymmetry is what makes peeling work: Bob's XOR removes one layer from everything, leaving Bob's hop payload in plaintext and the inner hop payloads still encrypted by 2 and 1 layers respectively.",
+      "Three. Dave's hop payload is written first, so it's sitting there for every pass that follows. Alice encrypts in the order Dave → Charlie → Bob, each pass XORing the whole buffer, so Dave's payload picks up all three keystreams while Bob's, written last, gets just one. That asymmetry is what makes peeling work: Bob's single XOR strips his layer and reveals his payload, leaving the inner ones still wrapped.",
   },
   "cp-101-decrypt-buffer-scope-draft": {
     question:
@@ -183,7 +183,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
     ],
     answer: 2,
     explanation:
-      "Decryption mirrors encryption exactly. Alice applied Bob's keystream to the whole buffer during construction; Bob has to apply the same keystream to the whole buffer to undo it. Bob's hop payload had only one encryption layer (Bob's), so it comes off completely and his hop payload is now plaintext. Charlie's and Dave's hop payloads had two and three layers respectively; each loses one, leaving them still encrypted. The padding loses one layer too. This symmetry is what makes Sphinx work: every hop runs the exact same operation Alice did during their iteration of the build.",
+      "Every byte. Peeling mirrors building: Alice ran Bob's keystream over the whole buffer, so Bob runs the same keystream over the whole buffer to undo it. His own hop payload had just one layer, so it comes off clean and lands in plaintext; Charlie's and Dave's had two and three, so each drops to one fewer and stays encrypted. It's the exact operation Alice did on her Bob iteration, run in reverse.",
   },
   "cp-101-tamper-detection-draft": {
     question:
@@ -196,7 +196,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
     ],
     answer: 1,
     explanation:
-      "Each per-hop HMAC commits to everything beneath it in the onion: the hop payload, the inner-hop HMAC field, and all the encrypted layers underneath. dave_hmac was computed by Alice over Dave's encrypted layer at construction time. If Charlie tampers with any of those bytes, the modified buffer no longer matches dave_hmac. When Charlie forwards the packet to Dave, Dave runs HMAC verification first, and it fails. Dave drops the packet. This is exactly why the per-hop HMACs make onion routing safe even when intermediate hops are malicious: any tampering anywhere below a hop's hop payload is detected at that hop and the packet never gets processed.",
+      "Dave's HMAC verification fails. Each per-hop HMAC commits to everything beneath that hop, so `dave_hmac` was computed over Dave's encrypted layer exactly as Alice built it. Change any of those bytes and the buffer no longer matches the tag. Dave verifies before he decrypts, the check fails, and he drops the packet. That's the whole reason onion routing survives malicious forwarders: tampering anywhere below a hop is caught at that hop, before anything gets processed.",
   },
   // ── Chapter 11: The Error Onion ──────────────────────────────────────────
   "cp-error-trial-decrypt-draft": {
@@ -208,7 +208,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
       "Use the failure code from a default mapping based on the wrapped bytes' length, since BOLT 4 defines a canonical fallback for unknown hops",
     ],
     answer: 1,
-    explanation: "Alice's algorithm is a strict trial-decrypt loop: peel one layer per iteration with the next hop's ammag, then check the corresponding um's HMAC. If she walks through every hop in the route without a match, no valid error exists in the bytes she received. This means a peer along the return path tampered with the error (or generated random bytes). Alice can disconnect that peer or downgrade their reliability score, because no attacker without one of the um keys can produce bytes that pass any layer's HMAC check.",
+    explanation: "She keeps going. The algorithm is a strict trial-decrypt loop: peel with the next hop's `ammag`, check that hop's `um` HMAC, repeat. If she runs through every hop and nothing verifies, the error is garbage, some peer on the return path tampered with it or made it up. Since no one without a `um` key can forge bytes that pass any layer's HMAC, Alice can safely disconnect that peer or dock its reliability.",
   },
   // ── Chapter 10: Forwarding & Validation ──────────────────────────────────
   "cp-validate-before-decrypt-draft": {
@@ -220,7 +220,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
       "ChaCha20 doesn't initialize correctly until an HMAC has been computed over its input, so the order is forced by the cryptographic library",
     ],
     answer: 1,
-    explanation: "Verify-then-decrypt (encrypt-then-MAC) is a standard secure-construction pattern. Two reasons: (1) Defensive coding, never feed a tampered or malformed packet's bytes to your parser. If the HMAC is wrong, we don't know what's in the packet, so we shouldn't process it. (2) CPU efficiency, generating a 2,600-byte ChaCha20 keystream isn't free, and discarding the work because the packet was bogus is wasted effort. Verifying the 32-byte HMAC tag first costs much less than the keystream generation it gates.",
+    explanation: "It's the encrypt-then-MAC discipline. Two reasons: you never want to hand tampered or malformed bytes to your parser, so if the HMAC is wrong you stop before decrypting anything; and generating a 2,600-byte ChaCha20 keystream isn't free, so there's no point spending it on a packet you're going to reject. The 32-byte tag check is cheap and gates the expensive work.",
   },
   "cp-tlv-final-vs-forward-draft": {
     question: "After peeling, the forwarder parses the bigsize-prefixed TLV records and finds types 2 (amt_to_forward), 4 (outgoing_cltv_value), and 8 (payment_data). No type 6 record is present. What should the forwarder do?",
@@ -231,7 +231,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
       "Forward to the next hop in its peer list at random, since the absent short_channel_id signals 'best-effort delivery'",
     ],
     answer: 1,
-    explanation: "Type 6 (short_channel_id) tells a forwarder which channel to forward over. Type 8 (payment_data) carries the payment_secret + total_msat that the destination uses to validate against an invoice. The presence of type 8 without type 6 is BOLT 4's way of signaling 'you are the destination.' The hop should look up its pending invoices to find one matching the payment_data and either settle (revealing the preimage) or fail if no matching invoice is found. Defaulting to all-zero scid (option 1) would forward into a non-existent channel; rejecting (option 3) would break the protocol's intentional final-hop signaling; option 4 is fictional and dangerous.",
+    explanation: "Type 8 without type 6 is BOLT 4's way of telling a hop it's the destination. `short_channel_id` (type 6) is what a forwarder needs to pick an outgoing channel; with no type 6 but a `payment_data` (type 8) carrying the `payment_secret` and `total_msat`, there's nowhere to forward, so the hop matches the `payment_data` against its pending invoices and settles or fails. Defaulting to an all-zero channel would forward into nothing, and rejecting would break the protocol's own final-hop signal.",
   },
   // ── Chapter 9: Peeling a Layer ───────────────────────────────────────────
   "cp-peel-extended-stream-draft": {
@@ -243,7 +243,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
       "The first 1,300 bytes decrypt the inbound packet; the next 1,300 bytes encrypt Bob's outgoing packet by XOR-ing onto the next ephemeral pubkey",
     ],
     answer: 2,
-    explanation: "Bob applies the keystream to the entire buffer in a single XOR pass BEFORE he parses his hop payload's length, so at XOR time he doesn't yet know how many bytes his own payload occupies. To stay safe, he sizes the buffer and keystream for the largest possible payload: 2x the routing-info size, or 2,600 bytes. (Bonus, and this is the elegant part: after he reads his payload and shifts the inner contents forward, the trailing bytes (the zero-padding XOR'd with that extended keystream) regenerate the exact filler Alice precomputed back in chapter 7, so the next hop's HMAC over the forwarded buffer still verifies.) The distractors are wrong: there's no backup mu key; ChaCha20 has no 2,600-byte minimum; and the trailing keystream isn't XOR'd onto the ephemeral pubkey (that key is advanced separately via the blinding factor).",
+    explanation: "Bob XORs the whole buffer in one pass before he's even parsed his own payload's length, so at that moment he doesn't know how big his slice is. He sizes the keystream for the largest a payload could be, twice the routing-info size, or 2,600 bytes, to stay safe. The elegant payoff: those extra bytes regenerate the exact filler Alice precomputed in chapter 7, so the next hop's HMAC still verifies. (There's no backup `mu` key, and ChaCha20 has no minimum call size.)",
   },
   "cp-peel-next-hmac-draft": {
     question: "After Bob XORs his `rho_B` keystream over the extended buffer, he parses the bigsize-prefixed TLV records at the front, then reads the 32 bytes that come right after the TLVs. What's in those 32 bytes, and where do they go in the packet Bob forwards to Charlie?",
@@ -254,7 +254,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
       "It's `E_AC`, the advanced ephemeral pubkey, derived from those bytes and placed in the next packet's header",
     ],
     answer: 1,
-    explanation: "Each hop payload is laid out as `bigsize_LEN || TLV records || next_hmac (32 B)`. During wrap, Alice wrote each hop's `next_hmac` field from the HMAC her loop computed on the *prior* (inner) iteration. So in Bob's hop payload, the 32 bytes after the TLVs are exactly `charlie_hmac`, the HMAC of Charlie's encrypted layer, computed during Alice's Charlie iteration.\n\nWhen Bob assembles his outgoing packet, those 32 bytes are written verbatim into the outer HMAC field. That's how the HMAC chain advances by one hop: Alice committed to `charlie_hmac` inside Bob's hop payload, Bob just lifts it into the wire field, and Charlie will compare it against the HMAC he recomputes from `mu_C` over his own hop_payloads. No `um` key is involved. `um` is used in the return-error path, not for forwarding (option 3). Option 4 confuses fields: the new ephemeral pubkey is derived from `E_AB` and `ss_AB`, not from a 32-byte region inside the buffer.",
+    explanation: "It's `charlie_hmac`. Each hop payload is laid out as `bigsize length || TLV records || next_hmac`, and during construction Alice filled that `next_hmac` field with the HMAC from her previous (inner) iteration. So the 32 bytes after Bob's TLVs are the HMAC of Charlie's layer, and Bob just lifts them straight into the outer HMAC field of the packet he forwards. That's how the chain advances one hop: Alice committed to it, Bob copies it across, and Charlie recomputes it from his own `mu` to check. No `um` involved, that's the return path.",
   },
   // ── Chapter 8: Wrapping Layer-by-Layer ───────────────────────────────────
   "cp-build-reverse-order-draft": {
@@ -266,7 +266,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
       "Forward order would leak the hop count to a passive observer because intermediate buffers would be visible at known sizes",
     ],
     answer: 1,
-    explanation: "The per-hop HMACs commit in a strict direction: Bob's HMAC commits to Charlie's layer, Charlie's HMAC commits to Dave's layer. To compute Bob's HMAC, Charlie's layer must already be built. To compute Charlie's HMAC, Dave's must already be built. So we have to build the innermost layer first, then wrap it, then wrap again, and so on. Forward order is impossible because the outer hop's HMAC needs bytes that don't yet exist. The reverse order isn't an arbitrary spec choice; it's forced by the data dependencies in the construction.",
+    explanation: "Each hop's HMAC commits to the encrypted layer beneath it: Bob's covers Charlie's layer, Charlie's covers Dave's. To compute Bob's HMAC, Charlie's layer has to exist already; to compute Charlie's, Dave's does. So Alice builds the innermost layer first and wraps outward. Forward order is simply impossible, the outer HMAC would need bytes that haven't been created yet. It's not a spec preference, it's forced by the data dependencies.",
   },
   "cp-hmac-commits-to-draft": {
     question: "When Alice computes a per-hop HMAC during the wrap iteration, what bytes does she actually authenticate with the `mu` key?",
@@ -277,7 +277,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
       "The shared secret <m>ss_i</m> between Alice and this hop, plus the encrypted buffer. The shared secret acts as both the HMAC key and the associated data.",
     ],
     answer: 1,
-    explanation: "Two BOLT 4 specifics combine in every wrap iteration's HMAC.\n\n(1) The HMAC is computed over the **encrypted** buffer, not the decrypted contents. This is the encrypt-then-MAC pattern from the Noise course's primitives chapter: the forwarder verifies integrity *first*, before any decryption, so tampered bytes never reach the parser.\n\n(2) The 32-byte `associated_data` (the `payment_hash` for an HTLC) is concatenated with the buffer before hashing. This binds the onion to a specific payment. An attacker who captures an in-flight onion can't re-attach it to a different HTLC: the new HTLC's `payment_hash` would produce a different HMAC at the first hop, and the packet would be rejected. Retries don't need the same onion: Alice builds a fresh one, so coupling to the `payment_hash` doesn't break anything legitimate, and it shuts the re-attachment attack down.\n\nOption 4 confuses key with message: `mu` is HMAC-derived from <m>ss_i</m> (different value, same function family), and only `mu` serves as the HMAC key.",
+    explanation: "The encrypted 1,300-byte `hop_payloads` buffer, plus the 32-byte `associated_data` (the `payment_hash`). Two things matter here. First, the HMAC covers the encrypted bytes, not the plaintext, that's encrypt-then-MAC, so a forwarder checks integrity before decrypting anything. Second, mixing in the `payment_hash` binds the onion to one specific HTLC: capture an in-flight onion and you can't re-attach it to a different payment, since the new `payment_hash` would change the HMAC and the first hop would reject it. Legitimate retries are unaffected, Alice just builds a fresh onion.",
   },
   // ── Chapter 7: Filler Construction ───────────────────────────────────────
   "cp-filler-shared-keystream-draft": {
@@ -289,7 +289,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
       "Bob uses a deterministic random number generator with a public seed that Alice can replicate",
     ],
     answer: 1,
-    explanation: "This is the whole reason the filler trick works. Filler isn't a trick for hiding values from Bob; it's Alice <em>recreating</em> bytes Bob will produce. Because Alice and Bob share an ECDH secret <code>ss_AB</code>, they both derive the same <code>rho_B</code> key, and thus generate the same ChaCha20 keystream. Alice can take that keystream, XOR it into zeros (or her growing filler), and produce the exact byte pattern Bob will later create when he XORs his keystream over his extended buffer. Without the shared secret, this would require Alice to literally run Bob's code; with it, she just runs the same primitive locally.",
+    explanation: "Alice and Bob share the ECDH secret <code>ss_AB</code>, so they derive the same <code>rho_B</code> key and generate the same ChaCha20 keystream. The filler isn't Alice hiding anything, it's Alice recreating the exact bytes Bob will produce when he XORs his keystream over his extended buffer. Same key, same zeros, same XOR, same result. Without the shared secret she'd have to literally run Bob's code; with it, she just runs the same primitive locally.",
   },
   "cp-filler-reach-back-draft": {
     question: "In step 3 of the filler algorithm, Alice XORs the <strong>last <code>s_B + s_C</code> bytes</strong> of Charlie's <code>rho</code> keystream into the filler, not just the last <code>s_C</code>. The <code>s_B + s_C</code>-byte slice overlaps Charlie's regular 1,300-byte keystream region by <code>s_B</code> bytes. Why is this overlap necessary?",
@@ -300,7 +300,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
       "The overlap is what authenticates Charlie's HMAC; without it, HMAC verification would fail at Charlie",
     ],
     answer: 2,
-    explanation: "When Charlie peels, he XORs his <code>rho_C</code> keystream over the <em>entire</em> 1,300 + <code>s_C</code> extended buffer, including the positions where Bob's filler bytes are already sitting. So Alice has to pre-bake Charlie's keystream into those positions too, otherwise Charlie's XOR will scramble Bob's bytes and the next hop's HMAC over the forwarded buffer won't match what Alice computed during construction. The overlap doesn't extend the keystream's length (it's the same <code>1300 + s_C</code> stream as always); it's about where Alice slices from so that her precomputed filler accounts for Charlie's encryption layer landing on top of Bob's bytes.",
+    explanation: "When Charlie peels, he XORs his <code>rho_C</code> keystream over the <em>entire</em> extended buffer, including the spots where Bob's filler bytes already sit. So Alice has to bake Charlie's keystream into those same positions ahead of time, otherwise Charlie's XOR scrambles Bob's bytes and the forwarded buffer no longer matches the HMAC Alice computed. The overlap doesn't lengthen the keystream, it just changes where Alice slices, so her filler accounts for Charlie's layer landing on top of Bob's.",
   },
   // ── Chapter 7: The Fixed-Size Packet & Filler ────────────────────────────
   "cp-payload-shrink-leak-draft": {
@@ -312,7 +312,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
       "The sender's identity, recovered from the packet header's leading public key bytes",
     ],
     answer: [0],
-    explanation: "Only the first option is right, and the trick is which direction the size leaks. A shrinking onion strips each hop's payload off the front and forwards what's left, so the bytes Charlie holds are the fixed envelope (1-byte version, 33-byte ephemeral pubkey, 32-byte HMAC) plus his own payload plus every payload still bound for hops after him. That leftover grows with how much route remains, and all of those bytes sit in his buffer for him to measure, so he can count the hops downstream of him (himself plus one more). That reveals his distance from the destination, which is exactly the chapter 3 privacy property breaking down. What he cannot do is count the hops upstream of him, and that is the tempting wrong answer. To work out that exactly one forwarder came before him, Charlie would need the packet's original size and then subtract, but he never receives it. The 306-byte figure is narrated to you, the reader; it never travels on the wire. The bytes Bob already peeled are simply gone, with no count field and no residue left behind. In fact the same 246-byte packet is byte-for-byte identical in two different worlds: one where Bob peeled a layer before Charlie, and one where Alice just built a 246-byte packet and handed it straight to Charlie for a two-hop tail. A number that looks the same whether zero or one forwarder came before him cannot reveal how many did. (Recovering an upstream count takes a passive observer watching Alice's own link, not a lone forwarder reading its byte count.) The other options are not size-derivable either: the amount and the sender's identity ride encrypted inside the hop payloads (and the header's key is a fresh per-packet blinded ephemeral key, not Alice's identity key), so neither shifts the byte count. The takeaway: leftover size leaks how far you are from the destination, never how far you are from the sender. Sphinx kills the leak by padding every packet to exactly 1,366 bytes regardless of route length, and the filler construction in this chapter is what makes that padding survive each hop's HMAC verification.",
+    explanation: "Only the first one. A shrinking onion forwards whatever's left after each peel, so Charlie's leftover bytes are his own payload plus everything still bound for hops after him. The more route that remains, the bigger that leftover, so he can count the hops downstream. He can't count the hops behind him, though: the bytes Bob already peeled are simply gone, with no length field to subtract from. A 246-byte packet is byte-for-byte identical whether one forwarder came before Charlie or Alice built him a two-hop route directly, so size can't reveal which. The amount and Alice's identity both ride encrypted inside the hop payloads, so neither shifts the byte count. The rule: leftover size leaks how far you are from the destination, never from the sender, and Sphinx kills the leak by padding every packet to a fixed 1,366 bytes.",
   },
   // ── Chapter 6: Key Derivation ────────────────────────────────────────────
   "cp-key-separation-draft": {
@@ -324,7 +324,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
       "With one shared key, the packet's compression ratio would push the buffer below the BOLT 4 minimum of 1,300 bytes, letting passive observers infer route length from the byte count and de-anonymizing the sender across payments.",
     ],
     answer: [0, 1, 2],
-    explanation: "All three of the first reasons are real cryptographic problems with reusing one key for everything, and together they're the reason BOLT 4 derives five separate keys from each shared secret. (1) is the standard generic-composition argument: encryption and authentication are different primitives whose security proofs assume independent keys. (2) is the two-time-pad attack: with the same key driving both directions of an all-zero-nonce ChaCha20, the keystream collides and ciphertexts can be XORed together to recover plaintext. (3) is the forwarder-forging-error attack: a hop legitimately learns the forward HMAC key during routing, and could repurpose it to author fake errors if it were the same as the backward HMAC key. The fourth option is the wrong reason: BOLT 4's 1,300-byte size comes from the packet format itself (and the filler construction we'll meet in chapter 7), not from the keying scheme.",
+    explanation: "The first three are all real, and together they're why BOLT 4 derives five separate keys per shared secret. Reusing one key for both encryption and authentication falls outside the security proofs, which assume the keys are independent. Worse, both encryption directions use ChaCha20 with an all-zero nonce, so one shared key means the same keystream both ways, and an attacker can XOR the two ciphertexts to recover plaintext (a two-time pad). And a forwarder that legitimately learned the forward HMAC key could reuse it to forge return errors Alice would trust. The fourth is the distractor: the 1,300-byte size comes from the packet format, not the keying.",
   },
   "cp-key-domain-separation-draft": {
     question: "Imagine an attacker recovers Bob's `rho` key (the ChaCha20 stream cipher key for the forward path). What does this let them do, and why doesn't it cascade to Bob's other per-hop keys?",
@@ -335,7 +335,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
       "They can forge the packet HMAC because `rho` is XORed with `mu` inside the protocol, making the two functionally equivalent",
     ],
     answer: 1,
-    explanation: "Each per-hop key is HMAC-SHA256(label, shared_secret) for a different ASCII label. HMAC's pseudorandom-function property means that knowing one output (<m>rho_i</m>) gives an attacker no usable information about the other three per-hop outputs unless they also know the shared secret <m>ss_i</m>. Recovering `rho` only lets them attack the forward stream cipher, which is bad enough on its own (they can read Bob's hop payload) but doesn't extend to forging HMACs (`mu`) or attacking the return path (`um`, `ammag`). That's the entire point of domain separation: a leak in one key stays contained to its own role. (The fifth key, `pad`, is derived from Alice's session key rather than any per-hop secret, so a forwarder couldn't recover it from <m>ss_AB</m> anyway.)",
+    explanation: "They can decrypt Bob's hop payload, but it stops there. Each key is `HMAC-SHA256(label, shared_secret)` under a different label, and HMAC is a pseudorandom function, so one output tells you nothing about the others unless you also hold the shared secret <m>ss_AB</m>. Recovering `rho` only breaks the forward stream cipher, bad enough on its own, but it doesn't let them forge HMACs (`mu`) or touch the return path (`um`, `ammag`). That's the point of domain separation: a leak stays boxed into its own role. (The fifth key, `pad`, comes from Alice's session key, not a per-hop secret, so a forwarder couldn't recover it anyway.)",
   },
   // ── Chapter 4: Shared Secrets per Hop ────────────────────────────────────
   "cp-naive-shared-secrets-draft": {
@@ -348,7 +348,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
     ],
     answer: [0, 2],
     explanation:
-      "Two real costs scale with the route length, and a single insight (the ephemeral key chain) is going to collapse both to one in the next section.\n\n**Option 1 (correct).** Each hop needs its own ephemeral pubkey in plaintext at the front of the packet to run ECDH against. Each pubkey is 33 bytes, so a 3-hop route ships 3 pubkeys (about 100 bytes), a 10-hop route ships 10. The BOLT 4 onion packet's hop_payloads region is fixed at 1300 bytes, so every ephemeral pubkey is bytes we can't spend on the actual hop payloads.\n\n**Option 3 (correct).** Alice generates a fresh ephemeral keypair for every hop and has to keep them all in memory until the payment finishes. She can't discard them after sending, because failures come back encrypted with those same shared secrets and she needs the keys to decrypt the error onion. That means an N-hop in-flight payment requires Alice to maintain N keypairs of state for the entire payment lifecycle.\n\nBoth costs scale linearly with route length: the longer the route, the worse it gets. The math works, but the design is wasteful in a way Sphinx wouldn't accept, which is exactly what the ephemeral key chain construction in the next section fixes.\n\n**Option 2 (wrong, distractor).** Shared secrets from fresh ECDH are uniformly random. The elliptic curve discrete log problem rules out predicting them from public information.\n\n**Option 4 (wrong, distractor).** The discrete log problem also keeps each ephemeral private key safe even when the corresponding pubkey is public. A forwarder seeing <m>E_Bob</m> can't recover <m>e_Bob</m>, and the keypairs for other hops are completely independent.",
+      "The first and third options, and both costs grow with the route. In this naive design Alice ships one ephemeral pubkey per hop in the packet (33 bytes apiece), so the longer the route, the more packet space goes to keys instead of the actual hop payloads. On top of that, Alice has to keep one private key per hop in memory for the whole payment, since errors come back encrypted under those same shared secrets and she needs the keys to read them. The other two are distractors: ECDH shared secrets are uniformly random, not predictable, and the discrete log problem keeps each ephemeral private key safe even though its pubkey is public. Both real costs collapse to one in the next section, where a single key chain replaces the whole pile.",
   },
   "cp-blinding-public-draft": {
     question: "Bob has derived <m>ss_AB</m> and computed <m>bf_AB</m>. He's about to forward the onion to Charlie. Which of the following best describes what Bob does to the ephemeral key field in the outgoing packet, and why Charlie ends up deriving the same <m>ss_AC</m> Alice precomputed?",
@@ -360,7 +360,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
     ],
     answer: 1,
     explanation:
-      "The chain advances by **replacing** the ephemeral key field at each hop, and the construction works because Alice and Bob independently arrive at the same <m>E_AC</m>.\n\n**Option 2 (correct).** Alice's chain produces <m>E_AC</m> as <m>bf_AB</m> · <m>E_AB</m> (since she advances her scalar <m>e_AB</m> by <m>bf_AB</m> to get <m>e_AC</m>, and <m>e_AC</m> · <m>G</m> = <m>bf_AB</m> · <m>E_AB</m>). Bob computes the same <m>E_AC</m> directly via <m>bf_AB</m> · <m>E_AB</m> on the public side. Once both sides agree on <m>E_AC</m>, ECDH between Charlie's node privkey and <m>E_AC</m> produces the same <m>ss_AC</m> Alice computed via <m>e_AC</m> · <m>C</m>, because scalar multiplication commutes.\n\n**Option 1 (wrong).** Appending defeats the fixed-size packet design and reintroduces both flaws we worked to eliminate (the size leak and Alice's key-management burden). The chain-and-replace mechanism is what keeps the packet compact.\n\n**Option 3 (wrong).** There is no signature on the ephemeral key in BOLT 4. Bob is kept honest economically (he loses his fee if he tampers) and via the HMAC we'll add in chapter 7. A signature would also expose Bob's identity to Charlie.\n\n**Option 4 (wrong).** Charlie can't derive <m>E_AC</m> without <m>bf_AB</m>, which requires <m>ss_AB</m>, which requires *Bob's* private key. Charlie has none of those. Each hop derives its own shared secret using the ephemeral key it sees in the packet header, not by recomputing the chain from scratch.",
+      "Bob replaces the ephemeral key in the header with <m>E_AC</m> = <m>bf_AB</m> · <m>E_AB</m>. Alice's chain produced that same <m>E_AC</m> (she advanced her scalar <m>e_AB</m> by <m>bf_AB</m>, and <m>e_AC</m> · <m>G</m> equals <m>bf_AB</m> · <m>E_AB</m>), so the two sides reach the same point from opposite directions. Charlie then ECDHs his node private key against <m>E_AC</m> and recovers the same <m>ss_AC</m> Alice precomputed, because scalar multiplication commutes. Appending keys instead would bloat the packet and bring back the size leak; there's no signature involved; and Charlie can't recompute the chain himself, since that needs <m>bf_AB</m>, hence <m>ss_AB</m>, hence Bob's private key.",
   },
   // ── Chapter 2: Pathfinding 101 ───────────────────────────────────────────
   "cp-channel-update-direction-draft": {
@@ -372,7 +372,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
       "The protocol mandates a redundant second update so peers can verify the channel is online, and each node publishes one to confirm its presence.",
     ],
     answer: 1,
-    explanation: "Forwarding policies are direction-specific. The Alice to Bob direction can charge different fees and require a different `cltv_expiry_delta` than the Bob to Alice direction, so each direction needs its own `channel_update`. Each side publishes the `channel_update` for their own outgoing direction: Alice publishes the Alice to Bob policy if she forwards that way, and Bob publishes the Bob to Alice policy if he forwards that way. Either side can update its own policy at any time by broadcasting a fresh `channel_update` with a newer timestamp, and the latest timestamp wins. If a node never forwards in a particular direction (for example, a pure receiver like Dave), no `channel_update` for that direction gets published, which is why hovering a receiver on the forwarder graph above shows no outgoing `channel_update`s.",
+    explanation: "Forwarding policy is per-direction: the Alice to Bob direction can charge different fees and set a different `cltv_expiry_delta` than Bob to Alice, so each direction needs its own `channel_update`. Each node publishes the update for the direction it forwards in, and can refresh it anytime with a newer timestamp (latest wins). A node that never forwards a given direction, like a pure receiver, publishes nothing for it, which is why hovering a receiver on the graph above shows no outgoing `channel_update`.",
   },
   "cp-cheapest-route-draft": {
     question: "You've now computed all three routes. Alice wants the lowest fee, but her wallet enforces `max_total_cltv_expiry_delta = 200`. Which route should she send through?",
@@ -383,7 +383,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
       "Either Route B or Route C. Once Route A is filtered out, picking between the survivors is a judgment call.",
     ],
     answer: 2,
-    explanation: "The right move is **filter, then minimize**. Route A is the cheapest on fees at just 900 sats, which is exactly what makes it tempting, but Hazel's `cltv_expiry_delta = 1000` pushes the total accumulated CLTV to 1,018 blocks, which blows past Alice's 200-block ceiling, so her wallet refuses to lock her funds for that long. The cheapest route drops out before fees even matter. Among the survivors, Route B totals 60 blocks of CLTV at 2,002 sats, and Route C totals 73 blocks of CLTV at 1,225 sats. Both sit comfortably under Alice's 200-block ceiling, so the deciding factor is fees, and Route C is the cheaper of the two. This filter-then-optimize pattern is what real Lightning pathfinders do: they apply hard constraints (CLTV ceiling, HTLC min/max amounts, channel capacity) up front, then minimize a cost function over what's left. Route C is also the same path Alice picked back in chapter 1: Alice → Bob → Charlie → Dave.",
+    explanation: "Route C. The trick is filter first, then minimize. Route A looks cheapest at 900 sats, but Hazel's `cltv_expiry_delta` of 1,000 pushes the total CLTV to 1,018 blocks, way past Alice's 200-block ceiling, so her wallet won't lock funds that long and Route A is out before fees matter. That leaves Route B (60 blocks, 2,002 sats) and Route C (73 blocks, 1,225 sats), both under the ceiling, so the cheaper one wins. That's what real pathfinders do: apply the hard constraints, then optimize over what survives. And Route C is the same path from chapter 1: Alice → Bob → Charlie → Dave.",
   },
   // ── Intro: Naive plaintext routing leak (Draft) ──────────────────────────
   "cp-naive-plaintext-leak-draft": {
@@ -395,7 +395,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
       "Nothing useful, since the bytes are signed by Alice and only the final hop can verify the signature",
     ],
     answer: 2,
-    explanation: "This is the privacy issue with the naive plaintext design. Because every hop's instructions are sitting in the message in the clear, Bob (and anyone watching the wire between Alice and Bob) can read the entire route end-to-end. Bob now knows Alice initiated the payment, Dave is the final recipient, exactly how much each hop forwards, and even the payment hash. We want a design where Bob learns ONLY what he needs to do his job (next hop is Charlie, forward this amount with this CLTV) and nothing more. That's what the rest of the course builds.",
+    explanation: "Every slice. With the whole route sitting in plaintext, Bob, and anyone watching the wire into Bob, can read it end to end: that Alice is the sender, Dave is the final recipient, what each hop forwards, even the payment hash. What we want is for Bob to learn only his own job (forward this amount to Charlie at this CLTV) and nothing else. That's what the rest of the course builds toward.",
   },
   // ── Chapter 3: The Privacy Problem ───────────────────────────────────────
   "cp-still-vulnerable-draft": {
@@ -406,7 +406,7 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
       "Public-key encryption is too computationally expensive for low-power wallets to perform per-hop, so the design doesn't scale.",
     ],
     answer: 1,
-    explanation: "Even with per-hop encryption, the **packet still shrinks**. Each forwarder peels its own slice off the wire before forwarding the rest, so the message gets smaller at each hop. If Bob receives a 3-slice message, he immediately knows there are at least two hops downstream of him; when Charlie sees a 2-slice message, he knows he's the last forwarder before the destination (the second-to-last node in the path). Size alone reveals each forwarder's position in the route, which directly violates the property 'Bob shouldn't be able to tell whether he's the first hop, the last forwarder, or somewhere in between.' Sphinx fixes this with a **fixed-size packet** that stays the same length at every hop. The other options are wrong: identical-looking ciphertext is a feature of good encryption, not a leak, and public-key crypto cost isn't the central problem here.",
+    explanation: "The **packet still shrinks**. Each forwarder peels its slice and passes a smaller message on, so the size at each hop leaks position: a 3-slice message tells Bob at least two hops are still ahead of him, and a 2-slice message tells Charlie he's the last forwarder before the destination. That alone breaks the property that a forwarder shouldn't know where it sits in the route. Sphinx fixes it with a **fixed-size packet** that never changes length. (Identical-looking ciphertext is good encryption, not a leak, and per-hop public-key cost isn't the real issue.)",
   },
 };
 
@@ -1651,7 +1651,7 @@ function OnionRoutingDraftTutorialShell({ activeId }: { activeId: string }) {
                                   {isComplete && "\u2713"}
                                 </span>
                               )}
-                              <div className="flex-1 min-w-0 text-[16px] leading-snug" style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
+                              <div className="flex-1 min-w-0 text-[16px] leading-snug" style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif', paddingLeft: "2.4em", textIndent: "-2.4em" }}>
                                 <span
                                   style={{ display: "inline-block", minWidth: "1.4em", textAlign: "right", opacity: 0.45, fontVariantNumeric: "tabular-nums" }}
                                 >
@@ -1660,9 +1660,10 @@ function OnionRoutingDraftTutorialShell({ activeId }: { activeId: string }) {
                                 <span style={{ opacity: 0.3, margin: "0 0.4em" }}>·</span>
                                 {c.title}
                               </div>
-                              {hasBadges && (
-                                <span className="flex items-center gap-1.5 shrink-0 ml-1">
-                                  {reqs!.checkpoints.map((cpId) => (
+                            </div>
+                            {hasBadges && (
+                              <div className="flex items-center justify-end gap-1.5" style={{ marginTop: "3px" }}>
+                                {reqs!.checkpoints.map((cpId) => (
                                     <Tooltip key={cpId} delayDuration={200}>
                                       <TooltipTrigger asChild>
                                         <button type="button" onClick={(e) => { e.stopPropagation(); goToItem(c.id, cpId, "checkpoint"); }} className={`font-pixel text-[13px] leading-none cursor-pointer ${badgeCompleted.has(cpId) ? badgeLit : badgeDim}`}>?</button>
@@ -1682,9 +1683,8 @@ function OnionRoutingDraftTutorialShell({ activeId }: { activeId: string }) {
                                       </TooltipContent>
                                     </Tooltip>
                                   ))}
-                                </span>
+                                </div>
                               )}
-                            </div>
                           </div>
                         );
                       })}

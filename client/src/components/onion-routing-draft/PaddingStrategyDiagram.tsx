@@ -145,10 +145,10 @@ const STRATEGIES: StrategyDef[] = [
       { holder: "charlie", fromHop: "bob", hopPayloads: ["charlie", "dave"], gapFill: "filler", outerKey: "charlie", hmacResult: "pass" },
     ],
     captions: [
-      "Same starting packet. The difference is invisible here, but it matters. The bytes at the very back are a block Alice precomputed, the filler, set up to survive each peel.",
+      "The difference here is subtle, but the bytes at the very back are a block Alice precomputed, called the filler.",
       "Bob's got the 1,366-byte packet, about to peel.",
-      "Same slide, same 60-byte gap at the back. But here the bytes that land in the gap are exactly the filler Alice precomputed, which equals what Bob's own keystream spits out during the peel. Still 1,366 bytes, forwarded to Charlie.",
-      "Now Charlie recomputes his HMAC. Hover the HMAC tag. Alice computed it over this exact filler, and the gap holds that same filler. They match, the HMAC verifies, and Charlie forwards to Dave. Nice. This is the one fill that reproduces the bytes the HMAC already committed to.",
+      "Bob peels his payload and fills the 60-byte gap at the back. However, crucially, instead of filling the gap with random bytes, he fills it with the exact same filler that Alice precomputed when she originally calculated the HMAC.",
+      "Finally, Charlie recomputes his HMAC. Hover the HMAC tag. Since Bob appended the same filler that Alice derived when computing the HMAC, the HMAC will verify!",
     ],
   },
 ];
