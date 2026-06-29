@@ -106,7 +106,7 @@ export const DISPLAY_DAVE_PCT = 26;
 export const DISPLAY_FILLER_PCT = 10;
 // Padding region absorbs whatever remains: 100 - 22 - 24 - 26 - 10 = 18%.
 
-const TOTAL_BEATS = 13;
+const TOTAL_BEATS = 12;
 export const STEP_MS = 2400;
 
 // ── Beat definitions ──────────────────────────────────────────────────────
@@ -134,22 +134,14 @@ const BEATS: Beat[] = [
   {
     step: 2,
     iterLabel: "Iteration 1 of 3 (Dave, innermost)",
-    subLabel: "SHIFT",
-    title: "Right-shift by 100 bytes",
+    subLabel: "SHIFT + WRITE",
+    title: "Right-shift by 100 and write Dave's hop payload",
     caption:
-      "Now we make room for Dave. Drop the last 100 bytes off the right and prepend 100 empty placeholder bytes at the front. That's exactly the size of Dave's hop payload (bigsize + TLV + HMAC), and the total stays at 1,300.",
-  },
-  {
-    step: 3,
-    iterLabel: "Iteration 1 of 3 (Dave, innermost)",
-    subLabel: "WRITE",
-    title: "Write Dave's hop payload at the front",
-    caption:
-      "Next, we write Dave's bigsize-prefixed TLV records (`amt_to_forward`, `outgoing_cltv_value`, `payment_data`), then a 32-byte all-zero HMAC. Those zeros are how Dave knows he's the *destination*. He's the final hop, so there's no inner layer for his HMAC to commit to.",
+      "We make room for Dave by dropping the last 100 bytes off the right (exactly the size of his hop payload: bigsize + TLV + HMAC, so the total stays at 1,300), then write his bigsize-prefixed TLV records (`amt_to_forward`, `outgoing_cltv_value`, `payment_data`) plus a 32-byte all-zero HMAC into the freed front. Those zeros are how Dave knows he's the *destination*: he's the final hop, so there's no inner layer for his HMAC to commit to.",
     focus: "front",
   } as Beat,
   {
-    step: 4,
+    step: 3,
     iterLabel: "Iteration 1 of 3 (Dave, innermost)",
     subLabel: "ENCRYPT",
     title: "XOR with `rho_D` over the whole 1,300 bytes",
@@ -157,7 +149,7 @@ const BEATS: Beat[] = [
       "Time to encrypt! We generate `chacha20(rho_D, 1300)` and XOR it onto the whole buffer. In a single pass, Dave's hop payload and the pad-noise tail both pick up Dave's encryption layer.",
   },
   {
-    step: 5,
+    step: 4,
     iterLabel: "Iteration 1 of 3 (Dave, innermost)",
     subLabel: "FILLER OVERLAY",
     title: "Overwrite the trailing 140 bytes with filler",
@@ -166,7 +158,7 @@ const BEATS: Beat[] = [
     focus: "trailing",
   } as Beat,
   {
-    step: 6,
+    step: 5,
     iterLabel: "Iteration 1 of 3 (Dave, innermost)",
     subLabel: "HMAC",
     title: "Compute `dave_hmac`",
@@ -174,16 +166,16 @@ const BEATS: Beat[] = [
       "Now we tag it: `dave_hmac = HMAC(mu_D, buffer || associated_data)`. That `associated_data` (the 32-byte `payment_hash`) ties the onion to one specific HTLC. We hold onto `dave_hmac` as `next_hmac`, ready for Charlie's iteration.",
   },
   {
-    step: 7,
+    step: 6,
     iterLabel: "Iteration 2 of 3 (Charlie)",
     subLabel: "SHIFT + WRITE",
     title: "Right-shift by 80 and write Charlie's hop payload",
     caption:
-      "Next, we repeat for another layer. Drop the last 80 bytes off the right (the Charlie-only tail of the filler), prepend 80 bytes of placeholder, and write Charlie's TLV records plus `dave_hmac` (the value we just computed) into it. The Bob+Charlie portion of the filler stays put in the trailing 60 bytes.",
+      "Next, we repeat for another layer. Drop the last 80 bytes off the right (the Charlie-only tail of the filler) and write Charlie's TLV records plus `dave_hmac` (the value we just computed) into the freed front. The Bob+Charlie portion of the filler stays put in the trailing 60 bytes.",
     focus: "front",
   } as Beat,
   {
-    step: 8,
+    step: 7,
     iterLabel: "Iteration 2 of 3 (Charlie)",
     subLabel: "ENCRYPT",
     title: "XOR with `rho_C` over the whole 1,300 bytes",
@@ -191,7 +183,7 @@ const BEATS: Beat[] = [
       "Now generate `chacha20(rho_C, 1300)` and XOR again. Charlie's hop payload gets its first encryption layer. Dave's, already wrapped in its own layer, picks up Charlie's on top, so it's at 2 layers now. The middle padding goes from 1 layer to 2.",
   },
   {
-    step: 9,
+    step: 8,
     iterLabel: "Iteration 2 of 3 (Charlie)",
     subLabel: "HMAC",
     title: "Compute `charlie_hmac`",
@@ -199,16 +191,16 @@ const BEATS: Beat[] = [
       "Then we tag again: `charlie_hmac = HMAC(mu_C, buffer || associated_data)`. We save it as `next_hmac` for Bob's iteration. Bob's hop payload doesn't exist yet, so this is exactly the value that'll end up sitting in Bob's HMAC field.",
   },
   {
-    step: 10,
+    step: 9,
     iterLabel: "Iteration 3 of 3 (Bob, outermost)",
     subLabel: "SHIFT + WRITE",
     title: "Right-shift by 60 and write Bob's hop payload",
     caption:
-      "Last hop, last time through. Drop the last 60 bytes off the right (the Bob+Charlie filler residue, which has done its job by now), prepend a 60-byte placeholder, and write Bob's TLV records plus `charlie_hmac` into it.",
+      "Last hop, last time through. Drop the last 60 bytes off the right (the Bob+Charlie filler residue, which has done its job by now) and write Bob's TLV records plus `charlie_hmac` into the freed front.",
     focus: "front",
   } as Beat,
   {
-    step: 11,
+    step: 10,
     iterLabel: "Iteration 3 of 3 (Bob, outermost)",
     subLabel: "ENCRYPT",
     title: "XOR with `rho_B` over the whole 1,300 bytes",
@@ -216,7 +208,7 @@ const BEATS: Beat[] = [
       "Now the final encryption layer. After this XOR, Bob's hop payload has 1 layer (Bob), Charlie's has 2 (Bob + Charlie), Dave's has 3 (Bob + Charlie + Dave), and the trailing padding has 3 too. There's the privacy property at work: on the wire, *every* region looks equally encrypted.",
   },
   {
-    step: 12,
+    step: 11,
     iterLabel: "Iteration 3 of 3 (Bob, outermost)",
     subLabel: "HMAC",
     title: "Compute `bob_hmac`",
@@ -224,7 +216,7 @@ const BEATS: Beat[] = [
       "One more tag: `bob_hmac = HMAC(mu_B, buffer || associated_data)`. This one's special, since it goes in the packet's outer `hmac` field. When the packet lands, Bob checks it first thing, before he decrypts anything.",
   },
   {
-    step: 13,
+    step: 12,
     iterLabel: "Final packet",
     subLabel: "ASSEMBLE",
     title: "Attach the envelope → 1,366-byte Sphinx packet",
@@ -275,28 +267,9 @@ function regionsForBeat(step: number, focus?: FocusKind): Region[] {
     ];
   }
 
-  // Beat 2 - Dave shift: empty placeholder at front, padding behind.
+  // Beat 2 - Dave shift + write: slot at front (no encryption yet). The last
+  // 100 bytes drop off the back; Dave's hop payload lands in the freed front.
   if (step === 2) {
-    return [
-      {
-        key: "dave-empty",
-        widthPct: DISPLAY_DAVE_PCT,
-        kind: "empty",
-        hop: "dave",
-        layers: [],
-        isFocus: true,
-      },
-      {
-        key: "pad",
-        widthPct: fullPadPct - DISPLAY_DAVE_PCT,
-        kind: "padding-init",
-        layers: [],
-      },
-    ];
-  }
-
-  // Beat 3 - Dave write: slot at front (no encryption yet).
-  if (step === 3) {
     return [
       {
         key: "dave-slot",
@@ -315,8 +288,8 @@ function regionsForBeat(step: number, focus?: FocusKind): Region[] {
     ];
   }
 
-  // Beat 4 - Dave XOR: entire buffer picks up Dave's hatch.
-  if (step === 4) {
+  // Beat 3 - Dave XOR: entire buffer picks up Dave's hatch.
+  if (step === 3) {
     return [
       {
         key: "dave-slot",
@@ -334,9 +307,9 @@ function regionsForBeat(step: number, focus?: FocusKind): Region[] {
     ];
   }
 
-  // Beat 5 - Dave filler overlay: trailing 140 bytes (display 14%) become
+  // Beat 4 - Dave filler overlay: trailing 140 bytes (display 14%) become
   // filler (Bob+Charlie hatch). Padding middle still wears Dave hatch.
-  if (step === 5) {
+  if (step === 4) {
     return [
       {
         key: "dave-slot",
@@ -362,18 +335,18 @@ function regionsForBeat(step: number, focus?: FocusKind): Region[] {
     ];
   }
 
-  // Beat 6 - Dave HMAC: same layout as beat 5; no buffer change. HMAC chip
+  // Beat 5 - Dave HMAC: same layout as beat 4; no buffer change. HMAC chip
   // surfaces separately.
-  if (step === 6) {
-    return regionsForBeat(5).map((r) => ({ ...r, isFocus: false }));
+  if (step === 5) {
+    return regionsForBeat(4).map((r) => ({ ...r, isFocus: false }));
   }
 
-  // Beat 7 - Charlie shift+write: prepend 80-byte slot, last 80 of buffer
+  // Beat 6 - Charlie shift+write: prepend 80-byte slot, last 80 of buffer
   // (the Charlie-only tail of the filler = 80B of the 140B filler) drops off.
   // Layout becomes:
-  //   Charlie-empty/slot | Dave slot (Dave hatch) | padding-enc (Dave) |
+  //   Charlie-slot | Dave slot (Dave hatch) | padding-enc (Dave) |
   //   filler-residue 60B (Bob+Charlie)
-  if (step === 7) {
+  if (step === 6) {
     // Filler region was 14% (140 bytes); after dropping 80, it should be
     // 14% * (60/140) = 6% of the bar.
     const fillerResiduePct = DISPLAY_FILLER_PCT * (60 / 140);
@@ -413,10 +386,10 @@ function regionsForBeat(step: number, focus?: FocusKind): Region[] {
     ];
   }
 
-  // Beat 8 - Charlie XOR: every region picks up Charlie's hatch.
+  // Beat 7 - Charlie XOR: every region picks up Charlie's hatch.
   // The filler residue's Bob+Charlie already includes Charlie; we dedupe so
   // the hatch overlay doesn't draw Charlie twice.
-  if (step === 8) {
+  if (step === 7) {
     const fillerResiduePct = DISPLAY_FILLER_PCT * (60 / 140);
     return [
       {
@@ -453,14 +426,14 @@ function regionsForBeat(step: number, focus?: FocusKind): Region[] {
     ];
   }
 
-  // Beat 9 - Charlie HMAC: same layout, HMAC chip surfaces.
-  if (step === 9) {
-    return regionsForBeat(8).map((r) => ({ ...r, isFocus: false }));
+  // Beat 8 - Charlie HMAC: same layout, HMAC chip surfaces.
+  if (step === 8) {
+    return regionsForBeat(7).map((r) => ({ ...r, isFocus: false }));
   }
 
-  // Beat 10 - Bob shift+write: prepend 60-byte slot; the trailing 60B
+  // Beat 9 - Bob shift+write: prepend 60-byte slot; the trailing 60B
   // filler residue drops off entirely.
-  if (step === 10) {
+  if (step === 9) {
     return [
       {
         key: "bob-slot",
@@ -493,8 +466,8 @@ function regionsForBeat(step: number, focus?: FocusKind): Region[] {
     ];
   }
 
-  // Beat 11 - Bob XOR: every region picks up Bob's hatch.
-  if (step === 11) {
+  // Beat 10 - Bob XOR: every region picks up Bob's hatch.
+  if (step === 10) {
     return [
       {
         key: "bob-slot",
@@ -526,9 +499,9 @@ function regionsForBeat(step: number, focus?: FocusKind): Region[] {
     ];
   }
 
-  // Beats 12, 13 - same buffer layout as beat 11. Beat 12 surfaces bob_hmac,
-  // beat 13 shows the assembled envelope.
-  return regionsForBeat(11).map((r) => ({ ...r, isFocus: false }));
+  // Beats 11, 12 - same buffer layout as beat 10. Beat 11 surfaces bob_hmac,
+  // beat 12 shows the assembled envelope.
+  return regionsForBeat(10).map((r) => ({ ...r, isFocus: false }));
 }
 
 // ── Hover tooltip (matches FillerTraceDiagram convention) ─────────────────
@@ -619,7 +592,7 @@ export function WrapTraceDiagram() {
 
   const beat = BEATS[step - 1];
   const regions = regionsForBeat(step, beat.focus);
-  const showEnvelope = step === 13;
+  const showEnvelope = step === 12;
   const beatAccent = beat.iterLabel.includes("Dave")
     ? HOP_STROKE.dave
     : beat.iterLabel.includes("Charlie")
@@ -655,7 +628,7 @@ export function WrapTraceDiagram() {
 
             {showEnvelope ? (
               <EnvelopeView />
-            ) : step === 3 || step === 4 ? (
+            ) : step === 2 || step === 3 ? (
               <WrapMorphView step={step} />
             ) : isXorStep(step) ? (
               <XorView step={step} />
@@ -1384,19 +1357,19 @@ function keysPropsForStep(
     };
   }
   const hop: ForwarderId | null =
-    step >= 2 && step <= 6
+    step >= 2 && step <= 5
       ? "dave"
-      : step >= 7 && step <= 9
+      : step >= 6 && step <= 8
         ? "charlie"
-        : step >= 10 && step <= 12
+        : step >= 9 && step <= 11
           ? "bob"
           : null;
-  if (!hop) return null; // step 13: envelope assembly uses only public bytes
+  if (!hop) return null; // step 12: envelope assembly uses only public bytes
   const initial = hop === "dave" ? "D" : hop === "charlie" ? "C" : "B";
   const ss = `ss_A${initial}`;
   const hopName = HOP_LABEL[hop];
-  const rhoActive = step === 4 || step === 8 || step === 11;
-  const muActive = step === 6 || step === 9 || step === 12;
+  const rhoActive = step === 3 || step === 7 || step === 10;
+  const muActive = step === 5 || step === 8 || step === 11;
   return {
     card: {
       title: `${hopName}'s iteration keys`,
@@ -1455,33 +1428,33 @@ function WrapKeysBadge({ step }: { step: number }) {
 }
 
 function isXorStep(step: number): boolean {
-  return step === 4 || step === 8 || step === 11;
+  return step === 3 || step === 7 || step === 10;
 }
 
 function isHmacStep(step: number): boolean {
-  return step === 6 || step === 9 || step === 12;
+  return step === 5 || step === 8 || step === 11;
 }
 
 // Small "← carries forward from step N" tag, shown above the running buffer
 // on beats where the buffer state is inherited from the prior beat.
 function carryForwardLabel(step: number): string | undefined {
   // Step 1 (pad-init) is the first state - nothing to carry from.
-  // Step 13 (envelope) uses its own layout.
+  // Step 12 (envelope) uses its own layout.
   // XOR steps label their own bars internally.
-  if (step === 1 || step === 13 || isXorStep(step)) return undefined;
+  if (step === 1 || step === 12 || isXorStep(step)) return undefined;
   return `running state · carried from step ${step - 1}`;
 }
 
-// ── Morph pilot (steps 3 & 4) ───────────────────────────────────────────────
+// ── Morph pilot (steps 2 & 3) ───────────────────────────────────────────────
 // Both steps render THIS one component, so the bar is the *same* React element
 // across the step change (reconciled by key) and animates its own height /
-// opacity, rather than crossfading two separate components. Step 3 = the full
-// write-state buffer; step 4 = that same bar, compacted + faded, with the rest
+// opacity, rather than crossfading two separate components. Step 2 = the full
+// write-state buffer; step 3 = that same bar, compacted + faded, with the rest
 // of the XOR equation sliding in beneath it.
 function WrapMorphView({ step }: { step: number }) {
-  const isXor = step === 4;
-  const beforeRegions = regionsForBeat(3, undefined).map((r) => ({ ...r, isFocus: false }));
-  const afterRegions = regionsForBeat(4, undefined).map((r) => ({ ...r, isFocus: false }));
+  const isXor = step === 3;
+  const beforeRegions = regionsForBeat(2, undefined).map((r) => ({ ...r, isFocus: false }));
+  const afterRegions = regionsForBeat(3, undefined).map((r) => ({ ...r, isFocus: false }));
 
   return (
     <div>
@@ -1491,7 +1464,7 @@ function WrapMorphView({ step }: { step: number }) {
             className="text-[10px] uppercase tracking-[0.06em] mb-1"
             style={{ color: NEUTRAL_TEXT, fontFamily: MONO, fontWeight: 500 }}
           >
-            hop_payloads · before Dave's XOR (from step 3)
+            hop_payloads · before Dave's XOR (from step 2)
           </div>
         ) : (
           <>
@@ -1499,7 +1472,7 @@ function WrapMorphView({ step }: { step: number }) {
               className="text-[9.5px] mb-1"
               style={{ color: FOCUS_GOLD, fontFamily: MONO, letterSpacing: "0.04em", fontStyle: "italic" }}
             >
-              ← running state · carried from step 2
+              ← running state · carried from step 1
             </div>
             <BufferHeader leftLabel="hop_payloads buffer" rightLabel="1,300 bytes" accentColor={FOCUS_GOLD} />
           </>
@@ -1533,7 +1506,7 @@ function WrapMorphView({ step }: { step: number }) {
             <KeystreamBar hop="dave" initial="D" />
             <SymbolRow char="=" />
             <CompactBar
-              label="hop_payloads · after XOR (+Dave's layer everywhere) → step 5"
+              label="hop_payloads · after XOR (+Dave's layer everywhere) → step 4"
               regions={afterRegions}
               accentColor={HOP_STROKE.dave}
               emphasis
@@ -1556,7 +1529,7 @@ function WrapMorphView({ step }: { step: number }) {
 
 function XorView({ step }: { step: number }) {
   const hop: ForwarderId =
-    step === 4 ? "dave" : step === 8 ? "charlie" : "bob";
+    step === 3 ? "dave" : step === 7 ? "charlie" : "bob";
   const initial = hop === "dave" ? "D" : hop === "charlie" ? "C" : "B";
   const hopName = HOP_LABEL[hop];
 
@@ -1786,10 +1759,10 @@ function hmacKeyProps(hop: ForwarderId): KeyDerivationCardProps {
 
 function HmacView({ step }: { step: number }) {
   const hop: ForwarderId =
-    step === 6 ? "dave" : step === 9 ? "charlie" : "bob";
+    step === 5 ? "dave" : step === 8 ? "charlie" : "bob";
   const initial = hop === "dave" ? "D" : hop === "charlie" ? "C" : "B";
   const hmacName = `${hop}_hmac`;
-  const isOuter = step === 12;
+  const isOuter = step === 11;
 
   // The buffer at an HMAC beat is the same regions as the prior beat
   // (HMAC doesn't change the buffer, just hashes it).

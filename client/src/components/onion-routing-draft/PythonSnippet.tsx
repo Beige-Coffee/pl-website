@@ -91,14 +91,9 @@ const SNIPPETS: Record<string, Snippet> = {
       'pad_key = hmac.new(b"pad", session_key, hashlib.sha256).digest()\nbuffer = bytearray(chacha20_keystream(pad_key, 1300))',
   },
 
-  "wrap-shift": {
-    python:
-      '# Drop the last hop_size bytes off the right; prepend hop_size bytes of\n# placeholder space at the front. Total length stays at 1300.\nhop_size = len(payload) + 32\nbuffer = bytearray(hop_size) + bytearray(buffer[:-hop_size])',
-  },
-
   "wrap-write": {
     python:
-      '# Write the bigsize-prefixed TLV payload followed by the 32-byte next_hmac\n# into the freshly-vacated front.\nbuffer[:len(payload) + 32] = payload + next_hmac',
+      "# Prepend this hop's payload + 32-byte next_hmac, dropping the last\n# hop_size bytes off the end so the buffer stays 1,300.\nhop_size = len(payload) + 32\nbuffer = payload + next_hmac + buffer[:-hop_size]",
   },
 
   "wrap-xor": {

@@ -1048,9 +1048,9 @@ def test_peels_the_official_bolt4_onion():
       "Implement <code>OnionPacketBuilder.wrap_hop</code>. Given the current 1300-byte buffer, this hop's bigsize-prefixed payload, the next-hop HMAC, this hop's <code>rho</code>/<code>mu</code> keys, and the payment's <code>associated_data</code> (32-byte <code>payment_hash</code>), produce the new buffer (after shift + write + XOR) and the HMAC computed over <code>(new_buffer || associated_data)</code> per BOLT 4.",
     sampleCode: `# Wrap-a-layer sandbox - one iteration of the build loop, on a tiny buffer.
 #
-# Each wrap: right-shift the buffer to make room, write this hop's payload +
-# next_hmac at the front, XOR the whole thing with the rho keystream, then MAC
-# the result. We use a small ROUTING_INFO_SIZE here so you can read the bytes.
+# Each wrap: prepend this hop's payload + next_hmac to the front, drop the last
+# hop_size bytes to stay fixed-size, XOR the whole thing with the rho keystream,
+# then MAC the result. We use a small ROUTING_INFO_SIZE here so you can read the bytes.
 # Helpers in scope: chacha20_keystream, xor_bytes, generate_key.
 
 ROUTING_INFO_SIZE = 32   # tiny on purpose; the real field is 1300
@@ -1064,16 +1064,16 @@ buffer = bytes(ROUTING_INFO_SIZE)              # start: pad noise (zeros here)
 payload = b"BOB"                               # this hop's bytes (toy)
 next_hmac = b"\\x00" * 32                       # all-zero for the destination
 
-# Step 1-2: shift right by len(payload + next_hmac), write the new front.
+# Step 1: prepend this hop's bytes (payload + next_hmac), drop the tail.
 chunk = payload + next_hmac
-shifted = (chunk + buffer)[:ROUTING_INFO_SIZE]
-print(f"after write: {shifted.hex()}")
+new_buffer = (chunk + buffer)[:ROUTING_INFO_SIZE]
+print(f"after write: {new_buffer.hex()}")
 
-# Step 3: XOR-encrypt the whole buffer with the rho keystream.
-encrypted = xor_bytes(shifted, chacha20_keystream(rho, ROUTING_INFO_SIZE))
+# Step 2: XOR-encrypt the whole buffer with the rho keystream.
+encrypted = xor_bytes(new_buffer, chacha20_keystream(rho, ROUTING_INFO_SIZE))
 print(f"after XOR:   {encrypted.hex()}")
 
-# Step 5: this hop's HMAC commits to (new_buffer || associated_data).
+# Step 4: this hop's HMAC commits to (new_buffer || associated_data).
 this_hmac = hmac.new(mu, encrypted + assoc, hashlib.sha256).digest()
 print(f"this hop's hmac: {this_hmac.hex()[:16]}...")
 `,
@@ -1112,10 +1112,9 @@ ROUTING_INFO_SIZE = 1300
 
 def reference_wrap_hop(buffer, payload, next_hmac, rho, mu, ad, filler=None):
     hop_size = len(payload) + 32
-    shifted = bytearray(hop_size) + bytearray(buffer[:-hop_size])
-    shifted[:hop_size] = payload + next_hmac
+    new_buffer = payload + next_hmac + buffer[:-hop_size]
     stream = chacha20_keystream(rho, ROUTING_INFO_SIZE)
-    encrypted = bytearray(xor_bytes(bytes(shifted), stream))
+    encrypted = bytearray(xor_bytes(bytes(new_buffer), stream))
     if filler is not None:
         encrypted[ROUTING_INFO_SIZE - len(filler):] = filler
     tag = hmac.new(mu, bytes(encrypted) + ad, hashlib.sha256).digest()
@@ -1207,29 +1206,26 @@ def test_no_filler_default_unchanged():
         "<strong>Goal:</strong> perform one iteration of the build loop. Take the current buffer, the new hop's data, the inner-layer HMAC, and produce a buffer that has this hop's data at the front (encrypted with rho) plus the HMAC over (new_buffer || associated_data) for use by the layer above." +
         "<br><br><strong>Hop-payload size:</strong> the bytes consumed by this hop = len(payload) + 32 (HMAC). The 'shift right' makes room for those bytes at the front by pushing existing contents back." +
         "<br><br><strong>Why associated_data:</strong> BOLT 4 binds the onion to a specific HTLC by including the 32-byte <code>payment_hash</code> in every hop's HMAC. A forwarder receiving the onion attached to a different <code>payment_hash</code> gets a HMAC mismatch and rejects the packet. This is what stops an attacker from re-attaching a captured onion to a different payment." +
-        "<br><br><strong>The filler (innermost hop only):</strong> the destination's call passes a <code>filler</code> argument; forwarders pass <code>None</code>. When present, overwrite the trailing <code>len(filler)</code> bytes of the encrypted buffer with it BEFORE computing the HMAC, so the one HMAC commits to it. That's the full BOLT 4 sequence for an iteration: shift, write, XOR, overlay filler, then a single HMAC. (There is no second HMAC; the filler goes in before the only one.)",
+        "<br><br><strong>The filler (innermost hop only):</strong> the destination's call passes a <code>filler</code> argument; forwarders pass <code>None</code>. When present, overwrite the trailing <code>len(filler)</code> bytes of the encrypted buffer with it BEFORE computing the HMAC, so the one HMAC commits to it. That's the full BOLT 4 sequence for an iteration: prepend the new front, XOR, overlay filler, then a single HMAC. (There is no second HMAC; the filler goes in before the only one.)",
       steps:
         "<strong>1. Compute the hop size.</strong>" +
         "<br><code>hop_size = len(payload) + 32</code>" +
-        "<br><strong>2. Shift right</strong> to open <code>hop_size</code> bytes at the front (you'll overwrite them in the next step):" +
-        "<br><code>shifted = bytearray(hop_size) + bytearray(buffer[:-hop_size])</code>" +
-        "<br><strong>3. Write the payload and next_hmac</strong> into that opened space:" +
-        "<br><code>shifted[:hop_size] = payload + next_hmac</code>" +
-        "<br><strong>4. Encrypt</strong> the whole buffer by XOR-ing with this hop's keystream (keep it a <code>bytearray</code> so step 5 can patch it):" +
-        "<br><code>stream = chacha20_keystream(rho, ROUTING_INFO_SIZE)\nencrypted = bytearray(xor_bytes(bytes(shifted), stream))</code>" +
-        "<br><strong>5. Overlay the filler (innermost hop only).</strong> If <code>filler is not None</code>, overwrite the tail BEFORE the HMAC so the single HMAC covers it:" +
+        "<br><strong>2. Prepend this hop's data, drop the tail.</strong> Build the new front (<code>payload + next_hmac</code>) and keep all but the last <code>hop_size</code> bytes of the old buffer, in a single line:" +
+        "<br><code>new_buffer = payload + next_hmac + buffer[:-hop_size]</code>" +
+        "<br><strong>3. Encrypt</strong> the whole buffer by XOR-ing with this hop's keystream (keep it a <code>bytearray</code> so step 4 can patch it):" +
+        "<br><code>stream = chacha20_keystream(rho, ROUTING_INFO_SIZE)\nencrypted = bytearray(xor_bytes(bytes(new_buffer), stream))</code>" +
+        "<br><strong>4. Overlay the filler (innermost hop only).</strong> If <code>filler is not None</code>, overwrite the tail BEFORE the HMAC so the single HMAC covers it:" +
         "<br><code>encrypted[ROUTING_INFO_SIZE - len(filler):] = filler</code>" +
-        "<br><strong>6. HMAC</strong> the (possibly filler-patched) buffer with <code>associated_data</code> appended:" +
+        "<br><strong>5. HMAC</strong> the (possibly filler-patched) buffer with <code>associated_data</code> appended:" +
         "<br><code>tag = hmac.new(mu, bytes(encrypted) + associated_data, hashlib.sha256).digest()</code>" +
-        "<br><strong>7. Return</strong> the encrypted buffer and its tag:" +
+        "<br><strong>6. Return</strong> the encrypted buffer and its tag:" +
         "<br><code>return bytes(encrypted), tag</code>",
       code:
         `    def wrap_hop(self, buffer, payload, next_hmac, rho, mu, associated_data, filler=None):
         hop_size = len(payload) + 32
-        shifted = bytearray(hop_size) + bytearray(buffer[:-hop_size])
-        shifted[:hop_size] = payload + next_hmac
+        new_buffer = payload + next_hmac + buffer[:-hop_size]
         stream = chacha20_keystream(rho, ROUTING_INFO_SIZE)
-        encrypted = bytearray(xor_bytes(bytes(shifted), stream))
+        encrypted = bytearray(xor_bytes(bytes(new_buffer), stream))
         if filler is not None:                       # innermost hop only
             encrypted[ROUTING_INFO_SIZE - len(filler):] = filler
         tag = hmac.new(mu, bytes(encrypted) + associated_data, hashlib.sha256).digest()
