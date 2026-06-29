@@ -176,7 +176,7 @@ export const CHECKPOINT_ANSWER_KEY: Record<string, number | number[]> = {
   // Intro: Naive plaintext routing leak (draft)
   "cp-naive-plaintext-leak-draft": 2,
   // Chapter 3: The Privacy Problem (draft)
-  "cp-still-vulnerable-draft": [1, 2],
+  "cp-still-vulnerable-draft": 1,
   // Privacy-rubric grid (KnowledgeMatrix). Client-verified like a coding
   // exercise: 0 means "all 24 cells correct".
   "km-privacy-rubric-draft": 0,

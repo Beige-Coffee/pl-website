@@ -411,15 +411,14 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
   },
   // ── Chapter 3: The Privacy Problem ───────────────────────────────────────
   "cp-still-vulnerable-draft": {
-    question: "Per-hop encryption hides the contents of each slice, but the message still leaks privacy in more than one way. Select all that apply.",
+    question: "Per-hop encryption hides the contents of each slice, but the route still isn't fully private. What can an eavesdropper still figure out?",
     options: [
       "The encrypted slices look identical from the outside, so Bob can't tell which slice is his to decrypt.",
       "The packet shrinks at each hop as forwarders peel their slices off, so anyone watching can count the slices in the message at each step and figure out which hop is at which position in the route.",
-      "Each slice has to be encrypted to a known forwarder's published node-identity public key. Anyone watching can correlate the public keys Alice used against the gossip graph and identify every forwarder in the route.",
       "Public-key encryption is too computationally expensive for low-power wallets to perform per-hop, so the design doesn't scale.",
     ],
-    answer: [1, 2],
-    explanation: "Two real privacy problems remain even with per-hop encryption. **First, the packet shrinks.** Each forwarder peels its own slice off the wire before forwarding the rest, so the message gets smaller at each hop. If Bob receives a 3-slice message, he immediately knows there are at least two hops downstream of him; when Charlie sees a 2-slice message, he knows he's the last forwarder before the destination (the second-to-last node in the path). Size alone reveals each forwarder's position, which directly violates the property 'Bob shouldn't be able to tell whether he's the first hop, the last forwarder, or somewhere in between.' Sphinx fixes this with a **fixed-size packet** that doesn't shrink. **Second, every forwarder's identity is exposed by the keys themselves.** To encrypt a slice for Bob, Alice has to look up Bob's node-identity public key on the gossip network. The very act of using Bob's public key in the packet (or any tag that lets Bob find his slice) signals 'Bob is in this route' to anyone watching. Sphinx fixes this with **shared-secret derivation via ephemeral keys** so Alice never directly references each hop's static identity key. The two distractors are wrong: identical-looking ciphertext is a feature of encryption, not a bug, and public-key crypto cost isn't the central problem here.",
+    answer: 1,
+    explanation: "Even with per-hop encryption, the **packet still shrinks**. Each forwarder peels its own slice off the wire before forwarding the rest, so the message gets smaller at each hop. If Bob receives a 3-slice message, he immediately knows there are at least two hops downstream of him; when Charlie sees a 2-slice message, he knows he's the last forwarder before the destination (the second-to-last node in the path). Size alone reveals each forwarder's position in the route, which directly violates the property 'Bob shouldn't be able to tell whether he's the first hop, the last forwarder, or somewhere in between.' Sphinx fixes this with a **fixed-size packet** that stays the same length at every hop. The other options are wrong: identical-looking ciphertext is a feature of good encryption, not a leak, and public-key crypto cost isn't the central problem here.",
   },
 };
 
