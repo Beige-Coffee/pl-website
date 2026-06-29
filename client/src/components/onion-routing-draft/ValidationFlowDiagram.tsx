@@ -86,7 +86,7 @@ const BEATS: Beat[] = [
     subLabel: "RECEIVE",
     title: "Nothing trusted yet",
     caption:
-      "First, Alice sends Bob an `update_add_htlc`. The channel message carries the incoming HTLC fields (the amount, the `cltv_expiry`, and the `payment_hash`, which is the `associated_data`) and, tucked inside it, the 1,366-byte onion. As of now, the onion is just encrypted bytes. Bob can't understand a single one of them yet.",
+      "First, Alice sends Bob an `update_add_htlc`. The channel message carries the incoming HTLC fields (the amount, the `cltv_expiry`, and the `payment_hash`, which is the `associated_data`) and, tucked inside it, the 1,366-byte onion. As of now, the onion is just encrypted bytes.",
   },
   {
     step: 2,
@@ -181,87 +181,172 @@ function strippedRegions1300(): Region[] {
   ];
 }
 
-// One labeled segment of the full-packet bar (beat 3). A stacked name + byte
-// count, optionally faded (parts not involved in the integrity check) and/or
-// hatched (the still-encrypted hop_payloads).
-function PacketSegment({
-  name,
-  bytes,
-  widthPct,
-  faded = false,
-  hatch = false,
-  nameColor = INK,
+// The sealed onion packet in the chapter's standard HEADER | PAYLOAD AREA | HMAC
+// framing (the same container PayloadShrinkDiagram uses). This is Bob's
+// pre-decryption view, so the PAYLOAD AREA stays one opaque, hatched block: no
+// per-hop subcells, which he can't see until he peels (beats 4-5). On the
+// integrity beat we fade the header and payload and ring the HMAC, the one
+// operand Bob actually checks. Shown sealed (no fade) inside the step-1 envelope.
+function SealedPacketContainer({
+  highlightHmac = false,
 }: {
-  name: string;
-  bytes: string;
-  widthPct: number;
-  faded?: boolean;
-  hatch?: boolean;
-  nameColor?: string;
+  highlightHmac?: boolean;
 }) {
-  const chipBg = "rgba(255,253,245,0.85)";
+  const tint = `${HOP_STROKE.bob}24`;
   return (
     <div
-      className="relative flex flex-col items-center justify-center"
-      style={{
-        width: `${widthPct}%`,
-        background: "#fffdf5",
-        opacity: faded ? 0.4 : 1,
-        borderLeft: "1.5px dashed rgba(15,23,42,0.18)",
-        transition: "opacity 400ms ease-out",
-      }}
+      className="border-[1.5px] overflow-hidden"
+      style={{ background: "#fffdf5", borderColor: INK }}
     >
-      {hatch && <HatchOverlay hops={OPAQUE_HATCH} zIndex={1} stripeOpacity={0.16} />}
-      <span
-        className="text-[9px]"
-        style={{
-          fontFamily: MONO,
-          fontWeight: 700,
-          color: nameColor,
-          background: chipBg,
-          padding: "0 4px",
-          zIndex: 2,
-          position: "relative",
-          letterSpacing: "0.02em",
-          lineHeight: 1.3,
-        }}
+      <div
+        className="bg-black text-white px-3 py-1.5 flex items-center gap-2"
+        style={{ fontFamily: MONO }}
       >
-        {name}
-      </span>
-      <span
-        className="text-[9px]"
-        style={{
-          fontFamily: MONO,
-          color: NEUTRAL_TEXT,
-          background: chipBg,
-          padding: "0 4px",
-          zIndex: 2,
-          position: "relative",
-          lineHeight: 1.3,
-        }}
-      >
-        {bytes}
-      </span>
-    </div>
-  );
-}
+        <span
+          style={{
+            width: 8,
+            height: 8,
+            background: FOCUS_GOLD,
+            display: "inline-block",
+            flexShrink: 0,
+          }}
+        />
+        <span className="text-[10px] uppercase tracking-[0.1em] font-bold">
+          onion_routing_packet (Alice → Bob)
+        </span>
+      </div>
 
-// Beat 3 (integrity): the whole 1,366-byte packet. The header plays no part in
-// the HMAC, so it's faded; the two operands of the check stand out: hop_payloads
-// (the HMAC input, still encrypted) and outer_hmac (the tag Bob compares against).
-function FullPacketBar() {
-  return (
-    <>
-      <PacketSegment name="header" bytes="34 B" widthPct={13} faded />
-      <PacketSegment
-        name="hop_payloads"
-        bytes="1,300 B"
-        widthPct={62}
-        hatch
-        nameColor={KEY_MU_COLOR}
-      />
-      <PacketSegment name="outer_hmac" bytes="32 B" widthPct={25} />
-    </>
+      <div className="p-3">
+        <div
+          className="border-[1.5px] flex"
+          style={{ background: "#fffdf5", borderColor: INK, minHeight: 104 }}
+        >
+          {/* HEADER */}
+          <div
+            className="flex flex-col items-center justify-center text-center border-r-[1.5px]"
+            style={{
+              flexBasis: 112,
+              flexShrink: 0,
+              borderColor: INK,
+              color: INK,
+              padding: "8px 6px",
+              background: tint,
+              opacity: highlightHmac ? 0.4 : 1,
+              transition: "opacity 400ms ease-out",
+            }}
+          >
+            <span
+              className="text-[10px] font-bold uppercase tracking-[0.08em] leading-tight"
+              style={{ fontFamily: MONO }}
+            >
+              HEADER
+            </span>
+            <div
+              style={{
+                width: "60%",
+                height: 1,
+                background: "#0f172a30",
+                marginTop: 5,
+                marginBottom: 6,
+              }}
+            />
+            <span
+              className="text-[9px] uppercase tracking-[0.05em] opacity-70 leading-tight"
+              style={{ fontFamily: MONO }}
+            >
+              version
+            </span>
+            <span
+              className="text-[11px] font-bold leading-tight"
+              style={{ fontFamily: MONO }}
+            >
+              0x00
+            </span>
+            <span
+              className="text-[9px] uppercase tracking-[0.05em] opacity-70 leading-tight mt-1.5"
+              style={{ fontFamily: MONO }}
+            >
+              ephemeral pubkey
+            </span>
+            <span className="leading-tight mt-0.5">
+              <MathLine text="E_AB" color={HOP_STROKE.bob} fontSize={15} />
+            </span>
+          </div>
+
+          {/* PAYLOAD AREA: fully encrypted in Bob's view (no per-hop subcells). */}
+          <div
+            className="flex flex-col border-r-[1.5px]"
+            style={{
+              flex: 1,
+              minWidth: 0,
+              padding: "8px",
+              borderColor: INK,
+              opacity: highlightHmac ? 0.5 : 1,
+              transition: "opacity 400ms ease-out",
+            }}
+          >
+            <div
+              className="text-center text-[10px] font-bold uppercase tracking-[0.08em] leading-tight mb-1.5"
+              style={{ fontFamily: MONO }}
+            >
+              PAYLOAD AREA
+            </div>
+            <div
+              className="relative flex items-center justify-center"
+              style={{ flex: 1, border: "1px dashed rgba(15,23,42,0.2)" }}
+            >
+              <HatchOverlay hops={OPAQUE_HATCH} zIndex={0} stripeOpacity={0.16} />
+              <span
+                className="relative text-[9px]"
+                style={{
+                  fontFamily: MONO,
+                  color: NEUTRAL_TEXT,
+                  background: "rgba(255,253,245,0.85)",
+                  padding: "0 4px",
+                  zIndex: 2,
+                }}
+              >
+                hop_payloads · 1,300 B · encrypted
+              </span>
+            </div>
+          </div>
+
+          {/* HMAC: the tag Bob checks. Ringed gold on the integrity beat. */}
+          <div
+            className="flex flex-col items-center justify-center text-center"
+            style={{
+              flexBasis: 80,
+              flexShrink: 0,
+              color: INK,
+              padding: "8px 4px",
+              background: highlightHmac ? "rgba(184,134,11,0.12)" : tint,
+              outline: highlightHmac ? `2px solid ${FOCUS_GOLD}` : "none",
+              outlineOffset: -2,
+              transition: "background 400ms ease-out",
+            }}
+          >
+            <span
+              className="text-[10px] font-bold uppercase tracking-[0.06em] leading-tight"
+              style={{ fontFamily: MONO }}
+            >
+              HMAC
+            </span>
+            <span
+              className="text-[10px] font-bold leading-tight mt-0.5"
+              style={{ fontFamily: MONO, color: HOP_STROKE.bob }}
+            >
+              for Bob
+            </span>
+            <span
+              className="text-[8.5px] opacity-60 leading-tight mt-0.5"
+              style={{ fontFamily: MONO }}
+            >
+              32 B
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -531,47 +616,52 @@ function PayloadArcView({ step }: { step: number }) {
         <ArcLeadIn step={step} />
       </FadeIn>
 
-      {/* Persistent label for the bar. */}
-      <div
-        className="text-[10px] uppercase tracking-[0.06em] mb-1 mt-1"
-        style={{
-          color: isParse ? FOCUS_GOLD : isPeel ? HOP_STROKE.bob : NEUTRAL_TEXT,
-          fontFamily: MONO,
-          fontWeight: isVerify ? 500 : 700,
-        }}
-      >
-        {isParse ? (
-          <div className="flex items-center justify-between">
-            <span>{barLabel}</span>
-            <span style={{ fontWeight: 500 }}>zoomed view</span>
-          </div>
-        ) : (
-          barLabel
-        )}
-      </div>
+      {/* Persistent label for the bar (beats 4-5 only; beat 3's sealed-packet
+          container carries its own header label). */}
+      {!isVerify && (
+        <div
+          className="text-[10px] uppercase tracking-[0.06em] mb-1 mt-1"
+          style={{
+            color: isParse ? FOCUS_GOLD : HOP_STROKE.bob,
+            fontFamily: MONO,
+            fontWeight: 700,
+          }}
+        >
+          {isParse ? (
+            <div className="flex items-center justify-between">
+              <span>{barLabel}</span>
+              <span style={{ fontWeight: 500 }}>zoomed view</span>
+            </div>
+          ) : (
+            barLabel
+          )}
+        </div>
+      )}
 
-      {/* THE persistent bar: same element in beats 3, 4, 5; the box (height +
-          border) morphs while its region children swap. Same direct-children
-          pattern as WrapMorphView's persistent bar. */}
-      <MorphBox
-        key="hop-payloads-bar"
-        initial={{ height: barHeight, borderColor: barBorder }}
-        animate={{ height: barHeight, borderColor: barBorder }}
-        className="border-[1.5px] flex relative overflow-hidden"
-        style={{ background: "#fffdf5", boxShadow: barShadow }}
-      >
-        {isParse ? (
-          <div style={{ flex: 1, position: "relative", minWidth: 0 }}>
-            <SlotCell hop="bob" />
-          </div>
-        ) : isVerify ? (
-          <FullPacketBar />
-        ) : (
-          strippedRegions1300().map((r) => (
-            <BufferRegion key={r.key} region={r} dimNonFocus={false} />
-          ))
-        )}
-      </MorphBox>
+      {/* Beat 3: the full sealed packet in its standard container, HMAC ringed.
+          Beats 4-5: THE persistent hop_payloads bar, whose box (height + border)
+          morphs across the 4->5 step change while its region children swap. */}
+      {isVerify ? (
+        <SealedPacketContainer highlightHmac />
+      ) : (
+        <MorphBox
+          key="hop-payloads-bar"
+          initial={{ height: barHeight, borderColor: barBorder }}
+          animate={{ height: barHeight, borderColor: barBorder }}
+          className="border-[1.5px] flex relative overflow-hidden"
+          style={{ background: "#fffdf5", boxShadow: barShadow }}
+        >
+          {isParse ? (
+            <div style={{ flex: 1, position: "relative", minWidth: 0 }}>
+              <SlotCell hop="bob" />
+            </div>
+          ) : (
+            strippedRegions1300().map((r) => (
+              <BufferRegion key={r.key} region={r} dimNonFocus={false} />
+            ))
+          )}
+        </MorphBox>
+      )}
 
       {/* Trailing content below the bar, fades in per beat. */}
       <FadeIn swapKey={`arc-tail-${step}`}>
@@ -714,7 +804,7 @@ function ArcTail({ step }: { step: number }) {
         </div>
         <VerdictStamp
           label="AUTHENTIC"
-          sub="bytes match, bound to this HTLC"
+          sub=""
           failCode="invalid_onion_hmac"
         />
       </div>
@@ -1024,12 +1114,14 @@ function VerdictStamp({
         </span>
       </div>
       <div className="flex items-center gap-2 flex-wrap justify-center">
-        <span
-          className="text-[10.5px] italic"
-          style={{ fontFamily: SANS, color: NEUTRAL_TEXT }}
-        >
-          {sub}
-        </span>
+        {sub && (
+          <span
+            className="text-[10.5px] italic"
+            style={{ fontFamily: SANS, color: NEUTRAL_TEXT }}
+          >
+            {sub}
+          </span>
+        )}
         <RejectsHover failCode={failCode} />
       </div>
     </div>
@@ -1090,6 +1182,10 @@ function UpdateAddHtlcEnvelope() {
             value={PAYMENT_HASH}
             note="= associated_data"
           />
+        </div>
+        {/* The onion the message carries, in the chapter's standard framing. */}
+        <div className="mt-3">
+          <SealedPacketContainer />
         </div>
       </div>
     </div>

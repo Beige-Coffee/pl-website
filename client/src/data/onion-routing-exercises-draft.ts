@@ -481,7 +481,7 @@ def test_official_bolt4_error_vector():
     title: "Verify the HMAC",
     description:
       "Implement <code>verify_hmac(packet, mu, associated_data) -> str | None</code>. Given a 1366-byte BOLT 4 onion packet, this hop's <code>mu</code> key (32 bytes), and the 32-byte <code>associated_data</code> (<code>payment_hash</code>), recompute <code>HMAC-SHA256(mu, hop_payloads || associated_data)</code> and compare it against the packet's last 32 bytes (the HMAC field). " +
-      "Return <code>None</code> when the HMAC verifies, or the BOLT 4 failure-code string <code>\"invalid_onion_hmac\"</code> when it does not (a packet that is not exactly 1366 bytes also fails). This is the same convention as <code>check_forward</code>: every forwarder check returns a failure code on rejection, or <code>None</code> when the check passes. Use <code>hmac.compare_digest</code> for a constant-time compare to avoid leaking timing information about which byte didn't match.",
+      "Return <code>None</code> when the HMAC verifies, or the BOLT 4 failure-code string <code>\"invalid_onion_hmac\"</code> when it does not (a packet that is not exactly 1366 bytes also fails). Use <code>hmac.compare_digest</code> for a constant-time compare to avoid leaking timing information about which byte didn't match.",
     sampleCode: `# HMAC-verify sandbox - forge a packet, then tamper with it.
 #
 # A 1366-byte onion is: version(1) || E_i(33) || hop_payloads(1300) || hmac(32).
@@ -609,8 +609,8 @@ def verify_hmac(packet, mu, associated_data):
     title: "Check the Forwarding Policy",
     description:
       "Implement <code>check_forward(incoming_amount_msat, incoming_cltv_expiry, amt_to_forward, outgoing_cltv_value, policy) -> str | None</code>. Once the HMAC verifies and the layer is peeled, the forwarder reads the requested <code>amt_to_forward</code> and <code>outgoing_cltv_value</code> from the hop payload and must decide whether forwarding is actually safe. " +
-      "This is the forward direction of chapter 2's backward math: the incoming HTLC has to leave the forwarder enough margin to (a) cover its own advertised fee and (b) keep enough timelock cushion to claim the downstream HTLC before its upstream HTLC expires. " +
-      "The <code>policy</code> argument is the provided <code>ForwardingPolicy</code> dataclass carrying this hop's BOLT 7 <code>channel_update</code> fields (<code>fee_base_msat</code>, <code>fee_proportional_millionths</code>, <code>cltv_expiry_delta</code>). Return a BOLT 4 failure-code string when a check fails, or <code>None</code> when it is safe to forward.",
+      "To do this, the forwarder must ensure the incoming HTLC has enough margin to (a) cover the fee it advertised and (b) keep enough timelock cushion to claim the downstream HTLC before its own upstream HTLC expires. " +
+      "The <code>policy</code> argument is the provided <code>ForwardingPolicy</code> dataclass carrying this hop's BOLT 7 <code>channel_update</code> fields (<code>fee_base_msat</code>, <code>fee_proportional_millionths</code>, <code>cltv_expiry_delta</code>). To complete this exercise, you must return a BOLT 4 failure-code string when a check fails, or <code>None</code> when it is safe to forward.",
     sampleCode: `# Forwarding-policy sandbox - play with the fee and CLTV margins.
 #
 # The forwarder keeps (incoming - amt_to_forward) as its fee, and keeps
@@ -756,7 +756,7 @@ def test_proportional_only_policy():
     hints: {
       conceptual:
         "<strong>Goal:</strong> given everything already parsed out of the onion, decide if forwarding is safe by re-checking the two promises this hop made to the network." +
-        "<br><br><strong>This is chapter 2's backward math, run forward.</strong> Back then, Alice worked backward from the destination, adding each hop's fee and CLTV delta as she went, so that by the time the HTLC reaches this forwarder there is exactly enough headroom. Now the forwarder verifies the sender actually did that arithmetic. It never trusts the incoming numbers blindly." +
+        "<br><br><strong>You're re-checking the sender's arithmetic.</strong> When Alice built the route back in chapter 2 she budgeted a fee and a timelock cushion for every hop, so the amounts arriving here should already leave this forwarder whole. It doesn't take that on faith, though: it recomputes both margins from its own advertised policy and forwards only if they hold." +
         "<br><br><strong>Fee = what the hop keeps.</strong> The forwarder receives <code>incoming_amount_msat</code> and is asked to send <code>amt_to_forward</code> downstream. The difference is its fee. That difference has to be at least the fee it advertised in its <code>channel_update</code>, or it loses money relaying the payment." +
         "<br><br><strong>CLTV delta = claim-before-you-pay cushion.</strong> The forwarder pays the downstream HTLC first, then claims the upstream one. It needs <code>cltv_expiry_delta</code> blocks between the two expiries so a downstream delay can never leave it having paid out without time left to get paid back." +
         "<br><br><strong>Why these exact strings:</strong> <code>fee_insufficient</code> and <code>incorrect_cltv_expiry</code> are real BOLT 4 failure codes. Returning them verbatim is what lets a real Lightning sender understand why the hop refused and re-route.",
