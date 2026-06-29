@@ -199,8 +199,20 @@ export function FeeCalculatorModal({ open, onClose }: FeeCalculatorModalProps) {
           className="text-xs leading-relaxed mb-4 opacity-80"
           style={{ color: INK }}
         >
-          Plug your own numbers in. The Lightning forwarding fee floors the
-          fee_rate result (real nodes drop fractional sats).
+          Plug your own numbers in. The Lightning forwarding fee floors the{" "}
+          <code
+            style={{
+              fontFamily: '"JetBrains Mono", "Fira Code", monospace',
+              background: "#f1f5f9",
+              border: "1px solid rgba(15,23,42,0.14)",
+              padding: "0 5px",
+              fontSize: "0.92em",
+              whiteSpace: "nowrap",
+            }}
+          >
+            fee_rate
+          </code>{" "}
+          result (real nodes drop fractional sats).
         </p>
 
         <div className="grid grid-cols-1 gap-3">

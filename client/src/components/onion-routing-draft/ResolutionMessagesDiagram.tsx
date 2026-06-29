@@ -191,7 +191,19 @@ export function ResolutionMessagesDiagram() {
               footnote={
                 <>
                   For an onion a hop couldn't decrypt. Its upstream neighbor turns this into a normal{" "}
-                  <span style={{ fontFamily: MONO, color: INK }}>update_fail_htlc</span>.
+                  <span
+                    style={{
+                      fontFamily: MONO,
+                      color: INK,
+                      background: "#f1f5f9",
+                      border: "1px solid rgba(15,23,42,0.14)",
+                      padding: "0 5px",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    update_fail_htlc
+                  </span>
+                  .
                 </>
               }
             >

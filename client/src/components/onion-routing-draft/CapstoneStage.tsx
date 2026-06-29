@@ -214,10 +214,12 @@ function KeystreamBar({ ks, dark }: { ks: NonNullable<StageState["keystream"]>; 
 
 function PacketStrip({ stage, dark }: { stage: StageState; dark: boolean }) {
   const P = palette(dark);
-  const fields: Array<{ key: "version" | "ephemeral" | "hop_payloads" | "hmac"; label: string; flex: number }> = [
+  // `chipToken` marks the literal protocol field (`hop_payloads`) so it renders
+  // as a monospace code chip, set apart from its `· N B` byte-size suffix.
+  const fields: Array<{ key: "version" | "ephemeral" | "hop_payloads" | "hmac"; label: string; chipToken?: string; suffix?: string; flex: number }> = [
     { key: "version", label: "v0", flex: 0.7 },
     { key: "ephemeral", label: `${stage.ephemeralLabel ?? "ephemeral"} · 33 B`, flex: 2.4 },
-    { key: "hop_payloads", label: "hop_payloads · 1,300 B", flex: 7 },
+    { key: "hop_payloads", label: "hop_payloads · 1,300 B", chipToken: "hop_payloads", suffix: " · 1,300 B", flex: 7 },
     { key: "hmac", label: `${stage.outerHmacLabel ?? "hmac"} · 32 B`, flex: 2.4 },
   ];
   return (
@@ -228,7 +230,14 @@ function PacketStrip({ stage, dark }: { stage: StageState; dark: boolean }) {
           const lit = stage.byteField === "all" || stage.byteField === f.key;
           return (
             <div key={f.key} style={{ flex: f.flex, textAlign: "center", fontFamily: MONO, fontSize: 10, padding: "12px 3px", color: lit ? P.litText : P.muted, background: lit ? P.litBg : P.soft, border: `1.5px solid ${lit ? P.litBorder : P.softBorder}`, borderRadius: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", transition: "all 0.3s" }}>
-              {f.label}
+              {f.chipToken ? (
+                <>
+                  <span style={{ fontFamily: MONO, background: P.cardBg, border: `1px solid ${lit ? P.litBorder : P.softBorder}`, borderRadius: 2, padding: "0 4px" }}>{f.chipToken}</span>
+                  {f.suffix}
+                </>
+              ) : (
+                f.label
+              )}
             </div>
           );
         })}

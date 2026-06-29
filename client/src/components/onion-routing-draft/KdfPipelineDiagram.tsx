@@ -39,7 +39,7 @@ const KEYS: KeySpec[] = [
     use: "Stream cipher key (forward)",
     source: "perhop",
     detail:
-      "This is the one that actually encrypts. It becomes a 1,300-byte ChaCha20 keystream, XORed across the hop payload area every time a layer gets wrapped or peeled.",
+      "This is the one that actually encrypts. It becomes a 1,300-byte `ChaCha20` keystream, XORed across the hop payload area every time a layer gets wrapped or peeled.",
   },
   {
     name: "mu",
@@ -982,19 +982,19 @@ function DemoLegend({ keyName, spec }: { keyName: KeyName; spec: KeySpec }) {
   let text: string;
   switch (keyName) {
     case "rho":
-      text = "Each forwarder XORs the entire 1,300-byte payload with a ChaCha20 keystream derived from rho. Watch the encryption layers sweep in.";
+      text = "Each forwarder XORs the entire 1,300-byte payload with a `ChaCha20` keystream derived from `rho`. Watch the encryption layers sweep in.";
       break;
     case "mu":
-      text = "Alice runs HMAC-SHA256 with mu over the encrypted payload to produce the 32-byte tag at the back of the packet. Watch the tag fill in.";
+      text = "Alice runs `HMAC-SHA256` with `mu` over the encrypted payload to produce the 32-byte tag at the back of the packet. Watch the tag fill in.";
       break;
     case "ammag":
-      text = "Bob (or any failing hop) wraps the error message with a ChaCha20 keystream derived from ammag. Watch the red encryption layer sweep in.";
+      text = "Bob (or any failing hop) wraps the error message with a `ChaCha20` keystream derived from `ammag`. Watch the red encryption layer sweep in.";
       break;
     case "um":
-      text = "Bob runs HMAC-SHA256 with um over the error message (before the ammag layer is applied) to produce the return-trip tag. Watch the tag fill in.";
+      text = "Bob runs `HMAC-SHA256` with `um` over the error message (before the `ammag` layer is applied) to produce the return-trip tag. Watch the tag fill in.";
       break;
     case "pad":
-      text = "Before any onion layers are applied, Alice pre-fills the 1,300-byte payload area with a ChaCha20 keystream derived from her session key. Watch the buffer fill from the left.";
+      text = "Before any onion layers are applied, Alice pre-fills the 1,300-byte payload area with a `ChaCha20` keystream derived from her session key. Watch the buffer fill from the left.";
       break;
   }
 
@@ -1015,7 +1015,7 @@ function DemoLegend({ keyName, spec }: { keyName: KeyName; spec: KeySpec }) {
         {keyName}
       </span>
       <span style={{ opacity: 0.85 }}>·</span>
-      <span style={{ marginLeft: 6 }}>{text}</span>
+      <span style={{ marginLeft: 6 }}>{renderCaption(text)}</span>
     </div>
   );
 }

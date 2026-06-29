@@ -145,7 +145,7 @@ const BEATS: Beat[] = [
     subLabel: "WRITE",
     title: "Write Dave's hop payload at the front",
     caption:
-      "Now we write Dave's bigsize-prefixed TLV records (amt_to_forward, outgoing_cltv_value, payment_data), then a 32-byte all-zero HMAC. Those zeros are how Dave knows he's the *destination*. He's the final hop, so there's no inner layer for his HMAC to commit to.",
+      "Now we write Dave's bigsize-prefixed TLV records (`amt_to_forward`, `outgoing_cltv_value`, `payment_data`), then a 32-byte all-zero HMAC. Those zeros are how Dave knows he's the *destination*. He's the final hop, so there's no inner layer for his HMAC to commit to.",
     focus: "front",
   } as Beat,
   {

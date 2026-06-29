@@ -439,8 +439,9 @@ function ComparePanel({ gapFill, pass }: { gapFill: GapFill; pass: boolean }) {
   const col = pass ? SUCCESS_GREEN : ERROR_RED;
   return (
     <div className="mt-3 border-[1.5px] p-2.5" style={{ borderColor: col, background: pass ? "#f1f7ea" : "#fdebeb" }}>
-      <div className="text-[10px] font-bold uppercase mb-2" style={{ color: INK, fontFamily: MONO, letterSpacing: "0.04em" }}>
-        charlie_hmac: what Alice computed it over vs what arrived
+      <div className="text-[10px] font-bold uppercase mb-2 flex items-center gap-1" style={{ color: INK, fontFamily: MONO, letterSpacing: "0.04em" }}>
+        <code style={{ fontFamily: MONO, background: "#f1f5f9", border: "1px solid rgba(15,23,42,0.14)", padding: "0 4px", textTransform: "none", whiteSpace: "nowrap", color: INK }}>charlie_hmac</code>
+        <span>: what Alice computed it over vs what arrived</span>
       </div>
       <CompareRow label="Alice computed it over" lastKind="filler" differ={false} />
       <CompareRow label="Charlie's packet has" lastKind={gapFill} differ={!pass} />

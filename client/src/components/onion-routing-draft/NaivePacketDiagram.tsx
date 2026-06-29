@@ -466,7 +466,18 @@ export function NaivePacketDiagram() {
               style={{ fontFamily: '"JetBrains Mono", "Fira Code", monospace' }}
             >
               <div className="text-[10px] leading-tight px-1 mb-2">
-                <span className="opacity-60">payment_hash:</span>{" "}
+                <span
+                  style={{
+                    fontFamily: '"JetBrains Mono", "Fira Code", monospace',
+                    background: "#f1f5f9",
+                    border: "1px solid rgba(15,23,42,0.14)",
+                    padding: "0 4px",
+                    fontSize: "0.92em",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  payment_hash
+                </span>{" "}
                 <span className="font-bold">0xa3f1...e9c4</span>
               </div>
 
@@ -481,7 +492,20 @@ export function NaivePacketDiagram() {
                   className="text-[9px] uppercase tracking-wider mb-1.5 flex items-center gap-1"
                   style={{ color: SLATE }}
                 >
-                  <span>ephemeral_pubkeys</span>
+                  <span
+                    className="normal-case tracking-normal"
+                    style={{
+                      fontFamily: '"JetBrains Mono", "Fira Code", monospace',
+                      background: "#f1f5f9",
+                      border: "1px solid rgba(15,23,42,0.14)",
+                      padding: "0 4px",
+                      fontSize: "1.05em",
+                      color: INK,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    ephemeral_pubkeys
+                  </span>
                   <span
                     className="normal-case tracking-normal"
                     style={{ color: "#5a7a2f", fontWeight: 700 }}
@@ -600,7 +624,19 @@ export function NaivePacketDiagram() {
                         >
                           {s.fields.map((f) => (
                             <div key={f.key}>
-                              <span className="opacity-60">{f.key}:</span>{" "}
+                              <span
+                                style={{
+                                  fontFamily:
+                                    '"JetBrains Mono", "Fira Code", monospace',
+                                  background: "#f1f5f9",
+                                  border: "1px solid rgba(15,23,42,0.14)",
+                                  padding: "0 4px",
+                                  fontSize: "0.92em",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                {f.key}
+                              </span>{" "}
                               <span className="font-bold">{f.value}</span>
                             </div>
                           ))}

@@ -75,13 +75,13 @@ const PAYMENT_HASH = "0xa3f1...e9c4";
 
 const STEP_CAPTIONS: Record<number, string> = {
   0: "Here are three channels along the path, each anchored by its own pair of commitment transactions. Notice Bob and Charlie each hold two, one for each channel they sit between. Let's send a 10,000-sat payment from Alice to Dave and watch what happens.",
-  1: "First, Alice and Bob each add a new HTLC output to their commitments. It's locked to payment_hash 0xa3f1...e9c4 and times out at block 260.",
+  1: "First, Alice and Bob each add a new HTLC output to their commitments. It's locked to `payment_hash` `0xa3f1...e9c4` and times out at block 260.",
   2: "Now Bob forwards the payment on to Charlie, keeping 2 sats as his forwarding fee, so the B↔C HTLC carries 10,002 sat. They each add an HTLC output on their B↔C commitments, this time with a tighter CLTV of 220 (that's Bob's safety margin, so he can resolve A↔B before B↔C times out).",
   3: "Then Charlie passes it on to Dave, with a CLTV of 180 and an amount of 10,000 sat. Where'd the other two sats go? That's Charlie's forwarding fee. The HTLC now sits on every channel along the path.",
   4: "Finally, the HTLC is routed to Dave, who knows the preimage because he generated it for this specific invoice.",
-  5: "Now Dave hands the preimage to Charlie. The Charlie-Dave HTLC outputs are removed and 10,000 sats slide into Dave's to_local.",
-  6: "Charlie passes the preimage back to Bob. The B↔C HTLC outputs are removed and 10,002 sats slide into Charlie's to_local on B↔C. Charlie's just pocketed his two-sat fee.",
-  7: "Bob hands the preimage back to Alice. The A↔B HTLC outputs are removed and 10,004 sats land in Bob's to_local. After forwarding 10,002 on to Charlie, Bob keeps 2 sats as his fee, and the payment has fully cleared.",
+  5: "Now Dave hands the preimage to Charlie. The Charlie-Dave HTLC outputs are removed and 10,000 sats slide into Dave's `to_local`.",
+  6: "Charlie passes the preimage back to Bob. The B↔C HTLC outputs are removed and 10,002 sats slide into Charlie's `to_local` on B↔C. Charlie's just pocketed his two-sat fee.",
+  7: "Bob hands the preimage back to Alice. The A↔B HTLC outputs are removed and 10,004 sats land in Bob's `to_local`. After forwarding 10,002 on to Charlie, Bob keeps 2 sats as his fee, and the payment has fully cleared.",
   8: "And we're settled. Alice is down 10,004, Bob and Charlie are each up 2 (their fees), and Dave's up 10,000. The same preimage Dave revealed travelled all the way back along the path. Atomic, off-chain, in seconds. Pretty slick, right?",
 };
 

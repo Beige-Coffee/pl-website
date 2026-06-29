@@ -7,6 +7,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { Tok } from "./mathTokens";
+import { renderCaption } from "./captionMarkup";
 
 // ────────────────────────────────────────────────────────────────────────────
 // OnionPacketAnatomyDiagram
@@ -100,7 +101,7 @@ interface Tip {
 
 const HEADER_TIP: Tip = {
   title: "HEADER (34 bytes)",
-  body: "Two fields: a 1-byte version (0x00) and the 33-byte ephemeral public key. Each forwarder performs ECDH between this pubkey and its node private key to derive its shared secret with Alice. Without it, nothing decrypts.",
+  body: "Two fields: a 1-byte `version` (`0x00`) and the 33-byte ephemeral public key. Each forwarder performs ECDH between this pubkey and its node private key to derive its shared secret with Alice. Without it, nothing decrypts.",
 };
 
 const PAYLOAD_TIP: Tip = {
@@ -116,15 +117,15 @@ const HMAC_TIP: Tip = {
 const SLOT_TIPS: Record<HopId, Tip> = {
   bob: {
     title: "Bob's hop payload (60 bytes)",
-    body: "First forwarder's TLV: amt_to_forward, outgoing_cltv_value, and short_channel_id, so Bob knows where and how much to forward. Ends with a 32-byte HMAC field (charlie_hmac), which Bob lifts into the outer HMAC of the packet he sends Charlie.",
+    body: "First forwarder's TLV: `amt_to_forward`, `outgoing_cltv_value`, and `short_channel_id`, so Bob knows where and how much to forward. Ends with a 32-byte HMAC field (`charlie_hmac`), which Bob lifts into the outer HMAC of the packet he sends Charlie.",
   },
   charlie: {
     title: "Charlie's hop payload (80 bytes)",
-    body: "Second forwarder's TLV, same shape as Bob's. Its HMAC field carries dave_hmac, which Charlie lifts into the outer tag of the packet he forwards to Dave.",
+    body: "Second forwarder's TLV, same shape as Bob's. Its HMAC field carries `dave_hmac`, which Charlie lifts into the outer tag of the packet he forwards to Dave.",
   },
   dave: {
     title: "Dave's hop payload (100 bytes)",
-    body: "Destination's TLV: amt_to_forward, outgoing_cltv_value, and payment_data (payment_secret + total_msat from the invoice). Its HMAC field is 32 zero bytes, the signal that Dave is the destination and should claim the payment, not forward it.",
+    body: "Destination's TLV: `amt_to_forward`, `outgoing_cltv_value`, and `payment_data` (`payment_secret` + `total_msat` from the invoice). Its HMAC field is 32 zero bytes, the signal that Dave is the destination and should claim the payment, not forward it.",
   },
 };
 
@@ -223,7 +224,7 @@ function HoverTip({
               {tip.title}
             </div>
             <div style={{ fontFamily: "ui-sans-serif, system-ui, sans-serif" }}>
-              {tip.body}
+              {renderCaption(tip.body)}
             </div>
           </div>,
           document.body,
@@ -681,6 +682,10 @@ export function OnionPacketAnatomyDiagram() {
                       fontSize: 9,
                       color: "#475569",
                       marginTop: 4,
+                      background: "#f1f5f9",
+                      border: "1px solid rgba(15,23,42,0.14)",
+                      padding: "0 4px",
+                      whiteSpace: "nowrap",
                     }}
                   >
                     bob_hmac

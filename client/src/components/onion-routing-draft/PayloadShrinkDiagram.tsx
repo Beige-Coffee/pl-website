@@ -140,7 +140,7 @@ const STEP_CAPTIONS: Record<number, string> = {
   0: "So, without a fixed size, Alice just stacks the three encrypted hop payloads (60, 80, and 100 bytes) behind a 66-byte envelope (version + ephemeral pubkey + HMAC). That's 306 bytes. Now let's watch what happens as it travels...",
   1: "Bob's peeled his hop payload off the front and forwards what's left to Charlie: 246 bytes. See how the packet already shrank?",
   2: "Charlie does the same, peels his 80-byte hop payload and sends on the rest. We're down to 166 bytes now, just Dave's hop payload inside the envelope.",
-  3: "Dave's packet was only his own hop payload. He decrypts it, reads the payment_data and final amount, and claims the HTLC. The onion's empty. But here's the problem this whole section is about: the byte count *shrank at every hop*, so anyone watching the wire could tell exactly where each forwarder sits in the route. Ouch.",
+  3: "Dave's packet was only his own hop payload. He decrypts it, reads the `payment_data` and final amount, and claims the HTLC. The onion's empty. But here's the problem this whole section is about: the byte count *shrank at every hop*, so anyone watching the wire could tell exactly where each forwarder sits in the route. Ouch.",
 };
 
 const TOTAL_BEATS = 4;
@@ -698,8 +698,20 @@ function DecryptedPayloadInner() {
         <div style={{ fontFamily: MONO, fontSize: 10, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
           Dave's payload · 100 B
         </div>
-        <div style={{ fontFamily: MONO, fontSize: 9, color: "#0f172a", marginTop: 4 }}>
-          payment_data
+        <div style={{ marginTop: 4 }}>
+          <span
+            style={{
+              fontFamily: MONO,
+              fontSize: 9,
+              color: "#0f172a",
+              background: "#f1f5f9",
+              border: "1px solid rgba(15,23,42,0.14)",
+              padding: "0 4px",
+              whiteSpace: "nowrap",
+            }}
+          >
+            payment_data
+          </span>
         </div>
       </div>
     </div>
