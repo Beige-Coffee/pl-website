@@ -388,8 +388,9 @@ ${BOLT4_ONION_VECTOR_TEST_FIXTURES}
 # official 5-hop test route fails with incorrect_or_unknown_payment_details
 # (carrying a 300-byte TLV), pads failuremsg + pad to 1,024 bytes, and every
 # hop re-wraps with its ammag on the way back. This is the exact 1,060-byte
-# blob the origin receives. It is the historical BOLT 4 error test vector;
-# current master publishes a 292-byte vector for the same route.
+# blob the origin receives. This 1,060-byte packet IS the current BOLT 4
+# "Returning Errors" test vector; the 292-byte packet our chapter example uses
+# is just the 256-byte-minimum illustration, not a published spec vector.
 BOLT4_ERROR_PACKET = bytes.fromhex(
     "2dd2f49c1f5af0fcad371d96e8cddbdcd5096dc309c1d4e110f955926506b3c03b44c192896f45610741c85ed4074212537e0c11"
     "8d472ff3a559ae244acd9d783c65977765c5d4e00b723d00f12475aafaafff7b31c1be5a589e6e25f8da2959107206dd42bbcb43"
@@ -437,7 +438,7 @@ def test_official_bolt4_error_vector():
         "<strong>Goal:</strong> Alice's view of the return path. She has all the (um, ammag) keys; she just doesn't know which layer the failing hop wrapped with. Solution: try each layer in order until one's HMAC verifies, then parse the length prefix to recover the message." +
         "<br><br><strong>Order:</strong> peel from outermost to innermost, which is hop 0, hop 1, hop 2 (the first forwarder is the outermost wrapper because their wrap was applied most recently during the return trip)." +
         "<br><br><strong>Why parse the u16 length:</strong> failure messages can contain zero bytes (e.g., binary <code>channel_update</code> data attached to <code>temporary_channel_failure</code>). Stripping trailing zeros would corrupt those messages. The explicit u16 failure_len at the front of the decrypted payload tells us the exact byte boundary." +
-        "<br><br><strong>Why <code>len(wrapped_error)</code> instead of a constant:</strong> the sender pads <code>failuremsg + pad</code> to a fixed total so the size can't leak which error occurred, but that total is not always 256. Our worked example uses the 256-byte minimum (a 292-byte packet); a historical BOLT 4 test vector padded a bigger message to 1,024 (a 1,060-byte packet), and that legacy vector is still hardcoded in our test fixture for interop. The structure is self-describing, so a decryptor that reads the lengths from the packet handles every size a real node might send." +
+        "<br><br><strong>Why <code>len(wrapped_error)</code> instead of a constant:</strong> the sender pads <code>failuremsg + pad</code> to a fixed total so the size can't leak which error occurred, but that total is not always 256. Our worked example uses the 256-byte minimum (a 292-byte packet); the official BOLT 4 test vector pads a bigger message to 1,024 (a 1,060-byte packet), and that current spec vector is hardcoded in our test fixture for interop. The structure is self-describing, so a decryptor that reads the lengths from the packet handles every size a real node might send." +
         "<br><br><strong>Why validate after the HMAC matches:</strong> the HMAC proves which hop authored the bytes, not that the bytes are well-formed. A verified HMAC has already pinned the failing hop (only it has the <code>um</code> key), so if the two length fields don't exactly tile the payload (<code>2 + failure_len + 2 + pad_len == len(payload)</code>), that hop sent a malformed error and there's nothing left to recover: return <code>(None, None)</code>.",
       steps:
         "<strong>Set up the working buffer.</strong> Start it at the received error packet; the loop below peels each layer off it in place, reassigning <code>wrapped</code> every pass:" +

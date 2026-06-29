@@ -90,7 +90,7 @@ const ENTRIES: Record<string, GlossaryEntry> = {
     render: "text",
     category: "per-hop key",
     definition:
-      "The original Sphinx name for the return-path encryption key. Lightning calls it `ammag` (gamma reversed) and derives it the same way; you will meet `gamma` in the Sphinx paper and older write-ups.",
+      "In the original Sphinx paper, `gamma` is the per-hop header MAC (the MAC function `mu` keyed by `h_mu`), so it maps to Lightning's `mu`-keyed HMAC, not to `ammag`. Lightning's `ammag` is just `gamma` spelled backwards as wordplay (the return-direction counterpart of an encryption key), not a functional equivalent. You'll meet `gamma` in the Sphinx paper and older write-ups.",
     chapter: "6",
   },
 
@@ -766,7 +766,7 @@ const ENTRIES: Record<string, GlossaryEntry> = {
     category: "your function",
     signature: "def verify_hmac(packet, mu, associated_data):",
     definition:
-      "Your integrity check. Recomputes HMAC-SHA256 over the packet's `hop_payloads ‖ associated_data` with the `mu` key and compares it to the packet's `hmac` field. Returns `True` on a match, `False` otherwise.",
+      "Your integrity check. Recomputes HMAC-SHA256 over the packet's `hop_payloads ‖ associated_data` with the `mu` key and compares it to the packet's `hmac` field. Returns `None` when it matches, or the BOLT 4 failure code `invalid_onion_hmac` when it doesn't (a packet that isn't exactly 1,366 bytes also fails).",
     chapter: "10",
   },
   check_forward: {

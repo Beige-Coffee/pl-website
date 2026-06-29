@@ -1408,10 +1408,14 @@ function BranchView() {
           width={260}
           label={
             <span>
-              Exactly one of{" "}
-              <span style={{ fontFamily: MONO }}>short_channel_id</span> or{" "}
-              <span style={{ fontFamily: MONO }}>payment_data</span> must be
-              present. Both, or neither, is malformed and Bob rejects it.
+              A forwarder's payload includes{" "}
+              <span style={{ fontFamily: MONO }}>short_channel_id</span> and not{" "}
+              <span style={{ fontFamily: MONO }}>payment_data</span>. A
+              destination's has{" "}
+              <span style={{ fontFamily: MONO }}>payment_data</span> (only when the
+              sender supplied a payment secret) and no{" "}
+              <span style={{ fontFamily: MONO }}>short_channel_id</span>, so it can
+              even have neither.
             </span>
           }
         >
