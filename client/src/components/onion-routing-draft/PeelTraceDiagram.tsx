@@ -128,7 +128,7 @@ const BEATS: Beat[] = [
     subLabel: "DERIVE",
     title: "Derive `mu_B` and `rho_B` from `ss_AB`",
     caption:
-      "Now, Bob runs ECDH between his node privkey and `E_AB`, and out pops the same `ss_AB` Alice computed. From `ss_AB`, two HMACs give him the keys he needs: `mu_B = HMAC('mu', ss_AB)` to check the HMAC tag, and `rho_B = HMAC('rho', ss_AB)` for the 2,600-byte XOR keystream.",
+      "Next, Bob computes an ECDH between his node privkey and `E_AB`, allowing him to derive the same `ss_AB` that Alice computed. From `ss_AB`, he can derive both of the keys he needs: `mu_B = HMAC('mu', ss_AB)` to check the HMAC tag, and `rho_B = HMAC('rho', ss_AB)` for the 2,600-byte XOR keystream.",
   },
   {
     step: 4,
@@ -144,7 +144,7 @@ const BEATS: Beat[] = [
     subLabel: "EXTEND",
     title: "Extend the buffer to 2,600 bytes",
     caption:
-      "Next, Bob tacks 1,300 zero bytes onto the end of `hop_payloads`, making a scratch buffer exactly twice the wire size. Why 2,600? Because Bob XORs the whole buffer in one pass *before* he reads his own hop payload, he can't yet know how big it is, so he sizes the buffer for the largest possible payload to be safe. (Those trailing zeros, once XOR'd, also regenerate the exact `filler` bytes Alice baked in for Charlie's view, the bonus that makes the shift land correctly.)",
+      "Next, Bob tacks 1,300 zero bytes onto the end of `hop_payloads`, making a scratch buffer exactly twice the wire size. Why 2,600? Since Bob doesn't yet know how big his payload is, he sizes the buffer for the largest one possible, to be safe.",
     focus: "trailing",
   } as Beat,
   {
@@ -153,7 +153,7 @@ const BEATS: Beat[] = [
     subLabel: "XOR",
     title: "XOR the 2,600-byte buffer with `rho_B`'s keystream",
     caption:
-      "Now, Bob runs `chacha20(rho_B, 2600)` and XORs it across the whole buffer. The first 1,300 bytes lose Bob's layer, so his hop payload sits in plaintext at the front. The last 1,300 are just the keystream (`0 ⊕ rho_B[1300:2600]`), which lands on the exact trailing bytes Alice baked into Charlie's view. Pretty slick, right?",
+      "Bob then runs `chacha20(rho_B, 2600)` and XORs it across the whole buffer. The first 1,300 bytes decrypt Bob's layer, so his hop payload now sits in plaintext at the front. The last 1,300 are just the keystream (`0 ⊕ rho_B[1300:2600]`), the same `rho_B` stream Alice already accounted for when she built the `filler`, so the trailing bytes line up with what Charlie expects to see. Pretty slick, right?",
   },
   {
     step: 7,
@@ -179,7 +179,7 @@ const BEATS: Beat[] = [
     subLabel: "ADVANCE",
     title: "Advance the ephemeral: `E_AC = bf_AB · E_AB`",
     caption:
-      "Almost there. Bob computes the blinding factor `bf_AB = SHA256(E_AB ‖ ss_AB)`, then multiplies Alice's ephemeral pubkey by it to get `E_AC`. Charlie will pair `E_AC` with his own node privkey to ECDH the same `ss_AC` Alice used. That blinding step is *why* each hop's ephemeral pubkey looks unrelated on the wire.",
+      "Almost there! Bob computes the blinding factor `bf_AB = SHA256(E_AB ‖ ss_AB)`, then multiplies Alice's ephemeral pubkey by it to get `E_AC`. Charlie will pair `E_AC` with his own node privkey to ECDH the same `ss_AC` Alice used.",
   },
   {
     step: 10,

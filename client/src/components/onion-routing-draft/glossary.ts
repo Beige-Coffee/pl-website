@@ -277,7 +277,7 @@ const ENTRIES: Record<string, GlossaryEntry> = {
     render: "code",
     category: "protocol field",
     definition:
-      "The 33-byte public key in the packet header (the `E_AB` for Bob). Each hop runs ECDH against it to recover its shared secret, then blinds it forward for the next hop.",
+      "The 33-byte public key in the packet header (the `E_AB` for Bob). Each hop performs ECDH against it to recover its shared secret, then blinds it forward for the next hop.",
     chapter: "9",
   },
   version: {
@@ -333,7 +333,7 @@ const ENTRIES: Record<string, GlossaryEntry> = {
     render: "code",
     category: "concept",
     definition:
-      "Bob's long-lived node private key. He runs ECDH between it and the packet's `ephemeral_pubkey` to recover his shared secret with Alice.",
+      "Bob's long-lived node private key. He performs ECDH between it and the packet's `ephemeral_pubkey` to recover his shared secret with Alice.",
     chapter: "9",
   },
   update_add_htlc: {
@@ -529,7 +529,7 @@ const ENTRIES: Record<string, GlossaryEntry> = {
     render: "code",
     category: "protocol field",
     definition:
-      "A `BADONION` failure (`BADONION` + `PERM`): the onion's ephemeral public key was unusable, so the hop couldn't run ECDH. Reported via `update_fail_malformed_htlc`.",
+      "A `BADONION` failure (`BADONION` + `PERM`): the onion's ephemeral public key was unusable, so the hop couldn't perform ECDH. Reported via `update_fail_malformed_htlc`.",
     chapter: "11",
   },
   temporary_node_failure: {

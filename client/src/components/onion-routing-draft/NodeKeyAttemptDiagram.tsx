@@ -53,7 +53,7 @@ const STEP_CAPTIONS: Record<number, string> = {
   2: "Bob peels his slice off and forwards the rest to Charlie. The pubkey field stays put, so the next hop sees the *same* Alice key.",
   3: "Charlie does the same thing. ECDH between his node private key and Alice's public key gives ss_AC, he decrypts his slice, and he learns Alice is the sender for free.",
   4: "Then Charlie peels his slice off and forwards what's left to Dave.",
-  5: "Finally Dave runs ECDH to get ss_AD and decrypts his slice. The math worked at every hop. Ouch, though: every forwarder along the way figured out Alice was the sender, straight from the pubkey field that's only there for crypto.",
+  5: "Finally Dave performs ECDH to get ss_AD and decrypts his slice. The math worked at every hop. Ouch, though: every forwarder along the way figured out Alice was the sender, straight from the pubkey field that's only there for crypto.",
 };
 
 const STEP_TITLES: Record<number, string> = {

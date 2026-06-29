@@ -274,7 +274,7 @@ export function buildSceneTimeline(trace: CapstoneTraceResult): SceneTimeline {
       mode = "derive"; chainIdx = 0;
       open({
         key: "chain-bob", title: "Shared secret · Bob",
-        caption: "Alice runs ECDH between her ephemeral key and Bob's node public key. SHA256 of the shared point gives ss_AB.",
+        caption: "Alice performs ECDH between her ephemeral key and Bob's node public key. SHA256 of the shared point gives ss_AB.",
         stage: chainState(0), pinned: [{ name: "ephemeral", value: "E_AB = session_key · G" }], pinLocals: PIN_LOCALS.chain,
       });
       return;

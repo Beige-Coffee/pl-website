@@ -54,7 +54,7 @@ const CODE_DETAILS: Record<string, { hex: string; flags: string; desc: string }>
   invalid_onion_key: {
     hex: "0xC006",
     flags: "BADONION + PERM",
-    desc: "The onion's ephemeral key was unusable, so the hop couldn't run the ECDH to recover its shared secret.",
+    desc: "The onion's ephemeral key was unusable, so the hop couldn't perform the ECDH to recover its shared secret.",
   },
   permanent_channel_failure: {
     hex: "0x4008",
