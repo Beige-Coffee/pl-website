@@ -128,7 +128,7 @@ export function ErrorUnwrapDiagram() {
       onReset={onReset}
       onStep={onStep}
       stageMinWidth={STAGE_MIN_WIDTH}
-      stageMinHeight={420}
+      stageMinHeight={step === 0 ? 0 : 420}
     >
       {/* The return arrived; the same leftward rail anchors this as the
           continuation of the boomerang. */}
@@ -187,7 +187,7 @@ export function ErrorUnwrapDiagram() {
       {/* Active-hop operation zone: the XOR + HMAC check formula shows ONLY
           for the hop Alice is currently trying. On the final beat this zone
           gives way to the Decoded payoff panel. */}
-      <div className="mt-4" style={{ minHeight: 96 }}>
+      <div className="mt-4" style={{ minHeight: step === 0 ? 0 : 96 }}>
         {step === 1 || step === 2 ? (
           <ActiveCheck hop={activeHop === "bob" ? "bob" : "charlie"} />
         ) : null}

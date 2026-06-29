@@ -234,7 +234,7 @@ def test_different_secrets_produce_different_keys():
     title: "Decrypt the Error Onion (Sender Side)",
     description:
       "Implement <code>decrypt_error_onion</code>. Given the wrapped error packet and a chain of <code>(um, ammag)</code> per-hop keys in route order, peel layers one at a time, identify which hop generated the error, and parse the BOLT 4 length-prefixed payload to recover the <code>failure_message</code>. " +
-      "One important detail: error packets are not all the same size. The sender pads <code>failuremsg + pad</code> to a fixed total so the packet size can't leak which error occurred. The spec minimum is 256 bytes (a 292-byte packet, which this chapter's example uses), but bigger failure messages get padded to a bigger total. (A historical BOLT 4 test vector padded a larger message to 1,024, a 1,060-byte packet; current master publishes a 292-byte vector.) Your function reads the lengths from the packet itself, so it handles both.",
+      "One important detail: error packets are not all the same size. The sender pads <code>failuremsg + pad</code> to a fixed total so the packet size can't leak which error occurred. The spec minimum is 256 bytes (a 292-byte packet, which this chapter's example uses), but bigger failure messages get padded to a bigger total.",
     sampleCode: `# Error-onion sandbox - build one layer, then peel it back off.
 #
 # The failing hop builds: hmac(32) || u16 failure_len || failure_msg ||

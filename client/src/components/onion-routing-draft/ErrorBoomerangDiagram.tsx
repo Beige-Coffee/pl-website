@@ -115,7 +115,7 @@ export function ErrorBoomerangDiagram() {
       onReset={onReset}
       onStep={onStep}
       stageMinWidth={STAGE_MIN_WIDTH}
-      stageMinHeight={400}
+      stageMinHeight={step === 0 ? 0 : 400}
     >
       {/* Persistent black RETURN PATH cue -- direction is unmistakable on EVERY
           beat. The active circle below shows which hop currently holds it. */}

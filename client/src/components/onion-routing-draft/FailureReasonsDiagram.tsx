@@ -123,7 +123,7 @@ function CodeDetail({ code }: { code: string }) {
           marginBottom: 5,
         }}
       >
-        <span style={{ fontFamily: MONO, fontSize: 12.5, fontWeight: 700, color: INK }}>{code}</span>
+        <span style={{ fontFamily: MONO, fontSize: 12.5, fontWeight: 700, color: INK, minWidth: 0, overflowWrap: "anywhere" }}>{code}</span>
         <span style={{ fontFamily: MONO, fontSize: 10, color: "#475569", flexShrink: 0 }}>{d.hex}</span>
       </div>
       <div style={{ marginBottom: 6 }}>
@@ -168,7 +168,7 @@ function FlagCard({ hex, name, meaning, codes }: (typeof FLAGS)[number]) {
       </div>
       <div className="px-3 py-2 flex flex-wrap gap-1.5">
         {codes.map((c) => (
-          <Tooltip key={c} width={300} label={<CodeDetail code={c} />}>
+          <Tooltip key={c} width={360} label={<CodeDetail code={c} />}>
             <span
               className="text-[10.5px] border-[1.5px] inline-flex items-center gap-1"
               style={{
