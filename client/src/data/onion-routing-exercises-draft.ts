@@ -1695,7 +1695,7 @@ def test_matches_official_bolt4_filler():
     description:
       "Implement <code>OnionPacketBuilder.derive_shared_secrets</code>. Given Alice's <code>session_key</code> (32 bytes) and the route's hop pubkeys (33-byte compressed each), build the session secrets and ephemeral public keys for every hop in the route, appending each to <code>self.ephemeral_pubkeys</code> and <code>self.shared_secrets</code>. " +
       "The provided helpers are <code>privkey_to_pubkey</code>, <code>ecdh</code>, and <code>scalar_mul</code>. " +
-      "A pop-up icon beside the SEND TO SANDBOX button shows a visual of what this function builds.",
+      "If you want to easily re-visit the Ephemeral Key Chain diagram, click the REFERENCE button below.",
     sampleCode: `# Blinding-chain sandbox - walk the shared-secret chain by hand for 3 hops.
 #
 # One session key, advanced at each hop by a blinding factor b = SHA256(E || ss).
