@@ -128,7 +128,7 @@ function buildCells(): Array<Array<CellSpec | null>> {
         <>
           First, Alice rolls a random 32-byte <Code token="sessionkey" />. This
           is the seed the whole chain grows from. For Bob, the ephemeral private
-          key just *is* the session key. Every later hop blinds its way to one.
+          key just <em>is</em> the session key. Every later hop blinds its way to one.
         </>
       ),
     },
@@ -143,7 +143,7 @@ function buildCells(): Array<Array<CellSpec | null>> {
         <>
           Now, multiply <Code token="e_AB" /> by the curve generator{" "}
           <Code token="G" /> to get Bob's ephemeral public key{" "}
-          <Code token="E_AB" />. Here's the neat part: this is the *only*
+          <Code token="E_AB" />. Here's the neat part: this is the <em>only</em>
           ephemeral pubkey that ever rides along in the packet.
         </>
       ),
@@ -326,7 +326,7 @@ const HOP_INFO: Record<HopKey, string> = {
 
 const INTRO_CAPTION: ReactNode = (
   <>
-    Hit Next to walk Bob's column. Each hop's chain leans on the one before it,
+    Each hop's chain leans on the one before it,
     so we'll reveal cells in dependency order: Bob first, then Charlie, then
     Dave. Hover any token in the formulas or captions and we'll explain it.
   </>
