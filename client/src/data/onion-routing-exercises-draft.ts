@@ -770,7 +770,7 @@ def test_proportional_only_policy():
       steps:
         "<strong>1. Required fee (BOLT 7 formula):</strong>" +
         "<br><code>required_fee = policy.fee_base_msat + (amt_to_forward * policy.fee_proportional_millionths) // 1_000_000</code>" +
-        "<br>Use integer floor division (<code>//</code>) exactly as written; that is what the spec mandates." +
+        "<br>Use integer floor division (<code>//</code>) exactly as written; BOLT 7's own worked fee example truncates (floors), it doesn't round." +
         "<br><strong>2. Fee check:</strong> fail if the inbound amount minus what you forward cannot cover the required fee:" +
         "<br><code>if incoming_amount_msat - amt_to_forward < required_fee:\n    return \"fee_insufficient\"</code>" +
         "<br><strong>3. CLTV check:</strong> fail if the timelock delta is below the policy minimum:" +

@@ -301,9 +301,9 @@ export function EncryptedSliceReveal() {
                           {label}'s public key
                         </div>
                         <div>
-                          This is the node-identity public key Alice used to
-                          lock this hop's payload. {label} opens it with the
-                          matching private key.
+                          Alice sealed this hop's payload to {label}'s
+                          node-identity key, so only {label} can open it. (The
+                          exact mechanism, ECDH, comes in the next chapter.)
                         </div>
                       </>
                     }
@@ -385,9 +385,9 @@ export function EncryptedSliceReveal() {
                               {s.forHop.charAt(0).toUpperCase() + s.forHop.slice(1)}'s public key
                             </div>
                             <div>
-                              Alice locked this hop payload to {s.forHop}'s
-                              node-identity public key. Only {s.forHop} can
-                              open it, using the matching private key.
+                              Alice sealed this hop payload to {s.forHop}'s
+                              node-identity key, so only {s.forHop} can open it.
+                              (The exact mechanism, ECDH, comes next chapter.)
                             </div>
                           </>
                         }

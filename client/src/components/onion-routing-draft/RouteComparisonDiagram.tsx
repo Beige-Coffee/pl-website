@@ -13,7 +13,7 @@ import { RouteCalcExercise, type RouteCalcReward } from "./RouteCalcExercise";
 // locked visual format (black header bar with gold dot, cream stage). Below
 // the header, a tab strip lets students flip between the three routes:
 //
-//   Tab A → ComputedRouteDiagram (Route A · direct via Bob)
+//   Tab A → ComputedRouteDiagram (Route A · direct via Hazel)
 //   Tab B → ComputedRouteDiagram (Route B · via Frank and Greg)
 //   Tab C → RouteCalcExercise (fillable Route C, the chapter-1 path)
 //
