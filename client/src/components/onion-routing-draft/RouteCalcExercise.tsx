@@ -910,7 +910,7 @@ function FillableFeeCard({
         </div>
         <div className="flex items-baseline gap-1.5 whitespace-nowrap">
           <span style={{ color: SLATE, minWidth: 70, display: "inline-block" }}>
-            Fee Rate
+            Proportional Fee
           </span>
           <span style={{ color: SLATE }}>=</span>
           <span className="tabular-nums">

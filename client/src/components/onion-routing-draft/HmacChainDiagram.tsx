@@ -51,10 +51,10 @@ const PACKETS: PacketSpec[] = [
     ghost: [{ label: "Charlie payload", hop: "charlie", w: 24 }, { label: "Dave payload", hop: "dave", w: 28 }, { label: "padding", hop: null, w: 48 }] },
   { hop: "charlie", viewer: "What Charlie receives", ephemeral: "E_AC", lenHex: "0x2F", payloadName: "Charlie", payloadBytes: "80 B",
     innerHmac: "dave_hmac", innerHmacHop: "dave", outerHmac: "charlie_hmac",
-    ghost: [{ label: "Dave payload", hop: "dave", w: 32 }, { label: "padding", hop: null, w: 44 }, { label: "filler", hop: null, w: 24 }] },
+    ghost: [{ label: "Dave payload", hop: "dave", w: 32 }, { label: "padding", hop: null, w: 68 }] },
   { hop: "dave", viewer: "What Dave receives", ephemeral: "E_AD", lenHex: "0x43", payloadName: "Dave", payloadBytes: "100 B",
     innerHmac: "0x00…", innerHmacHop: null, outerHmac: "dave_hmac",
-    ghost: [{ label: "padding", hop: null, w: 68 }, { label: "filler", hop: null, w: 32 }] },
+    ghost: [{ label: "padding", hop: null, w: 100 }] },
 ];
 
 

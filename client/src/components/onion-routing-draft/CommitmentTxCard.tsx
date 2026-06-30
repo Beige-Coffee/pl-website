@@ -47,6 +47,8 @@ export interface CommitmentTxCardProps {
   ownerLabel: string;
   subtitle?: string;
   fundingTxid?: string;
+  /** The funding 2-of-2's two signers (this channel's partners), e.g. ["<bob_sig>", "<charlie_sig>"]. Defaults to Alice/Bob. */
+  witnessSigs?: [string, string];
   outputs: CommitmentOutput[];
   highlight?: boolean;
   onMouseEnter?: (e: React.MouseEvent) => void;
@@ -258,6 +260,7 @@ export function CommitmentTxCard(props: CommitmentTxCardProps) {
     ownerLabel,
     subtitle,
     fundingTxid,
+    witnessSigs,
     outputs,
     highlight,
     onMouseEnter,
@@ -370,6 +373,7 @@ export function CommitmentTxCard(props: CommitmentTxCardProps) {
       ownerLabel={ownerLabel}
       subtitle={subtitle}
       fundingTxid={fundingTxid}
+      witnessSigs={witnessSigs}
       outputs={outputs}
       baseStyle={baseStyle}
     />
@@ -385,12 +389,14 @@ function CommitmentTxCardFullView({
   ownerLabel,
   subtitle,
   fundingTxid,
+  witnessSigs,
   outputs,
   baseStyle,
 }: {
   ownerLabel: string;
   subtitle?: string;
   fundingTxid?: string;
+  witnessSigs?: [string, string];
   outputs: CommitmentOutput[];
   baseStyle: React.CSSProperties;
 }) {
@@ -548,8 +554,8 @@ function CommitmentTxCardFullView({
               fontFamily: '"JetBrains Mono", "Fira Code", monospace',
             }}
           >
-            <span className="font-bold">&lt;alice_sig&gt;</span>{" "}
-            <span className="font-bold">&lt;bob_sig&gt;</span>
+            <span className="font-bold">{witnessSigs?.[0] ?? "<alice_sig>"}</span>{" "}
+            <span className="font-bold">{witnessSigs?.[1] ?? "<bob_sig>"}</span>
           </div>
         </Tooltip>
       </div>

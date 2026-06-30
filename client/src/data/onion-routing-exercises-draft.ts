@@ -293,7 +293,7 @@ def decrypt_error_onion(wrapped_error, hop_keys):
 
     A verified HMAC pins down the failing hop (only it has that um key), but it
     doesn't prove the bytes are well-formed. If the two length fields don't
-    exactly tile the payload, that hop sent a malformed error and there's
+    add up to the payload length, that hop sent a malformed error and there's
     nothing to recover, so return (None, None).
 
     Helpers in scope: chacha20_keystream(key, length), xor_bytes(a, b).
@@ -375,14 +375,14 @@ def test_malformed_length_prefix_returns_none():
     payload = (300).to_bytes(2, 'big') + b"\\x00" * 258
     wrapped = reference_wrap_raw(payload, UM_BOB, AMMAG_BOB)
     idx, recovered = decrypt_error_onion(wrapped, HOP_KEYS)
-    assert idx is None and recovered is None, "failure_len = 300 reaches past the end of this 260-byte payload; reject the malformed layer and keep peeling (expected (None, None))"
+    assert idx is None and recovered is None, "failure_len = 300 reaches past the end of this 260-byte payload; reject the malformed layer (expected (None, None))"
 
 def test_malformed_padding_length_returns_none():
     msg = b"badpad"
     payload = len(msg).to_bytes(2, 'big') + msg + (1).to_bytes(2, 'big') + b"\\x00" * (260 - 2 - len(msg) - 2)
     wrapped = reference_wrap_raw(payload, UM_BOB, AMMAG_BOB)
     idx, recovered = decrypt_error_onion(wrapped, HOP_KEYS)
-    assert idx is None and recovered is None, "2 + failure_len + 2 + pad_len must exactly equal len(payload); reject inconsistent lengths and keep peeling (expected (None, None))"
+    assert idx is None and recovered is None, "2 + failure_len + 2 + pad_len must exactly equal len(payload); reject inconsistent lengths (expected (None, None))"
 ${BOLT4_ONION_VECTOR_TEST_FIXTURES}
 # The spec's "Returning Errors" worked example: the destination (hop 4) of the
 # official 5-hop test route fails with incorrect_or_unknown_payment_details
@@ -437,33 +437,34 @@ def test_official_bolt4_error_vector():
       conceptual:
         "<strong>Goal:</strong> Alice's view of the return path. She has all the (um, ammag) keys; she just doesn't know which layer the failing hop wrapped with. Solution: try each layer in order until one's HMAC verifies, then parse the length prefix to recover the message." +
         "<br><br><strong>Order:</strong> peel from outermost to innermost, which is hop 0, hop 1, hop 2 (the first forwarder is the outermost wrapper because their wrap was applied most recently during the return trip)." +
-        "<br><br><strong>Why parse the u16 length:</strong> failure messages can contain zero bytes (e.g., binary <code>channel_update</code> data attached to <code>temporary_channel_failure</code>). Stripping trailing zeros would corrupt those messages. The explicit u16 failure_len at the front of the decrypted payload tells us the exact byte boundary." +
-        "<br><br><strong>Why <code>len(wrapped_error)</code> instead of a constant:</strong> the sender pads <code>failuremsg + pad</code> to a fixed total so the size can't leak which error occurred, but that total is not always 256. Our worked example uses the 256-byte minimum (a 292-byte packet); the official BOLT 4 test vector pads a bigger message to 1,024 (a 1,060-byte packet), and that current spec vector is hardcoded in our test fixture for interop. The structure is self-describing, so a decryptor that reads the lengths from the packet handles every size a real node might send." +
-        "<br><br><strong>Why validate after the HMAC matches:</strong> the HMAC proves which hop authored the bytes, not that the bytes are well-formed. A verified HMAC has already pinned the failing hop (only it has the <code>um</code> key), so if the two length fields don't exactly tile the payload (<code>2 + failure_len + 2 + pad_len == len(payload)</code>), that hop sent a malformed error and there's nothing left to recover: return <code>(None, None)</code>.",
+        "<br><br><strong>Why parse the u16 length:</strong> a failure message is raw binary that can contain, and even end in, null <code>0x00</code> bytes that still carry real information. A <code>temporary_channel_failure</code> reply that bundles a binary <code>channel_update</code> is a common example. Because the message is followed by zero padding, you can't find its end by trimming or scanning for zeros, so the explicit u16 <code>failure_len</code> at the front gives the exact number of bytes to read." +
+        "<br><br><strong>Size each keystream with <code>len(wrapped)</code>, never a constant:</strong> error packets aren't all the same length. Our worked example is 292 bytes, but the official BOLT 4 test vector in the suite is 1,060, so a hardcoded size would fail one of them." +
+        "<br><br><strong>Why validate after the HMAC matches:</strong> the HMAC proves which hop authored the bytes, not that the bytes are well-formed. A verified HMAC has already pinned the failing hop (only it has the <code>um</code> key), so if the two length fields don't add up to the payload length (<code>2 + failure_len + 2 + pad_len == len(payload)</code>), that hop sent a malformed error and there's nothing left to recover: return <code>(None, None)</code>. (BOLT 4 itself relies on the <code>um</code> HMAC alone to identify the failing hop; this length sanity-check is defensive validation we add so a malformed layer can't slip through.)",
       steps:
-        "<strong>Set up the working buffer.</strong> Start it at the received error packet; the loop below peels each layer off it in place, reassigning <code>wrapped</code> every pass:" +
-        "<br><code>wrapped = wrapped_error</code>" +
+        "<strong>Set up the working buffer.</strong> Start it at the received error packet; the loop below peels each layer off it in place, reassigning <code>layer</code> every pass:" +
+        "<br><code>layer = wrapped_error</code>" +
         "<br><br><strong>For each hop, taking its index <code>i</code> and keys <code>(um, ammag)</code> via <code>enumerate(hop_keys)</code>:</strong>" +
         "<br><strong>1. Peel this layer.</strong> XOR the whole buffer with this hop's keystream (it covers the whole packet, whatever its size):" +
-        "<br><code>wrapped = xor_bytes(wrapped, chacha20_keystream(ammag, len(wrapped)))</code>" +
+        "<br><code>layer = xor_bytes(layer, chacha20_keystream(ammag, len(layer)))</code>" +
         "<br><strong>2. Split off the 32-byte tag and the payload:</strong>" +
-        "<br><code>tag = wrapped[:32]\npayload = wrapped[32:]</code>" +
+        "<br><code>tag = layer[:32]\npayload = layer[32:]</code>" +
         "<br><strong>3. Check this hop's HMAC.</strong> Compare <code>hmac.new(um, payload, hashlib.sha256).digest()</code> to <code>tag</code>. If they differ, this is the wrong hop, so <code>continue</code> to peel the next layer. If they match, this IS the failing hop (only it has the <code>um</code> key), so parse and validate the length-prefixed payload:" +
         "<br><code>failure_len = int.from_bytes(payload[0:2], 'big')</code>" +
         "<br>If <code>2 + failure_len + 2 > len(payload)</code>, the length overshoots the packet, so the error is malformed and unrecoverable: <code>return None, None</code>." +
         "<br><code>pad_start = 2 + failure_len\npad_len = int.from_bytes(payload[pad_start:pad_start + 2], 'big')</code>" +
-        "<br>If <code>2 + failure_len + 2 + pad_len != len(payload)</code>, the two length fields don't tile the payload, so it's malformed too: <code>return None, None</code>." +
+        "<br>If <code>2 + failure_len + 2 + pad_len != len(payload)</code>, the two length fields don't add up to the payload length, so it's malformed too: <code>return None, None</code>." +
         "<br>Otherwise, return the hop index with the recovered message:" +
         "<br><code>return i, payload[2:2 + failure_len]</code>" +
         "<br><br><strong>If the loop ends with no match:</strong>" +
         "<br><code>return None, None</code>",
       code:
         `def decrypt_error_onion(wrapped_error, hop_keys):
-    wrapped = wrapped_error
+    HMAC_LEN = 32
+    layer = wrapped_error
     for i, (um, ammag) in enumerate(hop_keys):
-        wrapped = xor_bytes(wrapped, chacha20_keystream(ammag, len(wrapped)))
-        tag = wrapped[:32]
-        payload = wrapped[32:]
+        layer = xor_bytes(layer, chacha20_keystream(ammag, len(layer)))
+        tag = layer[:HMAC_LEN]
+        payload = layer[HMAC_LEN:]
         expected = hmac.new(um, payload, hashlib.sha256).digest()
         if not hmac.compare_digest(expected, tag):
             continue  # wrong hop, peel the next layer
@@ -474,7 +475,7 @@ def test_official_bolt4_error_vector():
         pad_start = 2 + failure_len
         pad_len = int.from_bytes(payload[pad_start:pad_start + 2], "big")
         if 2 + failure_len + 2 + pad_len != len(payload):
-            return None, None  # lengths don't tile: malformed
+            return None, None  # lengths don't add up: malformed
         return i, payload[2:2 + failure_len]
     return None, None`,
     },
@@ -488,7 +489,7 @@ def test_official_bolt4_error_vector():
     title: "Verify the HMAC",
     description:
       "Implement <code>verify_hmac(packet, mu, associated_data) -> str | None</code>. Given a 1366-byte BOLT 4 onion packet, this hop's <code>mu</code> key (32 bytes), and the 32-byte <code>associated_data</code> (<code>payment_hash</code>), recompute <code>HMAC-SHA256(mu, hop_payloads || associated_data)</code> and compare it against the packet's last 32 bytes (the HMAC field). " +
-      "Return <code>None</code> when the HMAC verifies, or the BOLT 4 failure-code string <code>\"invalid_onion_hmac\"</code> when it does not (a packet that is not exactly 1366 bytes also fails). Use <code>hmac.compare_digest</code> for a constant-time compare to avoid leaking timing information about which byte didn't match.",
+      "Return <code>None</code> when the HMAC verifies, or the BOLT 4 failure-code string <code>\"invalid_onion_hmac\"</code> when it does not (a packet that is not exactly 1366 bytes also fails). Use <code>hmac.compare_digest</code> for a constant-time compare to avoid leaking timing information about how many leading bytes matched.",
     sampleCode: `# HMAC-verify sandbox - forge a packet, then tamper with it.
 #
 # A 1366-byte onion is: version(1) || E_i(33) || hop_payloads(1300) || hmac(32).
@@ -762,8 +763,8 @@ def test_proportional_only_policy():
 `,
     hints: {
       conceptual:
-        "<strong>Goal:</strong> given everything already parsed out of the onion, decide if forwarding is safe by re-checking the two promises this hop made to the network." +
-        "<br><br><strong>You're re-checking the sender's arithmetic.</strong> When Alice built the route back in chapter 2 she budgeted a fee and a timelock cushion for every hop, so the amounts arriving here should already leave this forwarder whole. It doesn't take that on faith, though: it recomputes both margins from its own advertised policy and forwards only if they hold." +
+        "<strong>Goal:</strong> given everything already parsed out of the onion, decide if forwarding is safe and profitable." +
+        "<br><br><strong>You're re-checking the sender's arithmetic.</strong> When Alice built the route back in chapter 2 she budgeted a fee and a timelock cushion for every hop, so the amounts arriving here should already leave this forwarder whole." +
         "<br><br><strong>Fee = what the hop keeps.</strong> The forwarder receives <code>incoming_amount_msat</code> and is asked to send <code>amt_to_forward</code> downstream. The difference is its fee. That difference has to be at least the fee it advertised in its <code>channel_update</code>, or it loses money relaying the payment." +
         "<br><br><strong>CLTV delta = claim-before-you-pay cushion.</strong> The forwarder pays the downstream HTLC first, then claims the upstream one. It needs <code>cltv_expiry_delta</code> blocks between the two expiries so a downstream delay can never leave it having paid out without time left to get paid back." +
         "<br><br><strong>Why these exact strings:</strong> <code>fee_insufficient</code> and <code>incorrect_cltv_expiry</code> are real BOLT 4 failure codes. Returning them verbatim is what lets a real Lightning sender understand why the hop refused and re-route.",
@@ -1247,8 +1248,8 @@ def test_no_filler_default_unchanged():
     id: "exercise-build-packet-draft",
     title: "Build the Full Onion Packet",
     description:
-      "Implement <code>OnionPacketBuilder.build</code>. The setup, the per-hop keys, the filler, and the pad-noise buffer, is provided for you in the starter, re-using the <code>derive_keys</code> (chapter 6) and <code>generate_filler</code> (chapter 7) functions you already wrote and were tested on. " +
-      "Your job is the integration that's new this chapter: wrap the hops inside-out with <code>wrap_hop</code> (threading <code>next_hmac</code>, laying the filler in once), then assemble the final 1366-byte BOLT 4 packet (version || ephemeral_pubkey || hop_payloads || hmac).",
+      "Implement <code>OnionPacketBuilder.build</code>. The setup, the per-hop keys, the filler, and the pad-noise buffer, is provided for you in the starter, re-using the <code>derive_keys</code> (chapter 6) and <code>generate_filler</code> (chapter 7) functions you already wrote. " +
+      "Your job is the integration that's new in this chapter: wrap the hops inside-out with <code>wrap_hop</code> (threading <code>next_hmac</code>, laying the filler in once), then assemble the final 1366-byte BOLT 4 packet (version || ephemeral_pubkey || hop_payloads || hmac).",
     sampleCode: `# Build-loop sandbox - watch the inside-out wrap order and the shape of the
 # finished packet, without the full 1300-byte machinery.
 #
@@ -1679,7 +1680,7 @@ def test_matches_official_bolt4_filler():
       conceptual:
         "<strong>Goal:</strong> compute the bytes that will appear at the end of the hop_payloads field after each forwarder peels its layer." +
         "<br><br><strong>Why this works:</strong> Alice can't compute filler in isolation; it has to account for what each rho<sub>i</sub> XOR will do during peeling. By simulating the hops one by one (in order from first forwarder to last forwarder), Alice builds up the cumulative effect of all those XORs in the trailing positions." +
-        "<br><br><strong>Loop invariant:</strong> after iteration <i>i</i>, <code>filler</code> contains exactly what the last <code>sum(payload_sizes[:i+1])</code> bytes of hop <i>i</i>'s view of the packet would look like, given that earlier hops' rho XORs have already been applied (virtually).",
+        "<br><br><strong>Loop invariant:</strong> after iteration <i>i</i>, <code>len(filler)</code> has just grown by <code>payload_sizes[i]</code>, so it equals the running total of all the payload sizes processed so far (hops 0 through <i>i</i>). Throughout, <code>filler</code> holds the running XOR of each hop's rho keystream over the trailing positions of the 1300-byte hop_payloads field, which is why step c takes the <i>trailing</i> <code>len(filler)</code> bytes of the keystream rather than the front.",
       steps:
         "<strong>1. Start with an empty filler</strong> (you'll grow it one hop at a time):" +
         "<br><code>filler = b\"\"</code>" +
@@ -1687,7 +1688,7 @@ def test_matches_official_bolt4_filler():
         "<br>a. Extend filler at the END with <code>payload_sizes[i]</code> zero bytes." +
         "<br>b. Generate this hop's rho<sub>i</sub> keystream of length <code>ROUTING_INFO_SIZE + payload_sizes[i]</code> using <code>chacha20_keystream</code>." +
         "<br>c. Take the trailing <code>len(filler)</code> bytes of that keystream and XOR them into <code>filler</code> using <code>xor_bytes</code>." +
-        "<br><br><strong>3. Return</strong> the accumulated filler bytes. Total length = <code>sum(payload_sizes)</code>.",
+        "<br><br><strong>3. Return</strong> the accumulated filler bytes (just <code>return filler</code>, there's no length to compute). You never write a <code>sum()</code> yourself, but if you check afterward, <code>len(filler)</code> will have grown to equal the total of every entry in <code>payload_sizes</code>, one chunk per hop.",
       code:
         `    def generate_filler(self, rho_keys, payload_sizes):
         filler = b""
@@ -1708,7 +1709,7 @@ def test_matches_official_bolt4_filler():
     id: "exercise-derive-shared-secrets-draft",
     title: "Derive the Shared-Secret Chain",
     description:
-      "Implement <code>OnionPacketBuilder.derive_shared_secrets</code>. Given Alice's <code>session_key</code> (32 bytes) and the route's hop pubkeys (33-byte compressed each), build the session secrets and ephemeral public keys for every hop in the route, appending each to <code>self.ephemeral_pubkeys</code> and <code>self.shared_secrets</code>. " +
+      "Implement <code>OnionPacketBuilder.derive_shared_secrets</code>. Given Alice's <code>session_key</code> (32 bytes) and the route's hop pubkeys (33-byte compressed each), build the shared secrets and ephemeral public keys for every hop in the route, appending each to <code>self.ephemeral_pubkeys</code> and <code>self.shared_secrets</code>. " +
       "The provided helpers are <code>privkey_to_pubkey</code>, <code>ecdh</code>, and <code>scalar_mul</code>. " +
       "If you want to easily re-visit the Ephemeral Key Chain diagram, click the REFERENCE button below.",
     sampleCode: `# Blinding-chain sandbox - walk the shared-secret chain by hand for 3 hops.
@@ -1721,7 +1722,7 @@ def test_matches_official_bolt4_filler():
 import hashlib
 
 session_key = bytes.fromhex("41" * 32)
-hop_privkeys = [bytes.fromhex(b * 64) for b in ("42", "43", "44")]  # Bob, Charlie, Dave
+hop_privkeys = [bytes.fromhex(b * 32) for b in ("42", "43", "44")]  # Bob, Charlie, Dave
 hop_pubkeys = [privkey_to_pubkey(p) for p in hop_privkeys]
 
 e = session_key                       # the ephemeral private key, advanced each hop

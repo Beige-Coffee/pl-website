@@ -64,10 +64,14 @@ const TOTAL_BEATS = 8;
 // Example values for Bob's incoming HTLC and his parsed TLV. Chosen so every
 // policy check passes with a visible cushion (see CHECK beat).
 const PAYMENT_HASH = "0x7af3…c29b";
-const AMOUNT_IN_MSAT = 1_001_500; // incoming HTLC amount
+const AMOUNT_IN_MSAT = 1_002_500; // incoming HTLC amount
 const AMT_FORWARD_MSAT = 1_000_000; // TLV amt_to_forward
-const FEE_MARGIN_MSAT = AMOUNT_IN_MSAT - AMT_FORWARD_MSAT; // 1,500 (Bob keeps this)
-const FEE_REQUIRED_MSAT = 1_000; // Bob's published fee for this amount
+const FEE_MARGIN_MSAT = AMOUNT_IN_MSAT - AMT_FORWARD_MSAT; // 2,500 (Bob keeps this)
+// Bob's policy matches the check_forward exercise / ch10: base 1,000 msat + 1,000 ppm.
+// For a 1,000,000 msat forward that is 1,000 + 1,000 = 2,000 msat required.
+const FEE_BASE_MSAT = 1_000;
+const FEE_PROPORTIONAL_MSAT = Math.floor((1_000 * AMT_FORWARD_MSAT) / 1_000_000); // 1,000
+const FEE_REQUIRED_MSAT = FEE_BASE_MSAT + FEE_PROPORTIONAL_MSAT; // 2,000
 const CLTV_IN = 842; // incoming HTLC cltv_expiry
 const OUTGOING_CLTV = 800; // TLV outgoing_cltv_value
 const CLTV_DELTA = 40; // Bob's published cltv_expiry_delta
@@ -1518,7 +1522,7 @@ function CheckView() {
           pass
           label="Incoming amount covers forward + fee"
           formula={`${fmt(AMOUNT_IN_MSAT)} ≥ ${fmt(AMT_FORWARD_MSAT)} + ${fmt(FEE_REQUIRED_MSAT)}`}
-          note={`Bob keeps ${fmt(FEE_MARGIN_MSAT)} msat (≥ his ${fmt(FEE_REQUIRED_MSAT)} fee)`}
+          note={`Bob keeps ${fmt(FEE_MARGIN_MSAT)} msat (his fee: ${fmt(FEE_BASE_MSAT)} base + ${fmt(FEE_PROPORTIONAL_MSAT)} ppm = ${fmt(FEE_REQUIRED_MSAT)})`}
           failCode="fee_insufficient"
         />
         <CheckRow

@@ -170,7 +170,7 @@ const BEATS: Beat[] = [
     subLabel: "LIFT",
     title: "Lift bytes 60..1,360 as Charlie's `hop_payloads`",
     caption:
-      "Then, Bob slices out the next 1,300 bytes, starting right after his own hop payload. That's Charlie's `hop_payloads` (same fixed size Bob just received), with Charlie's encrypted hop payload up front, then Dave's, then padding, then the 60-byte filler-shaped tail Alice precomputed.",
+      "Then, Bob slices out the next 1,300 bytes, starting right after his own hop payload. That's Charlie's `hop_payloads` (same fixed size Bob just received): Charlie's own encrypted hop payload up front, then the still-wrapped layers for the rest of the route, padded out to the fixed size by the filler Alice precomputed. To Bob it's all opaque bytes.",
     focus: "trailing",
   } as Beat,
   {

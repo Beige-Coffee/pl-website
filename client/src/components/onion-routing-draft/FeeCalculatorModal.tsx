@@ -118,6 +118,14 @@ export function FeeCalculatorModal({ open, onClose }: FeeCalculatorModalProps) {
     };
   }, [dragging]);
 
+  // Keep the panel readable in dark mode. Declared with the other hooks (before
+  // the early returns) so the hook count never changes between renders; guarded
+  // to stay a no-op until the panel is actually open.
+  useEffect(() => {
+    if (!open || pos === null) return;
+    forceReadable(panelRef.current);
+  });
+
   function onHeaderMouseDown(e: React.MouseEvent<HTMLDivElement>) {
     if (!panelRef.current) return;
     // Don't initiate drag if user is clicking the close button.
@@ -140,9 +148,6 @@ export function FeeCalculatorModal({ open, onClose }: FeeCalculatorModalProps) {
   const total = base + feeRate;
   const fmt = (n: number) => n.toLocaleString("en-US");
 
-  useEffect(() => {
-    forceReadable(panelRef.current);
-  });
   return (
     <div
       ref={panelRef}
@@ -199,20 +204,8 @@ export function FeeCalculatorModal({ open, onClose }: FeeCalculatorModalProps) {
           className="text-xs leading-relaxed mb-4 opacity-80"
           style={{ color: INK }}
         >
-          Plug your own numbers in. The Lightning forwarding fee floors the{" "}
-          <code
-            style={{
-              fontFamily: '"JetBrains Mono", "Fira Code", monospace',
-              background: "#f1f5f9",
-              border: "1px solid rgba(15,23,42,0.14)",
-              padding: "0 5px",
-              fontSize: "0.92em",
-              whiteSpace: "nowrap",
-            }}
-          >
-            fee_rate
-          </code>{" "}
-          result (real nodes drop fractional sats).
+          Plug your own numbers in. The Lightning forwarding fee floors the
+          proportional-fee result (real nodes drop fractional sats).
         </p>
 
         <div className="grid grid-cols-1 gap-3">
@@ -253,7 +246,7 @@ export function FeeCalculatorModal({ open, onClose }: FeeCalculatorModalProps) {
             </div>
             <div className="flex items-baseline gap-1.5 whitespace-nowrap flex-wrap">
               <span style={{ color: SLATE, minWidth: 80, display: "inline-block" }}>
-                Fee Rate
+                Proportional Fee
               </span>
               <span style={{ color: SLATE }}>=</span>
               <span className="tabular-nums">

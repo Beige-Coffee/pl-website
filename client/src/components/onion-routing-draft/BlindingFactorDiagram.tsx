@@ -194,8 +194,9 @@ function buildCells(): Array<Array<CellSpec | null>> {
       caption: (
         <>
           Now, multiply <Code token="bf_AB" /> by <Code token="e_AB" /> and you
-          get Charlie's session-key-equivalent <Code token="e_AC" />. The blue
-          arrows show where each value came from in Bob's column.
+          get <Code token="e_AC" />, Alice's ephemeral private key for the
+          Charlie hop. The blue arrows show where each value came from in Bob's
+          column.
         </>
       ),
     },
@@ -258,8 +259,8 @@ function buildCells(): Array<Array<CellSpec | null>> {
       caption: (
         <>
           Same blinding step, one hop down: multiply <Code token="bf_AC" /> by{" "}
-          <Code token="e_AC" /> for Dave's session-key-equivalent{" "}
-          <Code token="e_AD" />. The teal arrows trace it back to Charlie.
+          <Code token="e_AC" /> for <Code token="e_AD" />, Alice's ephemeral key
+          for the Dave hop. The teal arrows trace it back to Charlie.
         </>
       ),
     },

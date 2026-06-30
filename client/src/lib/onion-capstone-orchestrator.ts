@@ -44,8 +44,46 @@ export const ONION_CAPSTONE_EXERCISE_IDS = [
 const BUILD_ID = "exercise-build-packet-draft";
 const CHECK_FORWARD_ID = "exercise-check-forward-draft";
 
+/** Leading-space count of a block's first non-empty line (its base indent). */
+function baseIndent(s: string): number | null {
+  for (const ln of s.split("\n")) {
+    if (ln.trim() === "") continue;
+    return ln.length - ln.trimStart().length;
+  }
+  return null;
+}
+
+/**
+ * Align a saved solution's base indentation to its starter's, so stale or
+ * oddly-indented saved code can't desync the assembled file. Some builder
+ * methods were once authored as column-0 standalone functions; a student who
+ * solved them back then still has column-0 code in localStorage. Without this,
+ * the assembled class would carry a top-level `def` where a method belongs,
+ * which both reads as broken in the code pane and breaks the trace harness's
+ * `OnionPacketBuilder.<method>` attachment. No-op when the indents already
+ * match, which is the overwhelmingly common case.
+ */
+function reindentToStarter(saved: string, starter: string): string {
+  const want = baseIndent(starter);
+  const have = baseIndent(saved);
+  if (want === null || have === null || want === have) return saved;
+  const lines = saved.split("\n");
+  if (want > have) {
+    const pad = " ".repeat(want - have);
+    return lines.map((ln) => (ln.trim() === "" ? ln : pad + ln)).join("\n");
+  }
+  // want < have: only safe to dedent if every non-empty line has the room.
+  const cut = have - want;
+  const fits = lines.every(
+    (ln) => ln.trim() === "" || ln.length - ln.trimStart().length >= cut,
+  );
+  return fits ? lines.map((ln) => (ln.trim() === "" ? ln : ln.slice(cut))).join("\n") : saved;
+}
+
 function codeFor(id: string, getSaved: SavedGetter): string {
-  return getSaved(id) ?? EX[id]?.starterCode ?? "";
+  const saved = getSaved(id);
+  if (saved == null) return EX[id]?.starterCode ?? "";
+  return reindentToStarter(saved, EX[id]?.starterCode ?? "");
 }
 
 /**

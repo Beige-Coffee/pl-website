@@ -70,8 +70,8 @@ export function ChannelUpdateCard({
           fontFamily: '"JetBrains Mono", "Fira Code", monospace',
         }}
       >
-        <Row label="Base Fee" value={`${baseFee} sats`} />
-        <Row label="Fee Per Millionth" value={String(feePpm)} />
+        <Row label="Base Fee" value={`${baseFee.toLocaleString("en-US")} sats`} />
+        <Row label="Fee Per Millionth" value={feePpm.toLocaleString("en-US")} />
         <Row label="CLTV Delta" value={String(cltvDelta)} />
       </div>
     </div>

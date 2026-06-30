@@ -76,7 +76,7 @@ const PAYMENT_HASH = "0xa3f1...e9c4";
 const STEP_CAPTIONS: Record<number, string> = {
   0: "Here are three channels along the path, each anchored by its own pair of commitment transactions. Notice Bob and Charlie each hold two, one for each channel they sit between. Let's send a 10,000-sat payment from Alice to Dave and watch what happens.",
   1: "First, Alice and Bob each add a new HTLC output to their commitments. It's locked to `payment_hash` `0xa3f1...e9c4` and times out at block 260.",
-  2: "Now Bob forwards the payment on to Charlie, keeping 2 sats as his forwarding fee, so the B↔C HTLC carries 10,002 sat. They each add an HTLC output on their B↔C commitments, this time with a tighter CLTV of 220 (that's Bob's safety margin, so he can resolve A↔B before B↔C times out).",
+  2: "Now Bob forwards the payment on to Charlie, keeping 2 sats as his forwarding fee, so the B↔C HTLC carries 10,002 sat. They each add an HTLC output on their B↔C commitments, this time with a tighter CLTV of 220. The 40-block gap between Bob's incoming A↔B HTLC (block 260) and his outgoing B↔C one (block 220) is his safety margin: if Charlie reveals the preimage at the last second, Bob still has time to claim his incoming HTLC after the B↔C one resolves.",
   3: "Then Charlie passes it on to Dave, with a CLTV of 180 and an amount of 10,000 sat. Where'd the other two sats go? That's Charlie's forwarding fee. The HTLC now sits on every channel along the path.",
   4: "Finally, the HTLC is routed to Dave, who knows the preimage because he generated it for this specific invoice.",
   5: "Now Dave hands the preimage to Charlie. The Charlie-Dave HTLC outputs are removed and 10,000 sats slide into Dave's `to_local`.",
@@ -346,10 +346,17 @@ function subtitleFor(ch: ChannelDef, side: "left" | "right"): string {
   return `(holds ${other}'s signature)`;
 }
 
+// The funding 2-of-2's two signers for a channel (its partners),
+// e.g. ["<bob_sig>", "<charlie_sig>"] for the B<->C channel.
+function channelSigs(c: ChannelDef): [string, string] {
+  return [`<${c.leftLabel.toLowerCase()}_sig>`, `<${c.rightLabel.toLowerCase()}_sig>`];
+}
+
 interface PinnedPopover {
   ownerLabel: string;
   subtitle: string;
   fundingTxid: string;
+  witnessSigs: [string, string];
   outputs: CommitmentOutput[];
   // Anchor coordinates (viewport-relative, "fixed" position)
   x: number;
@@ -699,6 +706,7 @@ export function HtlcPropagationDiagram() {
                           ownerLabel: leftOwner,
                           subtitle: leftSubtitle,
                           fundingTxid: ch.fundingTxid,
+                          witnessSigs: channelSigs(ch),
                           outputs: leftOutputs,
                         },
                         e,
@@ -710,6 +718,7 @@ export function HtlcPropagationDiagram() {
                           ownerLabel: leftOwner,
                           subtitle: leftSubtitle,
                           fundingTxid: ch.fundingTxid,
+                          witnessSigs: channelSigs(ch),
                           outputs: leftOutputs,
                         },
                         e,
@@ -727,6 +736,7 @@ export function HtlcPropagationDiagram() {
                           ownerLabel: rightOwner,
                           subtitle: rightSubtitle,
                           fundingTxid: ch.fundingTxid,
+                          witnessSigs: channelSigs(ch),
                           outputs: rightOutputs,
                         },
                         e,
@@ -738,6 +748,7 @@ export function HtlcPropagationDiagram() {
                           ownerLabel: rightOwner,
                           subtitle: rightSubtitle,
                           fundingTxid: ch.fundingTxid,
+                          witnessSigs: channelSigs(ch),
                           outputs: rightOutputs,
                         },
                         e,
@@ -807,6 +818,7 @@ export function HtlcPropagationDiagram() {
                 ownerLabel={popover.ownerLabel}
                 subtitle={popover.subtitle}
                 fundingTxid={popover.fundingTxid}
+                witnessSigs={popover.witnessSigs}
                 outputs={popover.outputs}
               />
             </div>

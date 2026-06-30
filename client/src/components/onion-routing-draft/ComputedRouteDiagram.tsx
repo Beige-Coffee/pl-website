@@ -479,6 +479,11 @@ export function ComputedRouteDiagram({
           className="relative bg-[#fefdfb] px-4 py-6"
           style={{ minWidth: minStageWidth }}
         >
+          {subtitle && (
+            <div className="mb-4 text-xs italic" style={{ color: SLATE }}>
+              {subtitle}
+            </div>
+          )}
           {/* Paper-invoice card pinned to the top-left of the stage. The card
               sits above the route stage in normal flow so it doesn't overlap
               the channel_update cards above the forwarders. */}
