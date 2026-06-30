@@ -23,31 +23,35 @@ export default function OverviewView({ data, onNavigate }: OverviewViewProps) {
   );
   const activeStudents7d = recentCheckpointUsers.size;
 
-  // Course completions (lightning)
-  const lnCheckpoints = TUTORIAL_CONFIGS.lightning.checkpoints;
-  const lnCheckpointIds = new Set(lnCheckpoints.map(cp => cp.id));
-  const userCheckpoints: Record<string, Set<string>> = {};
-  for (const c of data.checkpointCompletions) {
-    if (!lnCheckpointIds.has(c.checkpointId)) continue;
-    if (!userCheckpoints[c.userId]) userCheckpoints[c.userId] = new Set();
-    userCheckpoints[c.userId].add(c.checkpointId);
-  }
-  const usersWithAny = Object.keys(userCheckpoints).length;
-  const completedAll = Object.values(userCheckpoints).filter(s => s.size === lnCheckpoints.length).length;
-  const completionRate = usersWithAny > 0 ? Math.round(completedAll / usersWithAny * 100) : 0;
+  // Per-course completion funnel (counts only that course's checkpoints).
+  const buildFunnel = (checkpoints: { id: string }[]) => {
+    const ids = new Set(checkpoints.map(cp => cp.id));
+    const uc: Record<string, Set<string>> = {};
+    for (const c of data.checkpointCompletions) {
+      if (!ids.has(c.checkpointId)) continue;
+      if (!uc[c.userId]) uc[c.userId] = new Set();
+      uc[c.userId].add(c.checkpointId);
+    }
+    const n = checkpoints.length;
+    const completedAll = Object.values(uc).filter(s => s.size === n).length;
+    const milestones = [
+      { label: "Signed Up", count: data.userCount },
+      { label: "First Check", count: Object.keys(uc).length },
+      { label: "25%", count: Object.values(uc).filter(s => s.size >= Math.ceil(n * 0.25)).length },
+      { label: "50%", count: Object.values(uc).filter(s => s.size >= Math.ceil(n * 0.50)).length },
+      { label: "75%", count: Object.values(uc).filter(s => s.size >= Math.ceil(n * 0.75)).length },
+      { label: "Completed", count: completedAll },
+    ];
+    return { usersWithAny: Object.keys(uc).length, completedAll, milestones };
+  };
+  const lnFunnel = buildFunnel(TUTORIAL_CONFIGS.lightning.checkpoints);
+  const onionFunnel = buildFunnel(TUTORIAL_CONFIGS.onion.checkpoints);
+  // "Course completions" counts finishers of either coding course (onion-aware).
+  const completedAll = lnFunnel.completedAll + onionFunnel.completedAll;
+  const completionRate = lnFunnel.usersWithAny > 0 ? Math.round(lnFunnel.completedAll / lnFunnel.usersWithAny * 100) : 0;
 
   // New signups (7d)
   const newSignups7d = data.users.filter(u => u.createdAt && now - new Date(u.createdAt).getTime() < 7 * DAY).length;
-
-  // Mini funnel: section-level milestones
-  const milestones = [
-    { label: "Signed Up", count: data.userCount },
-    { label: "First Check", count: usersWithAny },
-    { label: "25%", count: Object.values(userCheckpoints).filter(s => s.size >= Math.ceil(lnCheckpoints.length * 0.25)).length },
-    { label: "50%", count: Object.values(userCheckpoints).filter(s => s.size >= Math.ceil(lnCheckpoints.length * 0.50)).length },
-    { label: "75%", count: Object.values(userCheckpoints).filter(s => s.size >= Math.ceil(lnCheckpoints.length * 0.75)).length },
-    { label: "Completed", count: completedAll },
-  ];
 
   // Alerts
   const alerts: { label: string; view: string; level: "warn" | "error" | "info" }[] = [];
@@ -80,13 +84,21 @@ export default function OverviewView({ data, onNavigate }: OverviewViewProps) {
         <StatCard label="NEW SIGNUPS (7D)" value={newSignups7d} />
       </div>
 
-      {/* Mini Course Funnel */}
-      <FunnelChart
-        title="COURSE FUNNEL (LIGHTNING)"
-        items={milestones}
-        total={data.userCount}
-        color="gold"
-      />
+      {/* Mini Course Funnels */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <FunnelChart
+          title="COURSE FUNNEL (LIGHTNING)"
+          items={lnFunnel.milestones}
+          total={data.userCount}
+          color="gold"
+        />
+        <FunnelChart
+          title="COURSE FUNNEL (ONION ROUTING)"
+          items={onionFunnel.milestones}
+          total={data.userCount}
+          color="gold"
+        />
+      </div>
 
       {/* Alerts Panel */}
       {alerts.length > 0 && (

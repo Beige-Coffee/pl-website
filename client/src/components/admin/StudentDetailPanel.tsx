@@ -64,7 +64,7 @@ export default function StudentDetailPanel({
         body: JSON.stringify({ password: storedPassword, userId, checkpointId }),
       });
       if (res.ok) {
-        if (!checkpointId) setResetBanner("/lightning-tutorial?fresh=1");
+        if (!checkpointId) setResetBanner(`${config.urlPrefix}?fresh=1`);
         onRefresh();
       }
     } catch {}

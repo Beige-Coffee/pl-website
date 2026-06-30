@@ -144,7 +144,7 @@ export default function StudentsView({ data, storedPassword, onRefresh }: Studen
     <div className="space-y-4">
       {/* Tutorial toggle + Search */}
       <div className="flex flex-wrap items-center gap-3">
-        {(["lightning", "noise", "visual-lightning"] as const).map(t => (
+        {(["lightning", "noise", "onion", "visual-lightning"] as const).map(t => (
           <button
             key={t}
             onClick={() => { setSelectedTutorial(t); setSelectedUserId(null); }}
@@ -154,7 +154,7 @@ export default function StudentsView({ data, storedPassword, onRefresh }: Studen
                 : "hover:bg-primary/5 text-foreground/60"
             }`}
           >
-            {t === "lightning" ? "LIGHTNING" : t === "noise" ? "NOISE" : "VISUAL LN"}
+            {t === "lightning" ? "LIGHTNING" : t === "noise" ? "NOISE" : t === "onion" ? "ONION" : "VISUAL LN"}
           </button>
         ))}
         <div className="flex-1" />

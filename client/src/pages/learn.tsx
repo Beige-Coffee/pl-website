@@ -5,7 +5,7 @@ const RESOURCES = [
     id: "lightning-tldr",
     title: "Lightning TLDR",
     description:
-      "Simple, yet elegant. Technical, yet approachable. The whole Lightning protocol, visual and interactive.",
+      "Simple, yet elegant. Technical, yet approachable. A few BOLTs of Lightning, visual and interactive.",
     href: "/visual-lightning",
     thumbnail: "messages",
   },

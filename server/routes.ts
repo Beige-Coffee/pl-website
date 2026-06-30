@@ -1523,10 +1523,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       // Total checkpoint count across all tutorials for "completed" check
       const ALL_CHECKPOINT_COUNT = 49; // lightning tutorial total
+      // Onion-routing course checkpoints (keep in sync with TUTORIAL_CONFIGS.onion
+      // in client/src/components/admin/admin-data.ts). Finishing onion also = "completed".
+      const ONION_CHECKPOINT_IDS = new Set([
+        "cp-channel-update-direction-draft", "cp-cheapest-route-draft", "exercise-route-calc-draft",
+        "cp-naive-plaintext-leak-draft", "km-privacy-rubric-draft", "cp-still-vulnerable-draft",
+        "cp-naive-shared-secrets-draft", "cp-blinding-public-draft", "exercise-derive-shared-secrets-draft",
+        "cp-101-keystream-shared-draft", "cp-101-encrypt-buffer-scope-draft", "cp-101-dave-layer-count-draft",
+        "cp-101-decrypt-buffer-scope-draft", "cp-101-tamper-detection-draft",
+        "cp-key-separation-draft", "cp-key-domain-separation-draft", "exercise-derive-keys-draft",
+        "cp-payload-shrink-leak-draft", "cp-filler-shared-keystream-draft", "cp-filler-reach-back-draft", "exercise-generate-filler-draft",
+        "cp-build-reverse-order-draft", "cp-hmac-commits-to-draft", "exercise-wrap-hop-draft", "exercise-build-packet-draft",
+        "cp-peel-extended-stream-draft", "cp-peel-next-hmac-draft", "exercise-peel-layer-draft",
+        "cp-validate-before-decrypt-draft", "cp-tlv-final-vs-forward-draft", "exercise-verify-hmac-draft", "exercise-check-forward-draft",
+        "cp-error-trial-decrypt-draft", "exercise-decrypt-error-onion-draft",
+      ]);
       const userSegments: Record<string, string> = {};
       for (const u of users) {
         const cpSet = userCheckpointIds[u.id];
         const cpCount = cpSet?.size ?? 0;
+        const onionCount = cpSet ? [...cpSet].filter((id) => ONION_CHECKPOINT_IDS.has(id)).length : 0;
         const lastActive = u.lastActiveAt ? new Date(u.lastActiveAt).getTime() : 0;
         const createdAt = u.createdAt ? new Date(u.createdAt).getTime() : 0;
         const daysSinceActive = lastActive ? (now - lastActive) / DAY : Infinity;
@@ -1534,7 +1550,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const daysSinceCheckpoint = latestCp ? (now - latestCp) / DAY : Infinity;
         const accountAgeDays = createdAt ? (now - createdAt) / DAY : Infinity;
 
-        if (cpCount >= ALL_CHECKPOINT_COUNT) {
+        if (cpCount >= ALL_CHECKPOINT_COUNT || onionCount >= ONION_CHECKPOINT_IDS.size) {
           userSegments[u.id] = "completed";
         } else if (accountAgeDays < 7 && cpCount <= 2) {
           userSegments[u.id] = "new";

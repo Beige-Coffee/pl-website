@@ -97,6 +97,7 @@ export default function ContentView({ data }: ContentViewProps) {
   const sections = [
     { label: "Lightning Tutorial", prefix: "/lightning-tutorial" },
     { label: "Noise Tutorial", prefix: "/noise-tutorial" },
+    { label: "Onion Routing", prefix: "/onion-routing-tutorial" },
     { label: "Visual Lightning", prefix: "/visual-lightning" },
     { label: "Other Pages", prefix: "" },
   ];
@@ -104,7 +105,7 @@ export default function ContentView({ data }: ContentViewProps) {
   const sectionStats = sections.map(sec => {
     const pages = sec.prefix
       ? data.pageStats.filter(p => p.page.startsWith(sec.prefix))
-      : data.pageStats.filter(p => !p.page.startsWith("/lightning-tutorial") && !p.page.startsWith("/noise-tutorial") && !p.page.startsWith("/visual-lightning"));
+      : data.pageStats.filter(p => !p.page.startsWith("/lightning-tutorial") && !p.page.startsWith("/noise-tutorial") && !p.page.startsWith("/onion-routing-tutorial") && !p.page.startsWith("/visual-lightning"));
     const views = pages.reduce((s, p) => s + p.views, 0);
     const totalDur = pages.reduce((s, p) => s + p.avgDuration * p.views, 0);
     const avgDur = views > 0 ? Math.round(totalDur / views) : 0;
@@ -125,7 +126,7 @@ export default function ContentView({ data }: ContentViewProps) {
     <div className="space-y-4">
       {/* Tutorial toggle */}
       <div className="flex flex-wrap items-center gap-3">
-        {(["lightning", "noise", "visual-lightning"] as const).map(t => (
+        {(["lightning", "noise", "onion", "visual-lightning"] as const).map(t => (
           <button
             key={t}
             onClick={() => setSelectedTutorial(t)}
@@ -135,7 +136,7 @@ export default function ContentView({ data }: ContentViewProps) {
                 : "hover:bg-primary/5 text-foreground/60"
             }`}
           >
-            {t === "lightning" ? "LIGHTNING" : t === "noise" ? "NOISE" : "VISUAL LN"}
+            {t === "lightning" ? "LIGHTNING" : t === "noise" ? "NOISE" : t === "onion" ? "ONION" : "VISUAL LN"}
           </button>
         ))}
       </div>
