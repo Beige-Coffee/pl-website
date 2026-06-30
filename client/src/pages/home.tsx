@@ -525,12 +525,19 @@ export default function Home() {
                     </div>
                   </div>
                   <div className="flex flex-row md:flex-col gap-2 shrink-0">
-                    <Link
-                      href="/onion-routing-tutorial"
-                      className="bg-foreground text-background px-6 py-2.5 font-pixel text-sm border-2 border-border hover:bg-foreground/80 transition-colors pixel-shadow active:translate-x-[2px] active:translate-y-[2px] active:shadow-none text-center flex-1 md:flex-none"
-                    >
-                      CODE
-                    </Link>
+                    <Tooltip delayDuration={0}>
+                      <TooltipTrigger asChild>
+                        <Link
+                          href="/onion-routing-tutorial"
+                          className="bg-foreground text-background px-6 py-2.5 font-pixel text-sm border-2 border-border hover:bg-foreground/80 transition-colors pixel-shadow active:translate-x-[2px] active:translate-y-[2px] active:shadow-none text-center flex-1 md:flex-none"
+                        >
+                          CODE
+                        </Link>
+                      </TooltipTrigger>
+                      <TooltipContent side="right" align="start" className="bg-card text-foreground border-4 border-border text-lg px-4 py-3 pixel-shadow max-w-xs rounded-none font-sans">
+                        Build Lightning's onion routing from scratch with hands-on Python exercises.
+                      </TooltipContent>
+                    </Tooltip>
                   </div>
                 </div>
               </div>
