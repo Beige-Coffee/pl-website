@@ -106,7 +106,7 @@ const ENTRIES: Record<string, GlossaryEntry> = {
     render: "text",
     category: "session key",
     definition:
-      "The single ephemeral keypair Alice generates for one payment. It seeds the ephemeral key chain (`E_AB`, `E_AC`, ...) and the `pad_key`.",
+      "The single ephemeral private key (a scalar) Alice generates for one payment; it equals the first ephemeral private key `e_AB` (whose public point is `E_AB`). It seeds the ephemeral key chain (`E_AB`, `E_AC`, ...) and the `pad_key`.",
     chapter: "4",
   },
   pad: {

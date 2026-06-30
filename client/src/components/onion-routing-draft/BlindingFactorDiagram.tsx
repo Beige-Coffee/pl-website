@@ -42,14 +42,14 @@ const TOKEN_INFO: Record<string, string> = {
   ss_AB:
     "Shared secret between Alice and Bob. Both sides derive the same 32-byte value via ECDH.",
   bf_AB:
-    "Bob's blinding factor. Charlie will use this to derive his own session-key-equivalent.",
+    "Bob's blinding factor. Alice multiplies the current ephemeral private key by it to get the next one (e_AC), advancing the chain toward Charlie. Charlie never uses it himself.",
   B: "Bob's published Lightning node public key, known from gossip.",
   e_AC:
     "Alice's ephemeral private key for the Charlie hop. Derived as bf_AB · e_AB.",
   E_AC: "Charlie's ephemeral public key, derived as e_AC · G.",
   ss_AC: "Shared secret between Alice and Charlie. Same ECDH trick as Bob's.",
   bf_AC:
-    "Charlie's blinding factor. Dave will use this to derive his own session-key-equivalent.",
+    "Charlie's blinding factor. Alice multiplies the current ephemeral private key by it to get the next one (e_AD), advancing the chain toward Dave. Dave never uses it himself.",
   C: "Charlie's published Lightning node public key, known from gossip.",
   e_AD:
     "Alice's ephemeral private key for the Dave hop. Derived as bf_AC · e_AC.",
@@ -177,8 +177,8 @@ function buildCells(): Array<Array<CellSpec | null>> {
       caption: (
         <>
           Then, hash <Code token="E_AB" /> with <Code token="ss_AB" /> to get a
-          blinding factor <Code token="bf_AB" />. Charlie will need this to spin
-          up his own session-key-equivalent.
+          blinding factor <Code token="bf_AB" />. Alice multiplies the current
+          ephemeral private key by it to get the next one, <Code token="e_AC" />.
         </>
       ),
     },

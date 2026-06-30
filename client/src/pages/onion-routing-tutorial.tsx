@@ -150,8 +150,8 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
     question:
       "When Alice encrypts a single hop's layer during onion construction, which bytes get XOR'd with that hop's keystream?",
     options: [
-      "Only this hop's own slice (the hop payload Alice just wrote)",
-      "All the hop-payload slices written so far, but not the leftover padding",
+      "Only this hop's own hop payload (the one Alice just wrote)",
+      "All the hop payloads written so far, but not the leftover padding",
       "The entire 1,300-byte payload buffer (every hop payload plus all the padding)",
       "Only the packet header (version + ephemeral pubkey), not the payload",
     ],
@@ -354,13 +354,13 @@ export const CHECKPOINT_QUESTIONS: Record<string, {
     question: "Bob has derived <m>ss_AB</m> and computed <m>bf_AB</m>. He's about to forward the onion to Charlie. Which of the following best describes what Bob does to the ephemeral key field in the outgoing packet, and why Charlie ends up deriving the same <m>ss_AC</m> Alice precomputed?",
     options: [
       "Bob appends <m>E_AC</m> after <m>E_AB</m>, so Charlie can scan for his own key. It works because Charlie tries each pubkey until ECDH yields a value that decrypts his slice.",
-      "Bob replaces <m>E_AB</m> with <m>E_AC</m> (computed as <m>bf_AB</m> · <m>E_AB</m>). Charlie ECDHs against <m>E_AC</m> and lands on the same <m>ss_AC</m> Alice precomputed.",
+      "Bob replaces <m>E_AB</m> with <m>E_AC</m> (computed as <m>bf_AB</m> · <m>E_AB</m>). Charlie performs ECDH between <m>E_AC</m> and his node private key and lands on the same <m>ss_AC</m> Alice precomputed.",
       "Bob signs <m>E_AC</m> with his node private key and embeds the signature in the packet. Charlie verifies it against `bob_pubkey` before trusting <m>E_AC</m>.",
       "Bob leaves <m>E_AB</m> in the field; Charlie derives <m>E_AC</m> himself by recomputing the chain from his own position in the route using gossip data.",
     ],
     answer: 1,
     explanation:
-      "Bob replaces the ephemeral key in the header with <m>E_AC</m> = <m>bf_AB</m> · <m>E_AB</m>. Alice's chain produced that same <m>E_AC</m> (she advanced her scalar <m>e_AB</m> by <m>bf_AB</m>, and <m>e_AC</m> · <m>G</m> equals <m>bf_AB</m> · <m>E_AB</m>), so the two sides reach the same point from opposite directions. Charlie then ECDHs his node private key against <m>E_AC</m> and recovers the same <m>ss_AC</m> Alice precomputed, because scalar multiplication commutes. Appending keys instead would bloat the packet and bring back the size leak; there's no signature involved; and Charlie can't recompute the chain himself, since that needs <m>bf_AB</m>, hence <m>ss_AB</m>, hence Bob's private key.",
+      "Bob replaces the ephemeral key in the header with <m>E_AC</m> = <m>bf_AB</m> · <m>E_AB</m>. Alice's chain produced that same <m>E_AC</m> (she advanced her scalar <m>e_AB</m> by <m>bf_AB</m>, and <m>e_AC</m> · <m>G</m> equals <m>bf_AB</m> · <m>E_AB</m>), so the two sides reach the same point from opposite directions. Charlie then performs ECDH between his node private key and <m>E_AC</m> and recovers the same <m>ss_AC</m> Alice precomputed, because scalar multiplication commutes. Appending keys instead would bloat the packet and bring back the size leak; there's no signature involved; and Charlie can't recompute the chain himself, since that needs <m>bf_AB</m>, hence <m>ss_AB</m>, hence Bob's private key.",
   },
   // ── Chapter 2: Pathfinding 101 ───────────────────────────────────────────
   "cp-channel-update-direction-draft": {

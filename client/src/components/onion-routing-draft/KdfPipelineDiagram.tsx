@@ -117,7 +117,7 @@ export function KdfPipelineDiagram() {
         <div className="flex items-center gap-2">
           <div className="w-1.5 h-1.5 rounded-full bg-[#b8860b]" />
           <span className="text-sm font-bold tracking-[0.08em] uppercase">
-            Five keys from one secret
+            Five keys, two secrets
           </span>
         </div>
       </div>

@@ -104,7 +104,7 @@ const TOTAL_STEPS = 6;
 
 const STEP_CAPTIONS: Record<number, string> = {
   0: "Alice makes a fresh ephemeral keypair for *every* hop, and packs all three pubkeys into the packet next to their encrypted slices.",
-  1: "Bob gets the packet. He runs his own private key against E_Bob from his slice to derive ss_AB, then decrypts his slice.",
+  1: "Bob gets the packet. He performs ECDH between his own private key and E_Bob from his slice to derive ss_AB, then decrypts his slice.",
   2: "Bob's done with his slice, so he forwards the packet to Charlie. Notice it still carries E_Charlie and E_Dave. The packet didn't shrink.",
   3: "Now Charlie does the same with his slice. ECDH between his node private key and E_Charlie gives him ss_AC, and he decrypts his slice.",
   4: "Charlie's slice is handled, and the packet keeps moving with E_Dave still tucked inside.",

@@ -1504,7 +1504,7 @@ function EphemeralAdvanceView() {
               className="text-[9.5px] italic leading-tight mt-0.5"
               style={{ fontFamily: SANS, color: NEUTRAL_TEXT }}
             >
-              EC scalar multiply · the ephemeral Charlie will ECDH against
+              EC scalar multiply · the ephemeral Charlie will ECDH with
             </div>
           </div>
         </div>

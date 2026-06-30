@@ -1099,13 +1099,13 @@ print(f"this hop's hmac: {this_hmac.hex()[:16]}...")
           filler:           precomputed filler bytes, or None. Only the innermost
                             (destination) hop gets a filler; build passes None for
                             every forwarder. When given, overlay it onto the buffer
-                            tail BEFORE the HMAC (step 4) so the single HMAC covers it.
+                            tail BEFORE computing the HMAC so the single HMAC covers it.
 
         Returns: (new_buffer, this_hop_hmac)
           new_buffer:     the rewritten + encrypted 1300-byte buffer
           this_hop_hmac:  the 32-byte tag the layer above will commit to
 
-        The moves are chapter 8's steps 1-5 for one iteration. Step 4 (the filler
+        The moves are chapter 8's steps 1-4 for one iteration. Step 3 (the filler
         overlay) runs only when filler is not None.
 
         Helpers in scope: chacha20_keystream(key, length), xor_bytes(a, b).
@@ -1653,8 +1653,9 @@ def test_empty_rho_keys_returns_empty():
 ${BOLT4_ONION_VECTOR_TEST_FIXTURES}
 import hmac, hashlib
 
-# The filler the official BOLT 4 route produces. This exact value is baked
-# into onion-test.json's final packet, so matching it means your filler is
+# The filler the official BOLT 4 route produces: the bytes the destination
+# recovers in its trailing hop_payload positions after peeling. The packet's
+# HMACs commit to it, so matching this value means your filler is
 # interoperable with every Lightning implementation.
 BOLT4_FILLER = bytes.fromhex(
     "51c30cc8f20da0153ca3839b850bcbc8fefc7fd84802f3e78cb35a660e747b57aa5b0de555cbcf1e6f044a718cc34219b965"

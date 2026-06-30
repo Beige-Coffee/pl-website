@@ -12,9 +12,9 @@ import { HatchOverlay } from "./encryptionHatch";
 //                                                      pseudo-random padding
 //   For each hop in REVERSE (Dave → Charlie → Bob):
 //     1. WRITE:  shift right by slot_size; tail bytes fall off; write
-//                [bigsize len | TLV | prev_hmac] at the FRONT of the buffer.
+//                [bigsize len | TLV | next_hmac] at the FRONT of the buffer.
 //     2. ENCRYPT: XOR the entire 1,300-byte buffer with chacha20(rho_hop).
-//     3. HMAC:   prev_hmac = HMAC(mu_hop, encrypted_buffer).
+//     3. HMAC:   next_hmac = HMAC(mu_hop, encrypted_buffer).
 //
 // In the visual:
 //   • The padding starts as the FULL buffer (step 0). Each WRITE substep
@@ -151,14 +151,14 @@ function captionForStep(step: number): string {
     return `Now, we'll right-shift \`hop_payloads\` by ${slotSize} bytes to make room for ${hopName}. His full hop payload runs ${slotSize} bytes (1-byte bigsize prefix + ${tlvSize}-byte TLV records + 32-byte HMAC field). The trailing ${slotSize} bytes fall off the back so we stay at 1,300, and into the front ${slotSize} bytes we just freed up we write [bigsize prefix | ${hopName}'s TLV records | ${hmacToWrite}].`;
   }
   if (sub === "encrypt") {
-    return `Next, we'll XOR the whole 1,300-byte \`hop_payloads\` buffer, byte by byte, with a 1,300-byte \`chacha20\` keystream we get from ${hopName}'s shared secret with Alice. Notice it hits *everything*, so ${hopName}'s hop payload, every earlier hop payload, and the padding all pick up one more layer of encryption.`;
+    return `Next, we'll XOR the whole 1,300-byte \`hop_payloads\` buffer, byte by byte, with a 1,300-byte \`chacha20\` keystream from \`rho_${hop}\` (derived from ${hopName}'s shared secret with Alice). Notice it hits *everything*, so ${hopName}'s hop payload, every earlier hop payload, and the padding all pick up one more layer of encryption.`;
   }
   // hmac
   if (hop === "bob") {
-    return "Finally, we'll compute `bob_hmac` as `HMAC-SHA256` over the now-encrypted 1,300-byte `hop_payloads` joined with the `associated_data` (the payment hash), keyed by Bob's shared secret with Alice. This one's special. `bob_hmac` is the packet's outer HMAC tag, a 32-byte authentication code we tack on right after `hop_payloads` on the wire, and it's what Bob checks the moment the packet lands, before he peels.";
+    return "Finally, we'll compute `bob_hmac` as `HMAC-SHA256` over the now-encrypted 1,300-byte `hop_payloads` joined with the `associated_data` (the payment hash), keyed by `mu_bob` (derived from Bob's shared secret with Alice). This one's special. `bob_hmac` is the packet's outer HMAC tag, a 32-byte authentication code we tack on right after `hop_payloads` on the wire, and it's what Bob checks the moment the packet lands, before he peels.";
   }
   const nextHopName = HOP_LABEL[BUILD_ORDER[BUILD_ORDER.indexOf(hop) + 1]];
-  return `Now, we'll compute \`${hop}_hmac\` as \`HMAC-SHA256\` over the now-encrypted \`hop_payloads ‖ associated_data\`, keyed by ${hopName}'s shared secret with Alice. Where does it go? When ${nextHopName}'s iteration runs next, we'll tuck \`${hop}_hmac\` into the HMAC field of ${nextHopName}'s hop payload, so ${hopName} can verify the packet once it finally reaches him.`;
+  return `Now, we'll compute \`${hop}_hmac\` as \`HMAC-SHA256\` over the now-encrypted \`hop_payloads ‖ associated_data\`, keyed by \`mu_${hop}\` (derived from ${hopName}'s shared secret with Alice). Where does it go? When ${nextHopName}'s iteration runs next, we'll tuck \`${hop}_hmac\` into the HMAC field of ${nextHopName}'s hop payload, so ${hopName} can verify the packet once it finally reaches him.`;
 }
 
 function actionsForStep(step: number): { hop: ForwarderId | null; actions: string[] } {
@@ -167,7 +167,7 @@ function actionsForStep(step: number): { hop: ForwarderId | null; actions: strin
       hop: null,
       actions: [
         `▶ hop_payloads ← chacha20(pad_key, 0, 1300)  // 1,300 random bytes`,
-        `▶ prev_hmac ← bytes(32)  // 32 zero bytes`,
+        `▶ next_hmac ← bytes(32)  // 32 zero bytes`,
       ],
     };
   }
