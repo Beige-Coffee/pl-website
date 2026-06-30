@@ -52,15 +52,48 @@ export default function StudentsView({ data, storedPassword, onRefresh }: Studen
     return m;
   }, [data.recentWithdrawals]);
 
-  // All users with enriched data
+  // Last activity on THIS course's pages (best-effort, from recent events).
+  const userCourseActivity = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const e of data.recentEvents) {
+      if (!e.userId || !e.page.startsWith(config.urlPrefix)) continue;
+      const t = new Date(e.createdAt).getTime();
+      if (!m[e.userId] || t > m[e.userId]) m[e.userId] = t;
+    }
+    return m;
+  }, [data.recentEvents, selectedTutorial]);
+
+  // Only students who actually started THIS course (>=1 checkpoint here), each with
+  // a segment recomputed FROM this course's activity (not the global segment), so a
+  // student churned on Lightning but active on Onion reads correctly per course.
   const enrichedUsers = useMemo(() => {
-    return data.users.map(u => ({
-      ...u,
-      progress: userCheckpoints[u.id]?.size ?? 0,
-      sats: userSats[u.id] ?? 0,
-      segment: (data.userSegments || {})[u.id] || "browsing",
-    }));
-  }, [data.users, userCheckpoints, userSats, data.userSegments]);
+    const now = Date.now();
+    const DAY = 86_400_000;
+    const total = CHECKPOINT_ORDER.length;
+    const courseSegment = (uid: string, createdAt: string | null | undefined): string => {
+      const cpCount = userCheckpoints[uid]?.size ?? 0;
+      const dates = userCheckpointDates[uid];
+      const lastCp = dates ? Math.max(0, ...Object.values(dates).map(d => new Date(d).getTime())) : 0;
+      const lastActivity = Math.max(lastCp, userCourseActivity[uid] ?? 0);
+      const daysSinceActive = lastActivity ? (now - lastActivity) / DAY : Infinity;
+      const daysSinceCheckpoint = lastCp ? (now - lastCp) / DAY : Infinity;
+      const accountAgeDays = createdAt ? (now - new Date(createdAt).getTime()) / DAY : Infinity;
+      if (total > 0 && cpCount >= total) return "completed";
+      if (accountAgeDays < 7 && cpCount <= 2) return "new";
+      if (daysSinceActive <= 7 && daysSinceCheckpoint <= 14) return "on-track";
+      if (daysSinceActive <= 7) return "struggling";
+      if (daysSinceActive <= 30) return "stalled";
+      return "churned";
+    };
+    return data.users
+      .filter(u => (userCheckpoints[u.id]?.size ?? 0) > 0)
+      .map(u => ({
+        ...u,
+        progress: userCheckpoints[u.id]?.size ?? 0,
+        sats: userSats[u.id] ?? 0,
+        segment: courseSegment(u.id, u.createdAt),
+      }));
+  }, [data.users, userCheckpoints, userCheckpointDates, userCourseActivity, userSats, CHECKPOINT_ORDER]);
 
   // Filter
   const filteredUsers = useMemo(() => {
