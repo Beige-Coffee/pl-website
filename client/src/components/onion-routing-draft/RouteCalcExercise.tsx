@@ -472,42 +472,12 @@ export function RouteCalcExercise({
                   <span style={{ color: SLATE }}>Amount: </span>
                   <span className="font-bold tabular-nums">400,000 sats</span>
                 </div>
-                <div className="mb-0.5 flex items-baseline gap-1">
-                  <span style={{ color: SLATE }}>
-                    <code
-                      style={{
-                        fontFamily:
-                          '"JetBrains Mono", "Fira Code", monospace',
-                        background: "#f1f5f9",
-                        border: "1px solid rgba(15,23,42,0.14)",
-                        padding: "0 4px",
-                        fontSize: "0.92em",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      min_final_cltv_expiry_delta
-                    </code>
-                    :
-                  </span>
+                <div className="mb-0.5">
+                  <span style={{ color: SLATE }}>min_final_cltv_expiry_delta: </span>
                   <span className="font-bold tabular-nums">18</span>
                 </div>
-                <div className="flex items-baseline gap-1">
-                  <span style={{ color: SLATE }}>
-                    <code
-                      style={{
-                        fontFamily:
-                          '"JetBrains Mono", "Fira Code", monospace',
-                        background: "#f1f5f9",
-                        border: "1px solid rgba(15,23,42,0.14)",
-                        padding: "0 4px",
-                        fontSize: "0.92em",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      payment_hash
-                    </code>
-                    :
-                  </span>
+                <div>
+                  <span style={{ color: SLATE }}>payment_hash: </span>
                   <span className="font-bold">566..c62</span>
                 </div>
               </div>
