@@ -224,7 +224,7 @@ def test_different_secrets_produce_different_keys():
         ammag=hmac.new(b"ammag", shared_secret, hashlib.sha256).digest(),
     )`,
     },
-    rewardSats: 30,
+    rewardSats: 21,
     group: "crypto/keys",
     groupOrder: 1,
   },
@@ -479,7 +479,7 @@ def test_official_bolt4_error_vector():
         return i, payload[2:2 + failure_len]
     return None, None`,
     },
-    rewardSats: 100,
+    rewardSats: 21,
     group: "sphinx/errors",
     groupOrder: 1,
   },
@@ -607,7 +607,7 @@ def verify_hmac(packet, mu, associated_data):
     return None if hmac.compare_digest(expected, inbound_hmac) else "invalid_onion_hmac"
 `,
     },
-    rewardSats: 40,
+    rewardSats: 21,
     group: "sphinx/forwarder",
     groupOrder: 2,
   },
@@ -791,7 +791,7 @@ def test_proportional_only_policy():
         return "incorrect_cltv_expiry"
     return None`,
     },
-    rewardSats: 75,
+    rewardSats: 21,
     group: "sphinx/forwarder",
     groupOrder: 3,
   },
@@ -1044,7 +1044,7 @@ def test_peels_the_official_bolt4_onion():
         next_packet = b"\\x00" + E_next + next_hop_payloads + next_hmac
         return next_packet, payload, ss`,
     },
-    rewardSats: 100,
+    rewardSats: 21,
     group: "sphinx/forwarder",
     groupOrder: 1,
   },
@@ -1239,7 +1239,7 @@ def test_no_filler_default_unchanged():
         tag = hmac.new(mu, bytes(encrypted) + associated_data, hashlib.sha256).digest()
         return bytes(encrypted), tag`,
     },
-    rewardSats: 75,
+    rewardSats: 21,
     group: "sphinx/builder",
     groupOrder: 3,
   },
@@ -1507,7 +1507,7 @@ def test_end_to_end_peel_through_route():
 
         return b"\\x00" + self.ephemeral_pubkeys[0] + bytes(buffer) + next_hmac`,
     },
-    rewardSats: 100,
+    rewardSats: 21,
     group: "sphinx/builder",
     groupOrder: 4,
   },
@@ -1700,7 +1700,7 @@ def test_matches_official_bolt4_filler():
             filler = xor_bytes(filler, chunk)
         return filler`,
     },
-    rewardSats: 100,
+    rewardSats: 21,
     group: "sphinx/builder",
     groupOrder: 2,
   },
@@ -1869,7 +1869,7 @@ def test_matches_official_bolt4_vector():
             self.shared_secrets.append(ss)
             e = scalar_mul(e, b)`,
     },
-    rewardSats: 50,
+    rewardSats: 21,
     group: "sphinx/builder",
     groupOrder: 1,
   },

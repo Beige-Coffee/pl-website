@@ -61,7 +61,7 @@ export function CheckpointRewardClaim({
   const [claimError, setClaimError] = useState<string | null>(null);
   const [rewardK1, setRewardK1] = useState<string | null>(null);
   const [rewardLnurl, setRewardLnurl] = useState<string | null>(null);
-  const [rewardAmountSats, setRewardAmountSats] = useState(5);
+  const [rewardAmountSats, setRewardAmountSats] = useState(21);
   const [withdrawalStatus, setWithdrawalStatus] = useState<string>("pending");
   const [rewardCreatedAt, setRewardCreatedAt] = useState<number | null>(null);
   const [countdown, setCountdown] = useState(300);
@@ -156,17 +156,17 @@ export function CheckpointRewardClaim({
           if (data.autoPaid) {
             setAutoPaid(true);
             setAutoPaySending(false);
-            setRewardAmountSats(data.amountSats || 5);
-            onCompleted(checkpointId, data.amountSats || 5);
+            setRewardAmountSats(data.amountSats || 21);
+            onCompleted(checkpointId, data.amountSats || 21);
           } else if (claimMethod === "address" && lightningAddress && data.k1) {
             setAutoPaySending(false);
-            setRewardAmountSats(data.amountSats || 5);
+            setRewardAmountSats(data.amountSats || 21);
             setClaimError("Auto-pay failed. Retry or use QR withdrawal.");
           } else {
             setAutoPaySending(false);
             setRewardK1(data.k1);
             setRewardLnurl(data.lnurl);
-            setRewardAmountSats(data.amountSats || 5);
+            setRewardAmountSats(data.amountSats || 21);
             setRewardCreatedAt(Date.now());
             setWithdrawalStatus("pending");
             setCountdown(300);

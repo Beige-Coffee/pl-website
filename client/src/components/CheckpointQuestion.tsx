@@ -141,7 +141,7 @@ export default function CheckpointQuestion({
   const [claimError, setClaimError] = useState<string | null>(null);
   const [rewardK1, setRewardK1] = useState<string | null>(null);
   const [rewardLnurl, setRewardLnurl] = useState<string | null>(null);
-  const [rewardAmountSats, setRewardAmountSats] = useState(5);
+  const [rewardAmountSats, setRewardAmountSats] = useState(21);
   const [withdrawalStatus, setWithdrawalStatus] = useState<string>("pending");
   const [rewardCreatedAt, setRewardCreatedAt] = useState<number | null>(null);
   const [countdown, setCountdown] = useState(300);
@@ -272,20 +272,20 @@ export default function CheckpointQuestion({
           // Auto-pay succeeded, skip QR entirely
           setAutoPaid(true);
           setAutoPaySending(false);
-          setRewardAmountSats(data.amountSats || 5);
-          onCompleted(checkpointId, data.amountSats || 5);
+          setRewardAmountSats(data.amountSats || 21);
+          onCompleted(checkpointId, data.amountSats || 21);
         } else if (claimMethod === "address" && lightningAddress && data.k1) {
           // Auto-pay was attempted but failed silently (server fell back to QR).
           // Show the error/retry UI instead of auto-displaying a QR code.
           setAutoPaySending(false);
-          setRewardAmountSats(data.amountSats || 5);
+          setRewardAmountSats(data.amountSats || 21);
           setClaimError("Auto-pay failed. Retry or use QR withdrawal.");
         } else {
           // Explicit QR flow
           setAutoPaySending(false);
           setRewardK1(data.k1);
           setRewardLnurl(data.lnurl);
-          setRewardAmountSats(data.amountSats || 5);
+          setRewardAmountSats(data.amountSats || 21);
           setRewardCreatedAt(Date.now());
           setWithdrawalStatus("pending");
           setCountdown(300);
