@@ -368,7 +368,7 @@ export default function Home() {
                         </span>
                       </TooltipTrigger>
                       <TooltipContent side="right" align="start" className="bg-card text-foreground border-4 border-border text-lg px-4 py-3 pixel-shadow max-w-xs rounded-none font-sans">
-                        Coming June 2026
+                        Coming Soon
                       </TooltipContent>
                     </Tooltip>
                     <Tooltip delayDuration={0}>
